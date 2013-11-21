@@ -779,12 +779,26 @@ saphana_stop_clone() {
   return $?
 }
 
+
+we_are_master_single()
+{
+   echo " ========== $(date) ============== " >>/tmp/null
+   node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=/usr/sap/LNX/HDB42/exe /usr/sap/LNX/HDB42/exe/hdbnsutil -sr_state" 2>>/tmp/null )
+   node_status=$(echo "$node_full_status" | awk '/mode/ {print $2}')
+   echo "$node_status"
+
+}
 we_are_master() {
 #HANA_STATE_MASTER=0
 #HANA_STATE_SLAVE=1
 #HANA_STATE_DEFECT=2
 
-   node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
+   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
+   # TODO: Change stderr location!!
+   # TODO: Fix hdbnsutil location
+   # TODO: Fix user sidadm
+   sidadm=lnxadm
+   node_status=$(we_are_master_single) 
    ocf_log info "we_are_master: node_status=$node_status"
    case "$node_status" in
        primary ) 
@@ -795,9 +809,18 @@ we_are_master() {
                   return $HANA_STATE_DEFECT;;
        * )
 		  ocf_log err "we_are_master:  we didn't expect node_status to be: <$node_status>"
-		  ocf_log err "we_are_master:  sleeping 5 minutes to give you a chance to anylyze"
-		  sleep 300
-		  ocf_log err "we_are_master:  we are back again"
+                  ocf_log err "we_are_master: trying multiple times to get master status"
+                  for i in 1 2 3 4 5; do
+                      node_status=$(we_are_master_single)
+                      ocf_log info "we_are_master: (loop nr $i) node_status=$node_status"
+                      case "$node_status" in
+                           primary )
+                                     return $HANA_STATE_MASTER;;
+                           syncmem )
+                                     return $HANA_STATE_SLAVE;;
+                      esac
+                      sleep 60
+                  done
 		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
                   return $HANA_STATE_DEFECT;;
    esac;
