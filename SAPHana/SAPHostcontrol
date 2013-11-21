@@ -1,0 +1,317 @@
+#!/bin/sh
+#
+# SAPHostcontrol
+#
+# Description:	Manages saphostcontrol instances in a cluster
+#
+# Author:       Fabian Herschel, October 2013
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2013 SUSE Linux Produvts GmbH
+#
+# Thanks to Alexander Krauth for idears and SAPInstance 
+#
+# OCF instance parameters:
+#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
+#	OCF_RESKEY_PROFILE    (optional, well known directories will be searched by default)
+#
+#  TODO: - Implementation :)
+#
+#######################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+#######################################################################
+
+SH=/bin/sh
+
+saphostexec_usage() {
+  methods=`saphostexec_methods`
+  methods=`echo $methods | tr ' ' '|'`
+  cat <<-!
+	usage: $0 ($methods)
+
+	$0 manages a SAP Instance as an HA resource.
+  
+         TBD: describe start/stop/monitor/...
+
+	!
+}
+
+saphostexec_meta_data() {
+	cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="SAPInstance">
+<version>0.20</version>
+
+<shortdesc lang="en">Manages saphostcontrol</shortdesc>
+<longdesc lang="en">
+LONGDESC: TBD
+</longdesc>
+<parameters>
+ <parameter name="DIR_EXECUTABLE" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
+  <shortdesc lang="en">Path of sapstartsrv and sapcontrol</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="DIR_PROFILE" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find the SAP START profile. Specify this parameter, if you have changed the SAP profile directory location after the default SAP installation.</longdesc>
+  <shortdesc lang="en">Path of start profile</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="PROFILE" unique="1" required="0">
+  <longdesc lang="en">
+TBD
+</longdesc>
+  <shortdesc lang="en">profile name</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+</parameters>
+
+<actions>
+<action name="start" timeout="30" />
+<action name="stop" timeout="30" />
+<action name="status" timeout="30" />
+<action name="monitor" depth="0" timeout="30" interval="60" />
+<action name="validate-all" timeout="5" />
+<action name="meta-data" timeout="5" />
+<action name="methods" timeout="5" />
+</actions>
+</resource-agent>
+END
+}
+
+
+#
+# methods: What methods/operations do we support?
+#
+saphostexec_methods() {
+  cat <<-!
+	start
+	stop
+	status
+	monitor
+        notify
+	validate-all
+	methods
+	meta-data
+	usage
+	!
+}
+
+#
+# abnormal_end : essential things are missing, but in the natur of a SAP installation - which can be very different
+#                from customer to customer - we cannot handle this always as an error
+#                This would be the case, if the software is installed on shared disks and not visible
+#                to all cluster nodes at all times.
+#
+abnormal_end() {
+  local err_msg=$1
+
+  ocf_is_probe && {
+    saphostexec_status
+    exit $?
+  }
+
+  if [ "$ACTION" = "stop" ]
+  then
+    cleanup_instance
+    exit $OCF_SUCCESS
+  fi
+
+  ocf_log err $err_msg
+  exit $OCF_ERR_CONFIGURED
+}
+
+#
+# saphostexec_init : Define global variables with default values, if optional parameters are not set
+#
+#
+saphostexec_init() {
+
+  if  [ -n "$OCF_RESKEY_DIR_EXECUTABLE" ]; then
+      DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
+  else 
+      DIR_EXECUTABLE="/usr/sap/hostctrl/exe"
+  fi 
+
+  if  [ -n "$OCF_RESKEY_DIR_PROFILE" ]; then
+      DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
+  else 
+      DIR_PROFILE="/usr/sap/hostctrl/exe"
+  fi 
+
+  if [ -n "$OCF_RESKEY_PROFILE" ]; then
+      PROFILE="$OCF_RESKEY_PROFILE"
+  else
+      PROFILE="host_profile"
+  fi
+
+  SAPHOSTEXEC=saphostexec
+  SAPHOSTCTRL=saphostctrl
+  SAPHOSTEXEC_PATH=${DIR_EXECUTABLE}/${SAPHOSTEXEC}
+  SAPHOSTCTRL_PATH=${DIR_EXECUTABLE}/${SAPHOSTCTRL}
+  SAPHOSTEXEC_PROFILE_PATH=${DIR_PROFILE}/${PROFILE}
+echo "SAPHOSTCTRL_PATH=$SAPHOSTCTRL_PATH"
+  
+
+  return $OCF_SUCCESS
+}
+
+
+#
+# saphostexec_start : Start the SAP instance
+#
+saphostexec_start() {
+
+  local rc=$OCF_ERR_GENERIC
+   
+  if [ -x "${SAPHOSTEXEC_PATH}" ]; then
+	${SAPHOSTEXEC_PATH} pf=${SAPHOSTEXEC_PROFILE_PATH}
+        rc=$?
+	  if [ $rc -eq 0 ]
+	  then
+	    ocf_log info "SAP Hostagent started"
+	    rc=$OCF_SUCCESS
+	  else
+	    ocf_log err "SAP Hostagent start failed"
+	    rc=$OCF_NOT_RUNNING
+	  fi
+  else
+	ocf_log err "SAP Hostagent executable not found"
+        rc=$OCF_ERR_INSTALLED
+  fi
+   
+
+  return $rc
+}
+
+
+#
+# saphostexec_stop: Stop the SAP instance
+#
+saphostexec_stop() {
+  local rc=$OCF_ERR_GENERIC
+   if [ -x "${SAPHOSTEXEC_PATH}" ]; then
+	${SAPHOSTEXEC_PATH} -stop
+        rc=$?
+	  if [ $rc -eq 0 ]
+	  then
+	    ocf_log info "SAP Hostagent stopped"
+	    rc=$OCF_SUCCESS
+	  else
+	    ocf_log err "SAP Hostagent stop failed"
+	    rc=$OCF_ERR_GENERIC
+	  fi
+  else
+	ocf_log err "SAP Hostagent executable not found"
+        rc=$OCF_ERR_INSTALLED
+   fi
+
+  return $rc
+}
+
+
+#
+# saphostexec_monitor: Can the given SAP instance do anything useful?
+#
+saphostexec_monitor() {
+  local rc=$OCF_ERR_GENERIC
+echo "SAPHOSTCTRL_PATH=$SAPHOSTCTRL_PATH"
+   if [ -x "${SAPHOSTCTRL_PATH}" ]; then
+# TODO: check if -function ListInstances is the right and even cheap method
+	${SAPHOSTCTRL_PATH} -function ListInstances
+        rc=$?
+	  if [ $rc -eq 0 ]
+	  then
+	    ocf_log info "SAP Hostagent working"
+	    rc=$OCF_SUCCESS
+	  else
+	    ocf_log err "SAP Hostagent down"
+	    rc=$OCF_NOT_RUNNING
+	  fi
+  else
+	ocf_log err "SAP Hostagent executable not found"
+        rc=$OCF_ERR_INSTALLED
+   fi
+  return $rc
+}
+
+
+
+#
+# saphostexec_status: Lightweight check of SAP instance only with OS tools
+#
+saphostexec_status() {
+  local rc=$OCF_ERR_GENERIC
+
+  #TODO: is pgrep a "sharp" tool?
+
+  pgrep -f ${SAPHOSTEXEC_PATH} 1>/dev/null 2>/dev/null
+  rc=$?
+	  if [ $rc -eq 0 ]
+	  then
+	    ocf_log info "SAP Hostagent working"
+	    rc=$OCF_SUCCESS
+	  else
+	    ocf_log info "SAP Hostagent down"
+	    rc=$OCF_NOT_RUNNING
+	  fi
+
+  return $OCF_NOT_RUNNING
+}
+
+
+#
+# saphostexec_validate: Check the symantic of the input parameters 
+#
+saphostexec_validate() {
+  local rc=$OCF_SUCCESS
+
+  # TODO: add parameter tests later
+  return $rc
+}
+
+#
+#	'main' starts here...
+#
+
+## GLOBALS
+DIR_EXECUTABLE=""
+#SAPSTARTSRV=""
+#SAPCONTROL=""
+DIR_PROFILE=""
+PROFILE=""
+saphostexec_init
+
+
+if
+  ( [ $# -ne 1 ] )
+then
+  saphostexec_usage
+  exit $OCF_ERR_ARGS
+fi
+
+ACTION=$1
+if [ "$ACTION" = "status" ]; then
+  ACTION=monitor
+fi
+
+case "$ACTION" in
+  usage|methods)                saphostexec_$ACTION
+                                exit $OCF_SUCCESS;;
+  meta-data)                    saphostexec_meta_data
+                                exit $OCF_SUCCESS;;
+  notify)                       saphostexec_notify
+                                exit $OCF_SUCCESS;;
+  start|stop|monitor)           saphostexec_$ACTION
+                                exit $?;;
+  validate-all)                 saphostexec_validate
+                                exit $?;;
+  *)                            saphostexec_methods
+                                exit $OCF_ERR_UNIMPLEMENTED;;
+esac

@@ -1,0 +1,948 @@
+#!/bin/sh
+#
+# SAPInstance
+#
+# Description:	Manages a single SAP Instance as a High-Availability
+#		resource. One SAP Instance is defined by one 
+#               SAP Instance-Profile. start/stop handels all services
+#               of the START-Profile, status and monitor care only
+#               about essential services.
+#
+# Author:       Alexander Krauth, June 2006
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2006-2008 Alexander Krauth
+#
+# An example usage: 
+#      See usage() function below for more details...
+#
+# OCF instance parameters:
+#	OCF_RESKEY_InstanceName
+#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
+#	OCF_RESKEY_START_PROFILE    (optional, well known directories will be searched by default)
+#	OCF_RESKEY_START_WAITTIME   (optional, to solve timing problems during J2EE-Addin start)
+#	OCF_RESKEY_AUTOMATIC_RECOVER    (optional, automatic startup recovery using cleanipc, default is false)
+#       OCF_RESKEY_MONITOR_SERVICES     (optional, default is to monitor critical services only)
+#       OCF_RESKEY_SHUTDOWN_METHOD      (optional, defaults to NORMAL, KILL: terminate the SAP instance with OS commands - faster, at your own risk)
+#       OCF_RESKEY_ERS_InstanceName     (optional, InstanceName of the ERS instance in a Master/Slave configuration)
+#       OCF_RESKEY_ERS_START_PROFILE    (optional, START_PROFILE of the ERS instance in a Master/Slave configuration)
+#	OCF_RESKEY_PRE_START_USEREXIT	(optional, lists a script which can be executed before the resource is started)
+#	OCF_RESKEY_POST_START_USEREXIT	(optional, lists a script which can be executed after the resource is started)
+#	OCF_RESKEY_PRE_STOP_USEREXIT	(optional, lists a script which can be executed before the resource is stopped)
+#	OCF_RESKEY_POST_STOP_USEREXIT	(optional, lists a script which can be executed after the resource is stopped)
+#
+#  TODO: - Option to shutdown sapstartsrv for non-active instances -> that means: do probes only with OS tools (sapinstance_status)
+#        - Option for better standalone enqueue server monitoring, using ensmon (test enque-deque)
+#        - Option for cleanup abandoned enqueue replication tables
+#
+#######################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+#######################################################################
+
+SH=/bin/sh
+
+sapinstance_usage() {
+  methods=`sapinstance_methods`
+  methods=`echo $methods | tr ' ' '|'`
+  cat <<-!
+	usage: $0 ($methods)
+
+	$0 manages a SAP Instance as an HA resource.
+
+	The 'start' operation starts the instance or the ERS instance in a Master/Slave configuration
+	The 'stop' operation stops the instance
+	The 'status' operation reports whether the instance is running
+	The 'monitor' operation reports whether the instance seems to be working
+        The 'promote' operation starts the primary instance in a Master/Slave configuration
+        The 'demote' operation stops the primary instance and starts the ERS instance
+        The 'notify' operation always returns SUCCESS
+	The 'validate-all' operation reports whether the parameters are valid
+	The 'methods' operation reports on the methods $0 supports
+
+	!
+}
+
+sapinstance_meta_data() {
+	cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="SAPInstance">
+<version>2.14</version>
+
+<shortdesc lang="en">Manages a SAP instance as an HA resource.</shortdesc>
+<longdesc lang="en">
+Usually a SAP system consists of one database and at least one or more SAP instances (sometimes called application servers). One SAP Instance is defined by having exactly one instance profile. The instance profiles can usually be found in the directory /sapmnt/SID/profile. Each instance must be configured as it's own resource in the cluster configuration.
+The resource agent supports the following SAP versions:
+- SAP WebAS ABAP Release 6.20 - 7.30
+- SAP WebAS Java Release 6.40 - 7.30
+- SAP WebAS ABAP + Java Add-In Release 6.20 - 7.30 (Java is not monitored by the cluster in that case)
+When using a SAP Kernel 6.40 please check and implement the actions from the section "Manual postprocessing" from SAP note 995116 (http://sdn.sap.com).
+
+All operations of the SAPInstance resource agent are done by using the startup framework called SAP Management Console or sapstartsrv that was introduced with SAP kernel release 6.40. Find more information about the SAP Management Console in SAP note 1014480. Using this framework defines a clear interface for the Heartbeat cluster, how it sees the SAP system. The options for monitoring the SAP system are also much better than other methods like just watching the ps command for running processes or doing some pings to the application. sapstartsrv uses SOAP messages to request the status of running SAP processes. Therefore it can actually ask a process itself what it's status is, independent from other problems that might exist at the same time.
+
+sapstartsrv knows 4 status colours:
+- GREEN   = everything is fine
+- YELLOW  = something is wrong, but the service is still working
+- RED     = the service does not work
+- GRAY    = the service has not been started
+
+The SAPInstance resource agent will interpret GREEN and YELLOW as OK. That means that minor problems will not be reported to the Heartbeat cluster. This prevents the cluster from doing an unwanted failover.
+The statuses RED and GRAY are reported as NOT_RUNNING to the cluster. Depending on the status the cluster expects from the resource, it will do a restart, failover or just nothing.
+</longdesc>
+<parameters>
+ <parameter name="InstanceName" unique="1" required="1">
+  <longdesc lang="en">The full qualified SAP instance name. e.g. P01_DVEBMGS00_sapp01ci. Usually this is the name of the SAP instance profile.</longdesc>
+  <shortdesc lang="en">Instance name: SID_INSTANCE_VIR-HOSTNAME</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="DIR_EXECUTABLE" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
+  <shortdesc lang="en">Path of sapstartsrv and sapcontrol</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="DIR_PROFILE" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find the SAP START profile. Specify this parameter, if you have changed the SAP profile directory location after the default SAP installation.</longdesc>
+  <shortdesc lang="en">Path of start profile</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="START_PROFILE" unique="1" required="0">
+  <longdesc lang="en">The name of the SAP START profile. Specify this parameter, if you have changed the name of the SAP START profile after the default SAP installation. As SAP release 7.10 does not have a START profile anymore, you need to specify the Instance Profile than.</longdesc>
+  <shortdesc lang="en">Start profile name</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="START_WAITTIME" unique="0" required="0">
+  <longdesc lang="en">After that time in seconds a monitor operation is executed by the resource agent. Does the monitor return SUCCESS, the start ishandled as SUCCESS. This is useful to resolve timing problems with e.g. the J2EE-Addin instance.Usually the resource agent waits until all services are started and the SAP Management Console reports a GREEN status. A double stack installation (ABAP + Java AddIn) consists of an ABAP dispatcher and aJAVA instance. Normally the start of the JAVA instance takes much longer than the start of the ABAP instance. For a JAVA Instance you may need to configure a much higher timeout for the start operation of the resource in Heartbeat. The disadvantage here is, that the discovery of a failed start by the cluster takes longer. Somebody might say: For me it is important, that the ABAP instance is up and running. A failure of the JAVA instance shall not cause a failover of the SAP instance.
+Actually the SAP MC reports a YELLOW status, if the JAVA instance of a double stack system fails. From the resource agent point of view YELLOW means:everything is OK. Setting START_WAITTIME to a lower value determines the resource agent to check the status of the instance during a start operation after that time. As it would wait normally for a GREEN status, now it reports SUCCESS to the cluster in case of a YELLOW status already after the specified time.
+
+That is only useful for double stack systems.
+  </longdesc>
+  <shortdesc lang="en">Check the successful start after that time (do not wait for J2EE-Addin)</shortdesc>
+  <content type="string" default="3600" />
+ </parameter>
+ <parameter name="AUTOMATIC_RECOVER" unique="0" required="0">
+  <longdesc lang="en">The SAPInstance resource agent tries to recover a failed start attempt automaticaly one time. This is done by killing runing instance processes, removing the kill.sap file and executing cleanipc. Sometimes a crashed SAP instance leaves some processes and/or shared memory segments behind. Setting this option to true will try to remove those leftovers during a start operation. That is to reduce manual work for the administrator.</longdesc>
+  <shortdesc lang="en">Enable or disable automatic startup recovery</shortdesc>
+  <content type="boolean" default="false"/>
+ </parameter>
+ <parameter name="MONITOR_SERVICES" unique="0" required="0">
+  <longdesc lang="en">Within a SAP instance there can be several services. Usually you will find the defined services in the START profile of the related instance (Attention: with SAP Release 7.10 the START profile content was moved to the instance profile). Not all of those services are worth to monitor by the cluster. For example you properly do not like to failover your SAP instance, if the central syslog collector daemon fails.
+Those services are monitored within the SAPInstance resource agent:
+
+- disp+work
+- msg_server
+- enserver
+- enrepserver
+- jcontrol
+- jstart
+
+That names match the strings used in the output of the command 'sapcontrol -nr [Instance-Nr] -function GetProcessList'.
+The default should fit most cases where you want to manage a SAP Instance from the cluster. You may change this with this parameter, if you like to monitor more/less or other services that sapstartsrv supports.
+You may specify multiple services seperated by a | (pipe) sign in this parameter: disp+work|msg_server|enserver
+  </longdesc>
+  <shortdesc lang="en">Services to monitor</shortdesc>
+  <content type="string" default="disp+work|msg_server|enserver|enrepserver|jcontrol|jstart"/>
+ </parameter>
+  <parameter name="SHUTDOWN_METHOD" unique="0" required="0">
+  <longdesc lang="en">Usual a SAP Instance is stopped by the command 'sapcontrol -nr InstanceNr -function Stop'. SHUTDOWN_METHOD=KILL means to kill the SAP Instance using OS commands. SAP processes of the instance are terminated with 'kill -9', shared memory is deleted with 'cleanipc' and the 'kill.sap' file will be deleted. That method is much faster than the gracefull stop, but the instance does not have the chance to say goodbye to other SAPinstances in the same system. USE AT YOUR OWN RISK !!</longdesc>
+  <shortdesc lang="en">Shutdown graceful or kill a SAP instance by terminating the processes. (normal|KILL)</shortdesc>
+  <content type="string" default="normal"/>
+ </parameter>
+ <parameter name="ERS_InstanceName" unique="1" required="0">
+  <longdesc lang="en">Only used in a Master/Slave resource configuration:
+The full qualified SAP enqueue replication instance name. e.g. P01_ERS02_sapp01ers. Usually this is the name of the SAP instance profile.
+The enqueue replication instance must be installed, before you want to configure a master-slave cluster recource.
+
+The master-slave configuration in the cluster must use this properties:
+clone_max = 2
+clone_node_max = 1
+master_node_max = 1
+master_max = 1
+  </longdesc>
+  <shortdesc lang="en">Enqueue replication instance name: SID_INSTANCE_VIR-HOSTNAME</shortdesc>
+  <content type="string" default=""/>
+ </parameter>
+ <parameter name="ERS_START_PROFILE" unique="1" required="0">
+  <longdesc lang="en">Only used in a Master/Slave resource configuration:
+The parameter ERS_InstanceName must also be set in this configuration.
+The name of the SAP START profile. Specify this parameter, if you have changed the name of the SAP START profile after the default SAP installation. As SAP release 7.10 does not have a START profile anymore, you need to specify the Instance Profile than.
+  </longdesc>
+  <shortdesc lang="en">Enqueue replication start profile name</shortdesc>
+  <content type="string" default=""/>
+ </parameter>
+ <parameter name="PRE_START_USEREXIT" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find a script or program which should be executed before this resource gets started.</longdesc>
+  <shortdesc lang="en">Path to a pre-start script</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="POST_START_USEREXIT" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find a script or program which should be executed after this resource got started.</longdesc>
+  <shortdesc lang="en">Path to a post-start script</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="PRE_STOP_USEREXIT" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find a script or program which should be executed before this resource gets stopped.</longdesc>
+  <shortdesc lang="en">Path to a pre-start script</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="POST_STOP_USEREXIT" unique="0" required="0">
+  <longdesc lang="en">The full qualified path where to find a script or program which should be executed after this resource got stopped.</longdesc>
+  <shortdesc lang="en">Path to a post-start script</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+</parameters>
+
+<actions>
+<action name="start" timeout="180" />
+<action name="stop" timeout="240" />
+<action name="status" timeout="60" />
+<action name="monitor" depth="0" timeout="60" interval="120" />
+<action name="monitor" depth="0" timeout="60" interval="121" role="Slave" />
+<action name="monitor" depth="0" timeout="60" interval="119" role="Master" />
+<action name="promote" timeout="320" />
+<action name="demote" timeout="320" />
+<action name="validate-all" timeout="5" />
+<action name="meta-data" timeout="5" />
+<action name="methods" timeout="5" />
+</actions>
+</resource-agent>
+END
+}
+
+
+#
+# methods: What methods/operations do we support?
+#
+sapinstance_methods() {
+  cat <<-!
+	start
+	stop
+	status
+	monitor
+        promote
+        demote
+        notify
+	validate-all
+	methods
+	meta-data
+	usage
+	!
+}
+
+
+
+#
+# is_clone : find out if we are configured to run in a Master/Slave configuration
+#
+is_clone() {
+  if [ -n "$OCF_RESKEY_CRM_meta_clone_max" ] \
+   && [ "$OCF_RESKEY_CRM_meta_clone_max" -gt 0 ]
+  then
+    if [ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ] || \
+       [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] || \
+       [ "$OCF_RESKEY_CRM_meta_master_node_max" -ne 1 ] || \
+       [ "$OCF_RESKEY_CRM_meta_master_max" -ne 1 ]
+    then
+            ocf_log err "Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
+            exit $OCF_ERR_CONFIGURED
+    fi
+
+    if [ -z "$OCF_RESKEY_ERS_InstanceName" ]
+    then
+      ocf_log err "In a Master/Slave configuration the ERS_InstanceName parameter is mandatory."
+      exit $OCF_ERR_ARGS
+    fi
+  else
+    return 0
+  fi
+  return 1
+}
+
+
+#
+# abnormal_end : essential things are missing, but in the natur of a SAP installation - which can be very different
+#                from customer to customer - we cannot handle this always as an error
+#                This would be the case, if the software is installed on shared disks and not visible
+#                to all cluster nodes at all times.
+#
+abnormal_end() {
+  local err_msg=$1
+
+  ocf_is_probe && {
+    sapinstance_status
+    exit $?
+  }
+
+  if [ "$ACTION" = "stop" ]
+  then
+    cleanup_instance
+    exit $OCF_SUCCESS
+  fi
+
+  ocf_log err $err_msg
+  exit $OCF_ERR_CONFIGURED
+}
+
+#
+# sapinstance_init : Define global variables with default values, if optional parameters are not set
+#
+#
+sapinstance_init() {
+
+  local myInstanceName="$1"
+
+  SID=`echo "$myInstanceName" | cut -d_ -f1`
+  InstanceName=`echo "$myInstanceName" | cut -d_ -f2`
+  InstanceNr=`echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/'`
+  SAPVIRHOST=`echo "$myInstanceName" | cut -d_ -f3`
+
+  # optional OCF parameters, we try to guess which directories are correct
+  if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
+  then
+    if have_binary /usr/sap/$SID/$InstanceName/exe/sapstartsrv && have_binary /usr/sap/$SID/$InstanceName/exe/sapcontrol
+    then
+      DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
+      SAPSTARTSRV="/usr/sap/$SID/$InstanceName/exe/sapstartsrv"
+      SAPCONTROL="/usr/sap/$SID/$InstanceName/exe/sapcontrol"
+    elif have_binary /usr/sap/$SID/SYS/exe/run/sapstartsrv && have_binary /usr/sap/$SID/SYS/exe/run/sapcontrol
+    then
+      DIR_EXECUTABLE="/usr/sap/$SID/SYS/exe/run"
+      SAPSTARTSRV="/usr/sap/$SID/SYS/exe/run/sapstartsrv"
+      SAPCONTROL="/usr/sap/$SID/SYS/exe/run/sapcontrol"
+    fi
+  else
+    if have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv" && have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
+    then
+      DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
+      SAPSTARTSRV="$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv"
+      SAPCONTROL="$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
+    fi
+  fi
+
+  sidadm="`echo $SID | tr '[:upper:]' '[:lower:]'`adm"
+
+  [ -z "$DIR_EXECUTABLE" ] && abnormal_end "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
+
+  if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
+  then
+    DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+  else
+    DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
+  fi
+
+  if [ "$myInstanceName" != "$OCF_RESKEY_InstanceName" ]
+  then
+    currentSTART_PROFILE=$OCF_RESKEY_ERS_START_PROFILE
+  else
+    currentSTART_PROFILE=$OCF_RESKEY_START_PROFILE
+  fi
+
+  if [ -z "$currentSTART_PROFILE" ]
+  then
+    SAPSTARTPROFILE="$DIR_PROFILE/START_${InstanceName}_${SAPVIRHOST}"
+  else
+    SAPSTARTPROFILE="$currentSTART_PROFILE"
+  fi
+
+  if [ -z "$OCF_RESKEY_START_WAITTIME" ]
+  then
+    export OCF_RESKEY_START_WAITTIME=3600
+  fi
+
+  if [ -z "$OCF_RESKEY_MONITOR_SERVICES" ]
+  then
+    export OCF_RESKEY_MONITOR_SERVICES="disp+work|msg_server|enserver|enrepserver|jcontrol|jstart"
+  fi
+
+  # as root user we need the library path to the SAP kernel to be able to call sapcontrol
+  if [ `echo $LD_LIBRARY_PATH | grep -c "^$DIR_EXECUTABLE\>"` -eq 0 ]; then
+    LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH
+  fi
+
+  return $OCF_SUCCESS
+}
+
+
+#
+# check_sapstartsrv : Before using sapcontrol we make sure that the sapstartsrv is running for the correct instance.
+#                     We cannot use sapinit and the /usr/sap/sapservices file in case of an enquerep instance,
+#                     because then we have two instances with the same instance number.
+#
+check_sapstartsrv() {
+  local restart=0
+  local runninginst=""
+  local chkrc=$OCF_SUCCESS
+  local output=""
+
+  if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
+    ocf_log warn "sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
+    restart=1
+  else
+    output=`$SAPCONTROL -nr $InstanceNr -function ParameterValue INSTANCE_NAME -format script`
+    if [ $? -eq 0 ]
+    then
+      runninginst=`echo "$output" | grep '^0 : ' | cut -d' ' -f3`
+      if [ "$runninginst" != "$InstanceName" ]
+      then 
+        ocf_log warn "sapstartsrv is running for instance $runninginst, that service will be killed"
+        restart=1
+      else
+        output=`$SAPCONTROL -nr $InstanceNr -function AccessCheck Start`
+        if [ $? -ne 0 ]; then
+          ocf_log warn "FAILED : sapcontrol -nr $InstanceNr -function AccessCheck Start (`ls -ld1 /tmp/.sapstream5${InstanceNr}13`)"
+          ocf_log warn "sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
+          restart=1
+        fi
+      fi
+    else
+      ocf_log warn "sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+      restart=1
+    fi
+  fi
+
+  if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
+
+  if [ $restart -eq 1 ]
+  then
+
+    if [ -d /usr/sap/$SID/SYS/profile/ ]
+    then
+      DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+    else
+      abnormal_end "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
+    fi
+
+    [ ! -r $SAPSTARTPROFILE ] && abnormal_end "Expected $SAPSTARTPROFILE to be the instance START profile, please set START_PROFILE parameter!"
+
+    pkill -9 -f "sapstartsrv.*$runninginst"
+
+    # removing the unix domain socket files as they might have wrong permissions
+    # or ownership - they will be recreated by sapstartsrv during next start
+    rm -f /tmp/.sapstream5${InstanceNr}13
+    rm -f /tmp/.sapstream5${InstanceNr}14
+
+    $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
+
+    # now make sure the daemon has been started and is able to respond
+    local srvrc=1
+    while [ $srvrc -eq 1 -a `pgrep -f "sapstartsrv.*$runninginst" | wc -l` -gt 0 ]
+    do
+      sleep 1
+      $SAPCONTROL -nr $InstanceNr -function GetProcessList > /dev/null 2>&1
+      srvrc=$?
+    done
+
+    if [ $srvrc -ne 1 ]
+    then
+      ocf_log info "sapstartsrv for instance $SID-$InstanceName was restarted !"
+      chkrc=$OCF_SUCCESS
+    else
+      ocf_log error "sapstartsrv for instance $SID-$InstanceName could not be started!"
+      chkrc=$OCF_ERR_GENERIC
+      ocf_is_probe && chkrc=$OCF_NOT_RUNNING
+    fi
+  fi
+
+  return $chkrc
+}
+
+
+#
+# sapuserexit : Many SAP customers need some additional processes/tools to run their SAP systems.
+#               This specialties do not allow a totally generic SAP cluster resource agent.
+#               Someone should write a resource agent for each additional process you need, if it
+#               is required to monitor that process within the cluster manager. To enable 
+#               you to extent this resource agent without developing a new one, this user exit
+#               was introduced.
+#
+sapuserexit() {
+  local NAME="$1"
+  local VALUE="$2"
+
+  if [ -n "$VALUE" ]
+  then
+    if have_binary "$VALUE"
+    then
+      ocf_log info "Calling userexit ${NAME} with customer script file ${VALUE}"
+      "$VALUE" >/dev/null 2>&1
+      ocf_log info "Exiting userexit ${NAME} with customer script file ${VALUE}, returncode: $?"
+    else
+      ocf_log warn "Attribute ${NAME} is set to ${VALUE}, but this file is not executable"
+    fi
+  fi
+  return 0
+}
+
+
+#
+# cleanup_instance : remove resources (processes and shared memory) from a crashed instance)
+#
+cleanup_instance() {
+  pkill -9 -f -U $sidadm $InstanceName
+  ocf_log info "Terminated instance using 'pkill -9 -f -U $sidadm $InstanceName'"
+
+  # it is necessary to call cleanipc as user sidadm if the system has 'vmcj/enable = ON' set - otherwise SHM-segments in /dev/shm/SAP_ES2* cannot beremoved
+  su - $sidadm -c "cleanipc $InstanceNr remove"
+  ocf_log info "Tried to remove shared memory resources using 'cleanipc $InstanceNr remove' as user $sidadm"
+
+  ocf_run rm -fv /usr/sap/$SID/$InstanceName/work/kill.sap
+  ocf_run rm -fv /usr/sap/$SID/$InstanceName/work/shutdown.sap
+  ocf_run rm -fv /usr/sap/$SID/$InstanceName/data/rslgcpid
+  ocf_run rm -fv /usr/sap/$SID/$InstanceName/data/rslgspid
+
+  return 0
+}
+
+#
+# sapinstance_start : Start the SAP instance
+#
+sapinstance_start() {
+
+  sapuserexit PRE_START_USEREXIT "$OCF_RESKEY_PRE_START_USEREXIT"
+
+  local rc=$OCF_NOT_RUNNING
+  local output=""
+  local loopcount=0
+
+  while [ $loopcount -lt 2 ]
+  do
+    loopcount=$(($loopcount + 1))
+
+    check_sapstartsrv
+    rc=$?
+    if [ $rc -eq $OCF_SUCCESS ]; then
+      output=`$SAPCONTROL -nr $InstanceNr -function Start`
+      rc=$?
+      ocf_log info "Starting SAP Instance $SID-$InstanceName: $output"
+    fi
+
+    if [ $rc -ne 0 ]
+    then
+      ocf_log err "SAP Instance $SID-$InstanceName start failed."
+      return $OCF_ERR_GENERIC
+    fi
+
+    local startrc=1
+    while [ $startrc -gt 0 ]
+    do
+      local waittime_start=`date +%s`
+      output=`$SAPCONTROL -nr $InstanceNr -function WaitforStarted $OCF_RESKEY_START_WAITTIME 10`
+      startrc=$?
+      local waittime_stop=`date +%s`
+
+      if [ $startrc -ne 0 ]
+      then
+        if [ $(($waittime_stop - $waittime_start)) -ge $OCF_RESKEY_START_WAITTIME ]
+        then
+          sapinstance_monitor NOLOG
+          if [ $? -eq $OCF_SUCCESS ]
+          then
+            output="START_WAITTIME ($OCF_RESKEY_START_WAITTIME) has elapsed, but instance monitor returned SUCCESS. Instance considered running."
+            startrc=0; loopcount=2
+          fi
+        else
+          if [ $loopcount -eq 1 ] && ocf_is_true $OCF_RESKEY_AUTOMATIC_RECOVER
+          then
+            ocf_log warn "SAP Instance $SID-$InstanceName start failed: $output"
+            ocf_log warn "Try to recover $SID-$InstanceName"
+            cleanup_instance
+          else
+            loopcount=2
+          fi
+          startrc=-1
+        fi
+      else
+        loopcount=2
+      fi
+    done
+  done
+
+  if [ $startrc -eq 0 ]
+  then
+    ocf_log info "SAP Instance $SID-$InstanceName started: $output"
+    rc=$OCF_SUCCESS
+    sapuserexit POST_START_USEREXIT "$OCF_RESKEY_POST_START_USEREXIT"
+  else
+    ocf_log err "SAP Instance $SID-$InstanceName start failed: $output"
+    rc=$OCF_NOT_RUNNING
+  fi
+
+  return $rc
+}
+
+
+#
+# sapinstance_recover: Try startup of failed instance by cleaning up resources
+#
+sapinstance_recover() {
+  cleanup_instance
+  sapinstance_start
+  return $?
+}
+
+
+#
+# sapinstance_stop: Stop the SAP instance
+#
+sapinstance_stop() {
+  local output=""
+  local rc
+
+  sapuserexit PRE_STOP_USEREXIT "$OCF_RESKEY_PRE_STOP_USEREXIT"
+
+  if [ "$OCF_RESKEY_SHUTDOWN_METHOD" = "KILL" ]
+  then
+    ocf_log info "Stopping SAP Instance $SID-$InstanceName with shutdown method KILL!"
+    cleanup_instance
+    return $OCF_SUCCESS
+  fi
+
+  check_sapstartsrv
+  rc=$?
+  if [ $rc -eq $OCF_SUCCESS ]; then
+    output=`$SAPCONTROL -nr $InstanceNr -function Stop`
+    rc=$?
+    ocf_log info "Stopping SAP Instance $SID-$InstanceName: $output"
+  fi
+
+  if [ $rc -eq 0 ]
+  then
+    output=`$SAPCONTROL -nr $InstanceNr -function WaitforStopped 3600 1`
+    if [ $? -eq 0 ]
+    then
+      ocf_log info "SAP Instance $SID-$InstanceName stopped: $output"
+      rc=$OCF_SUCCESS
+    else
+      ocf_log err "SAP Instance $SID-$InstanceName stop failed: $output"
+      rc=$OCF_ERR_GENERIC
+    fi
+  else
+    ocf_log err "SAP Instance $SID-$InstanceName stop failed: $output"
+    rc=$OCF_ERR_GENERIC
+  fi
+
+  sapuserexit POST_STOP_USEREXIT "$OCF_RESKEY_POST_STOP_USEREXIT"
+
+  return $rc
+}
+
+
+#
+# sapinstance_monitor: Can the given SAP instance do anything useful?
+#
+sapinstance_monitor() {
+  local MONLOG=$1
+  local rc
+
+  check_sapstartsrv
+  rc=$?
+
+  if [ $rc -eq $OCF_SUCCESS ]
+  then
+    local count=0
+    local SERVNO
+    local output
+
+    output=`$SAPCONTROL -nr $InstanceNr -function GetProcessList -format script`
+
+    # we have to parse the output, because the returncode doesn't tell anything about the instance status
+    for SERVNO in `echo "$output" | grep '^[0-9] ' | cut -d' ' -f1 | sort -u`
+    do
+      local COLOR=`echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3`
+      local SERVICE=`echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3`
+      local STATE=0
+      local SEARCH
+
+      case $COLOR in
+        GREEN|YELLOW)       STATE=$OCF_SUCCESS;;
+        *)                  STATE=$OCF_NOT_RUNNING;;
+      esac 
+
+      SEARCH=`echo "$OCF_RESKEY_MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g'`
+      if [ `echo "$SERVICE" | egrep -c "$SEARCH"` -eq 1 ]
+      then
+          if [ $STATE -eq $OCF_NOT_RUNNING ]
+          then
+            [ "$MONLOG" != "NOLOG" ] && ocf_log err "SAP instance service $SERVICE is not running with status $COLOR !"
+            rc=$STATE
+          fi
+          count=1
+      fi
+    done
+
+    if [ $count -eq 0 -a $rc -eq $OCF_SUCCESS ]
+    then
+      if ocf_is_probe
+      then
+        rc=$OCF_NOT_RUNNING
+      else
+        [ "$MONLOG" != "NOLOG" ] && ocf_log err "The SAP instance does not run any services which this RA could monitor!"
+        rc=$OCF_ERR_GENERIC
+      fi
+    fi
+  fi
+ 
+  return $rc
+}
+
+
+#
+# sapinstance_status: Lightweight check of SAP instance only with OS tools
+#
+sapinstance_status() {
+  local pid
+  local pids
+
+  [ ! -f "/usr/sap/$SID/$InstanceName/work/kill.sap" ] && return $OCF_NOT_RUNNING
+  pids=`grep '^kill -[0-9]' /usr/sap/$SID/$InstanceName/work/kill.sap | awk '{print $3}'`
+  for pid in $pids
+  do
+    [ `pgrep -f -U $sidadm $InstanceName | grep -c $pid` -gt 0 ] && return $OCF_SUCCESS
+  done
+  return $OCF_NOT_RUNNING
+}
+
+
+#
+# sapinstance_validate: Check the symantic of the input parameters 
+#
+sapinstance_validate() {
+  local rc=$OCF_SUCCESS
+  if [ `echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$'` -ne 1 ]
+  then
+    ocf_log err "Parsing instance profile name: '$SID' is not a valid system ID!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  if [ `echo "$InstanceName" | grep -c '^[A-Z].*[0-9][0-9]$'` -ne 1 ]
+  then
+    ocf_log err "Parsing instance profile name: '$InstanceName' is not a valid instance name!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  if [ `echo "$InstanceNr" | grep -c '^[0-9][0-9]$'` -ne 1 ]
+  then
+    ocf_log err "Parsing instance profile name: '$InstanceNr' is not a valid instance number!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  if [ `echo "$SAPVIRHOST" | grep -c '^[A-Za-z][A-Za-z0-9_-]*$'` -ne 1 ]
+  then
+    ocf_log err "Parsing instance profile name: '$SAPVIRHOST' is not a valid hostname!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  return $rc
+}
+
+
+#
+# sapinstance_start_clone
+#
+sapinstance_start_clone() {
+  sapinstance_init $OCF_RESKEY_ERS_InstanceName
+  ${HA_SBIN_DIR}/crm_master -v 50 -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 50 -l reboot"
+  sapinstance_start
+  return $?
+}
+
+
+#
+# sapinstance_stop_clone
+#
+sapinstance_stop_clone() {
+  sapinstance_init $OCF_RESKEY_ERS_InstanceName
+  ${HA_SBIN_DIR}/crm_master -v 0 -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 0 -l reboot"
+  sapinstance_stop
+  return $?
+}
+
+
+#
+# sapinstance_monitor_clone
+#
+sapinstance_monitor_clone() {
+  # first check with the status function (OS tools) if there could be something like a SAP instance running
+  # as we do not know here, if we are in master or slave state we do not want to start our monitoring
+  # agents (sapstartsrv) on the wrong host
+  local rc
+
+  sapinstance_init $OCF_RESKEY_InstanceName
+  if sapinstance_status; then
+    if sapinstance_monitor; then
+      ${HA_SBIN_DIR}/crm_master -Q -v 100 -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 100 -l reboot"
+      return $OCF_RUNNING_MASTER
+    fi
+    # by nature of the SAP enqueue server we have to make sure
+    # that we do a failover to the slave (enqueue replication server)
+    # in case the enqueue process has failed. We signal this to the
+    # cluster by setting our master preference to a lower value than the slave.
+    ${HA_SBIN_DIR}/crm_master -v 10 -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 10 -l reboot"
+    return $OCF_FAILED_MASTER
+  fi
+
+  sapinstance_init $OCF_RESKEY_ERS_InstanceName
+  sapinstance_status && sapinstance_monitor
+  rc=$?
+  if [ $rc -eq $OCF_SUCCESS ]; then
+    ${HA_SBIN_DIR}/crm_master -Q -v 100 -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 100 -l reboot"
+  fi
+  return $rc
+}
+
+
+#
+# sapinstance_promote_clone: In a Master/Slave configuration get Master by starting the SCS instance and stopping the ERS instance
+#                            The order is important here to behave correct from the application levels view
+#
+sapinstance_promote_clone() {
+  local rc
+
+  sapinstance_init $OCF_RESKEY_InstanceName
+  ocf_log info "Promoting $SID-$InstanceName to running Master."
+  sapinstance_start
+  rc=$?
+
+  if [ $rc -eq $OCF_SUCCESS ]; then
+    sapinstance_init $OCF_RESKEY_ERS_InstanceName
+    sapinstance_stop
+    rc=$?
+  fi
+
+  return $rc
+}
+
+
+#
+# sapinstance_demote_clone: In a Master/Slave configuration get Slave by stopping the SCS instance and starting the ERS instance
+#
+sapinstance_demote_clone() {
+  local rc
+
+  sapinstance_init $OCF_RESKEY_InstanceName
+  ocf_log info "Demoting $SID-$InstanceName to a slave."
+  sapinstance_stop
+  rc=$?
+
+  if [ $rc -eq $OCF_SUCCESS ]; then
+    sapinstance_init $OCF_RESKEY_ERS_InstanceName
+    sapinstance_start
+    rc=$?
+  fi
+
+  return $rc
+}
+
+
+#
+# sapinstance_notify: Handle master scoring - to make sure a slave gets the next master
+#
+sapinstance_notify() {
+  local n_type="$OCF_RESKEY_CRM_meta_notify_type"
+  local n_op="$OCF_RESKEY_CRM_meta_notify_operation"
+
+  if [ "${n_type}_${n_op}" = "post_promote" ]; then
+    # After promotion of one master in the cluster, we make sure that all clones reset their master
+    # value back to 100. This is because a failed monitor on a master might have degree one clone
+    # instance to score 10.
+    ${HA_SBIN_DIR}/crm_master -v 100 -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 100 -l reboot"
+  elif [ "${n_type}_${n_op}" = "pre_demote" ]; then
+    # if we are a slave and a demote event is anounced, make sure we have the highes wish to became master
+    # that is, when a slave resource was startet after the promote event of a already running master (e.g. node of slave was down)
+    # We also have to make sure to overrule the globaly set resource_stickiness or any fail-count factors => INFINITY
+    local n_uname="$OCF_RESKEY_CRM_meta_notify_demote_uname"
+    if [ ${n_uname} != ${HOSTNAME} ]; then
+      ${HA_SBIN_DIR}/crm_master -v INFINITY -l reboot
+      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v INFINITY -l reboot"
+    fi
+  fi
+}
+
+
+#
+#	'main' starts here...
+#
+
+## GLOBALS
+SID=""
+sidadm=""
+InstanceName=""
+InstanceNr=""
+SAPVIRHOST=""
+DIR_EXECUTABLE=""
+SAPSTARTSRV=""
+SAPCONTROL=""
+DIR_PROFILE=""
+SAPSTARTPROFILE=""
+CLONE=0
+
+
+if
+  ( [ $# -ne 1 ] )
+then
+  sapinstance_usage
+  exit $OCF_ERR_ARGS
+fi
+
+ACTION=$1
+if [ "$ACTION" = "status" ]; then
+  ACTION=monitor
+fi
+
+# These operations don't require OCF instance parameters to be set
+case "$ACTION" in
+  usage|methods)                sapinstance_$ACTION
+                                exit $OCF_SUCCESS;;
+  meta-data)                    sapinstance_meta_data
+                                exit $OCF_SUCCESS;;
+  notify)                       sapinstance_notify
+                                exit $OCF_SUCCESS;;
+  *);;
+esac
+
+if ! ocf_is_root
+then
+  ocf_log err "$0 must be run as root"
+  exit $OCF_ERR_PERM
+fi
+
+# parameter check
+if  [ -z "$OCF_RESKEY_InstanceName" ]
+then
+  ocf_log err "Please set OCF_RESKEY_InstanceName to the name to the SAP instance profile!"
+  exit $OCF_ERR_ARGS
+fi
+
+is_clone; CLONE=$?
+if [ ${CLONE} -eq 1 ]
+then
+  CLACT=_clone
+else
+  if [ "$ACTION" = "promote" -o "$ACTION" = "demote" ]
+  then
+    ocf_log err "$ACTION called in a non master/slave environment"
+    exit $OCF_ERR_ARGS
+  fi
+  sapinstance_init $OCF_RESKEY_InstanceName
+fi
+
+# What kind of method was invoked?
+case "$ACTION" in
+  start|stop|monitor|promote|demote)      sapinstance_$ACTION$CLACT
+                                          exit $?;;
+  validate-all)                           sapinstance_validate
+                                          exit $?;;
+  *)                                      sapinstance_methods
+                                          exit $OCF_ERR_UNIMPLEMENTED;;
+esac
