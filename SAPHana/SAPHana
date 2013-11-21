@@ -789,6 +789,7 @@ we_are_master_single()
    echo "$node_status"
 
 }
+
 we_are_master() {
 #HANA_STATE_MASTER=0
 #HANA_STATE_SLAVE=1
@@ -804,7 +805,8 @@ we_are_master() {
    case "$node_status" in
        primary ) 
                   return $HANA_STATE_MASTER;;
-       syncmem )
+       syncmem* | sync* | async* )
+                  # TODO: instead of wildcards we should be sharper, but need to check for possible strings 
                   return $HANA_STATE_SLAVE;;
        none )     # have seen that mode on second side BEFEORE we registered it as replica
                   return $HANA_STATE_DEFECT;;
@@ -960,7 +962,7 @@ saphana_promote_clone() {
 
 
 #
-# saphana_demote_clone: In a Master/Slave configuration get Slave by stopping the SCS instance and starting the ERS instance
+# saphana_demote_clone: for normal master we need to "ignore" demote as we could do NOTHING
 #
 saphana_demote_clone() {
   local rc
