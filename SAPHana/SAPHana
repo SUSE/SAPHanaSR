@@ -784,7 +784,8 @@ we_are_master_single()
 {
    echo " ========== $(date) ============== " >>/tmp/null
    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=/usr/sap/LNX/HDB42/exe /usr/sap/LNX/HDB42/exe/hdbnsutil -sr_state" 2>>/tmp/null )
-   node_status=$(echo "$node_full_status" | awk '/mode/ {print $2}')
+   echo "${node_full_status}" >>/tmp/null
+   node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
    echo "$node_status"
 
 }
@@ -816,10 +817,11 @@ we_are_master() {
                       case "$node_status" in
                            primary )
                                      return $HANA_STATE_MASTER;;
-                           syncmem )
+                           syncmem* | sync* | async* )
+                                     # TODO: instead of wildcards we should be sharper, but need to check for possible strings 
                                      return $HANA_STATE_SLAVE;;
                       esac
-                      sleep 60
+                      sleep 10
                   done
 		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
                   return $HANA_STATE_DEFECT;;
