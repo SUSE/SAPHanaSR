@@ -745,6 +745,45 @@ saphana_validate() {
   return $rc
 }
 
+we_are_master() {
+#HANA_STATE_MASTER=0
+#HANA_STATE_SLAVE=1
+#HANA_STATE_DEFECT=2
+
+   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
+   # TODO: Change stderr location!!
+   # TODO: Fix hdbnsutil location
+   # TODO: Fix user sidadm
+   sidadm=lnxadm
+   node_status=$(we_are_master_single) 
+   ocf_log info "we_are_master: node_status=$node_status"
+   case "$node_status" in
+       primary ) 
+                  return $HANA_STATE_MASTER;;
+       syncmem )
+                  return $HANA_STATE_SLAVE;;
+       none )     # have seen that mode on second side BEFEORE we registered it as replica
+                  return $HANA_STATE_DEFECT;;
+       * )
+		  ocf_log err "we_are_master:  we didn't expect node_status to be: <$node_status>"
+                  ocf_log err "we_are_master: trying multiple times to get master status"
+                  for i in 1 2 3 4 5; do
+                      node_status=$(we_are_master_single)
+                      ocf_log info "we_are_master: (loop nr $i) node_status=$node_status"
+                      case "$node_status" in
+                           primary )
+                                     return $HANA_STATE_MASTER;;
+                           syncmem* | sync* | async* )
+                                     # TODO: instead of wildcards we should be sharper, but need to check for possible strings 
+                                     return $HANA_STATE_SLAVE;;
+                      esac
+                      sleep 10
+                  done
+		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
+                  return $HANA_STATE_DEFECT;;
+   esac;
+   return $HANA_STATE_DEFECT
+}
 
 #
 # saphana_start_clone
@@ -752,14 +791,27 @@ saphana_validate() {
 saphana_start_clone() {
 # TODO: fh - NOT ERS any more
   # saphana_init $OCF_RESKEY_ERS_InstanceName
-  notifies=$(env | grep meta_notify)
-  for notify in $notifies; do
-	  ocf_log info ">> NOTIFY VALUE: $notify <<"
-  done
+  #notifies=$(env | grep meta_notify)
+  #for notify in $notifies; do
+  #	  ocf_log info ">> NOTIFY VALUE: $notify <<"
+  #done
+  ocf_log info ">> NOTIFY VALUE: OCF_RESKEY_CRM_meta_notify_master_uname=${OCF_RESKEY_CRM_meta_notify_master_uname} <<"
   saphana_init $OCF_RESKEY_InstanceName
 # TODO: fh - when to check, if this is master already?
 #  ${HA_SBIN_DIR}/crm_master -v 50 -l reboot
 #      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 50 -l reboot"
+  we_are_master; master_status=$?
+  if [ $master_status -eq $HANA_STATE_MASTER ]; then
+     #
+     # we will be a master (primary) so checking, if the other nor primary
+     #
+     # TODO: This will NOT work for scale-out only for scale-up (1:1)
+     if [ -n "$OCF_RESKEY_CRM_meta_notify_master_uname" ]; then
+	ocf_log err "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
+        return $OCF_ERR_GENERIC
+     fi
+      
+  fi 
   saphana_start
   return $?
 }
@@ -789,48 +841,6 @@ we_are_master_single()
    echo "$node_status"
 
 }
-
-we_are_master() {
-#HANA_STATE_MASTER=0
-#HANA_STATE_SLAVE=1
-#HANA_STATE_DEFECT=2
-
-   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
-   # TODO: Change stderr location!!
-   # TODO: Fix hdbnsutil location
-   # TODO: Fix user sidadm
-   sidadm=lnxadm
-   node_status=$(we_are_master_single) 
-   ocf_log info "we_are_master: node_status=$node_status"
-   case "$node_status" in
-       primary ) 
-                  return $HANA_STATE_MASTER;;
-       syncmem* | sync* | async* )
-                  # TODO: instead of wildcards we should be sharper, but need to check for possible strings 
-                  return $HANA_STATE_SLAVE;;
-       none )     # have seen that mode on second side BEFEORE we registered it as replica
-                  return $HANA_STATE_DEFECT;;
-       * )
-		  ocf_log err "we_are_master:  we didn't expect node_status to be: <$node_status>"
-                  ocf_log err "we_are_master: trying multiple times to get master status"
-                  for i in 1 2 3 4 5; do
-                      node_status=$(we_are_master_single)
-                      ocf_log info "we_are_master: (loop nr $i) node_status=$node_status"
-                      case "$node_status" in
-                           primary )
-                                     return $HANA_STATE_MASTER;;
-                           syncmem* | sync* | async* )
-                                     # TODO: instead of wildcards we should be sharper, but need to check for possible strings 
-                                     return $HANA_STATE_SLAVE;;
-                      esac
-                      sleep 10
-                  done
-		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
-                  return $HANA_STATE_DEFECT;;
-   esac;
-   return $HANA_STATE_DEFECT
-}
-
 #
 # saphana_monitor_clone
 #
@@ -838,7 +848,7 @@ saphana_monitor_clone() {
   # first check with the status function (OS tools) if there could be something like a SAP instance running
   # as we do not know here, if we are in master or slave state we do not want to start our monitoring
   # agents (sapstartsrv) on the wrong host
-  local rc=$OCF_GENERIC_ERROR
+  local rc=$OCF_ERR_GENERIC
 
 
   #
@@ -878,7 +888,7 @@ saphana_monitor_clone() {
                rc=$OCF_SUCCESS
            else
                ocf_log info "fhDBG saphana_monitor_clone: we_are_master: HANA_STATE_DEFECT"
-               rc=$OCF_GENERIC_ERROR
+               rc=$OCF_ERR_GENERIC
 	   fi
       fi
     else 
@@ -962,7 +972,7 @@ saphana_promote_clone() {
 
 
 #
-# saphana_demote_clone: for normal master we need to "ignore" demote as we could do NOTHING
+# saphana_demote_clone: In a Master/Slave configuration get Slave by stopping the SCS instance and starting the ERS instance
 #
 saphana_demote_clone() {
   local rc
