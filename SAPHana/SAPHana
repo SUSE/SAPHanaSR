@@ -745,6 +745,51 @@ saphana_validate() {
   return $rc
 }
 
+# set the hana_sync_status attribute
+#   param: location like WALLDORF or ROT
+set_hana_sync_status_attr()
+{
+   theStatus=$1
+   # TODO: move ATTR_NAME_HANA_SYNC_STATUS to init
+   ATTR_NAME_HANA_SYNC_STATUS="hana_sync_state"
+   crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS"
+   # TODO: Do we need error handling?
+}
+
+get_hana_sync_status_attr()
+{
+   # TODO: move ATTR_NAME_HANA_SYNC_STATUS to init
+   # TODO: what about multiple HANAs with different SID in one cluster -> need to handle different attributes or spaces
+   ATTR_NAME_HANA_SYNC_STATUS="hana_sync_state"
+   crm_attribute -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -q
+   # TODO: Do we need error handling?
+}
+
+#
+# set the hana_master_at attribute
+#   param: location like WALLDORF or ROT
+#
+set_hana_master_at_attr()
+{
+   theLocation=$1
+   # TODO: move ATTR_NAME_HANA_MASTER_AT to init
+   ATTR_NAME_HANA_MASTER_AT="hana_master_at"
+   crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_MASTER_AT"
+   # TODO: Do we need error handling?
+}
+
+#
+# get the hana_master_at attribute
+#
+get_hana_master_at_attr()
+{
+   # TODO: move ATTR_NAME_HANA_MASTER_AT to init
+   ATTR_NAME_HANA_MASTER_AT="hana_master_at"
+   # crm_attribute -G -n "$ATTR_NAME_HANA_MASTER_AT" | awk '{for (i=1; i<=NF; i++)  { split($i, VV, "="); if ( VV[1] == "value") { printf "%s\n", VV[2] } } }'
+    crm_attribute -G -n "$ATTR_NAME_HANA_MASTER_AT" -q
+   # TODO: Do we need error handling?
+}
+
 we_are_master() {
 #HANA_STATE_MASTER=0
 #HANA_STATE_SLAVE=1
@@ -835,12 +880,90 @@ saphana_stop_clone() {
 we_are_master_single()
 {
    echo " ========== $(date) ============== " >>/tmp/null
+   #
+   # TODO: check how to remove the paths
+   # TODO: remove debug-output to /tmp/null
+   #
    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=/usr/sap/LNX/HDB42/exe /usr/sap/LNX/HDB42/exe/hdbnsutil -sr_state" 2>>/tmp/null )
    echo "${node_full_status}" >>/tmp/null
    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
    echo "$node_status"
-
 }
+
+#
+# get site name of local HANA instance
+#
+get_site_name()
+{
+   #
+   # TODO: check how to remove the paths
+   #
+   node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=/usr/sap/LNX/HDB42/exe /usr/sap/LNX/HDB42/exe/hdbnsutil -sr_state" 2>>/tmp/null )
+   echo "${node_full_status}" >>/tmp/null
+   node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "<%s>/n", $3 } ' )
+   echo "$node_site_name"
+}
+
+#
+# get the HANA sync status
+# 
+get_hana_sync_status()
+{
+   #
+   # TODO: 
+   #
+ #  hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
+   export PATH="/usr/sap/LNX/HDB42/lv9042:/usr/sap/LNX/HDB42:/usr/sap/LNX/HDB42/exe:/usr/sap/LNX/HDB42/exe/Python/bin:/usr/sap/LNX/HDB42/exe/dat_bin_dir:.:/usr/sap/LNX/home:/usr/sap/LNX/home/bin:/usr/bin:/usr/sbin/:/bin:/sbin:${PATH}"
+    export LD_LIBRARY_PATH="/usr/sap/LNX/HDB42/exe:/usr/sap/LNX/HDB42/exe/Python/lib:/usr/sap/LNX/HDB42/exe/filter:/usr/sap/LNX/HDB42/exe/dat_bin_dir:/usr/sap/LNX/HDB42/exe/plugins/afl:/usr/sap/LNX/HDB42/exe/plugins/lcapps:/usr/sap/LNX/SYS/global/security/lib:/usr/sap/LNX/SYS/global/hdb/federation:$LD_LIBRARY_PATH"
+   hana_sync_status=$(hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | tr -d '"')
+   #
+   # UNKNOWN, ACTIVE, ERROR, INITIALIZING
+   #
+   if [ "${hana_sync_status}" == "ACTIVE" ]; then
+      ocf_log info set_hana_sync_status_attr "OK"
+      set_hana_sync_status_attr "OK"
+   else
+      ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
+      ocf_log info set_hana_sync_status_attr "FAILURE"
+      set_hana_sync_status_attr "FAILURE"
+   fi
+}
+
+#
+# get the HANA landscape status
+#
+get_hana_landscape_status()
+{
+    #
+    # TODO: check how to remove the paths
+  # as sidadm:
+  #  python /usr/sap/LNX/HDB42/exe/python_support/landscapeHostConfiguration.py ; ls_rc=$?
+    # ls_rc:
+    # 0 : FATAL
+    # 1 : ERROR
+    # 2 : WARN
+    # 3 : INFO
+    # 4 : OK
+    return $ls_rc;
+}
+
+#
+# register_hana_secondary
+#
+
+register_hana_secondary()
+{
+   local rc=2;
+   # TODO: implementation :)
+   # HANA nedds to be stopped to register!
+   # as sidadm
+   # hdbnsutil -sr_register --remoteHost=lv9041 --remoteInstance=42 --mode=syncmem --name=ROT
+   # --remoteHost=  this is the (new) primary host
+   # --remoteInstance= this is the (new) primaries instance number - do we assume the same number?
+   # --name= this is the local(!) site name 
+   return rc;
+}
+
 #
 # saphana_monitor_clone
 #
@@ -882,6 +1005,7 @@ saphana_monitor_clone() {
       if [ $master_status -eq $HANA_STATE_MASTER ]; then
            ocf_log info "fhDBG saphana_monitor_clone: we_are_master: HANA_STATE_MASTER"
            rc=$OCF_RUNNING_MASTER
+           get_hana_sync_status
       else 
            if [ $master_status -eq $HANA_STATE_SLAVE  ]; then
                ocf_log info "fhDBG saphana_monitor_clone: we_are_master: HANA_STATE_SLAVE"
@@ -942,20 +1066,29 @@ saphana_promote_clone() {
         # we are SLAVE and need to takepover ...
         # promote on the replica side...
         #
-        ocf_log info "!!!!!!! Promote REPLICA $SID-$InstanceName to be master. !!!!!!"
-        #####
-        su - $sidadm -c "hdbnsutil -sr_takeover"
-        # TODO: do we need to check return codes, or does the we_are_master test works successful?
-        #
-        # now gain check, if we are master NOW
-        #
-        # TODO: check, if we need to destigush between HANA_STATE_MASTER, HANA_STATE_SLAVE, HANA_STATE_DEFECT
-        #
-        if we_are_master; then
-           rc=$OCF_SUCCESS;
-        else
-           rc=$OCF_ERR_GENERIC
-        fi 
+        hana_sync=$(get_hana_sync_status_attr)
+        case "$hana_sync" in
+             OK )
+		ocf_log info "!!!!!!! Promote REPLICA $SID-$InstanceName to be master. !!!!!!"
+		#####
+		su - $sidadm -c "hdbnsutil -sr_takeover"
+		# TODO: do we need to check return codes, or does the we_are_master test works successful?
+		#
+		# now gain check, if we are master NOW
+		#
+		# TODO: check, if we need to destigush between HANA_STATE_MASTER, HANA_STATE_SLAVE, HANA_STATE_DEFECT
+		#
+		if we_are_master; then
+		   rc=$OCF_SUCCESS;
+		else
+		   rc=$OCF_ERR_GENERIC
+		fi 
+                ;;
+             * )
+                ocf_log err "!!!!!!! HANA SYNC STATUS IS NOT 'OK' SO WE COULD NOT PROMOTE !!!!!!!"
+                rc=$OCF_ERR_GENERIC
+                ;;
+        esac
      else
         #
         # neither MASTER nor SLAVE - This clone instance seams broken!!
