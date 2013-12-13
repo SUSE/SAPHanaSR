@@ -290,17 +290,15 @@ saphana_init() {
   local myInstanceName="$1"
 
   SID=$(echo "$myInstanceName" | cut -d_ -f1)
+  sid=$(echo "$SID" | tr [:upper:] [:lower:])
+  sidadm="${sid}adm"
   InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
   SIDInstanceName=${myInstanceName}
   InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
   #SAPVIRHOST=$(echo "$myInstanceName" | cut -d_ -f3)
   SAPVIRHOST=$(hostname)
 
-
-echo "fhDBG SIDInstanceName=$SIDInstanceName"
-echo "fhDBG InstanceName=$InstanceName"
-echo "fhDBG InstanceNr=$InstanceNr"
-echo "fhDBG SAPVIRHOST=$SAPVIRHOST"
+  ocf_log info "fhDBG: SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
 
 #echo "exit 99" ; exit 99
 
@@ -365,6 +363,7 @@ echo "fhDBG SAPVIRHOST=$SAPVIRHOST"
     export LD_LIBRARY_PATH
   fi
 
+  ocf_log info "fhDBG: LD_LIBRARY_PATH=$LD_LIBRARY_PATH, DIR_EXECUTABLE=$DIR_EXECUTABLE"
   return $OCF_SUCCESS
 }
 
@@ -799,7 +798,7 @@ we_are_master() {
    # TODO: Change stderr location!!
    # TODO: Fix hdbnsutil location
    # TODO: Fix user sidadm
-   sidadm=lnxadm
+   #sidadm=lnxadm
    node_status=$(we_are_master_single) 
    ocf_log info "we_are_master: node_status=$node_status"
    case "$node_status" in
@@ -850,10 +849,14 @@ saphana_start_clone() {
      #
      # we will be a master (primary) so checking, if the other nor primary
      #
-     # TODO: This will NOT work for scale-out only for scale-up (1:1)
-     if [ -n "$OCF_RESKEY_CRM_meta_notify_master_uname" ]; then
-	ocf_log err "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
-        return $OCF_ERR_GENERIC
+     # TODO: Maybe this will NOT work for scale-out only for scale-up (1:1)
+     Master_Nodes=$(echo $OCF_RESKEY_CRM_meta_notify_master_uname | tr -d "" )
+     if [ -n "$Master_Nodes" ]; then
+        if [ "$Master_Nodes" != "$(hostname)" ]; then
+           ocf_log warn "!!!!!!!!!!! Master_Nodes=\"$Master_Nodes\" !!!!!!!!!!!!!"
+	   ocf_log err  "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
+	   return $OCF_ERR_GENERIC
+        fi
      fi
       
   fi 
@@ -884,7 +887,8 @@ we_are_master_single()
    # TODO: check how to remove the paths
    # TODO: remove debug-output to /tmp/null
    #
-   node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=/usr/sap/LNX/HDB42/exe /usr/sap/LNX/HDB42/exe/hdbnsutil -sr_state" 2>>/tmp/null )
+   ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
+   node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
    echo "${node_full_status}" >>/tmp/null
    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
    echo "$node_status"
@@ -898,7 +902,8 @@ get_site_name()
    #
    # TODO: check how to remove the paths
    #
-   node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=/usr/sap/LNX/HDB42/exe /usr/sap/LNX/HDB42/exe/hdbnsutil -sr_state" 2>>/tmp/null )
+   ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
+   node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
    echo "${node_full_status}" >>/tmp/null
    node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "<%s>/n", $3 } ' )
    echo "$node_site_name"
@@ -913,9 +918,7 @@ get_hana_sync_status()
    # TODO: 
    #
  #  hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
-   export PATH="/usr/sap/LNX/HDB42/lv9042:/usr/sap/LNX/HDB42:/usr/sap/LNX/HDB42/exe:/usr/sap/LNX/HDB42/exe/Python/bin:/usr/sap/LNX/HDB42/exe/dat_bin_dir:.:/usr/sap/LNX/home:/usr/sap/LNX/home/bin:/usr/bin:/usr/sbin/:/bin:/sbin:${PATH}"
-    export LD_LIBRARY_PATH="/usr/sap/LNX/HDB42/exe:/usr/sap/LNX/HDB42/exe/Python/lib:/usr/sap/LNX/HDB42/exe/filter:/usr/sap/LNX/HDB42/exe/dat_bin_dir:/usr/sap/LNX/HDB42/exe/plugins/afl:/usr/sap/LNX/HDB42/exe/plugins/lcapps:/usr/sap/LNX/SYS/global/security/lib:/usr/sap/LNX/SYS/global/hdb/federation:$LD_LIBRARY_PATH"
-   hana_sync_status=$(hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | tr -d '"')
+   hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | tr -d '"')
    #
    # UNKNOWN, ACTIVE, ERROR, INITIALIZING
    #
@@ -929,7 +932,6 @@ get_hana_sync_status()
    fi
 }
 
-#
 # get the HANA landscape status
 #
 get_hana_landscape_status()
@@ -937,7 +939,8 @@ get_hana_landscape_status()
     #
     # TODO: check how to remove the paths
   # as sidadm:
-  #  python /usr/sap/LNX/HDB42/exe/python_support/landscapeHostConfiguration.py ; ls_rc=$?
+    su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py"; ls_rc=$?
+    
     # ls_rc:
     # 0 : FATAL
     # 1 : ERROR
