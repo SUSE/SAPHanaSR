@@ -281,6 +281,17 @@ abnormal_end() {
   exit $OCF_ERR_CONFIGURED
 }
 
+
+set_crm_master()
+{
+   local score=0
+   if [ -n "$1" ]; then
+      score=$1
+   fi
+   ${HA_SBIN_DIR}/crm_master -v $score -l reboot
+   logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v $score -l reboot"
+}
+
 #
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
@@ -835,11 +846,8 @@ saphana_start_clone() {
   #for notify in $notifies; do
   #	  ocf_log info ">> NOTIFY VALUE: $notify <<"
   #done
-  ocf_log info ">> NOTIFY VALUE: OCF_RESKEY_CRM_meta_notify_master_uname=${OCF_RESKEY_CRM_meta_notify_master_uname} <<"
+  ocf_log info "fhDBG NOTIFY VALUE: OCF_RESKEY_CRM_meta_notify_master_uname=${OCF_RESKEY_CRM_meta_notify_master_uname}"
   saphana_init $OCF_RESKEY_InstanceName
-# TODO: fh - when to check, if this is master already?
-#  ${HA_SBIN_DIR}/crm_master -v 50 -l reboot
-#      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 50 -l reboot"
   ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to DEMOTED"
   crm_attribute -N $(hostname) -v DEMOTED  -n "master_hana_${sid}" -l forever
   we_are_primary; primary_status=$?
@@ -853,10 +861,29 @@ saphana_start_clone() {
         if [ "$Master_Nodes" != "$(hostname)" ]; then
            ocf_log warn "!!!!!!!!!!! Master_Nodes=\"$Master_Nodes\" !!!!!!!!!!!!!"
 	   ocf_log err  "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
+           #
+           # DO NOT PROMOTE HERE
+           # TODO: Could we repair that situation?
+           #
+           set_crm_master -INFINITY
 	   return $OCF_ERR_GENERIC
         fi
+     else
+        # we are primary and we are alone - so we could promote, if the sync status is unequal "FAILED"
+        # TODO: Implement handling of the sync-status instead of static 100 score
+        # PSEUDO_CODE:
+        # if sync-status != "FAILED"
+        #    set_crm_master  2000
+        # else
+        #    set_crm_master -INFINITY
+        set_crm_master  100
      fi
-      
+  else 
+      #
+      # we would be slave (secondary)
+      #
+      # TODO: Implement handling of the sync-status instead of the static 0 score
+      set_crm_master  0
   fi 
   saphana_start
   return $?
@@ -873,8 +900,7 @@ saphana_stop_clone() {
 # TODO: fh - when to check, if this is/was master already?
   ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to UNDEFINED"
   crm_attribute -N $(hostname) -v UNDEFINED  -n "master_hana_${sid}" -l forever
-  ${HA_SBIN_DIR}/crm_master -v 0 -l reboot
-      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 0 -l reboot"
+  set_crm_master 0
   saphana_stop
   return $?
 }
@@ -975,6 +1001,7 @@ saphana_monitor_clone() {
   # as we do not know here, if we are in master or slave state we do not want to start our monitoring
   # agents (sapstartsrv) on the wrong host
   local rc=$OCF_ERR_GENERIC
+  local promoted=0
 
 
   #
@@ -1010,8 +1037,8 @@ saphana_monitor_clone() {
        #
        ocf_log info "fhDBG saphana_monitor_clone: we_are_primary: HANA_STATE_PRIMARY"
        #
-       ##### CHECK, IF WE ARE DEMOTED
-       
+       ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
+       #
        promote_attr=$(crm_attribute -N $(hostname) -G -n "master_hana_${sid}" -l forever -q)
        ocf_log info "fhDBG saphana_monitor_clone: master_hana_${sid}=$promote_attr"
        case "$promote_attr" in
@@ -1026,17 +1053,32 @@ saphana_monitor_clone() {
                         ;;
        esac
        #
-       # old method was: saphana_monitor - new method is get_hana_landscape_status
+       ##### old method was: saphana_monitor - new method is get_hana_landscape_status
+       #
        get_hana_landscape_status; lss=$? 
        ocf_log info "fhDBG saphana_monitor_clone: get_hana_landscape_status=$lss"
        case "$lss" in
            0 | 1 ) # FATAL or ERROR
                    if ocf_is_probe; then
+		      # 
+                      # leave master score untouched, only set return code
+                      #
                       rc=$OCF_NOT_RUNNING
                    else
 		      if [ "$promoted" -eq 1 ]; then
+                         # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
+			 # TODO: Adjust with set_crm_master?
+                         #       For Migration it would be good to decrease master score
+                         #       For Reload locally we should NOT adjust the master score
+                         # ===>  Should we rely on the migration threshold?
+                         #       set_crm_master 
                          rc=$OCF_FAILED_MASTER
                       else
+                         # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
+			 # TODO: Adjust with set_crm_master?
+                         #       Current decission: Do NOT adjust master score now as other
+                         #       steps ahould already have done that
+                         #
                          rc=$OCF_NOT_RUNNING
                       fi
                    fi
@@ -1044,19 +1086,24 @@ saphana_monitor_clone() {
            2 | 3 | 4 )
                    # WARN INFO OK
 		   if [ "$promoted" -eq 1 ]; then
+			 # TODO: Adjust with set_crm_master?
                        rc=$OCF_RUNNING_MASTER
                    else
+			 # TODO: Adjust with set_crm_master?
                        rc=$OCF_SUCCESS
                    fi
                    ;;
            * )
                    # UNDEFINED STATUS
                    if ocf_is_probe; then
+			 # TODO: Adjust with set_crm_master?
                       rc=$OCF_NOT_RUNNING
                    else
 		      if [ "$promoted" -eq 1 ]; then
+			 # TODO: Adjust with set_crm_master?
                          rc=$OCF_FAILED_MASTER
                       else
+			 # TODO: Adjust with set_crm_master?
                          rc=$OCF_NOT_RUNNING
                       fi
                    fi
@@ -1086,11 +1133,18 @@ saphana_monitor_clone() {
                        rc=$OCF_NOT_RUNNING
                        ;;
            esac 
+	   # TODO: Checking Sync-Status:
+           # PSEUDO-CODE
+           # if sync-status != "FAILED"
+           #    set_crm_master 100
+           # else
+           #    set_crm_master -INFINITY
        else
            #
            # OK, we are neither HANA PRIMARY nor HANA SECONDARY
            #
            ocf_log info "fhDBG saphana_monitor_clone: we_are_primary: HANA_STATE_DEFECT"
+	   # TODO: Or only set_crm_master -INFINITY ?
            rc=$OCF_ERR_GENERIC
        fi
   fi
@@ -1197,16 +1251,16 @@ saphana_notify() {
     # After promotion of one master in the cluster, we make sure that all clones reset their master
     # value back to 100. This is because a failed monitor on a master might have degree one clone
     # instance to score 10.
-    ${HA_SBIN_DIR}/crm_master -v 100 -l reboot
-      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v 100 -l reboot"
+    # TODO: a) check, if the "story" is still correct for SAPHana in scale-up and scale-out
+    #       b) are the values 10 / 100 still correct?
+    set_crm_master 100
   elif [ "${n_type}_${n_op}" = "pre_demote" ]; then
     # if we are a slave and a demote event is anounced, make sure we have the highes wish to became master
     # that is, when a slave resource was startet after the promote event of a already running master (e.g. node of slave was down)
     # We also have to make sure to overrule the globaly set resource_stickiness or any fail-count factors => INFINITY
     local n_uname="$OCF_RESKEY_CRM_meta_notify_demote_uname"
     if [ ${n_uname} != ${HOSTNAME} ]; then
-      ${HA_SBIN_DIR}/crm_master -v INFINITY -l reboot
-      logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v INFINITY -l reboot"
+      set_crm_master INFINITY
     fi
   fi
 }
