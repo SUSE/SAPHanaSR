@@ -309,9 +309,7 @@ saphana_init() {
   #SAPVIRHOST=$(echo "$myInstanceName" | cut -d_ -f3)
   SAPVIRHOST=$(hostname)
 
-  ocf_log info "fhDBG: SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
-
-#echo "exit 99" ; exit 99
+  ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
 
   # optional OCF parameters, we try to guess which directories are correct
   if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -336,7 +334,6 @@ saphana_init() {
     fi
   fi
 
-  sidadm="`echo $SID | tr '[:upper:]' '[:lower:]'`adm"
 
   [ -z "$DIR_EXECUTABLE" ] && abnormal_end "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
 
@@ -1291,13 +1288,13 @@ then
   exit $OCF_ERR_ARGS
 fi
 
-saphana_init $OCF_RESKEY_InstanceName
 ACTION=$1
 if [ "$ACTION" = "status" ]; then
   ACTION=monitor
 fi
 
-# These operations don't require OCF instance parameters to be set
+# These operations don't require OCF parameters to be set
+# TODO: check, if notify is still not needing OCF parameters
 case "$ACTION" in
   usage|methods)                saphana_$ACTION
                                 exit $OCF_SUCCESS;;
@@ -1307,6 +1304,7 @@ case "$ACTION" in
                                 exit $OCF_SUCCESS;;
   *);;
 esac
+saphana_init $OCF_RESKEY_InstanceName
 
 if ! ocf_is_root
 then
