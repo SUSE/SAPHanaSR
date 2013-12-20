@@ -784,12 +784,12 @@ set_hana_sync_status_attr()
    if [ $# -ge 2 ]; then
       theStatus=$1
       shift
-      theHosts="$*"
+      theHosts=$(echo $* | dequote)
       for theHost in $theHosts; do
           ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
-          # ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
-          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost
-	   # TODO: Do we need error handling?
+          ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
+          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
+	   # TODO: maybe we do need error handling!!
       done
       rc=0
    else
@@ -986,7 +986,7 @@ get_site_name()
 # 
 analyze_hana_sync_status()
 {
-    local hana_sync_status
+    local hana_sync_status what_does_the_camaelion_say
     #
     hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | dequote)
     #
@@ -1012,12 +1012,12 @@ analyze_hana_sync_status()
         #
         # we have a broken secondary site - set all hosts to "FAILURE"
         #
-        set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts
+        what_does_the_camaelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1)
     else 
         #
         # we have an ACTIVE secondary site - set all hosts to "OK"
         #
-        set_hana_sync_status_attr "OK" $all_secondary_hosts
+        what_does_the_camaelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1)
     fi
 }
 
@@ -1063,6 +1063,7 @@ saphana_monitor_clone() {
 	# agents (sapstartsrv) on the wrong host
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
+    local init_attribute=0
 
 	if ocf_is_probe; then
 		ocf_log info "fhDBG: PROBE ONLY"
@@ -1083,20 +1084,25 @@ saphana_monitor_clone() {
         #
         promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q)
         ocf_log info "fhDBG saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
-        case "$promote_attr" in
-            PROMOTED )
-                promoted=1;
-                ;;
-            DEMOTED )
-                promoted=0;
-                ;;
-            WAITING )  # However - WAITING should never happeb for a PRIMARY
-                promoted=0;
-                ;;
-            * )
-                promoted=0;
-                ;;
-        esac
+        if [ -z "$promote_attr" ]; then
+            init_attribute=1
+            promoted=0;
+        else
+            case "$promote_attr" in
+                PROMOTED )
+                    promoted=1;
+                    ;;
+                DEMOTED )
+                    promoted=0;
+                    ;;
+                WAITING )  # However - WAITING should never happeb for a PRIMARY
+                    promoted=0;
+                    ;;
+                * )
+                    promoted=0;
+                    ;;
+            esac
+        fi
         #
         ##### old method was: saphana_monitor - new method is get_hana_landscape_status
         #
@@ -1139,7 +1145,13 @@ saphana_monitor_clone() {
                     if [ "$promoted" -eq 1 ]; then
                         rc=$OCF_RUNNING_MASTER
                     else
-                        rc=$OCF_SUCCESS
+                        if [ "$init_attribute" -eq 1 ]; then
+                            ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
+                            crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+                            rc=$OCF_RUNNING_MASTER
+                        else
+                            rc=$OCF_SUCCESS
+                        fi
                     fi
                     analyze_hana_sync_status
                 fi
@@ -1166,28 +1178,35 @@ saphana_monitor_clone() {
             #
             promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q)
             ocf_log info "fhDBG saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
-            case "$promote_attr" in
-                PROMOTED ) # However - WAITING should never happen for a SECONDARY
-                    promoted=1;
-                    ;;
-                DEMOTED )  # This is the status we expect
-                    promoted=0;
-                    ;;
-                WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-                    Master_Nodes=$(echo $meta_notify_master_uname | dequote )
-                    if [ -n "$Master_Nodes" ]; then
-                        ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
-                        saphana_start_clone
-                        rc=$?
-                    else
-                        ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary missing"
-                        return $OCF_SUCCESS
-                    fi
-                    ;;
-                * )
-                    promoted=0;
-                    ;;
-            esac
+            if [ -z "$promote_attr" ]; then
+                init_attribute=1
+                #  TODO: do we need to inizialize also the DEMOTED attribute value?
+                promoted=0;
+            else
+                case "$promote_attr" in
+                    PROMOTED ) # However - WAITING should never happen for a SECONDARY
+                        promoted=1;
+                        ;;
+                    DEMOTED )  # This is the status we expect
+                        promoted=0;
+                        ;;
+                    WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
+                        Master_Nodes=$(echo $meta_notify_master_uname | dequote )
+                        if [ -n "$Master_Nodes" ]; then
+                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
+                            saphana_start_clone
+                            rc=$?
+                        else
+                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary missing"
+                            return $OCF_SUCCESS
+                        fi
+                        promoted=0;
+                        ;;
+                    * )
+                        promoted=0;
+                        ;;
+                esac
+            fi
             #
             ocf_log info "fhDBG saphana_monitor_clone: HANA_STATE_SECONDARY"
             #
