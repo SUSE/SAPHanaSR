@@ -230,6 +230,10 @@ saphana_methods() {
 }
 
 
+dequote()
+{
+   tr -d '"'
+}
 
 #
 # is_clone : find out if we are configured to run in a Master/Slave configuration
@@ -238,15 +242,14 @@ is_clone() {
   if [ -n "$OCF_RESKEY_CRM_meta_clone_max" ] \
    && [ "$OCF_RESKEY_CRM_meta_clone_max" -gt 0 ]
   then
-# TOODO: fh : for first its the same for our HANA 1:1 SR as for ERS we only want ONE master and ONE additional slave
-    #if [ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ] || \
-    #   [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] || \
-    #   [ "$OCF_RESKEY_CRM_meta_master_node_max" -ne 1 ] || \
-    #   [ "$OCF_RESKEY_CRM_meta_master_max" -ne 1 ]
-    #then
-    #        ocf_log err "Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
-    #        exit $OCF_ERR_CONFIGURED
-    #fi
+    if [ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ] || \
+       [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] || \
+       [ "$OCF_RESKEY_CRM_meta_master_node_max" -ne 1 ] || \
+       [ "$OCF_RESKEY_CRM_meta_master_max" -ne 1 ]
+    then
+            ocf_log err "Clone options misconfigured. (expect: clone-max=2,clone-node-max=1,master-node-max=1,master-max=1)"
+            exit $OCF_ERR_CONFIGURED
+    fi
     echo 1 
 
   else
@@ -310,6 +313,10 @@ saphana_init() {
   SAPVIRHOST=$(hostname)
 
   ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
+   
+  ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"
+  ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"
+  ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state"
 
   # optional OCF parameters, we try to guess which directories are correct
   if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -753,21 +760,33 @@ saphana_validate() {
 }
 
 # set the hana_sync_status attribute
-#   param: location like WALLDORF or ROT
+#   param: STATUS [ HOST-LIST ]
 set_hana_sync_status_attr()
 {
-   theStatus=$1
-   # TODO: move ATTR_NAME_HANA_SYNC_STATUS to init
-   ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"
-   crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS"
-   # TODO: Do we need error handling?
+   local rc theStatus theHosts
+   if [ $# -ge 2 ]; then
+      theStatus=$1
+      shift
+      theHosts="$*"
+      for theHost in $theHosts; do
+          ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
+          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost
+	   # TODO: Do we need error handling?
+      done
+      rc=0
+   else
+      rc=1
+   fi
+   return $rc
 }
 
 get_hana_sync_status_attr()
 {
-   # TODO: move ATTR_NAME_HANA_SYNC_STATUS to init
-   ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"
-   crm_attribute -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -q
+   local sync_attr
+   sync_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l forever -q)
+
+   # OLD ATTRIBUTE IN PROPETRY INSTEAD OF HOSTS ATTRIBUTES
+   #crm_attribute -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -q
    # TODO: Do we need error handling?
 }
 
@@ -778,8 +797,6 @@ get_hana_sync_status_attr()
 set_hana_primary_at_attr()
 {
    theLocation=$1
-   # TODO: move ATTR_NAME_HANA_PRIMARY_AT to init
-   ATTR_NAME_HANA_PRIMARY_AT="hana_primary_at"
    crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"
    # TODO: Do we need error handling?
 }
@@ -789,10 +806,7 @@ set_hana_primary_at_attr()
 #
 get_hana_primary_at_attr()
 {
-   # TODO: move ATTR_NAME_HANA_PRIMARY_AT to init
-   ATTR_NAME_HANA_PRIMARY_AT="hana_primary_at"
-   # crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" | awk '{for (i=1; i<=NF; i++)  { split($i, VV, "="); if ( VV[1] == "value") { printf "%s\n", VV[2] } } }'
-    crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q
+   crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q
    # TODO: Do we need error handling?
 }
 
@@ -845,15 +859,15 @@ saphana_start_clone() {
   #done
   ocf_log info "fhDBG NOTIFY VALUE: OCF_RESKEY_CRM_meta_notify_master_uname=${OCF_RESKEY_CRM_meta_notify_master_uname}"
   saphana_init $OCF_RESKEY_InstanceName
-  ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to DEMOTED"
-  crm_attribute -N $(hostname) -v DEMOTED  -n "master_hana_${sid}" -l forever
+  ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to DEMOTED"
+  crm_attribute -N $(hostname) -v DEMOTED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l forever
   we_are_primary; primary_status=$?
   if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
      #
      # we will be a master (primary) so checking, if the other nor primary
      #
      # TODO: Maybe this will NOT work for scale-out only for scale-up (1:1)
-     Master_Nodes=$(echo $OCF_RESKEY_CRM_meta_notify_master_uname | tr -d "" )
+     Master_Nodes=$(echo $OCF_RESKEY_CRM_meta_notify_master_uname | dequote )
      if [ -n "$Master_Nodes" ]; then
         if [ "$Master_Nodes" != "$(hostname)" ]; then
            ocf_log warn "!!!!!!!!!!! Master_Nodes=\"$Master_Nodes\" !!!!!!!!!!!!!"
@@ -895,8 +909,8 @@ saphana_stop_clone() {
   # saphana_init $OCF_RESKEY_ERS_InstanceName
   saphana_init $OCF_RESKEY_InstanceName
 # TODO: fh - when to check, if this is/was master already?
-  ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to UNDEFINED"
-  crm_attribute -N $(hostname) -v UNDEFINED  -n "master_hana_${sid}" -l forever
+  ocf_log info "fhDBG set attribute $$ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to UNDEFINED"
+  crm_attribute -N $(hostname) -v UNDEFINED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l forever
   set_crm_master 0
   saphana_stop
   return $?
@@ -935,13 +949,13 @@ get_site_name()
 #
 # get the HANA sync status
 # 
-get_hana_sync_status()
+analyze_hana_sync_status()
 {
    #
    # TODO: 
    #
  #  hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
-   hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | tr -d '"')
+   hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | dequote)
    #
    # UNKNOWN, ACTIVE, ERROR, INITIALIZING
    #
@@ -952,6 +966,27 @@ get_hana_sync_status()
       ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
       ocf_log info set_hana_sync_status_attr "FAILURE"
       set_hana_sync_status_attr "FAILURE"
+   fi
+
+   list_of_broken_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
+
+   #
+   # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
+   #    TODO: for first we assume there is only ONE secondary site
+   #    TODO: error handling of hdbsql
+   #
+   all_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "(select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION)")
+   all_broken_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
+   if [ -n "$all_broken_secondary_hosts" ]; then
+      #
+      # we have a broken secondary site - set all hosts to "FAILURE"
+      #
+      set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts
+   else 
+      #
+      # we have an ACTIVE secondary site - set all hosts to "OK"
+      #
+      set_hana_sync_status_attr "OK" $all_secondary_hosts
    fi
 }
 
@@ -1036,8 +1071,8 @@ saphana_monitor_clone() {
        #
        ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
        #
-       promote_attr=$(crm_attribute -N $(hostname) -G -n "master_hana_${sid}" -l forever -q)
-       ocf_log info "fhDBG saphana_monitor_clone: master_hana_${sid}=$promote_attr"
+       promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "ATTR_NAME_HANA_CLONE_STATE" -l forever -q)
+       ocf_log info "fhDBG saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
        case "$promote_attr" in
             PROMOTED )
                         promoted=1;
@@ -1106,7 +1141,7 @@ saphana_monitor_clone() {
                    fi
                    ;;
        esac 
-       get_hana_sync_status
+       analyze_hana_sync_status
   else
        if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
            #
@@ -1164,8 +1199,8 @@ saphana_promote_clone() {
      #
      # as we are already planned to be master we only mark the node as primary
      #
-     ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to PROMOTED"
-     crm_attribute -N $(hostname) -v PROMOTED -n "master_hana_${sid}" -l forever
+     ocf_log info "fhDBG set attribute $$ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
+     crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l forever
      rc=$OCF_SUCCESS;
      ocf_log info "Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
   else
@@ -1187,12 +1222,12 @@ saphana_promote_clone() {
 		# TODO: check, if we need to destigush between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
 		#
 		if we_are_primary; then
-     ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to PROMOTED"
-                   crm_attribute -N $(hostname) -v PROMOTED -n "master_hana_${sid}" -l forever
+     ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
+                   crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l forever
 		   rc=$OCF_SUCCESS;
 		else
-     ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to PROMOTED"
-                   crm_attribute -N $(hostname) -v PROMOTED -n "master_hana_${sid}" -l forever
+     ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
+                   crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l forever
 		   rc=$OCF_ERR_GENERIC
 		fi 
                 ;;
@@ -1226,8 +1261,8 @@ saphana_demote_clone() {
   # TODO: currently not implemented - what to do to DEMOTE a master?
   # 
 
-     ocf_log info "fhDBG set attribute master_hana_${sid} for node $(hostname) to DEMOTED"
-  crm_attribute -N $(hostname) -v DEMOTED  -n "master_hana_${sid}" -l forever
+     ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to DEMOTED"
+  crm_attribute -N $(hostname) -v DEMOTED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l forever
 
   rc=$OCF_SUCCESS;
   ocf_log info "Demoted $SID-$InstanceName as slave."
