@@ -306,6 +306,31 @@ get_crm_master()
    ${HA_SBIN_DIR}/crm_master -G -q -l reboot
 }
 
+
+get_hana_clone_state()
+{
+    local attr_node=$1
+    local attr_status=$2
+    crm_attribute -N ${$attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q
+}
+
+set_hana_clone_state()
+{
+    local attr_node=$1
+    local attr_status=$2
+    local rc=1
+    local attr_old
+    attr_old=$(get_hana_clone_state $attr_node)
+    if [ "$attr_old" != "$attr_status" ]; then
+        ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} to ${attr_status}"
+        crm_attribute -N $attr_node -v $attr_status -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot; rc=$?
+    else
+        ocf_log info "fhDBG let attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} still be ${attr_status}"
+        rc=0
+    fi
+    return $rc
+}
+
 #
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
@@ -325,6 +350,11 @@ saphana_init() {
   PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
   meta_notify_master_uname="$OCF_RESKEY_CRM_meta_notify_master_uname"
 
+#
+# TODO: Parameter for hardcoded IP address
+#       to get this IP address/virt-hostname - we could either rechange the use od the InstanceName OR defining an own parameter like VirtName
+#
+  remote_sql=10.17.140.200
   ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
 
   ocf_env=$(env | grep 'OCF_RESKEY_CRM')
@@ -529,6 +559,16 @@ cleanup_instance() {
   ocf_run rm -fv /usr/sap/$SID/$InstanceName/data/rslgspid
 
   return 0
+}
+
+saphana_hdbsql_check()
+{
+   local rc=1
+   local remote_sql=$1
+   # TODO: we should get rid of user system and pwd manager and using a secure store db user
+   #
+   $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
+   return $rc
 }
 
 #
@@ -871,8 +911,7 @@ check_for_primary() {
 #
 saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
-	ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to DEMOTED"
-	crm_attribute -N $(hostname) -v DEMOTED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+    set_hana_clone_state ${HOSTNAME} "DEMOTED"
 	check_for_primary; primary_status=$?
 	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
 		#
@@ -912,18 +951,10 @@ saphana_start_clone() {
 		# we would be slave (secondary)
 		# we first need to check, if there are Master Nodes, because the Scecondary only starts
 		# successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-#
-# TODO: Parameter for hardcoded IP address
-#       to get this IP address/virt-hostname - we could either rechange the use od the InstanceName OR defining an own parameter like VirtName
-#
-                        remote_sql=10.17.140.200
 # WORKING-ZONE
-# TODO: we should get rid of user system and pwd manager and using a secure store db user
-#
-                        $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; sqlrc=$?
+        saphana_hdbsql_check $remote_sql; sqlrc=$?
 		if [ $sqlrc -ne 0 ]; then
-			ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to WAITING"
-			crm_attribute -N $(hostname) -v WAITING  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+            set_hana_clone_state ${HOSTNAME} "WAITING"
 			ocf_log info "fhDES: secondary in status WAITING -> EXCLUDE as posible takeover node"
 			set_crm_master -INFINITY
 			rc=$OCF_SUCCSESS
@@ -955,8 +986,7 @@ saphana_start_clone() {
 #
 saphana_stop_clone() {
     # TODO: fh - when to check, if this is/was master already?
-    ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to UNDEFINED"
-    crm_attribute -N $(hostname) -v UNDEFINED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+    set_hana_clone_state ${HOSTNAME} "UNDEFINED"
     saphana_stop
     return $?
 }
@@ -1098,7 +1128,7 @@ saphana_monitor_clone() {
         #
         ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
         #
-        promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q)
+        promote_attr=$(get_hana_clone_state ${HOSTNAME})
         ocf_log info "fhDBG saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
         if [ -z "$promote_attr" ]; then
             init_attribute=1
@@ -1162,8 +1192,7 @@ saphana_monitor_clone() {
                         rc=$OCF_RUNNING_MASTER
                     else
                         if [ "$init_attribute" -eq 1 ]; then
-                            ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
-                            crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+                            set_hana_clone_state ${HOSTNAME} "PROMOTED"
                             rc=$OCF_RUNNING_MASTER
                         else
                             rc=$OCF_SUCCESS
@@ -1192,7 +1221,7 @@ saphana_monitor_clone() {
             #
             ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
             #
-            promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q)
+            promote_attr=$(get_hana_clone_state ${HOSTNAME})
             ocf_log info "fhDBG saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
             if [ -z "$promote_attr" ]; then
                 init_attribute=1
@@ -1207,22 +1236,7 @@ saphana_monitor_clone() {
                         promoted=0;
                         ;;
                     WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-#
-# TODO: We MUST NOT check Master Nodes here - its only valid in notify action
-#
-#                        Master_Nodes=$(echo $meta_notify_master_uname | dequote )
-#                        if [ -n "$Master_Nodes" ]; then
-#                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
-#                            saphana_start_clone
-#                            rc=$?
-#                        else
-#                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary missing"
-#                            return $OCF_SUCCESS
-#                        fi
-# TODO: Parameter for hardcoded IP address
-                        remote_sql=10.17.140.200
-# WORKING-ZONE
-                        $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; sqlrc=$?
+                        saphana_hdbsql_check $remote_sql=10.17.140.200; sqlrc=$?
                         if [ $sqlrc -eq 0 ]; then
                             ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
                             saphana_start_clone
@@ -1306,8 +1320,7 @@ saphana_promote_clone() {
      #
      # as we are already planned to be master we only mark the node as primary
      #
-     ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
-     crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+     set_hana_clone_state ${HOSTNAME} "PROMOTED"
      rc=$OCF_SUCCESS;
      ocf_log info "Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
   else
@@ -1319,24 +1332,22 @@ saphana_promote_clone() {
         hana_sync=$(get_hana_sync_status_attr)
         case "$hana_sync" in
              OK )
-		ocf_log info "!!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
-		#####
-		su - $sidadm -c "hdbnsutil -sr_takeover"
-		# TODO: do we need to check return codes, or does the check_for_primary test works successful?
-		#
-		# now gain check, if we are primary NOW
-		#
-		# TODO: check, if we need to destigush between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-		#
-		if check_for_primary; then
-                   ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
-                   crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
-		   rc=$OCF_SUCCESS;
-		else
-                   ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
-                   crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
-		   rc=$OCF_ERR_GENERIC
-		fi 
+                ocf_log info "!!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
+                #####
+                su - $sidadm -c "hdbnsutil -sr_takeover"
+                # TODO: do we need to check return codes, or does the check_for_primary test works successful?
+                #
+                # now gain check, if we are primary NOW
+                #
+                # TODO: check, if we need to destigush between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+                #
+                if check_for_primary; then
+                    set_hana_clone_state ${HOSTNAME} "PROMOTED"
+                    rc=$OCF_SUCCESS;
+                else
+                    set_hana_clone_state ${HOSTNAME} "PROMOTED"
+                    rc=$OCF_ERR_GENERIC
+                fi 
                 ;;
              * )
                 ocf_log err "!!!!!!! HANA SYNC STATUS IS NOT 'OK' SO WE COULD NOT PROMOTE !!!!!!!"
@@ -1354,20 +1365,15 @@ saphana_promote_clone() {
   return $rc
 }
 
-
 #
 # saphana_demote_clone: In a Master/Slave configuration get Slave by stopping the SCS instance and starting the ERS instance
 #
 saphana_demote_clone() {
     local rc
     rc=$OCF_ERR_GENERIC;
-    #
-    # TODO: currently not implemented - how to DEMOTE a HANA PRIMARY?
-    # 
-    ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to DEMOTED"
-    crm_attribute -N $(hostname) -v DEMOTED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+    set_hana_clone_state ${HOSTNAME} "DEMOTED"
     rc=$OCF_SUCCESS;
-    ocf_log info "Demoted $SID-$InstanceName as slave."
+    ocf_log info "Demoted $SID-$InstanceName."
     # saphana_stop
     return $rc
 }
@@ -1443,9 +1449,9 @@ saphana_notify() {
 
 
     case "${n_type}_${n_op}" in
-	post_start )
+	post_promote )
 # WORKING-ZONE
-                     promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q)
+             promote_attr=$(get_hana_clone_state ${HOSTNAME})
 		     case "$promote_attr" in
                          WAITING )  
                                     
