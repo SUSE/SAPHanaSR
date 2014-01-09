@@ -311,7 +311,7 @@ get_hana_clone_state()
 {
     local attr_node=$1
     local attr_status=$2
-    crm_attribute -N ${$attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q
+    crm_attribute -N ${attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q
 }
 
 set_hana_clone_state()
@@ -322,10 +322,10 @@ set_hana_clone_state()
     local attr_old
     attr_old=$(get_hana_clone_state $attr_node)
     if [ "$attr_old" != "$attr_status" ]; then
-        ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} to ${attr_status}"
+        ocf_log info "fhDBG SET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} to ${attr_status}"
         crm_attribute -N $attr_node -v $attr_status -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot; rc=$?
     else
-        ocf_log info "fhDBG let attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} still be ${attr_status}"
+        ocf_log info "fhDBG LET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} still be ${attr_status}"
         rc=0
     fi
     return $rc
@@ -911,47 +911,87 @@ check_for_primary() {
 #
 saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
+    local lsrc sqlrc;
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
 	check_for_primary; primary_status=$?
 	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
 		#
-		# we will be a master (primary) so checking, if the is an other master
+		# we will be a master (PRIMARY) so checking, if the is an OTHER master
 		#
-# TODO: Do we need to check, if a primary is already rechable (sql) - normaly a dual master may not happen (master_max=1)
-#       But as HANA may come up with primary configurattion also at slave side we need to check that
-#       Also - what to do on a side, where primary config is available but there is already a primary - should we than
-#       register that side as secondary?
-##		if [ -n "$Master_Nodes" ]; then
-#			if [ "$Master_Nodes" != "$(hostname)" ]; then
-#				ocf_log warn "!!!!!!!!!!! Master_Nodes=\"$Master_Nodes\" !!!!!!!!!!!!!"
-#				ocf_log err  "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
-#				#
-#				# DO NOT PROMOTE HERE
-#				# TODO: Could we repair that situation?
-#				#
-#				ocf_log info "fhDES: primary-primary detected - block this clone!"
-#				set_crm_master -INFINITY
-#				return $OCF_ERR_GENERIC
+# WORKING-ZONE
+        get_hana_landscape_status; lsrc=$?
+        saphana_hdbsql_check $remote_sql; sqlrc=$?
+        if [ $lsrc -ge 2 ]; then
+           if [ $sqlrc -eq 0 ]; then  
+               #
+               # LANDSCAPE SAYS UP, SQL ANSWERES
+               #
+               saphana_hdbsql_check localhost; sqlrc=$?
+               if [ $sqlrc -eq 0 ]; then              
+                  #
+                  # LOCAL SQL ANSWERS ==> WE ARE UP ALREADY
+                  #
+                  ocf_log info "fhDES: primary and up already"
+                  set_crm_master 1000
+                  rc=$OCF_SUCCSESS
+               else
+                  #
+                  # LOCAL SQL ANSWERS NOT ==> How to recover: local up, remote sql ansers, local sql answers not?
+                  #
+                  # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
+                  ocf_log info "fhDES: primary up but does not answer"
+                  rc=$OCF_ERR_GENERIC
+               fi
+           else 
+               #
+               # LANDSCAPE SAYS UP, SQL DOES NOT ANSWER ==> How to recover that? As we should be primary?
+               #
+               # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
+               ocf_log info "fhDES: primary up but service does not answer"
+               rc=$OCF_ERR_GENERIC
+           fi
+        else 
+           if [ $sqlrc -eq 0 ]; then
+               #
+               # LANDSCAPE SAYS DOWN, SQL ANSWERS ==>  AN OTHER INSTANCE IS PRIMARY!! ===> Should we register?
+               # TODO: should we have a option wether we automatically register or not?
+               #
+			   set_crm_master  0
+               register_hana_secondary 
+	           check_for_primary; primary_status=$?
+	           if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+                    ocf_log info "Register successful"
+                    set_crm_master  0
+                    saphana_start
+                    rc=$?
+               else
+                    ocf_log err "Register failed"
+                    rc=$OCF_ERR_GENERIC
+               fi
+           else
+               #
+               # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER ==> Should be a classical start :)
+               #
+			   set_crm_master  1000
+		       saphana_start
+		       rc=$?
+           fi
+               
+##			score_master=$(get_crm_master)
+#			if [ "$score_master" = "-INFINITY" -o "$score_master" -lt 0 ]; then
+#				ocf_log info "fhDES: primary and only primary BUT have penality - so we should NOT promote here"
+#				set_crm_master  0
+#			else
+#				# we are primary and we are alone - so we could promote
+#				ocf_log info "fhDES: primary and only primary, we have no penality - so we could promote here"
+#				set_crm_master  100
 #			fi
-#		else
-			score_master=$(get_crm_master)
-			if [ "$score_master" = "-INFINITY" -o "$score_master" -lt 0 ]; then
-				ocf_log info "fhDES: primary and only primary BUT have penality - so we should NOT promote here"
-				set_crm_master  0
-			else
-				# we are primary and we are alone - so we could promote
-				ocf_log info "fhDES: primary and only primary, we have no penality - so we could promote here"
-				set_crm_master  100
-			fi
-#		fi
-		saphana_start
-		rc=$?
+        fi
 	else 
 		#
 		# we would be slave (secondary)
 		# we first need to check, if there are Master Nodes, because the Scecondary only starts
 		# successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-# WORKING-ZONE
         saphana_hdbsql_check $remote_sql; sqlrc=$?
 		if [ $sqlrc -ne 0 ]; then
             set_hana_clone_state ${HOSTNAME} "WAITING"
@@ -1092,6 +1132,27 @@ register_hana_secondary()
     # --remoteHost=  this is the (new) primary host
     # --remoteInstance= this is the (new) primaries instance number - do we assume the same number?
     # --name= this is the local(!) site name 
+
+    # TODO: For first we assume both SIDs and InstanceNumbers are equal - so we could use our values
+    # TODO: For first we hardcode the sites and remote host name - just for test purposes
+
+    case ${HOSTNAME} in
+        lv9041 )
+                 remoteHost=lv9042
+                 remoteInstance=$InstanceNr
+                 sr_mode=syncmem
+                 sr_name=WALLDORF
+                 ;;
+        lv9042 )
+                 remoteHost=lv9041
+                 remoteInstance=$InstanceNr
+                 sr_mode=syncmem
+                 sr_name=ROT
+                 ;;
+    esac
+
+    ocf_log info "fhDES: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+    su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
     return rc;
 }
 
