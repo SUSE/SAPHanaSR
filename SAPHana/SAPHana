@@ -829,28 +829,28 @@ get_hana_primary_at_attr()
    # TODO: Do we need error handling?
 }
 
-we_are_primary() {
+check_for_primary() {
 
    # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
    # TODO: Change stderr location!!
    # TODO: Fix hdbnsutil location
    # TODO: Fix user sidadm
    #sidadm=lnxadm
-   node_status=$(we_are_primary_single) 
-   ocf_log info "we_are_primary: node_status=$node_status"
+   node_status=$(check_for_primary_single) 
+   ocf_log info "check_for_primary: node_status=$node_status"
    case "$node_status" in
        primary ) 
                   return $HANA_STATE_PRIMARY;;
-       syncmem )
+       syncmem | sync | async )
                   return $HANA_STATE_SECONDARY;;
        none )     # have seen that mode on second side BEFEORE we registered it as replica
                   return $HANA_STATE_DEFECT;;
        * )
-		  ocf_log err "we_are_primary:  we didn't expect node_status to be: <$node_status>"
-                  ocf_log err "we_are_primary: trying multiple times to get primary status"
+		  ocf_log err "check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                  ocf_log err "check_for_primary: trying multiple times to get primary status"
                   for i in 1 2 3 4 5; do
-                      node_status=$(we_are_primary_single)
-                      ocf_log info "we_are_primary: (loop nr $i) node_status=$node_status"
+                      node_status=$(check_for_primary_single)
+                      ocf_log info "check_for_primary: (loop nr $i) node_status=$node_status"
                       case "$node_status" in
                            primary )
                                      return $HANA_STATE_PRIMARY;;
@@ -871,11 +871,17 @@ we_are_primary() {
 #
 saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
+#
+# TODO: We might NOT trust meta_notify_master_uname in the start action (only valid in notify action)
+#
 	ocf_log info "fhDBG NOTIFY VALUE: meta_notify_master_uname=${meta_notify_master_uname}"
 	ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to DEMOTED"
 	crm_attribute -N $(hostname) -v DEMOTED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
+#
+# TODO: We need to destingush for secondary, if we are in status WAITING or PREPARE, or ...
+#       
 	Master_Nodes=$(echo $meta_notify_master_uname | dequote )
-	we_are_primary; primary_status=$?
+	check_for_primary; primary_status=$?
 	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
 		#
 		# we will be a master (primary) so checking, if the is an other master
@@ -910,7 +916,13 @@ saphana_start_clone() {
 		# we would be slave (secondary)
 		# we first need to check, if there are Master Nodes, because the Scecondary only starts
 		# successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-		if [ -z "$Master_Nodes" ]; then
+#
+# TODO: Parameter for hardcoded IP address
+#
+                        remote_sql=10.17.140.200
+# WORKING-ZONE
+                        $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; sqlrc=$?
+		if [ $sqlrc -ne 0 ]; then
 			ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to WAITING"
 			crm_attribute -N $(hostname) -v WAITING  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
 			ocf_log info "fhDES: secondary in status WAITING -> EXCLUDE as posible takeover node"
@@ -951,7 +963,7 @@ saphana_stop_clone() {
 }
 
 
-we_are_primary_single()
+check_for_primary_single()
 {
     local node_full_status node_status
     echo " ========== $(date) ============== " >>/tmp/null
@@ -1058,6 +1070,11 @@ register_hana_secondary()
 # saphana_monitor_clone
 #
 saphana_monitor_clone() {
+#
+# TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
+#       a) returning 7 here and force cluster a restart of the slave
+#       b) starting the instance here inside the monitor -> may result in longer runtime, timeouts
+#
 	# first check with the status function (OS tools) if there could be something like a SAP instance running
 	# as we do not know here, if we are in master or slave state we do not want to start our monitoring
 	# agents (sapstartsrv) on the wrong host
@@ -1073,7 +1090,7 @@ saphana_monitor_clone() {
 	#
 	# First check, if we are PRIMARY or SECONDARY
 	# 
-	we_are_primary; primary_status=$?
+	check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         #
         # OK, we are running as HANA PRIMARY
@@ -1191,15 +1208,37 @@ saphana_monitor_clone() {
                         promoted=0;
                         ;;
                     WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-                        Master_Nodes=$(echo $meta_notify_master_uname | dequote )
-                        if [ -n "$Master_Nodes" ]; then
-                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
+#
+# TODO: We MUST NOT check Master Nodes here - its only valid in notify action
+#
+#                        Master_Nodes=$(echo $meta_notify_master_uname | dequote )
+#                        if [ -n "$Master_Nodes" ]; then
+#                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
+#                            saphana_start_clone
+#                            rc=$?
+#                        else
+#                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary missing"
+#                            return $OCF_SUCCESS
+#                        fi
+# TODO: Parameter for hardcoded IP address
+                        remote_sql=10.17.140.200
+# WORKING-ZONE
+                        $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; sqlrc=$?
+                        if [ $sqlrc -eq 0 ]; then
+                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
                             saphana_start_clone
                             rc=$?
                         else
-                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary missing"
+                            ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing (sqlrc=$sqlrc)"
                             return $OCF_SUCCESS
                         fi
+                        
+                        promoted=0;
+                        ;;
+                    PREPARE ) # Notify action has noticed an available primary - try a new start
+                        ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
+                        saphana_start_clone
+                        rc=$?
                         promoted=0;
                         ;;
                     * )
@@ -1262,7 +1301,7 @@ saphana_promote_clone() {
   #
   # first check, if we WILL be PRIMARY (checking HANA status)
   #
-  we_are_primary; primary_status=$?
+  check_for_primary; primary_status=$?
   #
   if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
      #
@@ -1284,13 +1323,13 @@ saphana_promote_clone() {
 		ocf_log info "!!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
 		#####
 		su - $sidadm -c "hdbnsutil -sr_takeover"
-		# TODO: do we need to check return codes, or does the we_are_primary test works successful?
+		# TODO: do we need to check return codes, or does the check_for_primary test works successful?
 		#
 		# now gain check, if we are primary NOW
 		#
 		# TODO: check, if we need to destigush between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
 		#
-		if we_are_primary; then
+		if check_for_primary; then
                    ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to PROMOTED"
                    crm_attribute -N $(hostname) -v PROMOTED -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
 		   rc=$OCF_SUCCESS;
@@ -1334,32 +1373,108 @@ saphana_demote_clone() {
     return $rc
 }
 
+saphana_notify_log_values()
+{
+    # params: name value
+    local name=$1
+    local value=$2
+    local separator="/"
+    
+    if [ -n "$value" ]; then
+       if [ "$(echo $value | tr -d ' ')" != "$separator" ]; then
+		ocf_log info "saphana_notify: $name $value"
+          
+       fi 
+    fi
+} 
+
 
 #
 # saphana_notify: Handle master scoring - to make sure a slave gets the next master
 #
 saphana_notify() {
+    local promote_attr
+    #
+    # related to notification
+    #
+
     local n_type="$OCF_RESKEY_CRM_meta_notify_type"
     local n_op="$OCF_RESKEY_CRM_meta_notify_operation"
+    ocf_log info "==== begin action $ACTION$CLACT (${n_type}/${n_op})===="
+
+    #
+    # related to resources
+    #
+
+    local n_act="$OCF_RESKEY_CRM_meta_notify_active_resource"
+    local n_iact="$OCF_RESKEY_CRM_meta_notify_inactive_resource"
+    saphana_notify_log_values "n_act/n_iact" "${n_act}/${n_iact}"
+
+    local n_master="$OCF_RESKEY_CRM_meta_notify_master_resource"
+    local n_slave="$OCF_RESKEY_CRM_meta_notify_slave_resource"
+    saphana_notify_log_values "n_master/n_slave" "${n_master}/${n_slave}"
+
+    local n_start="$OCF_RESKEY_CRM_meta_notify_start_resource"
+    local n_stop="$OCF_RESKEY_CRM_meta_notify_stop_resource"
+    saphana_notify_log_values "n_start/n_stop" "${n_start}/${n_stop}"
+
+    local n_promote="$OCF_RESKEY_CRM_meta_notify_promote_resource"
+    local n_demote="$OCF_RESKEY_CRM_meta_notify_demote_resource"
+    saphana_notify_log_values "n_promote/n_demote" "${n_promote}/${n_demote}"
+
+    #
+    # related to nodes
+    #
+
+    local n_startU="$OCF_RESKEY_CRM_meta_notify_start_uname"
+    local n_stopU="$OCF_RESKEY_CRM_meta_notify_stop_uname"
+    saphana_notify_log_values "n_startU/n_stopU" "${n_startU}/${n_stopU}"
+
+    local n_promoteU="$OCF_RESKEY_CRM_meta_notify_promote_uname"
+    local n_demoteU="$OCF_RESKEY_CRM_meta_notify_demote_uname"
+    saphana_notify_log_values "n_promoteU/n_demoteU" "${n_promoteU}/${n_demoteU}"
+
+    local n_actU="$OCF_RESKEY_CRM_meta_notify_active_uname"
+    local n_iactU="$OCF_RESKEY_CRM_meta_notify_inactive_uname"
+    saphana_notify_log_values "n_actU/n_iactU" "${n_actU}/${n_iactU}"
+
+    local n_masterU="$OCF_RESKEY_CRM_meta_notify_master_uname"
+    local n_slaveU="$OCF_RESKEY_CRM_meta_notify_slave_uname"
+    saphana_notify_log_values "n_masterU/n_slaveU" "${n_masterU}/${n_slaveU}"
+
+
+    case "${n_type}_${n_op}" in
+	post_start )
+# WORKING-ZONE
+                     promote_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q)
+		     case "$promote_attr" in
+                         WAITING )  
+                                    
+                                    ;;
+                     esac
+                     ;;
+    esac
+
     # TODO: Check when we need to change master/promotion scores
-    if false; then
-        if [ "${n_type}_${n_op}" = "post_promote" ]; then
-            # After promotion of one master in the cluster, we make sure that all clones reset their master
-            # value back to 100. This is because a failed monitor on a master might have degree one clone
-            # instance to score 10.
-            # TODO: a) check, if the "story" is still correct for SAPHana in scale-up and scale-out
-            #       b) are the values 10 / 100 still correct?
-            set_crm_master 100
-        elif [ "${n_type}_${n_op}" = "pre_demote" ]; then
-            # if we are a slave and a demote event is anounced, make sure we have the highes wish to became master
-            # that is, when a slave resource was startet after the promote event of a already running master (e.g. node of slave was down)
-            # We also have to make sure to overrule the globaly set resource_stickiness or any fail-count factors => INFINITY
-            local n_uname="$OCF_RESKEY_CRM_meta_notify_demote_uname"
-            if [ ${n_uname} != ${HOSTNAME} ]; then
-                set_crm_master INFINITY
-            fi
-        fi
-    fi
+    #if false; then
+    #    if [ "${n_type}_${n_op}" = "post_promote" ]; then
+    #        # After promotion of one master in the cluster, we make sure that all clones reset their master
+    #        # value back to 100. This is because a failed monitor on a master might have degree one clone
+    #        # instance to score 10.
+    #        # TODO: a) check, if the "story" is still correct for SAPHana in scale-up and scale-out
+    #        #       b) are the values 10 / 100 still correct?
+    #        set_crm_master 100
+    #    elif [ "${n_type}_${n_op}" = "pre_demote" ]; then
+    #        # if we are a slave and a demote event is anounced, make sure we have the highes wish to became master
+    #        # that is, when a slave resource was startet after the promote event of a already running master (e.g. node of slave was down)
+    #        # We also have to make sure to overrule the globaly set resource_stickiness or any fail-count factors => INFINITY
+    #        local n_uname="$OCF_RESKEY_CRM_meta_notify_demote_uname"
+    #        if [ ${n_uname} != ${HOSTNAME} ]; then
+    #            set_crm_master INFINITY
+    #        fi
+    #    fi
+    #fi
+    ocf_log info "==== end action $ACTION$CLACT (${n_type}/${n_op})===="
 }
 
 
@@ -1399,9 +1514,7 @@ case "$ACTION" in
     meta-data)                    saphana_meta_data
                                 exit $OCF_SUCCESS;;
     notify)                       
-ocf_log info "==== begin action $ACTION$CLACT ===="
                                 saphana_notify
-ocf_log info "==== end action $ACTION$CLACT rc=$OCF_SUCCESS ===="
                                 exit $OCF_SUCCESS;;
     *);;
 esac
