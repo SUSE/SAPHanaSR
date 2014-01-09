@@ -871,34 +871,30 @@ check_for_primary() {
 #
 saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
-#
-# TODO: We might NOT trust meta_notify_master_uname in the start action (only valid in notify action)
-#
-	ocf_log info "fhDBG NOTIFY VALUE: meta_notify_master_uname=${meta_notify_master_uname}"
 	ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to DEMOTED"
 	crm_attribute -N $(hostname) -v DEMOTED  -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot
-#
-# TODO: We need to destingush for secondary, if we are in status WAITING or PREPARE, or ...
-#       
-	Master_Nodes=$(echo $meta_notify_master_uname | dequote )
 	check_for_primary; primary_status=$?
 	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
 		#
 		# we will be a master (primary) so checking, if the is an other master
 		#
-		if [ -n "$Master_Nodes" ]; then
-			if [ "$Master_Nodes" != "$(hostname)" ]; then
-				ocf_log warn "!!!!!!!!!!! Master_Nodes=\"$Master_Nodes\" !!!!!!!!!!!!!"
-				ocf_log err  "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
-				#
-				# DO NOT PROMOTE HERE
-				# TODO: Could we repair that situation?
-				#
-				ocf_log info "fhDES: primary-primary detected - block this clone!"
-				set_crm_master -INFINITY
-				return $OCF_ERR_GENERIC
-			fi
-		else
+# TODO: Do we need to check, if a primary is already rechable (sql) - normaly a dual master may not happen (master_max=1)
+#       But as HANA may come up with primary configurattion also at slave side we need to check that
+#       Also - what to do on a side, where primary config is available but there is already a primary - should we than
+#       register that side as secondary?
+##		if [ -n "$Master_Nodes" ]; then
+#			if [ "$Master_Nodes" != "$(hostname)" ]; then
+#				ocf_log warn "!!!!!!!!!!! Master_Nodes=\"$Master_Nodes\" !!!!!!!!!!!!!"
+#				ocf_log err  "!!!!!!!!!!! SAPHana MUST never be primary-primary !!!!!!!!!!!!!"
+#				#
+#				# DO NOT PROMOTE HERE
+#				# TODO: Could we repair that situation?
+#				#
+#				ocf_log info "fhDES: primary-primary detected - block this clone!"
+#				set_crm_master -INFINITY
+#				return $OCF_ERR_GENERIC
+#			fi
+#		else
 			score_master=$(get_crm_master)
 			if [ "$score_master" = "-INFINITY" -o "$score_master" -lt 0 ]; then
 				ocf_log info "fhDES: primary and only primary BUT have penality - so we should NOT promote here"
@@ -908,7 +904,7 @@ saphana_start_clone() {
 				ocf_log info "fhDES: primary and only primary, we have no penality - so we could promote here"
 				set_crm_master  100
 			fi
-		fi
+#		fi
 		saphana_start
 		rc=$?
 	else 
@@ -918,9 +914,12 @@ saphana_start_clone() {
 		# successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
 #
 # TODO: Parameter for hardcoded IP address
+#       to get this IP address/virt-hostname - we could either rechange the use od the InstanceName OR defining an own parameter like VirtName
 #
                         remote_sql=10.17.140.200
 # WORKING-ZONE
+# TODO: we should get rid of user system and pwd manager and using a secure store db user
+#
                         $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; sqlrc=$?
 		if [ $sqlrc -ne 0 ]; then
 			ocf_log info "fhDBG set attribute $ATTR_NAME_HANA_CLONE_STATE for node $(hostname) to WAITING"
