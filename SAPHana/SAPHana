@@ -30,11 +30,13 @@
 #      See usage() function below for more details...
 #
 # OCF instance parameters:
-#yes:	OCF_RESKEY_InstanceName
-#yes:	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
-#yes:	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
-#yes:	OCF_RESKEY_PROFILE          (optional, well known directories will be searched by default)
-#yes:   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
+#	OCF_RESKEY_InstanceName
+#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
+#	OCF_RESKEY_PROFILE          (optional, well known directories will be searched by default)
+#   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
+#   OCF_RESKEY_HANA_SERVICE_ADDRESS 
+#   OCF_RESKEY_HANA_SR_TOPOLOGY
 #
 #  TODO: - Option to shutdown sapstartsrv for non-active instances -> that means: do probes only with OS tools (saphana_status)
 #        - Option for better standalone enqueue server monitoring, using ensmon (test enque-deque)
@@ -132,6 +134,19 @@ The SAPHana resource agent will interpret retuencodes 0,1 and 2 as NOT-RUNNING (
   <longdesc lang="en">The name of the SAP START profile. Specify this parameter, if you have changed the name of the SAP START profile after the default SAP installation. As SAP release 7.10 does not have a START profile anymore, you need to specify the Instance Profile than.</longdesc>
   <shortdesc lang="en">HANA instance profile name</shortdesc>
   <content type="string" default="" />
+ </parameter>
+ <parameter name="HANA_SERVICE_ADDRESS" unique="0" required="1">
+ <shortdesc lang="en">HANA Service Address to query system replication view</shortdesc>
+ <longdesc lang="en">HANA Service Address to query system replication view 
+ TODO: this might also be part of the InstanceName</longdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="HANA_SR_TOPOLOGY" unique="1" required="1">
+  <shortdesc lang="en">Define the HANA System Replication Tolology</shortdesc>
+ <longdesc lang="en">HANA_SR_TOPOLOGY is a space separated list of tupels, which define the system replication topology.
+ Each tuple has the syntax node:site:remoteNode.
+ Sample: "lv9041:WALLDORF:lv9042 lv9042:ROT:lv9041"
+ </longdesc>
  </parameter>
 </parameters>
 
@@ -296,9 +311,36 @@ saphana_init() {
 #
 # TODO: Parameter for hardcoded IP address
 #       to get this IP address/virt-hostname - we could either rechange the use od the InstanceName OR defining an own parameter like VirtName
+#       or HANA_SERVICE_ADDRESS
 #
+# TODO: remove this default after adding this value to the reference cluster config
   remote_sql=10.17.140.200
+  if [ -n "$OCF_RESKEY_HANA_SERVICE_ADDRESS" ]; then
+      remote_sql=$OCF_RESKEY_HANA_SERVICE_ADDRESS
+  fi
+
+#
+# TODO: Working on topology
+#
+local one two three rest1
+for node_top in $HANA_SR_TOPOLOGY; do 
+    one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
+    rest1=${node_top#*:} # cut-out the first field (so have all the rest)
+    two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
+    three=${rest1#*:}    # cut-out  the first field of the rest 
+                         # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
+    if [ "$one" = "$HOSTNAME" ]; then
+       # found "own" datarecord
+       sr_name=$two
+       remoteHost=$three
+# WORKING-ZONE
+    fi
+done
+
   ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
+
+  ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost"
+   
 
   ocf_env=$(env | grep 'OCF_RESKEY_CRM')
   ocf_log info "fhDBG: OCF: $ocf_env"
@@ -330,6 +372,8 @@ saphana_init() {
     fi
   fi
 
+  HANA_SR_TOPOLOGY=OCF_RESKEY_HANA_SR_TOPOLOGY
+  ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
 
   [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
 
