@@ -36,9 +36,7 @@
 #   OCF_RESKEY_HANA_SERVICE_ADDRESS 
 #   OCF_RESKEY_HANA_SR_TOPOLOGY
 #
-#  TODO: - Option to shutdown sapstartsrv for non-active instances -> that means: do probes only with OS tools (saphana_status)
-#        - Option for better standalone enqueue server monitoring, using ensmon (test enque-deque)
-#        - Option for cleanup abandoned enqueue replication tables
+#   TODO: See TODOs in this script
 #
 #######################################################################
 # Initialization:
@@ -54,6 +52,9 @@ HANA_STATE_DEFECT=2
 
 SH=/bin/sh
 
+#
+# function: saphana_usage - short usage info
+#
 saphana_usage() {
   methods=$(saphana_methods)
   methods=$(echo $methods | tr ' ' '|')
@@ -75,6 +76,9 @@ saphana_usage() {
 	!
 }
 
+#
+# function: saphana_meta_data - print resource agent meta-data for cluster
+#
 saphana_meta_data() {
 	cat <<END
 <?xml version="1.0"?>
@@ -167,35 +171,42 @@ END
 
 
 #
+# function: saphana_methods - report supported cluster methods
 # methods: What methods/operations do we support?
 #
 saphana_methods() {
   cat <<-!
-	start
-	stop
-	status
-	monitor
-        promote
-        demote
-        notify
-	validate-all
-	methods
-	meta-data
-	usage
+    start
+    stop
+    status
+    monitor
+    promote
+    demote
+    notify
+    validate-all
+    methods
+    meta-data
+    usage
 	!
 }
 
-
+#
+# function: dequote - filter: remove quotes (") from stdin
+#
 dequote()
 {
    tr -d '"'
 }
 
 #
+# function: is_clone - report, if resource is configured as a clone (also master/slave)
 # is_clone : find out if we are configured to run in a Master/Slave configuration
 #   rc: 0: it is a clone
 #       1: it is not a clone
 #   Special EXIT of RA, if clone is missconfigured
+#
+# TODO: For the case of a clone/master/slave we also need to check more parameters to be set
+#       such as HANA_SR_TOPOLOGY, HANA_SERVICE_ADDRESS, ...
 #
 is_clone() {
     local rc=0
@@ -222,7 +233,7 @@ is_clone() {
 
 
 #
-# TODO: fh - check, if we will follow this concept also for HANA installations
+# function: assert - quickly go out of here with minimal error/return code handling and log
 # assert : essential things are missing, but in the natur of a SAP installation - which can be very different
 #                from customer to customer - we cannot handle this always as an error
 #                This would be the case, if the software is installed on shared disks and not visible
@@ -247,6 +258,9 @@ assert() {
 }
 
 
+#
+# function: set_crm_master - set the crm master score of the local node
+#
 set_crm_master()
 {
    local score=0
@@ -257,19 +271,28 @@ set_crm_master()
    logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v $score -l reboot"
 }
 
+#
+# function: get_crm_master - get the crm master score of the local node
+#
 get_crm_master()
 {
    ${HA_SBIN_DIR}/crm_master -G -q -l reboot
 }
 
-
+#
+# function: get_hana_clone_state - get the multi-state status of the a clone
+# params:   NODE 
+#
 get_hana_clone_state()
 {
     local attr_node=$1
-    local attr_status=$2
     crm_attribute -N ${attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q
 }
 
+#
+# function: set_hana_clone_state - set the multi-state status of a node
+# params:   NODE STATUS
+#
 set_hana_clone_state()
 {
     local attr_node=$1
@@ -288,281 +311,468 @@ set_hana_clone_state()
 }
 
 #
+# function: saphana_init - initialize variables for the resource agent
+# params:   InstanceName
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
 #
 saphana_init() {
 
-  local myInstanceName="$1"
+    local myInstanceName="$1"
 
-  SID=$(echo "$myInstanceName" | cut -d_ -f1)
-  sid=$(echo "$SID" | tr [:upper:] [:lower:])
-  sidadm="${sid}adm"
-  InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
-  SIDInstanceName=${myInstanceName}
-  InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
-  #SAPVIRHOST=$(echo "$myInstanceName" | cut -d_ -f3)
-  SAPVIRHOST=$(hostname)
-  PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
-  meta_notify_master_uname="$OCF_RESKEY_CRM_meta_notify_master_uname"
+    SID=$(echo "$myInstanceName" | cut -d_ -f1)
+    sid=$(echo "$SID" | tr [:upper:] [:lower:])
+    sidadm="${sid}adm"
+    InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
+    SIDInstanceName=${myInstanceName}
+    InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
+    SAPVIRHOST=${HOSTNAME}
+    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
+    meta_notify_master_uname="$OCF_RESKEY_CRM_meta_notify_master_uname"
 
-#
-# TODO: Parameter for hardcoded IP address
-#       to get this IP address/virt-hostname - we could either rechange the use od the InstanceName OR defining an own parameter like VirtName
-#       or HANA_SERVICE_ADDRESS
-#
-# TODO: remove this default after adding this value to the reference cluster config
-  remote_sql=10.17.140.200
-  if [ -n "$OCF_RESKEY_HANA_SERVICE_ADDRESS" ]; then
-      remote_sql=$OCF_RESKEY_HANA_SERVICE_ADDRESS
-  fi
+    remote_sql=$OCF_RESKEY_HANA_SERVICE_ADDRESS
 
-#
-# TODO: Working on topology
-#
-  HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
-  ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
-local one two three rest1
-for node_top in $HANA_SR_TOPOLOGY; do 
-    one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
-    rest1=${node_top#*:} # cut-out the first field (so have all the rest)
-    two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
-    three=${rest1#*:}    # cut-out  the first field of the rest 
-                         # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
-    ocf_log info "fhDBG: node_top=$node_top, one=$one, two=$two, three=$three"
-    if [ "$one" = "$HOSTNAME" ]; then
-       # found "own" datarecord
-       sr_name=$two
-       remoteHost=$three
-# WORKING-ZONE
-    fi
-done
+    HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
+    ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
+    local one two three rest1
+    for node_top in $HANA_SR_TOPOLOGY; do 
+        one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
+        rest1=${node_top#*:} # cut-out the first field (so have all the rest)
+        two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
+        three=${rest1#*:}    # cut-out  the first field of the rest 
+                             # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
+        ocf_log info "fhDBG: node_top=$node_top, one=$one, two=$two, three=$three"
+        if [ "$one" = "$HOSTNAME" ]; then
+           # found "own" datarecord
+           sr_name=$two
+           remoteHost=$three
+            # WORKING-ZONE
+        fi
+    done
 
-  ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
+    ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
 
-  ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, remote_sql=$remote_sql"
+    ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, remote_sql=$remote_sql"
 
 
-  ocf_env=$(env | grep 'OCF_RESKEY_CRM')
-  ocf_log info "fhDBG: OCF: $ocf_env"
+    ocf_env=$(env | grep 'OCF_RESKEY_CRM')
+    ocf_log info "fhDBG: OCF: $ocf_env"
    
-  ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"
-  ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"
-  ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state"
+    ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"
+    ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"
+    ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state"
 
-  # optional OCF parameters, we try to guess which directories are correct
-  if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
-  then
-    if have_binary /usr/sap/$SID/$InstanceName/exe/sapstartsrv && have_binary /usr/sap/$SID/$InstanceName/exe/sapcontrol
+    # optional OCF parameters, we try to guess which directories are correct
+    if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
-      DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
-      SAPSTARTSRV="/usr/sap/$SID/$InstanceName/exe/sapstartsrv"
-      SAPCONTROL="/usr/sap/$SID/$InstanceName/exe/sapcontrol"
-    elif have_binary /usr/sap/$SID/SYS/exe/run/sapstartsrv && have_binary /usr/sap/$SID/SYS/exe/run/sapcontrol
-    then
-      DIR_EXECUTABLE="/usr/sap/$SID/SYS/exe/run"
-      SAPSTARTSRV="/usr/sap/$SID/SYS/exe/run/sapstartsrv"
-      SAPCONTROL="/usr/sap/$SID/SYS/exe/run/sapcontrol"
+        if have_binary /usr/sap/$SID/$InstanceName/exe/sapstartsrv && have_binary /usr/sap/$SID/$InstanceName/exe/sapcontrol
+        then
+            DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
+            SAPSTARTSRV="/usr/sap/$SID/$InstanceName/exe/sapstartsrv"
+            SAPCONTROL="/usr/sap/$SID/$InstanceName/exe/sapcontrol"
+        elif have_binary /usr/sap/$SID/SYS/exe/run/sapstartsrv && have_binary /usr/sap/$SID/SYS/exe/run/sapcontrol
+        then
+            DIR_EXECUTABLE="/usr/sap/$SID/SYS/exe/run"
+            SAPSTARTSRV="/usr/sap/$SID/SYS/exe/run/sapstartsrv"
+            SAPCONTROL="/usr/sap/$SID/SYS/exe/run/sapcontrol"
+        fi
+    else
+        if have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv" && have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
+        then
+            DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
+            SAPSTARTSRV="$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv"
+            SAPCONTROL="$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
+        fi
     fi
-  else
-    if have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv" && have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
+
+    [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
+
+    if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
     then
-      DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
-      SAPSTARTSRV="$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv"
-      SAPCONTROL="$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
+        DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+    else
+        DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
     fi
-  fi
 
+    if [ -z "${OCF_RESKEY_PROFILE}" ]
+    then
+        SAPSTARTPROFILE="$DIR_PROFILE/${SIDInstanceName}_${SAPVIRHOST}"
+    else
+        SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_PROFILE}"
+    fi
 
-  [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
+    if [ -z "$OCF_RESKEY_START_WAITTIME" ]
+    then
+        export OCF_RESKEY_START_WAITTIME=3600
+    fi
 
-  if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
-  then
-    DIR_PROFILE="/usr/sap/$SID/SYS/profile"
-  else
-    DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
-  fi
+    # as root user we need the library path to the SAP kernel to be able to call sapcontrol
+    # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
+    if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
+    then
+        LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+        export LD_LIBRARY_PATH
+    fi
 
-  if [ -z "${OCF_RESKEY_PROFILE}" ]
-  then
-    SAPSTARTPROFILE="$DIR_PROFILE/${SIDInstanceName}_${SAPVIRHOST}"
-  else
-# TODO: if OCF_RESKEY_PROFILE contains slahes ignore DIR_PROFILE
-    SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_PROFILE}"
-  fi
-
-  if [ -z "$OCF_RESKEY_START_WAITTIME" ]
-  then
-    export OCF_RESKEY_START_WAITTIME=3600
-  fi
-
-  if [ -z "$OCF_RESKEY_MONITOR_SERVICES" ]
-  then
-# TODO: fh - which HANA service to monitor and are there several kinds of HANA instances with a different needed services set (scale-out)?
-    export OCF_RESKEY_MONITOR_SERVICES="hdbindexserver|hdbdaemon"
-  fi
-
-  # as root user we need the library path to the SAP kernel to be able to call sapcontrol
-  # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
-  if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
-  then
-    LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH
-  fi
-
-  PATH=${PATH}:${DIR_EXECUTABLE}
-  # ocf_log info "fhDBG: LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, DIR_EXECUTABLE=${DIR_EXECUTABLE} PATH=${PATH}"
-  return $OCF_SUCCESS
+    PATH=${PATH}:${DIR_EXECUTABLE}
+    # ocf_log info "fhDBG: LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, DIR_EXECUTABLE=${DIR_EXECUTABLE} PATH=${PATH}"
+    return $OCF_SUCCESS
 }
 
 
 #
+# function: check_sapstartsrv - check for sapstartsrv - optional start
 # check_sapstartsrv : Before using sapcontrol we make sure that the sapstartsrv is running for the correct instance.
 #                     We cannot use sapinit and the /usr/sap/sapservices file in case of an enquerep instance,
 #                     because then we have two instances with the same instance number.
 #
 check_sapstartsrv() {
-  local restart=0
-  local runninginst=""
-  local chkrc=$OCF_SUCCESS
-  local output=""
+    local restart=0
+    local runninginst=""
+    local chkrc=$OCF_SUCCESS
+    local output=""
 
-  if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
-    ocf_log warn "sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
-    restart=1
-  else
-    output=$($SAPCONTROL -nr $InstanceNr -function ParameterValue INSTANCE_NAME -format script)
-    if [ $? -eq 0 ]
-    then
-      runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
-      if [ "$runninginst" != "$InstanceName" ]
-      then 
-        ocf_log warn "sapstartsrv is running for instance $runninginst, that service will be killed"
+    if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
+        ocf_log warn "sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
         restart=1
-      else
-        output=$($SAPCONTROL -nr $InstanceNr -function AccessCheck Start)
-        if [ $? -ne 0 ]; then
-          ocf_log warn "FAILED : sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 /tmp/.sapstream5${InstanceNr}13))"
-          ocf_log warn "sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
-          restart=1
+    else
+        output=$($SAPCONTROL -nr $InstanceNr -function ParameterValue INSTANCE_NAME -format script)
+        if [ $? -eq 0 ]
+        then
+            runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
+            if [ "$runninginst" != "$InstanceName" ]
+            then 
+                ocf_log warn "sapstartsrv is running for instance $runninginst, that service will be killed"
+                restart=1
+            else
+                output=$($SAPCONTROL -nr $InstanceNr -function AccessCheck Start)
+                if [ $? -ne 0 ]; then
+                    ocf_log warn "FAILED : sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 /tmp/.sapstream5${InstanceNr}13))"
+                    ocf_log warn "sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
+                    restart=1
+                fi
+            fi
+        else
+            ocf_log warn "sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+            restart=1
         fi
-      fi
-    else
-      ocf_log warn "sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
-      restart=1
     fi
-  fi
 
-  if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
+    if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
 
-  if [ $restart -eq 1 ]
-  then
-
-    if [ -d /usr/sap/$SID/SYS/profile/ ]
+    if [ $restart -eq 1 ]
     then
-      DIR_PROFILE="/usr/sap/$SID/SYS/profile"
-    else
-      assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
+
+        if [ -d /usr/sap/$SID/SYS/profile/ ]
+        then
+            DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+        else
+            assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
+        fi
+
+        [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set START_PROFILE parameter!"
+
+        pkill -9 -f "sapstartsrv.*$runninginst"
+
+        # removing the unix domain socket files as they might have wrong permissions
+        # or ownership - they will be recreated by sapstartsrv during next start
+        rm -f /tmp/.sapstream5${InstanceNr}13
+        rm -f /tmp/.sapstream5${InstanceNr}14
+
+        $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
+
+        # now make sure the daemon has been started and is able to respond
+        local srvrc=1
+        while [ $srvrc -eq 1 -a $(pgrep -f "sapstartsrv.*$runninginst" | wc -l) -gt 0 ]
+        do
+            sleep 1
+            $SAPCONTROL -nr $InstanceNr -function GetProcessList > /dev/null 2>&1
+            srvrc=$?
+        done
+
+        if [ $srvrc -ne 1 ]
+        then
+            ocf_log info "sapstartsrv for instance $SID-$InstanceName was restarted !"
+            chkrc=$OCF_SUCCESS
+        else
+            ocf_log error "sapstartsrv for instance $SID-$InstanceName could not be started!"
+            chkrc=$OCF_ERR_GENERIC
+            ocf_is_probe && chkrc=$OCF_NOT_RUNNING
+        fi
     fi
 
-    [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set START_PROFILE parameter!"
-
-    pkill -9 -f "sapstartsrv.*$runninginst"
-
-    # removing the unix domain socket files as they might have wrong permissions
-    # or ownership - they will be recreated by sapstartsrv during next start
-    rm -f /tmp/.sapstream5${InstanceNr}13
-    rm -f /tmp/.sapstream5${InstanceNr}14
-
-    $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
-
-    # now make sure the daemon has been started and is able to respond
-    local srvrc=1
-    while [ $srvrc -eq 1 -a $(pgrep -f "sapstartsrv.*$runninginst" | wc -l) -gt 0 ]
-    do
-      sleep 1
-      $SAPCONTROL -nr $InstanceNr -function GetProcessList > /dev/null 2>&1
-      srvrc=$?
-    done
-
-    if [ $srvrc -ne 1 ]
-    then
-      ocf_log info "sapstartsrv for instance $SID-$InstanceName was restarted !"
-      chkrc=$OCF_SUCCESS
-    else
-      ocf_log error "sapstartsrv for instance $SID-$InstanceName could not be started!"
-      chkrc=$OCF_ERR_GENERIC
-      ocf_is_probe && chkrc=$OCF_NOT_RUNNING
-    fi
-  fi
-
-  return $chkrc
+    return $chkrc
 }
 
-
 #
-# sapuserexit : Many SAP customers need some additional processes/tools to run their SAP systems.
-#               This specialties do not allow a totally generic SAP cluster resource agent.
-#               Someone should write a resource agent for each additional process you need, if it
-#               is required to monitor that process within the cluster manager. To enable 
-#               you to extent this resource agent without developing a new one, this user exit
-#               was introduced.
-#
-sapuserexit() {
-  local NAME="$1"
-  local VALUE="$2"
-
-  if [ -n "$VALUE" ]
-  then
-    if have_binary "$VALUE"
-    then
-      ocf_log info "Calling userexit ${NAME} with customer script file ${VALUE}"
-      "$VALUE" >/dev/null 2>&1
-      ocf_log info "Exiting userexit ${NAME} with customer script file ${VALUE}, returncode: $?"
-    else
-      ocf_log warn "Attribute ${NAME} is set to ${VALUE}, but this file is not executable"
-    fi
-  fi
-  return 0
-}
-
-
-#
+# function: cleanup_instance - remove resources from a crashed instance
 # cleanup_instance : remove resources (processes and shared memory) from a crashed instance)
 #
 cleanup_instance() {
 # TODO: fh - Do not know what we need for HANA cleanup
-  pkill -9 -f -U $sidadm $InstanceName
-  ocf_log info "Terminated instance using 'pkill -9 -f -U $sidadm $InstanceName'"
-
-  # it is necessary to call cleanipc as user sidadm if the system has 'vmcj/enable = ON' set - otherwise SHM-segments in /dev/shm/SAP_ES2* cannot beremoved
-  su - $sidadm -c "cleanipc $InstanceNr remove"
-  ocf_log info "Tried to remove shared memory resources using 'cleanipc $InstanceNr remove' as user $sidadm"
-
-  ocf_run rm -fv /usr/sap/$SID/$InstanceName/work/kill.sap
-  ocf_run rm -fv /usr/sap/$SID/$InstanceName/work/shutdown.sap
-  ocf_run rm -fv /usr/sap/$SID/$InstanceName/data/rslgcpid
-  ocf_run rm -fv /usr/sap/$SID/$InstanceName/data/rslgspid
-
+#
+# Do wee need to cleanup
+#  - process list (kill/signal)
+#  - ipc objects
+#  - process-pid files and other files
+  ocf_log info "fhDBG: cleanup_instance currently not implemented"
   return 0
 }
 
+#
+# function: saphana_hdbsql_check - query SR view
+# params:   remote_sql (IP address or name where to send the query)
+#
 saphana_hdbsql_check()
 {
    local rc=1
    local remote_sql=$1
    # TODO: we should get rid of user system and pwd manager and using a secure store db user
+   #       and do we need a parameter for that like HANA_SECURE_USER (with default sleha)
    #
    $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
    return $rc
 }
 
 #
+# function: set_hana_sync_status_attr - set the HANA syst-repl. status attribute 
+# params:   STATUS [ HOST-LIST ]
+# set the hana_sync_status attribute
+set_hana_sync_status_attr()
+{
+   local rc theStatus theHosts
+   if [ $# -ge 2 ]; then
+      theStatus=$1
+      shift
+      theHosts=$(echo $* | dequote)
+      for theHost in $theHosts; do
+          ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
+          ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
+          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
+	   # TODO: maybe we do need error handling!!
+      done
+      rc=0
+   else
+      rc=1
+   fi
+   return $rc
+}
+
+#
+# function: get_hana_sync_status_attr - get the HANA syst-repl. status attribute
+#
+get_hana_sync_status_attr()
+{
+   local sync_attr
+   sync_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q)
+
+   # OLD ATTRIBUTE IN PROPETRY INSTEAD OF HOSTS ATTRIBUTES
+   #crm_attribute -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -q
+   # TODO: Do we need error handling?
+   echo "$sync_attr"
+}
+
+#
+# function: set_hana_primary_at_attr - set the location where the cluster expects the primary
+# params:   location (like WALLDORF or ROT)
+# set the hana_primary_at attribute
+#
+set_hana_primary_at_attr()
+{
+   theLocation=$1
+   crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"
+   # TODO: Do we need error handling?
+}
+
+#
+# function: get_hana_primary_at_attr - get the location where the cluster expects the primary
+# 
+# get the hana_primary_at attribute
+#
+get_hana_primary_at_attr()
+{
+   crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q
+   # TODO: Do we need error handling?
+}
+
+#
+# function: check_for_primary - check if local SAP HANA is configured as primary
+#
+check_for_primary() {
+
+   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
+   # TODO: Change stderr location!!
+   #sidadm=lnxadm
+   node_status=$(check_for_primary_single) 
+   ocf_log info "check_for_primary: node_status=$node_status"
+   case "$node_status" in
+       primary ) 
+                  return $HANA_STATE_PRIMARY;;
+       syncmem | sync | async )
+                  return $HANA_STATE_SECONDARY;;
+       none )     # have seen that mode on second side BEFEORE we registered it as replica
+                  return $HANA_STATE_DEFECT;;
+       * )
+		  ocf_log err "check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                  ocf_log err "check_for_primary: trying multiple times to get primary status"
+                  for i in 1 2 3 4 5; do
+                      node_status=$(check_for_primary_single)
+                      ocf_log info "check_for_primary: (loop nr $i) node_status=$node_status"
+                      case "$node_status" in
+                           primary )
+                                     return $HANA_STATE_PRIMARY;;
+                           syncmem | sync | async )
+                                     return $HANA_STATE_SECONDARY;;
+                      esac
+                      sleep 10
+                  done
+		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
+                  return $HANA_STATE_DEFECT;;
+   esac;
+   return $HANA_STATE_DEFECT
+}
+
+#
+# function: check_for_primary_single - query hdbnsutil to get HANA primary/secondary status
+#
+check_for_primary_single()
+{
+    local node_full_status node_status
+    echo " ========== $(date) ============== " >>/tmp/null
+    #
+    # TODO: remove debug-output to /tmp/null
+    #
+    # ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
+    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
+    echo "${node_full_status}" >>/tmp/null
+    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+    echo "$node_status"
+}
+
+#
+# function: get_site_name - query site name
+# get site name of local HANA instance
+#
+get_site_name()
+{
+    local node_full_status node_site_name
+    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
+    echo "${node_full_status}" >>/tmp/null
+    node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "<%s>/n", $3 } ' )
+    echo "$node_site_name"
+}
+
+#
+# function: analyze_hana_sync_status - query and check hana system replication status
+# get the HANA sync status
+# 
+analyze_hana_sync_status()
+{
+    local hana_sync_status what_does_the_camaelion_say
+    #
+    hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | dequote)
+    #
+    # UNKNOWN, ACTIVE, ERROR, INITIALIZING
+    #
+    if [ "${hana_sync_status}" == "ACTIVE" ]; then
+        ocf_log info set_hana_sync_status_attr "OK"
+        set_hana_sync_status_attr "OK"
+    else
+        ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
+        ocf_log info set_hana_sync_status_attr "FAILURE"
+        set_hana_sync_status_attr "FAILURE"
+    fi
+
+    # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
+    #    TODO: for first we assume there is only ONE secondary site
+    #    TODO: error handling of hdbsql
+    #    TODO: Use secure-store user instead of username/passwd --> this prereq must be checked! 
+    #
+    all_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "(select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION)")
+    all_broken_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
+    if [ -n "$all_broken_secondary_hosts" ]; then
+        #
+        # we have a broken secondary site - set all hosts to "FAILURE"
+        #
+        what_does_the_camaelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1)
+    else 
+        #
+        # we have an ACTIVE secondary site - set all hosts to "OK"
+        #
+        what_does_the_camaelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1)
+    fi
+}
+
+#
+# function: get_hana_landscape_status - figure out hana ladscape status
+# get the HANA landscape status
+#
+get_hana_landscape_status()
+{
+    local ls_rc=0
+    #
+    su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; ls_rc=$?
+    # ls_rc:
+    # 0 : FATAL
+    # 1 : ERROR
+    # 2 : WARN
+    # 3 : INFO
+    # 4 : OK
+    return $ls_rc;
+}
+
+#
+# function: register_hana_secondary - register local hana as secondary to the other site
+# register_hana_secondary
+#
+register_hana_secondary()
+{
+    local rc=2;
+    # HANA nedds to be stopped to register!
+    # as sidadm
+    # hdbnsutil -sr_register --remoteHost=lv9041 --remoteInstance=42 --mode=syncmem --name=ROT
+    # --remoteHost=  this is the (new) primary host
+    # --remoteInstance= this is the (new) primaries instance number - do we assume the same number?
+    # --name= this is the local(!) site name 
+
+    # TODO: For first we assume both SIDs and InstanceNumbers are equal - so we could use our values
+  
+    remoteInstance=$InstanceNr
+    # TODO: make mode be configurable?
+    sr_mode=syncmem
+
+    ocf_log info "fhACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+    su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+    return rc;
+}
+
+#
+# function: saphana_notify_log_values - log notify variables (also as tuples)
+# params:   variable-names variable-values
+#
+saphana_notify_log_values()
+{
+    local name=$1
+    local value=$2
+    local separator="/"
+    
+    if [ -n "$value" ]; then
+       if [ "$(echo $value | tr -d ' ')" != "$separator" ]; then
+		ocf_log info "saphana_notify: $name $value"
+          
+       fi 
+    fi
+} 
+
+
+#
+#############################################################################
+#
+# function: saphana_start - start a hana instance
 # saphana_start : Start the SAP HANA instance
 #
 saphana_start() {
 
-  sapuserexit PRE_START_USEREXIT "$OCF_RESKEY_PRE_START_USEREXIT"
 
   local rc=$OCF_NOT_RUNNING
   local output=""
@@ -574,6 +784,9 @@ saphana_start() {
 
     check_sapstartsrv
     rc=$?
+    #
+    # TODO: For scale-out - do we need to use an other call like StartSystem? Or better to use the HDB command?
+    #
     if [ $rc -eq $OCF_SUCCESS ]; then
       output=$($SAPCONTROL -nr $InstanceNr -function Start)
       rc=$?
@@ -605,14 +818,7 @@ saphana_start() {
             startrc=0; loopcount=2
           fi
         else
-          if [ $loopcount -eq 1 ] && ocf_is_true $OCF_RESKEY_AUTOMATIC_RECOVER
-          then
-            ocf_log warn "SAP Instance $SID-$InstanceName start failed: $output"
-            ocf_log warn "Try to recover $SID-$InstanceName"
-            cleanup_instance
-          else
-            loopcount=2
-          fi
+          loopcount=2
           startrc=-1
         fi
       else
@@ -625,7 +831,6 @@ saphana_start() {
   then
     ocf_log info "SAP Instance $SID-$InstanceName started: $output"
     rc=$OCF_SUCCESS
-    sapuserexit POST_START_USEREXIT "$OCF_RESKEY_POST_START_USEREXIT"
   else
     ocf_log err "SAP Instance $SID-$InstanceName start failed: $output"
     rc=$OCF_NOT_RUNNING
@@ -636,6 +841,7 @@ saphana_start() {
 
 
 #
+# function: saphana_recover - recover - cleanup and (re)start a hana instance
 # saphana_recover: Try startup of failed instance by cleaning up resources
 #
 saphana_recover() {
@@ -646,13 +852,13 @@ saphana_recover() {
 
 
 #
+# function: saphana_stop - stop a hana instance
 # saphana_stop: Stop the SAP instance
 #
 saphana_stop() {
   local output=""
   local rc
 
-  sapuserexit PRE_STOP_USEREXIT "$OCF_RESKEY_PRE_STOP_USEREXIT"
 
   if [ "$OCF_RESKEY_SHUTDOWN_METHOD" = "KILL" ]
   then
@@ -685,13 +891,13 @@ saphana_stop() {
     rc=$OCF_ERR_GENERIC
   fi
 
-  sapuserexit POST_STOP_USEREXIT "$OCF_RESKEY_POST_STOP_USEREXIT"
 
   return $rc
 }
 
 
 #
+# function: saphana_monitor - monitor a hana instance
 # saphana_monitor: Can the given SAP instance do anything useful?
 #
 saphana_monitor() {
@@ -707,6 +913,9 @@ saphana_monitor() {
     local SERVNO
     local output
 
+#
+# TODO: completely switch-over to landscape script
+#
     output=$($SAPCONTROL -nr $InstanceNr -function GetProcessList -format script)
 
     # we have to parse the output, because the returncode doesn't tell anything about the instance status
@@ -722,6 +931,9 @@ saphana_monitor() {
         *)                  STATE=$OCF_NOT_RUNNING;;
       esac 
 
+#
+# TODO: completely switch-over to landscape script
+#
       SEARCH=$(echo "$OCF_RESKEY_MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
       if [ $(echo "$SERVICE" | egrep -c "$SEARCH") -eq 1 ]
       then
@@ -751,17 +963,19 @@ saphana_monitor() {
 
 
 #
+# function: saphana_status - get status of a hana instance (os tools only)
 # saphana_status: Lightweight check of SAP instance only with OS tools
 #
 saphana_status() {
   local pid
   local pids
+  local killsap="/usr/sap/$SID/$InstanceName/${HOSTNAME}/trace/kill.sap"
 
 echo "fhDBD: saphana_status: SID=$SID"
 echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 
-  [ ! -f "/usr/sap/$SID/$InstanceName/work/kill.sap" ] && return $OCF_NOT_RUNNING
-  pids=$(grep '^kill -[0-9]' /usr/sap/$SID/$InstanceName/work/kill.sap | awk '{print $3}')
+  [ ! -f ${killsap} ] && return $OCF_NOT_RUNNING
+  pids=$(awk '/^kill -[0-9]/ {print $3}' ${killsap})
   for pid in $pids
   do
     [ $(pgrep -f -U $sidadm $InstanceName | grep -c $pid) -gt 0 ] && return $OCF_SUCCESS
@@ -771,6 +985,7 @@ echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 
 
 #
+# function: saphana_validate - validation of (some) variables/parameters
 # saphana_validate: Check the symantic of the input parameters 
 #
 saphana_validate() {
@@ -802,97 +1017,8 @@ saphana_validate() {
   return $rc
 }
 
-# set the hana_sync_status attribute
-#   param: STATUS [ HOST-LIST ]
-set_hana_sync_status_attr()
-{
-   local rc theStatus theHosts
-   if [ $# -ge 2 ]; then
-      theStatus=$1
-      shift
-      theHosts=$(echo $* | dequote)
-      for theHost in $theHosts; do
-          ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
-          ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
-          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
-	   # TODO: maybe we do need error handling!!
-      done
-      rc=0
-   else
-      rc=1
-   fi
-   return $rc
-}
-
-get_hana_sync_status_attr()
-{
-   local sync_attr
-   sync_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q)
-
-   # OLD ATTRIBUTE IN PROPETRY INSTEAD OF HOSTS ATTRIBUTES
-   #crm_attribute -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -q
-   # TODO: Do we need error handling?
-   echo "$sync_attr"
-}
-
 #
-# set the hana_primary_at attribute
-#   param: location like WALLDORF or ROT
-#
-set_hana_primary_at_attr()
-{
-   theLocation=$1
-   crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"
-   # TODO: Do we need error handling?
-}
-
-#
-# get the hana_primary_at attribute
-#
-get_hana_primary_at_attr()
-{
-   crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q
-   # TODO: Do we need error handling?
-}
-
-check_for_primary() {
-
-   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
-   # TODO: Change stderr location!!
-   # TODO: Fix hdbnsutil location
-   # TODO: Fix user sidadm
-   #sidadm=lnxadm
-   node_status=$(check_for_primary_single) 
-   ocf_log info "check_for_primary: node_status=$node_status"
-   case "$node_status" in
-       primary ) 
-                  return $HANA_STATE_PRIMARY;;
-       syncmem | sync | async )
-                  return $HANA_STATE_SECONDARY;;
-       none )     # have seen that mode on second side BEFEORE we registered it as replica
-                  return $HANA_STATE_DEFECT;;
-       * )
-		  ocf_log err "check_for_primary:  we didn't expect node_status to be: <$node_status>"
-                  ocf_log err "check_for_primary: trying multiple times to get primary status"
-                  for i in 1 2 3 4 5; do
-                      node_status=$(check_for_primary_single)
-                      ocf_log info "check_for_primary: (loop nr $i) node_status=$node_status"
-                      case "$node_status" in
-                           primary )
-                                     return $HANA_STATE_PRIMARY;;
-                           syncmem* | sync* | async* )
-                                     # TODO: instead of wildcards we should be sharper, but need to check for possible strings 
-                                     return $HANA_STATE_SECONDARY;;
-                      esac
-                      sleep 10
-                  done
-		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
-                  return $HANA_STATE_DEFECT;;
-   esac;
-   return $HANA_STATE_DEFECT
-}
-
-#
+# function: saphana_start_clone - start a hana clone instance
 # saphana_start_clone
 #
 saphana_start_clone() {
@@ -962,16 +1088,6 @@ saphana_start_clone() {
 		       saphana_start
 		       rc=$?
            fi
-               
-##			score_master=$(get_crm_master)
-#			if [ "$score_master" = "-INFINITY" -o "$score_master" -lt 0 ]; then
-#				ocf_log info "fhDES: primary and only primary BUT have penality - so we should NOT promote here"
-#				set_crm_master  0
-#			else
-#				# we are primary and we are alone - so we could promote
-#				ocf_log info "fhDES: primary and only primary, we have no penality - so we could promote here"
-#				set_crm_master  100
-#			fi
         fi
 	else 
 		#
@@ -1009,6 +1125,7 @@ saphana_start_clone() {
 
 
 #
+# function: saphana_stop_clone - stop a hana clone instance
 # saphana_stop_clone
 #
 saphana_stop_clone() {
@@ -1018,132 +1135,8 @@ saphana_stop_clone() {
     return $?
 }
 
-
-check_for_primary_single()
-{
-    local node_full_status node_status
-    echo " ========== $(date) ============== " >>/tmp/null
-    #
-    # TODO: remove debug-output to /tmp/null
-    #
-    # ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
-    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
-    echo "${node_full_status}" >>/tmp/null
-    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-    echo "$node_status"
-}
-
 #
-# get site name of local HANA instance
-#
-get_site_name()
-{
-    local node_full_status node_site_name
-    #
-    # TODO: check how to remove the paths
-    #
-    #ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
-    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
-    echo "${node_full_status}" >>/tmp/null
-    node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "<%s>/n", $3 } ' )
-    echo "$node_site_name"
-}
-
-#
-# get the HANA sync status
-# 
-analyze_hana_sync_status()
-{
-    local hana_sync_status what_does_the_camaelion_say
-    #
-    hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | dequote)
-    #
-    # UNKNOWN, ACTIVE, ERROR, INITIALIZING
-    #
-    if [ "${hana_sync_status}" == "ACTIVE" ]; then
-        ocf_log info set_hana_sync_status_attr "OK"
-        set_hana_sync_status_attr "OK"
-    else
-        ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
-        ocf_log info set_hana_sync_status_attr "FAILURE"
-        set_hana_sync_status_attr "FAILURE"
-    fi
-
-    # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
-    #    TODO: for first we assume there is only ONE secondary site
-    #    TODO: error handling of hdbsql
-    #    TODO: Use secure-store user instead of username/passwd --> this prereq must be checked! 
-    #
-    all_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "(select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION)")
-    all_broken_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
-    if [ -n "$all_broken_secondary_hosts" ]; then
-        #
-        # we have a broken secondary site - set all hosts to "FAILURE"
-        #
-        what_does_the_camaelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1)
-    else 
-        #
-        # we have an ACTIVE secondary site - set all hosts to "OK"
-        #
-        what_does_the_camaelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1)
-    fi
-}
-
-#
-# get the HANA landscape status
-#
-get_hana_landscape_status()
-{
-    local ls_rc=0
-    #
-    su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; ls_rc=$?
-    # ls_rc:
-    # 0 : FATAL
-    # 1 : ERROR
-    # 2 : WARN
-    # 3 : INFO
-    # 4 : OK
-    return $ls_rc;
-}
-
-#
-# register_hana_secondary
-#
-register_hana_secondary()
-{
-    local rc=2;
-    # TODO: implementation :)
-    # HANA nedds to be stopped to register!
-    # as sidadm
-    # hdbnsutil -sr_register --remoteHost=lv9041 --remoteInstance=42 --mode=syncmem --name=ROT
-    # --remoteHost=  this is the (new) primary host
-    # --remoteInstance= this is the (new) primaries instance number - do we assume the same number?
-    # --name= this is the local(!) site name 
-
-    # TODO: For first we assume both SIDs and InstanceNumbers are equal - so we could use our values
-    # TODO: For first we hardcode the sites and remote host name - just for test purposes
-
-    case ${HOSTNAME} in
-        lv9041 )
-                 remoteHost=lv9042
-                 remoteInstance=$InstanceNr
-                 sr_mode=syncmem
-                 sr_name=WALLDORF
-                 ;;
-        lv9042 )
-                 remoteHost=lv9041
-                 remoteInstance=$InstanceNr
-                 sr_mode=syncmem
-                 sr_name=ROT
-                 ;;
-    esac
-
-    ocf_log info "fhDES: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
-    su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
-    return rc;
-}
-
-#
+# function: saphana_monitor_clone - monitor a hana clone instance
 # saphana_monitor_clone
 #
 saphana_monitor_clone() {
@@ -1353,6 +1346,7 @@ saphana_monitor_clone() {
 }
 
 #
+# function: saphana_promote_clone - promote a hana clone
 # saphana_promote_clone: 
 #    In a Master/Slave configuration get Master being the primary OR by running hana takeover
 #
@@ -1414,6 +1408,7 @@ saphana_promote_clone() {
 }
 
 #
+# function: saphana_demote_clone - demote a hana clone instance
 # saphana_demote_clone
 #   the HANA System Replication (SR) runs in a Master/Slave 
 #   While we could not change a HANA instance to be really demoted, we only mark the status for 
@@ -1429,23 +1424,8 @@ saphana_demote_clone() {
     return $rc
 }
 
-saphana_notify_log_values()
-{
-    # params: name value
-    local name=$1
-    local value=$2
-    local separator="/"
-    
-    if [ -n "$value" ]; then
-       if [ "$(echo $value | tr -d ' ')" != "$separator" ]; then
-		ocf_log info "saphana_notify: $name $value"
-          
-       fi 
-    fi
-} 
-
-
 #
+# function: saphana_notify - notify action
 # saphana_notify: Handle master scoring - to make sure a slave gets the next master
 #
 saphana_notify() {
@@ -1511,31 +1491,12 @@ saphana_notify() {
                      ;;
     esac
 
-    # TODO: Check when we need to change master/promotion scores
-    #if false; then
-    #    if [ "${n_type}_${n_op}" = "post_promote" ]; then
-    #        # After promotion of one master in the cluster, we make sure that all clones reset their master
-    #        # value back to 100. This is because a failed monitor on a master might have degree one clone
-    #        # instance to score 10.
-    #        # TODO: a) check, if the "story" is still correct for SAPHana in scale-up and scale-out
-    #        #       b) are the values 10 / 100 still correct?
-    #        set_crm_master 100
-    #    elif [ "${n_type}_${n_op}" = "pre_demote" ]; then
-    #        # if we are a slave and a demote event is anounced, make sure we have the highes wish to became master
-    #        # that is, when a slave resource was startet after the promote event of a already running master (e.g. node of slave was down)
-    #        # We also have to make sure to overrule the globaly set resource_stickiness or any fail-count factors => INFINITY
-    #        local n_uname="$OCF_RESKEY_CRM_meta_notify_demote_uname"
-    #        if [ ${n_uname} != ${HOSTNAME} ]; then
-    #            set_crm_master INFINITY
-    #        fi
-    #    fi
-    #fi
     ocf_log info "==== end action $ACTION$CLACT (${n_type}/${n_op})===="
 }
 
 
 #
-#	'main' starts here...
+# function: main - main function to operate 
 #
 
 ## GLOBALS
