@@ -11,18 +11,13 @@
 ##################################################################################################################################################
 #
 # SAPHana is a fork of SAPInstance to cover special actions needed for running HANA in a SR mode
+# Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
 #
 # SAPHana:
 # Author:       Fabian Herschel, November 2013
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013 SUSE Linux Products GmbH
-
-# SAPInstance:
-# Author:       Alexander Krauth, June 2006
-# Support:      linux@sap.com
-# License:      GNU General Public License (GPL)
-# Copyright:    (c) 2006-2008 Alexander Krauth
 #
 # An example usage: 
 #      See usage() function below for more details...
@@ -35,6 +30,7 @@
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #   OCF_RESKEY_HANA_SERVICE_ADDRESS 
 #   OCF_RESKEY_HANA_SR_TOPOLOGY
+#   OCF_RESKEY_HANA_SR_MODE
 #
 #   TODO: See TODOs in this script
 #
@@ -84,7 +80,7 @@ saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.40.2014.01.15.2</version>
+<version>0.45.2014.01.15.5</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -149,6 +145,12 @@ The SAPHana resource agent will interpret retuencodes 0,1 and 2 as NOT-RUNNING (
  Each tuple has the syntax node:site:remoteNode.
  Sample: "lv9041:WALLDORF:lv9042 lv9042:ROT:lv9041"
  </longdesc>
+ </parameter>
+ <parameter name="HANA_SR_MODE" unique="0" required="0">
+ <shortdesc lang="en">Define the HANA System Replication mode</shortdesc>
+ <longdesc lang="en">HANA_SR_MODE defines the System Replication mode. This mode is needed when a former failed primary should
+  register to the new primary. Allowed values are: sync, syncmem and async</longdesc>
+ <content type="string" default="sync" />
  </parameter>
 </parameters>
 
@@ -350,9 +352,15 @@ saphana_init() {
         fi
     done
 
+    if [ -n "$OCF_RESKEY_HANA_SR_MODE" ]; then
+        sr_mode=$OCF_RESKEY_HANA_SR_MODE
+    else
+        sr_mode="sync"
+    fi
+
     ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
 
-    ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, remote_sql=$remote_sql"
+    ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, remote_sql=$remote_sql, sr_mode=$sr_mode"
 
 
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
@@ -738,8 +746,6 @@ register_hana_secondary()
     # TODO: For first we assume both SIDs and InstanceNumbers are equal - so we could use our values
   
     remoteInstance=$InstanceNr
-    # TODO: make mode be configurable?
-    sr_mode=syncmem
 
     ocf_log info "fhACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
     su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
@@ -1043,7 +1049,7 @@ saphana_start_clone() {
                   #
                   # LOCAL SQL ANSWERS ==> WE ARE UP ALREADY
                   #
-                  ocf_log info "fhDES: primary and up already"
+                  ocf_log info "fhDEC: primary and up already"
                   set_crm_master 1000
                   rc=$OCF_SUCCSESS
                else
@@ -1051,7 +1057,7 @@ saphana_start_clone() {
                   # LOCAL SQL ANSWERS NOT ==> How to recover: local up, remote sql ansers, local sql answers not?
                   #
                   # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
-                  ocf_log info "fhDES: primary up but does not answer"
+                  ocf_log info "fhDEC: primary up but does not answer"
                   rc=$OCF_ERR_GENERIC
                fi
            else 
@@ -1059,7 +1065,7 @@ saphana_start_clone() {
                # LANDSCAPE SAYS UP, SQL DOES NOT ANSWER ==> How to recover that? As we should be primary?
                #
                # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
-               ocf_log info "fhDES: primary up but service does not answer"
+               ocf_log info "fhDEC: primary up but service does not answer"
                rc=$OCF_ERR_GENERIC
            fi
         else 
@@ -1098,7 +1104,7 @@ saphana_start_clone() {
 		if [ $sqlrc -ne 0 ]; then
             set_hana_clone_state ${HOSTNAME} "WAITING"
 			ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
-			ocf_log info "fhDES: secondary in status WAITING -> EXCLUDE as posible takeover node"
+			ocf_log info "fhDEC: secondary in status WAITING -> EXCLUDE as posible takeover node"
 			set_crm_master -INFINITY
 			rc=$OCF_SUCCSESS
 		else
@@ -1106,15 +1112,15 @@ saphana_start_clone() {
 			sync_attr=$(get_hana_sync_status_attr)
 			case "$sync_attr" in
 				"OK"   )    # This is a possible node to promote, when primary is missing
-							ocf_log info "fhDES: secondary with sync status OK -> posible takeover node"
+							ocf_log info "fhDEC: secondary with sync status OK -> posible takeover node"
 							set_crm_master  10
 							;;
 				"FAILURE" ) # This is currently NOT a possible node to promote
-							ocf_log info "fhDES: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
+							ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
 							set_crm_master -INFINITY
 							;;
 				"*" )       # Unknown sync status
-							ocf_log info "fhDES: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
+							ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
 							set_crm_master -INFINITY
 							;;
 			esac
@@ -1211,7 +1217,7 @@ saphana_monitor_clone() {
                         # ===>  Should we rely on the migration threshold?
                         #       set_crm_master 
                         if [ $PreferSiteTakeover -eq 1 ]; then
-                            ocf_log info "fhDES: PreferSiteTakeover selected so decrease promotion score here"
+                            ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
                             set_crm_master -9000
                         fi
                         rc=$OCF_FAILED_MASTER
@@ -1316,15 +1322,15 @@ saphana_monitor_clone() {
                     ocf_log info "fhDBG sync_attr=$sync_attr"
                     case "$sync_attr" in
                         "OK"   )    # This is a possible node to promote, when primary is missing
-                            ocf_log info "fhDES: secondary with sync status OK -> posible takeover node"
+                            ocf_log info "fhDEC: secondary with sync status OK -> posible takeover node"
                             set_crm_master  10
                             ;;
                         "FAILURE" ) # This is currently NOT a possible node to promote
-                            ocf_log info "fhDES: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
+                            ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
                             set_crm_master -INFINITY
                             ;;
                         "*" )       # Unknown sync status
-                            ocf_log info "fhDES: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
+                            ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
                             set_crm_master -INFINITY
                             ;;
                     esac
@@ -1374,7 +1380,7 @@ saphana_promote_clone() {
         hana_sync=$(get_hana_sync_status_attr)
         case "$hana_sync" in
              OK )
-                ocf_log info "!!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
+                ocf_log info "fhACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
                 #####
                 su - $sidadm -c "hdbnsutil -sr_takeover"
                 # TODO: do we need to check return codes, or does the check_for_primary test works successful?
@@ -1392,7 +1398,7 @@ saphana_promote_clone() {
                 fi 
                 ;;
              * )
-                ocf_log err "!!!!!!! HANA SYNC STATUS IS NOT 'OK' SO WE COULD NOT PROMOTE !!!!!!!"
+                ocf_log err "fhACT: !!!!!!! HANA SYNC STATUS IS NOT 'OK' SO WE COULD NOT PROMOTE !!!!!!!"
                 rc=$OCF_ERR_GENERIC
                 ;;
         esac
