@@ -117,7 +117,7 @@ The SAPHana resource agent will interpret retuencodes 0,1 and 2 as NOT-RUNNING (
  <longdesc lang="en">Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default=No</longdesc>
  <shortdesc lang="en">Local or site recover preferred?</shortdesc>
   <content type="boolean" default="0" />
- </paramater>
+ </parameter>
  <parameter name="DIR_EXECUTABLE" unique="0" required="0">
   <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
   <shortdesc lang="en">Path of sapstartsrv and sapcontrol</shortdesc>
@@ -320,6 +320,8 @@ saphana_init() {
 #
 # TODO: Working on topology
 #
+  HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
+  ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
 local one two three rest1
 for node_top in $HANA_SR_TOPOLOGY; do 
     one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
@@ -327,6 +329,7 @@ for node_top in $HANA_SR_TOPOLOGY; do
     two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
     three=${rest1#*:}    # cut-out  the first field of the rest 
                          # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
+    ocf_log info "fhDBG: node_top=$node_top, one=$one, two=$two, three=$three"
     if [ "$one" = "$HOSTNAME" ]; then
        # found "own" datarecord
        sr_name=$two
@@ -337,7 +340,7 @@ done
 
   ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
 
-  ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost"
+  ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, remote_sql=$remote_sql"
 
 
   ocf_env=$(env | grep 'OCF_RESKEY_CRM')
@@ -370,8 +373,6 @@ done
     fi
   fi
 
-  HANA_SR_TOPOLOGY=OCF_RESKEY_HANA_SR_TOPOLOGY
-  ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
 
   [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
 
