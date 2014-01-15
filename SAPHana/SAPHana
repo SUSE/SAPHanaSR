@@ -1,7 +1,5 @@
 #!/bin/bash
 #
-# $Id$
-#
 # SAPHana
 #
 # Description:	Manages a single SAP Instance as a High-Availability
@@ -82,7 +80,7 @@ saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.40.2014.01.10</version>
+<version>0.40.2014.01.15.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -340,7 +338,7 @@ done
   ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
 
   ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost"
-   
+
 
   ocf_env=$(env | grep 'OCF_RESKEY_CRM')
   ocf_log info "fhDBG: OCF: $ocf_env"
@@ -559,7 +557,7 @@ saphana_hdbsql_check()
 }
 
 #
-# saphana_start : Start the SAP Hana instance
+# saphana_start : Start the SAP HANA instance
 #
 saphana_start() {
 
@@ -982,6 +980,7 @@ saphana_start_clone() {
         saphana_hdbsql_check $remote_sql; sqlrc=$?
 		if [ $sqlrc -ne 0 ]; then
             set_hana_clone_state ${HOSTNAME} "WAITING"
+			ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
 			ocf_log info "fhDES: secondary in status WAITING -> EXCLUDE as posible takeover node"
 			set_crm_master -INFINITY
 			rc=$OCF_SUCCSESS
@@ -1284,7 +1283,7 @@ saphana_monitor_clone() {
                         promoted=0;
                         ;;
                     WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-                        saphana_hdbsql_check $remote_sql=10.17.140.200; sqlrc=$?
+                        saphana_hdbsql_check $remote_sql; sqlrc=$?
                         if [ $sqlrc -eq 0 ]; then
                             ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
                             saphana_start_clone
