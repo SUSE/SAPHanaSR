@@ -60,17 +60,17 @@ saphana_usage() {
   cat <<-!
 	usage: $0 ($methods)
 
-	$0 manages a SAP Instance as an HA resource.
+    $0 manages a SAP Instance as an HA resource.
 
-	The 'start' operation starts the instance or the ERS instance in a Master/Slave configuration
-	The 'stop' operation stops the instance
-	The 'status' operation reports whether the instance is running
-	The 'monitor' operation reports whether the instance seems to be working
-        The 'promote' operation starts the primary instance in a Master/Slave configuration
-        The 'demote' operation stops the primary instance and starts the ERS instance
-        The 'notify' operation always returns SUCCESS
-	The 'validate-all' operation reports whether the parameters are valid
-	The 'methods' operation reports on the methods $0 supports
+    The 'start' operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
+    The 'stop' operation stops the HANA instance
+    The 'status' operation reports whether the HANA instance is running
+    The 'monitor' operation reports whether the HANA instance seems to be working in master/slave it also needs to check the system replication status
+    The 'promote' operation either runs a takeover for a secondary or a just-nothing for a primary
+    The 'demote' operation neary does nothing and just mark the instance as demoted
+    The 'notify' operation always returns SUCCESS
+    The 'validate-all' operation reports whether the parameters are valid
+    The 'methods' operation reports on the methods $0 supports
 
 	!
 }
@@ -80,7 +80,7 @@ saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.40.2014.01.15.1</version>
+<version>0.40.2014.01.15.2</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1352,9 +1352,9 @@ saphana_monitor_clone() {
     return $rc
 }
 
-
 #
-# saphana_promote_clone: In a Master/Slave configuration get Master being the primary OR by running hana takeover
+# saphana_promote_clone: 
+#    In a Master/Slave configuration get Master being the primary OR by running hana takeover
 #
 saphana_promote_clone() {
   local rc
@@ -1414,7 +1414,10 @@ saphana_promote_clone() {
 }
 
 #
-# saphana_demote_clone: In a Master/Slave configuration get Slave by stopping the SCS instance and starting the ERS instance
+# saphana_demote_clone
+#   the HANA System Replication (SR) runs in a Master/Slave 
+#   While we could not change a HANA instance to be really demoted, we only mark the status for 
+#   correct monitor return codes
 #
 saphana_demote_clone() {
     local rc
@@ -1562,13 +1565,12 @@ fi
 # These operations don't require OCF parameters to be set
 # TODO: check, if notify is still not needing OCF parameters
 case "$ACTION" in
-    usage|methods)                saphana_$ACTION
-                                exit $OCF_SUCCESS;;
-    meta-data)                    saphana_meta_data
-                                exit $OCF_SUCCESS;;
-    notify)                       
-                                saphana_notify
-                                exit $OCF_SUCCESS;;
+    usage|methods)  saphana_$ACTION
+                    exit $OCF_SUCCESS;;
+    meta-data)      saphana_meta_data
+                    exit $OCF_SUCCESS;;
+    notify)         saphana_notify
+                    exit $OCF_SUCCESS;;
     *);;
 esac
 saphana_init $OCF_RESKEY_InstanceName
