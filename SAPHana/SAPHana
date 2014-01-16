@@ -733,7 +733,6 @@ analyze_hana_sync_status()
     # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
     #    TODO: for first we assume there is only ONE secondary site
     #    TODO: error handling of hdbsql
-    #    TODO: Use secure-store user instead of username/passwd --> this prereq must be checked! 
     #
     all_secondary_hosts=$(hdbsql -a -x -U $secUser "select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION")
     all_broken_secondary_hosts=$(hdbsql -a -x -U $secUser "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
@@ -1050,6 +1049,7 @@ echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 # params:   -
 # globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
 # saphana_validate: Check the symantic of the input parameters 
+# TODO: Need to add more coding here - check other params, check prereqisites such as secure store users
 #
 saphana_validate() {
   local rc=$OCF_SUCCESS
@@ -1649,7 +1649,7 @@ case "$ACTION" in
         saphana_$ACTION$CLACT
         ra_rc=$?
         ;;
-    validate-all) # TODO: need to add coding here
+    validate-all) 
         saphana_validate
         ra_rc=$?
         ;;
