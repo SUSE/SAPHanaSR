@@ -28,7 +28,6 @@
 #	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
 #	OCF_RESKEY_PROFILE          (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
-#   OCF_RESKEY_HANA_SERVICE_ADDRESS 
 #   OCF_RESKEY_HANA_SR_TOPOLOGY
 #   OCF_RESKEY_HANA_SR_MODE
 #
@@ -50,6 +49,8 @@ SH=/bin/sh
 
 #
 # function: saphana_usage - short usage info
+# params:   -
+# globals:  $0(r)
 #
 saphana_usage() {
   methods=$(saphana_methods)
@@ -74,6 +75,8 @@ saphana_usage() {
 
 #
 # function: saphana_meta_data - print resource agent meta-data for cluster
+# params:   -
+# globals:  -
 #
 saphana_meta_data() {
 	cat <<END
@@ -174,6 +177,8 @@ END
 
 #
 # function: saphana_methods - report supported cluster methods
+# params:   -
+# globals:  -
 # methods: What methods/operations do we support?
 #
 saphana_methods() {
@@ -194,6 +199,8 @@ saphana_methods() {
 
 #
 # function: dequote - filter: remove quotes (") from stdin
+# params:   -
+# globals:  -
 #
 dequote()
 {
@@ -202,6 +209,8 @@ dequote()
 
 #
 # function: is_clone - report, if resource is configured as a clone (also master/slave)
+# params:   -
+# globals:  OCF_*(r)
 # is_clone : find out if we are configured to run in a Master/Slave configuration
 #   rc: 0: it is a clone
 #       1: it is not a clone
@@ -236,6 +245,8 @@ is_clone() {
 
 #
 # function: assert - quickly go out of here with minimal error/return code handling and log
+# params:   MESSAGE
+# globals:  OCF_*(r)
 # assert : essential things are missing, but in the natur of a SAP installation - which can be very different
 #                from customer to customer - we cannot handle this always as an error
 #                This would be the case, if the software is installed on shared disks and not visible
@@ -262,6 +273,8 @@ assert() {
 
 #
 # function: set_crm_master - set the crm master score of the local node
+# params:   SCORE
+# globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
 #
 set_crm_master()
 {
@@ -275,6 +288,8 @@ set_crm_master()
 
 #
 # function: get_crm_master - get the crm master score of the local node
+# params:   -
+# globals:  HA_SBIN_DIR(r)
 #
 get_crm_master()
 {
@@ -284,6 +299,7 @@ get_crm_master()
 #
 # function: get_hana_clone_state - get the multi-state status of the a clone
 # params:   NODE 
+# globals:  ATTR_NAME_HANA_CLONE_STATE(r)
 #
 get_hana_clone_state()
 {
@@ -294,6 +310,7 @@ get_hana_clone_state()
 #
 # function: set_hana_clone_state - set the multi-state status of a node
 # params:   NODE STATUS
+# globals:  ATTR_NAME_HANA_CLONE_STATE(r)
 #
 set_hana_clone_state()
 {
@@ -315,6 +332,7 @@ set_hana_clone_state()
 #
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
+# globals:  TBD
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
 #
@@ -430,6 +448,8 @@ saphana_init() {
 
 #
 # function: check_sapstartsrv - check for sapstartsrv - optional start
+# params:   -
+# globals:  TBD
 # check_sapstartsrv : Before using sapcontrol we make sure that the sapstartsrv is running for the correct instance.
 #                     We cannot use sapinit and the /usr/sap/sapservices file in case of an enquerep instance,
 #                     because then we have two instances with the same instance number.
@@ -514,6 +534,8 @@ check_sapstartsrv() {
 
 #
 # function: cleanup_instance - remove resources from a crashed instance
+# params:   -
+# globals:  -
 # cleanup_instance : remove resources (processes and shared memory) from a crashed instance)
 #
 cleanup_instance() {
@@ -530,21 +552,25 @@ cleanup_instance() {
 #
 # function: saphana_hdbsql_check - query SR view
 # params:   remote_sql (IP address or name where to send the query)
+# globals:  DIR_EXECUTABLE(r)
 #
 saphana_hdbsql_check()
 {
    local rc=1
    local remote_sql=$1
-   # TODO: we should get rid of user system and pwd manager and using a secure store db user
-   #       and do we need a parameter for that like HANA_SECURE_USER (with default sleha)
-   #
-   $DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n $remote_sql -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
+   local secUser
+   case "$remote_sql" in 
+        local* ) secUser="slehaLoc";;
+        remote*) secUser="slehaRem";;
+   esac
+   $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
    return $rc
 }
 
 #
 # function: set_hana_sync_status_attr - set the HANA syst-repl. status attribute 
 # params:   STATUS [ HOST-LIST ]
+# globals:  ATTR_NAME_HANA_SYNC_STATUS(r)
 # set the hana_sync_status attribute
 set_hana_sync_status_attr()
 {
@@ -568,6 +594,8 @@ set_hana_sync_status_attr()
 
 #
 # function: get_hana_sync_status_attr - get the HANA syst-repl. status attribute
+# params:   -
+# globals:  HOSTNAME(r), ATTR_NAME_HANA_SYNC_STATUS(r)
 #
 get_hana_sync_status_attr()
 {
@@ -583,17 +611,20 @@ get_hana_sync_status_attr()
 #
 # function: set_hana_primary_at_attr - set the location where the cluster expects the primary
 # params:   location (like WALLDORF or ROT)
+# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
 # set the hana_primary_at attribute
 #
 set_hana_primary_at_attr()
 {
-   theLocation=$1
+   local theLocation=$1
    crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"
    # TODO: Do we need error handling?
 }
 
 #
 # function: get_hana_primary_at_attr - get the location where the cluster expects the primary
+# params:   -
+# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
 # 
 # get the hana_primary_at attribute
 #
@@ -605,6 +636,8 @@ get_hana_primary_at_attr()
 
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
+# params:   -
+# globals:  HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
 #
 check_for_primary() {
 
@@ -642,6 +675,8 @@ check_for_primary() {
 
 #
 # function: check_for_primary_single - query hdbnsutil to get HANA primary/secondary status
+# params:   -
+# globals:  SID(r), LD_LIBRARY_PATH(r), PATH(r), DIR_EXECUTABLE(r)
 #
 check_for_primary_single()
 {
@@ -659,6 +694,8 @@ check_for_primary_single()
 
 #
 # function: get_site_name - query site name
+# params:   -
+# globals:  LD_LIBRARY_PATH(r), DIR_EXECUTABLE(r)
 # get site name of local HANA instance
 #
 get_site_name()
@@ -672,13 +709,15 @@ get_site_name()
 
 #
 # function: analyze_hana_sync_status - query and check hana system replication status
+# params:   -
+# globals:  DIR_EXECUTABLE(r), 
 # get the HANA sync status
 # 
 analyze_hana_sync_status()
 {
     local hana_sync_status what_does_the_camaelion_say
-    #
-    hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -u system -p manager -n localhost -i 42 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' | dequote)
+    local secUser="slehaLoc"
+    hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'  | dequote)
     #
     # UNKNOWN, ACTIVE, ERROR, INITIALIZING
     #
@@ -696,8 +735,8 @@ analyze_hana_sync_status()
     #    TODO: error handling of hdbsql
     #    TODO: Use secure-store user instead of username/passwd --> this prereq must be checked! 
     #
-    all_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "(select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION)")
-    all_broken_secondary_hosts=$(hdbsql -a -x -u system -p manager -n localhost -i 42 "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
+    all_secondary_hosts=$(hdbsql -a -x -U $secUser "select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION")
+    all_broken_secondary_hosts=$(hdbsql -a -x -U $secUser "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
     if [ -n "$all_broken_secondary_hosts" ]; then
         #
         # we have a broken secondary site - set all hosts to "FAILURE"
@@ -713,6 +752,8 @@ analyze_hana_sync_status()
 
 #
 # function: get_hana_landscape_status - figure out hana ladscape status
+# params:   -
+# globals:  sidadm(r), DIR_EXECUTABLE(r)
 # get the HANA landscape status
 #
 get_hana_landscape_status()
@@ -731,11 +772,14 @@ get_hana_landscape_status()
 
 #
 # function: register_hana_secondary - register local hana as secondary to the other site
+# params:   -
+# globals:  sidadm(r), remoteHost(r), InstanceNr(r), sr_mode(r), sr_name(r)
 # register_hana_secondary
 #
 register_hana_secondary()
 {
     local rc=2;
+    local remoteInstance="";
     # HANA nedds to be stopped to register!
     # as sidadm
     # hdbnsutil -sr_register --remoteHost=lv9041 --remoteInstance=42 --mode=syncmem --name=ROT
@@ -755,6 +799,7 @@ register_hana_secondary()
 #
 # function: saphana_notify_log_values - log notify variables (also as tuples)
 # params:   variable-names variable-values
+# globals:  -
 #
 saphana_notify_log_values()
 {
@@ -775,6 +820,8 @@ saphana_notify_log_values()
 #############################################################################
 #
 # function: saphana_start - start a hana instance
+# params:   -
+# globals:  TBD
 # saphana_start : Start the SAP HANA instance
 #
 saphana_start() {
@@ -848,6 +895,8 @@ saphana_start() {
 
 #
 # function: saphana_recover - recover - cleanup and (re)start a hana instance
+# params:   -
+# globals:  -
 # saphana_recover: Try startup of failed instance by cleaning up resources
 #
 saphana_recover() {
@@ -859,6 +908,8 @@ saphana_recover() {
 
 #
 # function: saphana_stop - stop a hana instance
+# params:   -
+# globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
 # saphana_stop: Stop the SAP instance
 #
 saphana_stop() {
@@ -904,6 +955,8 @@ saphana_stop() {
 
 #
 # function: saphana_monitor - monitor a hana instance
+# params:   MONLOG
+# globals:  OCF_*(r), SAPCONTROL(r), InstanveNr(r)
 # saphana_monitor: Can the given SAP instance do anything useful?
 #
 saphana_monitor() {
@@ -970,6 +1023,8 @@ saphana_monitor() {
 
 #
 # function: saphana_status - get status of a hana instance (os tools only)
+# params:   -
+# globals:  SID(r), InstanceName(r), OCF_*(r), sidarm(r)
 # saphana_status: Lightweight check of SAP instance only with OS tools
 #
 saphana_status() {
@@ -992,6 +1047,8 @@ echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 
 #
 # function: saphana_validate - validation of (some) variables/parameters
+# params:   -
+# globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
 # saphana_validate: Check the symantic of the input parameters 
 #
 saphana_validate() {
@@ -1025,6 +1082,8 @@ saphana_validate() {
 
 #
 # function: saphana_start_clone - start a hana clone instance
+# params:   -
+# globals:  TBD
 # saphana_start_clone
 #
 saphana_start_clone() {
@@ -1038,13 +1097,15 @@ saphana_start_clone() {
 		#
 # WORKING-ZONE
         get_hana_landscape_status; lsrc=$?
-        saphana_hdbsql_check $remote_sql; sqlrc=$?
+        saphana_hdbsql_check remote; sqlrc=$?
         if [ $lsrc -ge 2 ]; then
            if [ $sqlrc -eq 0 ]; then  
                #
+               #TODO: for all cases - we need to check, if $sqlrc reports a connetcion failure or a user failure (auth) or key faiilure (secstore)
+               #
                # LANDSCAPE SAYS UP, SQL ANSWERES
                #
-               saphana_hdbsql_check localhost; sqlrc=$?
+               saphana_hdbsql_check local; sqlrc=$?
                if [ $sqlrc -eq 0 ]; then              
                   #
                   # LOCAL SQL ANSWERS ==> WE ARE UP ALREADY
@@ -1100,7 +1161,7 @@ saphana_start_clone() {
 		# we would be slave (secondary)
 		# we first need to check, if there are Master Nodes, because the Scecondary only starts
 		# successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-        saphana_hdbsql_check $remote_sql; sqlrc=$?
+        saphana_hdbsql_check remote; sqlrc=$?
 		if [ $sqlrc -ne 0 ]; then
             set_hana_clone_state ${HOSTNAME} "WAITING"
 			ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
@@ -1132,6 +1193,8 @@ saphana_start_clone() {
 
 #
 # function: saphana_stop_clone - stop a hana clone instance
+# params:   -
+# globals:  HOSTNAME(r)
 # saphana_stop_clone
 #
 saphana_stop_clone() {
@@ -1143,6 +1206,8 @@ saphana_stop_clone() {
 
 #
 # function: saphana_monitor_clone - monitor a hana clone instance
+# params:   -
+# globals:  TBD
 # saphana_monitor_clone
 #
 saphana_monitor_clone() {
@@ -1283,7 +1348,7 @@ saphana_monitor_clone() {
                         promoted=0;
                         ;;
                     WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-                        saphana_hdbsql_check $remote_sql; sqlrc=$?
+                        saphana_hdbsql_check remote; sqlrc=$?
                         if [ $sqlrc -eq 0 ]; then
                             ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
                             saphana_start_clone
@@ -1353,12 +1418,16 @@ saphana_monitor_clone() {
 
 #
 # function: saphana_promote_clone - promote a hana clone
+# params:   -
+# globals:  OCF_*(r), HOSTNAME(r), HANA_STATE_*, SID(r), InstanceName(r), 
 # saphana_promote_clone: 
 #    In a Master/Slave configuration get Master being the primary OR by running hana takeover
 #
 saphana_promote_clone() {
   local rc
   rc=$OCF_ERR_GENERIC;
+  local hana_sync;
+  local primary_status;
   #
   # first check, if we WILL be PRIMARY (checking HANA status)
   #
@@ -1415,6 +1484,8 @@ saphana_promote_clone() {
 
 #
 # function: saphana_demote_clone - demote a hana clone instance
+# params:   -
+# globals:  OCF_*(r), HOSTNAME(r), 
 # saphana_demote_clone
 #   the HANA System Replication (SR) runs in a Master/Slave 
 #   While we could not change a HANA instance to be really demoted, we only mark the status for 
@@ -1432,6 +1503,8 @@ saphana_demote_clone() {
 
 #
 # function: saphana_notify - notify action
+# params:   -
+# globals:  OCF_*(r), ACTION(r), CLACT(r), HOSTNAME(r)
 # saphana_notify: Handle master scoring - to make sure a slave gets the next master
 #
 saphana_notify() {
@@ -1503,6 +1576,8 @@ saphana_notify() {
 
 #
 # function: main - main function to operate 
+# params:   ACTION
+# globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
 #
 
 ## GLOBALS
