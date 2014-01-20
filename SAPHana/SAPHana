@@ -579,7 +579,7 @@ saphana_hdbsql_check()
         remote*) secUser="slehaRem";;
    esac
    ocf_log info "fhDBG: $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'"
-   $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
+   timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
    return $rc
 }
 
@@ -733,7 +733,7 @@ analyze_hana_sync_status()
 {
     local hana_sync_status what_does_the_camaelion_say
     local secUser="slehaLoc"
-    hana_sync_status=$($DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'  | dequote)
+    hana_sync_status=$(timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'  | dequote)
     #
     # UNKNOWN, ACTIVE, ERROR, INITIALIZING
     #
@@ -750,8 +750,8 @@ analyze_hana_sync_status()
     #    TODO: for first we assume there is only ONE secondary site
     #    TODO: error handling of hdbsql
     #
-    all_secondary_hosts=$(hdbsql -a -x -U $secUser "select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION")
-    all_broken_secondary_hosts=$(hdbsql -a -x -U $secUser "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
+    all_secondary_hosts=$(timeout 300 hdbsql -a -x -U $secUser "select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION")
+    all_broken_secondary_hosts=$(timeout 300 hdbsql -a -x -U $secUser "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote)
     if [ -n "$all_broken_secondary_hosts" ]; then
         #
         # we have a broken secondary site - set all hosts to "FAILURE"
