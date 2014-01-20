@@ -211,7 +211,7 @@ dequote()
 # function: is_clone - report, if resource is configured as a clone (also master/slave)
 # params:   -
 # globals:  OCF_*(r)
-# is_clone : find out if we are configured to run in a Master/Slave configuration
+# descript: is_clone : find out if we are configured to run in a Master/Slave configuration
 #   rc: 0: it is a clone
 #       1: it is not a clone
 #   Special EXIT of RA, if clone is missconfigured
@@ -255,10 +255,7 @@ is_clone() {
 assert() {
   local err_msg=$1
 
-  ocf_is_probe && {
-    saphana_status
-    exit $?
-  }
+  # TODO: Check, if we need to destinguish between probe and others
 
   if [ "$ACTION" = "stop" ]
   then
@@ -445,6 +442,24 @@ saphana_init() {
     return $OCF_SUCCESS
 }
 
+# function: check_secstore_users
+# params:   USER1 USER2
+# globals:  DIR_EXECUTABLE(r)
+#
+function check_secstore_users()
+{
+   local user1=$1
+   local user2=$2
+   local count
+   local rc=1
+   count=$($DIR_EXECUTABLE/hdbuserstore list | awk 'BEGIN {f=0} $0=="KEY " u1 {f++} $0=="KEY " u2 {f++} END {print f}' u1=$user1 u2=$user2)
+   if [ "$count" -eq 2 ]; then
+      rc=0
+   else 
+      rc=2
+   fi
+   return $rc
+}
 
 #
 # function: check_sapstartsrv - check for sapstartsrv - optional start
@@ -563,6 +578,7 @@ saphana_hdbsql_check()
         local* ) secUser="slehaLoc";;
         remote*) secUser="slehaRem";;
    esac
+   ocf_log info "fhDBG: $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'"
    $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
    return $rc
 }
@@ -1089,17 +1105,21 @@ saphana_validate() {
 saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
+    check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing"
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
 	check_for_primary; primary_status=$?
 	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
 		#
 		# we will be a master (PRIMARY) so checking, if the is an OTHER master
 		#
+        ocf_log info "fhDBG: saphana_start_clone - check_for_primary reports HANA_STATE_PRIMARY"
 # WORKING-ZONE
         get_hana_landscape_status; lsrc=$?
         saphana_hdbsql_check remote; sqlrc=$?
         if [ $lsrc -ge 2 ]; then
+           ocf_log info "fhDBG: get_hana_landscape_status reports an already running HANA"
            if [ $sqlrc -eq 0 ]; then  
+               ocf_log info "fhDBG: saphana_hdbsql_check remote reports an already reachable HANA"
                #
                #TODO: for all cases - we need to check, if $sqlrc reports a connetcion failure or a user failure (auth) or key faiilure (secstore)
                #
@@ -1110,7 +1130,8 @@ saphana_start_clone() {
                   #
                   # LOCAL SQL ANSWERS ==> WE ARE UP ALREADY
                   #
-                  ocf_log info "fhDEC: primary and up already"
+                  ocf_log info "fhDBG: saphana_hdbsql_check local reports an already reachable HANA"
+                  ocf_log info "fhDEC: primary and up already ==> JUST KEEP IT RUNNING"
                   set_crm_master 1000
                   rc=$OCF_SUCCSESS
                else
@@ -1118,7 +1139,8 @@ saphana_start_clone() {
                   # LOCAL SQL ANSWERS NOT ==> How to recover: local up, remote sql ansers, local sql answers not?
                   #
                   # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
-                  ocf_log info "fhDEC: primary up but does not answer"
+                  ocf_log info "fhDBG: saphana_hdbsql_check local reports NOT an already reachable HANA"
+                  ocf_log info "fhDEC: primary up but does not answer ==> THIS IS AN UNRECOVERABLE ERROR"
                   rc=$OCF_ERR_GENERIC
                fi
            else 
@@ -1126,15 +1148,19 @@ saphana_start_clone() {
                # LANDSCAPE SAYS UP, SQL DOES NOT ANSWER ==> How to recover that? As we should be primary?
                #
                # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
-               ocf_log info "fhDEC: primary up but service does not answer"
+               ocf_log info "fhDBG: saphana_hdbsql_check remote reports NOT an already reachable HANA"
+               ocf_log info "fhDEC: primary up but service does not answer ==> THIS IS AN UNRECOVERABLE ERROR"
                rc=$OCF_ERR_GENERIC
            fi
         else 
+           ocf_log info "fhDBG: get_hana_landscape_status reports NOT an already running HANA"
            if [ $sqlrc -eq 0 ]; then
                #
                # LANDSCAPE SAYS DOWN, SQL ANSWERS ==>  AN OTHER INSTANCE IS PRIMARY!! ===> Should we register?
                # TODO: should we have a option wether we automatically register or not?
                #
+               ocf_log info "fhDBG: saphana_hdbsql_check remote reports an already reachable HANA"
+               ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
 			   set_crm_master  0
                register_hana_secondary 
 	           check_for_primary; primary_status=$?
@@ -1151,6 +1177,8 @@ saphana_start_clone() {
                #
                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER ==> Should be a classical start :)
                #
+               ocf_log info "fhDBG: saphana_hdbsql_check remote reports NOT an already reachable HANA (rc=$sqlrc)"
+               ocf_log info "fhDEC: ===> NO OTHER HANA IS AVAILABLE ==> JUST START AS PRIMARY"
 			   set_crm_master  1000
 		       saphana_start
 		       rc=$?
