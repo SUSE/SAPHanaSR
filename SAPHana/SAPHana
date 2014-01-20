@@ -731,7 +731,7 @@ get_site_name()
 # 
 analyze_hana_sync_status()
 {
-    local hana_sync_status what_does_the_camaelion_say
+    local hana_sync_status="" what_does_the_camaelion_say=""
     local secUser="slehaLoc"
     hana_sync_status=$(timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'  | dequote)
     #
@@ -1154,35 +1154,59 @@ saphana_start_clone() {
            fi
         else 
            ocf_log info "fhDBG: get_hana_landscape_status reports NOT an already running HANA"
-           if [ $sqlrc -eq 0 ]; then
-               #
-               # LANDSCAPE SAYS DOWN, SQL ANSWERS ==>  AN OTHER INSTANCE IS PRIMARY!! ===> Should we register?
-               # TODO: should we have a option wether we automatically register or not?
-               #
-               ocf_log info "fhDBG: saphana_hdbsql_check remote reports an already reachable HANA"
-               ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
-			   set_crm_master  0
-               register_hana_secondary 
-	           check_for_primary; primary_status=$?
-	           if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
-                    ocf_log info "Register successful"
-                    set_crm_master  0
-                    saphana_start
-                    rc=$?
-               else
-                    ocf_log err "Register failed"
+           case "$sqlrc" in
+                0 ) # SQL ANSWERS
+                   # LANDSCAPE SAYS DOWN, SQL ANSWERS ==>  AN OTHER INSTANCE IS PRIMARY!! ===> Should we register?
+                   # TODO: should we have a option wether we automatically register or not?
+                   #
+                   ocf_log info "fhDBG: saphana_hdbsql_check remote reports an already reachable HANA"
+                   ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
+                   set_crm_master  0
+                   register_hana_secondary 
+                   check_for_primary; primary_status=$?
+                   if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+                        ocf_log info "Register successful"
+                        set_crm_master  0
+                        saphana_start
+                        rc=$?
+                   else
+                        ocf_log err "Register failed"
+                        rc=$OCF_ERR_GENERIC
+                   fi
+                   ;;
+               43 ) # SQL: No connection 
+                    #
+                    # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER ==> Should be a classical start :)
+                    #
+                    # TODO: Do we need to differenciate between the return codes rc=43 (no connection) rc=136 (bad key) rc=124 (timeout rised)
+                    #
+                    ocf_log info "fhDBG: saphana_hdbsql_check remote reports NOT an already reachable HANA (rc=$sqlrc)"
+                    ocf_log info "fhDEC: ===> NO OTHER HANA IS AVAILABLE ==> JUST START AS PRIMARY"
+			        set_crm_master  1000
+		            saphana_start
+		            rc=$?
+                    ;;
+                124 | 137 ) # SQL: timeout rised / hdbsql killed
+                    #
+                    # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER IN TIME ==> This is critical
+                    #
+                    ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out)"
                     rc=$OCF_ERR_GENERIC
-               fi
-           else
-               #
-               # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER ==> Should be a classical start :)
-               #
-               ocf_log info "fhDBG: saphana_hdbsql_check remote reports NOT an already reachable HANA (rc=$sqlrc)"
-               ocf_log info "fhDEC: ===> NO OTHER HANA IS AVAILABLE ==> JUST START AS PRIMARY"
-			   set_crm_master  1000
-		       saphana_start
-		       rc=$?
-           fi
+                    ;;
+                10 | 136 ) # SQL NOT OK - bad key / invalid user/pwd
+                    #
+                    # LANDSCAPE SAYS DOWN, SQL means bad key (secstore user)
+                    #
+                    ocf_log info "fhDBG: saphana_hdbsql_check remote fails (bad key/secstore user or wrong username/password)"
+                    rc=$OCF_ERR_GENERIC
+                    ;;
+                * ) # SQL: unknown error
+                    # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER CORRECTLY ==> This is critical
+                    #
+                    ocf_log info "fhDBG: saphana_hdbsql_check remote fails (unknown error rc=$sqlrc)"
+                    rc=$OCF_ERR_GENERIC
+                    ;;
+           esac
         fi
 	else 
 		#
@@ -1190,30 +1214,53 @@ saphana_start_clone() {
 		# we first need to check, if there are Master Nodes, because the Scecondary only starts
 		# successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
         saphana_hdbsql_check remote; sqlrc=$?
-		if [ $sqlrc -ne 0 ]; then
-            set_hana_clone_state ${HOSTNAME} "WAITING"
-			ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
-			ocf_log info "fhDEC: secondary in status WAITING -> EXCLUDE as posible takeover node"
-			set_crm_master -INFINITY
-			rc=$OCF_SUCCSESS
-		else
-			saphana_start; rc=$?
-			sync_attr=$(get_hana_sync_status_attr)
-			case "$sync_attr" in
-				"OK"   )    # This is a possible node to promote, when primary is missing
-							ocf_log info "fhDEC: secondary with sync status OK -> posible takeover node"
-							set_crm_master  10
-							;;
-				"FAILURE" ) # This is currently NOT a possible node to promote
-							ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
-							set_crm_master -INFINITY
-							;;
-				"*" )       # Unknown sync status
-							ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
-							set_crm_master -INFINITY
-							;;
-			esac
-		fi
+        case "$sqlrc" in
+            0 ) # SQL OK
+                saphana_start; rc=$?
+                sync_attr=$(get_hana_sync_status_attr)
+                case "$sync_attr" in
+                    "OK"   )    # This is a possible node to promote, when primary is missing
+                                ocf_log info "fhDEC: secondary with sync status OK -> posible takeover node"
+                                set_crm_master  10
+                                ;;
+                    "FAILURE" ) # This is currently NOT a possible node to promote
+                                ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
+                                set_crm_master -INFINITY
+                                ;;
+                    "*" )       # Unknown sync status
+                                ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
+                                set_crm_master -INFINITY
+                                ;;
+                esac
+                ;;
+            43 ) # SQL NOT OK - NO CONNECTION
+                set_hana_clone_state ${HOSTNAME} "WAITING"
+                ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
+                ocf_log info "fhDEC: secondary in status WAITING -> EXCLUDE as posible takeover node"
+                set_crm_master -INFINITY
+                rc=$OCF_SUCCSESS
+                ;;
+            124 | 137 ) # SQL: timeout rised / hdbsql killed
+                #
+                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER IN TIME ==> This is critical
+                #
+                ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out)"
+                rc=$OCF_ERR_GENERIC
+                ;;
+            10 | 136 ) # SQL NOT OK - bad key / invalid user/pwd
+                #
+                # LANDSCAPE SAYS DOWN, SQL means bad key (secstore user)
+                #
+                ocf_log info "fhDBG: saphana_hdbsql_check remote fails (bad key/secstore user or wrong username/password)"
+                rc=$OCF_ERR_GENERIC
+                ;;
+            * ) # SQL: unknown error
+                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER CORRECTLY ==> This is critical
+                #
+                ocf_log info "fhDBG: saphana_hdbsql_check remote fails (unknown error rc=$sqlrc)"
+                rc=$OCF_ERR_GENERIC
+                ;;
+        esac
 	fi 
 	return $rc
 }
