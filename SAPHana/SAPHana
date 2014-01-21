@@ -8,7 +8,7 @@
 #               of the START-Profile, status and monitor care only
 #               about essential services.
 #
-##################################################################################################################################################
+################################################################################################################################################
 #
 # SAPHana is a fork of SAPInstance to cover special actions needed for running HANA in a SR mode
 # Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
@@ -83,7 +83,7 @@ saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.47.2014.01.20.2</version>
+<version>0.48.2014.01.21.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -381,9 +381,9 @@ saphana_init() {
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     ocf_log info "fhDBG: OCF: $ocf_env"
    
-    ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"
-    ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"
-    ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state"
+    ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state" # OK, FAILURE?, UNKNOWN?
+    ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"  # Not really used
+    ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state" # UKNOWN?, DEMOTED, PROMOTED
 
     # optional OCF parameters, we try to guess which directories are correct
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -653,7 +653,7 @@ get_hana_primary_at_attr()
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
-# globals:  HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+# globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r)
 #
 check_for_primary() {
 
@@ -731,7 +731,7 @@ get_site_name()
 # 
 analyze_hana_sync_status()
 {
-    local hana_sync_status="" what_does_the_camaelion_say=""
+    local hana_sync_status="" what_does_the_chamelion_say=""
     local secUser="slehaLoc"
     hana_sync_status=$(timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'  | dequote)
     #
@@ -756,12 +756,12 @@ analyze_hana_sync_status()
         #
         # we have a broken secondary site - set all hosts to "FAILURE"
         #
-        what_does_the_camaelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1)
+        what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1)
     else 
         #
         # we have an ACTIVE secondary site - set all hosts to "OK"
         #
-        what_does_the_camaelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1)
+        what_does_the_chamelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1)
     fi
 }
 
@@ -1105,7 +1105,7 @@ saphana_validate() {
 saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
-    check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing"
+    check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing (see best practice manual how to setup the users)"
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
 	check_for_primary; primary_status=$?
 	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
@@ -1116,6 +1116,7 @@ saphana_start_clone() {
 # WORKING-ZONE
         get_hana_landscape_status; lsrc=$?
         saphana_hdbsql_check remote; sqlrc=$?
+        # TODO: Include also check for remote attribute for primary status (DEMOTED/PROMOTED)
         if [ $lsrc -ge 2 ]; then
            ocf_log info "fhDBG: get_hana_landscape_status reports an already running HANA"
            if [ $sqlrc -eq 0 ]; then  
@@ -1436,6 +1437,7 @@ saphana_monitor_clone() {
                         promoted=0;
                         ;;
                     PREPARE ) # Notify action has noticed an available primary - try a new start
+                              # TODO: could we remove that - PREPARE still used?
                         ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary available - try a new start"
                         saphana_start_clone
                         rc=$?
@@ -1548,7 +1550,7 @@ saphana_promote_clone() {
         esac
      else
         #
-        # neither MASTER nor SLAVE - This clone instance seams broken!!
+        # neither MASTER nor SLAVE - This clone instance seams to be broken!!
         #
         rc=$OCF_ERR_GENERIC
      fi
@@ -1572,7 +1574,6 @@ saphana_demote_clone() {
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
     rc=$OCF_SUCCESS;
     ocf_log info "Demoted $SID-$InstanceName."
-    # saphana_stop
     return $rc
 }
 
