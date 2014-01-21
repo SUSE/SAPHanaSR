@@ -1,0 +1,74 @@
+# Make sure PATH contains all the usual suspects
+PATH="$PATH:/sbin:/bin:/usr/sbin:/usr/bin"
+
+# Include /usr/ucb for finding whoami on Solaris
+PATH="$PATH:/usr/ucb"
+
+export PATH
+
+# Binaries and binary options for use in Resource Agents
+: ${AWK:=gawk}
+: ${EGREP:="/usr/bin/grep -E"}
+: ${IFCONFIG_A_OPT:="-a"}
+: ${MAILCMD:=mail}
+: ${PING:=/bin/ping}
+: ${SH:=/bin/sh}
+: ${TEST:=/usr/bin/test}
+: ${TESTPROG:=/usr/bin/test}
+
+# Entries that should probably be removed
+: ${BASENAME:=basename}
+: ${BLOCKDEV:=blockdev}
+: ${CAT:=cat}
+: ${FSCK:=fsck}
+: ${FUSER:=fuser}
+: ${GETENT:=getent}
+: ${GREP:=grep}
+: ${IFCONFIG:=ifconfig}
+: ${IPTABLES:=iptables}
+: ${IP2UTIL:=ip}
+: ${MDADM:=mdadm}
+: ${MODPROBE:=modprobe}
+: ${MOUNT:=mount}
+: ${MSGFMT:=msgfmt}
+: ${NETSTAT:=netstat}
+: ${PERL:=perl}
+: ${PYTHON:=python}
+: ${RAIDSTART:=raidstart}
+: ${RAIDSTOP:=raidstop}
+: ${ROUTE:=route}
+: ${UMOUNT:=umount}
+: ${REBOOT:=reboot}
+: ${POWEROFF_CMD:=poweroff}
+: ${WGET:=wget}
+: ${WHOAMI:=whoami}
+: ${STRINGSCMD:=strings}
+: ${SCP:=scp}
+: ${SSH:=ssh}
+: ${SWIG:=swig}
+: ${GZIP_PROG:=gzip}
+: ${TAR:=tar}
+: ${MD5:=md5}
+: ${DRBDADM:=drbdadm}
+: ${DRBDSETUP:=drbdsetup}
+
+check_binary () {
+    if ! have_binary "$1"; then
+	if [ "$OCF_NOT_RUNNING" = 7 ]; then
+	    # Chances are we have a fully setup OCF environment
+	    ocf_log err "Setup problem: couldn't find command: $1"
+	else 
+	    echo "Setup problem: couldn't find command: $1"
+	fi
+	exit $OCF_ERR_INSTALLED
+    fi
+}
+
+have_binary () {
+    if [ "$OCF_TESTER_FAIL_HAVE_BINARY" = "1" ]; then
+    	false
+    else
+	local bin=`echo $1 | sed -e 's/ -.*//'`
+	test -x "`which $bin 2>/dev/null`"
+    fi
+}
