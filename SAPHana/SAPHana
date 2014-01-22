@@ -121,7 +121,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.51.2014.01.22.3</version>
+<version>0.52.2014.01.22.4</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -285,7 +285,7 @@ function is_clone() {
     else
         rc=1;
     fi
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -385,7 +385,7 @@ function set_hana_clone_state()
         super_ocf_log info "fhDBG LET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} still be ${attr_status}"
         rc=0
     fi
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -506,7 +506,7 @@ function saphana_init() {
     fi
 
     PATH=${PATH}:${DIR_EXECUTABLE}
-    super_log "  -> return code = $OCF_SUCCESSs"
+    super_ocf_log info "  -> return code = $OCF_SUCCESSs"
     return $OCF_SUCCESS
 }
 
@@ -527,7 +527,7 @@ function check_secstore_users()
     else
         rc=2
     fi
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -635,7 +635,7 @@ function cleanup_instance() {
 #  - process-pid files and other files
   super_ocf_log info "fhDBG: cleanup_instance currently not implemented"
   rc=0
-  super_log "  -> return code = $rc"
+  super_ocf_log info "  -> return code = $rc"
 }
 
 #
@@ -655,7 +655,7 @@ function saphana_hdbsql_check()
    esac
    super_ocf_log info "fhDBG: $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'"
    timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
-   super_log "  -> return code = $rc"
+   super_ocf_log info "  -> return code = $rc"
    return $rc
 }
 
@@ -682,7 +682,7 @@ function set_hana_sync_status_attr()
    else
       rc=1
    fi
-   super_log "  -> return code = $rc"
+   super_ocf_log info "  -> return code = $rc"
    return $rc
 }
 
@@ -752,13 +752,13 @@ function check_for_primary() {
    super_ocf_log info "check_for_primary: node_status=$node_status"
    case "$node_status" in
        primary ) 
-                  super_log "  -> return code = HANA_STATE_PRIMARY"
+                  super_ocf_log info "  -> return code = HANA_STATE_PRIMARY"
                   return $HANA_STATE_PRIMARY;;
        syncmem | sync | async )
-                  super_log "  -> return code = HANA_STATE_SECONDARY"
+                  super_ocf_log info "  -> return code = HANA_STATE_SECONDARY"
                   return $HANA_STATE_SECONDARY;;
        none )     # have seen that mode on second side BEFEORE we registered it as replica
-                  super_log "  -> return code = HANA_STATE_DEFECT"
+                  super_ocf_log info "  -> return code = HANA_STATE_DEFECT"
                   return $HANA_STATE_DEFECT;;
        * )
 		  super_ocf_log err "check_for_primary:  we didn't expect node_status to be: <$node_status>"
@@ -768,10 +768,10 @@ function check_for_primary() {
                       super_ocf_log info "check_for_primary: (loop nr $i) node_status=$node_status"
                       case "$node_status" in
                            primary )
-                                     super_log "  -> return code = HANA_STATE_PRIMARY"
+                                     super_ocf_log info "  -> return code = HANA_STATE_PRIMARY"
                                      return $HANA_STATE_PRIMARY;;
                            syncmem | sync | async )
-                                     super_log "  -> return code = HANA_STATE_SECONDARY"
+                                     super_ocf_log info "  -> return code = HANA_STATE_SECONDARY"
                                      return $HANA_STATE_SECONDARY;;
                       esac
                       sleep 10
@@ -780,7 +780,7 @@ function check_for_primary() {
           # TODO: exit loop when rc is set
                   #       rc=$HANA_STATE_DEFECT;;
    esac;
-   super_log "  -> return code = HANA_STATE_DEFECT"
+   super_ocf_log info "  -> return code = HANA_STATE_DEFECT"
    return $HANA_STATE_DEFECT
 }
 
@@ -915,7 +915,7 @@ function register_hana_secondary()
 
     super_ocf_log info "fhACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
     su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc;
 }
 
@@ -1016,7 +1016,7 @@ function saphana_start() {
     rc=$OCF_NOT_RUNNING
   fi
 
-  super_log "  -> return code = $rc"
+  super_ocf_log info "  -> return code = $rc"
   return $rc
 }
 
@@ -1033,7 +1033,7 @@ function saphana_recover() {
   cleanup_instance
   saphana_start
   rc=$?
-  super_log "  -> return code = $rc"
+  super_ocf_log info "  -> return code = $rc"
   return $rc
 }
 
@@ -1081,7 +1081,7 @@ function saphana_stop() {
   fi
 
 
-  super_log "  -> return code = $rc"
+  super_ocf_log info "  -> return code = $rc"
   return $rc
 }
 
@@ -1151,7 +1151,7 @@ function saphana_monitor() {
     fi
   fi
  
-  super_log "  -> return code = $rc" 
+  super_ocf_log info "  -> return code = $rc" 
   return $rc
 }
 
@@ -1215,7 +1215,7 @@ function saphana_validate() {
     rc=$OCF_ERR_ARGS
   fi
 
-  super_log "  -> return code = $rc"
+  super_ocf_log info "  -> return code = $rc"
   return $rc
 }
 
@@ -1330,7 +1330,7 @@ function saphana_start_primary()
                 ;;
        esac
     fi
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -1397,7 +1397,7 @@ function saphana_start_secondary()
             rc=$OCF_ERR_GENERIC
             ;;
     esac
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -1541,7 +1541,7 @@ function saphana_monitor_primary()
             fi
             ;;
     esac
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -1627,7 +1627,7 @@ function saphana_monitor_secondary()
             rc=$OCF_NOT_RUNNING
             ;;
     esac
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -1674,7 +1674,7 @@ function saphana_monitor_clone() {
             rc=$OCF_ERR_GENERIC
         fi
     fi
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
@@ -1739,7 +1739,7 @@ function saphana_promote_clone() {
      fi
   fi
   rc=$?
-  super_log "  -> return code = $rc"
+  super_ocf_log info "  -> return code = $rc"
   return $rc
 }
 
@@ -1758,7 +1758,7 @@ function saphana_demote_clone() {
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
     rc=$OCF_SUCCESS;
     super_ocf_log info "Demoted $SID-$InstanceName."
-    super_log "  -> return code = $rc"
+    super_ocf_log info "  -> return code = $rc"
     return $rc
 }
 
