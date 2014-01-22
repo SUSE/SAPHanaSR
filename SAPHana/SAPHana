@@ -52,7 +52,7 @@ SH=/bin/sh
 # params:   -
 # globals:  $0(r)
 #
-saphana_usage() {
+function saphana_usage() {
   methods=$(saphana_methods)
   methods=$(echo $methods | tr ' ' '|')
   cat <<-!
@@ -78,7 +78,7 @@ saphana_usage() {
 # params:   -
 # globals:  -
 #
-saphana_meta_data() {
+function saphana_meta_data() {
 	cat <<END
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
@@ -181,7 +181,7 @@ END
 # globals:  -
 # methods: What methods/operations do we support?
 #
-saphana_methods() {
+function saphana_methods() {
   cat <<-!
     start
     stop
@@ -202,7 +202,7 @@ saphana_methods() {
 # params:   -
 # globals:  -
 #
-dequote()
+function dequote()
 {
    tr -d '"'
 }
@@ -219,7 +219,7 @@ dequote()
 # TODO: For the case of a clone/master/slave we also need to check more parameters to be set
 #       such as HANA_SR_TOPOLOGY, HANA_SERVICE_ADDRESS, ...
 #
-is_clone() {
+function is_clone() {
     local rc=0
     #
     # is a clone config?
@@ -252,7 +252,7 @@ is_clone() {
 #                This would be the case, if the software is installed on shared disks and not visible
 #                to all cluster nodes at all times.
 #
-assert() {
+function assert() {
   local err_msg=$1
 
   # TODO: Check, if we need to destinguish between probe and others
@@ -273,7 +273,7 @@ assert() {
 # params:   SCORE
 # globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
 #
-set_crm_master()
+function set_crm_master()
 {
    local score=0
    if [ -n "$1" ]; then
@@ -288,7 +288,7 @@ set_crm_master()
 # params:   -
 # globals:  HA_SBIN_DIR(r)
 #
-get_crm_master()
+function get_crm_master()
 {
    ${HA_SBIN_DIR}/crm_master -G -q -l reboot
 }
@@ -298,7 +298,7 @@ get_crm_master()
 # params:   NODE 
 # globals:  ATTR_NAME_HANA_CLONE_STATE(r)
 #
-get_hana_clone_state()
+function get_hana_clone_state()
 {
     local attr_node=$1
     crm_attribute -N ${attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q
@@ -309,7 +309,7 @@ get_hana_clone_state()
 # params:   NODE STATUS
 # globals:  ATTR_NAME_HANA_CLONE_STATE(r)
 #
-set_hana_clone_state()
+function set_hana_clone_state()
 {
     local attr_node=$1
     local attr_status=$2
@@ -333,7 +333,7 @@ set_hana_clone_state()
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
 #
-saphana_init() {
+function saphana_init() {
 
     local myInstanceName="$1"
 
@@ -469,7 +469,7 @@ function check_secstore_users()
 #                     We cannot use sapinit and the /usr/sap/sapservices file in case of an enquerep instance,
 #                     because then we have two instances with the same instance number.
 #
-check_sapstartsrv() {
+function check_sapstartsrv() {
     local restart=0
     local runninginst=""
     local chkrc=$OCF_SUCCESS
@@ -553,7 +553,7 @@ check_sapstartsrv() {
 # globals:  -
 # cleanup_instance : remove resources (processes and shared memory) from a crashed instance)
 #
-cleanup_instance() {
+function cleanup_instance() {
 # TODO: fh - Do not know what we need for HANA cleanup
 #
 # Do wee need to cleanup
@@ -569,7 +569,7 @@ cleanup_instance() {
 # params:   remote_sql (IP address or name where to send the query)
 # globals:  DIR_EXECUTABLE(r)
 #
-saphana_hdbsql_check()
+function saphana_hdbsql_check()
 {
    local rc=1
    local remote_sql=$1
@@ -588,7 +588,7 @@ saphana_hdbsql_check()
 # params:   STATUS [ HOST-LIST ]
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(r)
 # set the hana_sync_status attribute
-set_hana_sync_status_attr()
+function set_hana_sync_status_attr()
 {
    local rc theStatus theHosts
    if [ $# -ge 2 ]; then
@@ -613,7 +613,7 @@ set_hana_sync_status_attr()
 # params:   -
 # globals:  HOSTNAME(r), ATTR_NAME_HANA_SYNC_STATUS(r)
 #
-get_hana_sync_status_attr()
+function get_hana_sync_status_attr()
 {
    local sync_attr
    sync_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q)
@@ -630,7 +630,7 @@ get_hana_sync_status_attr()
 # globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
 # set the hana_primary_at attribute
 #
-set_hana_primary_at_attr()
+function set_hana_primary_at_attr()
 {
    local theLocation=$1
    crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"
@@ -644,7 +644,7 @@ set_hana_primary_at_attr()
 # 
 # get the hana_primary_at attribute
 #
-get_hana_primary_at_attr()
+function get_hana_primary_at_attr()
 {
    crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q
    # TODO: Do we need error handling?
@@ -655,7 +655,7 @@ get_hana_primary_at_attr()
 # params:   -
 # globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r)
 #
-check_for_primary() {
+function check_for_primary() {
 
    # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
    # TODO: Change stderr location!!
@@ -694,7 +694,7 @@ check_for_primary() {
 # params:   -
 # globals:  SID(r), LD_LIBRARY_PATH(r), PATH(r), DIR_EXECUTABLE(r)
 #
-check_for_primary_single()
+function check_for_primary_single()
 {
     local node_full_status node_status
     echo " ========== $(date) ============== " >>/tmp/null
@@ -714,7 +714,7 @@ check_for_primary_single()
 # globals:  LD_LIBRARY_PATH(r), DIR_EXECUTABLE(r)
 # get site name of local HANA instance
 #
-get_site_name()
+function get_site_name()
 {
     local node_full_status node_site_name
     node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
@@ -729,7 +729,7 @@ get_site_name()
 # globals:  DIR_EXECUTABLE(r), 
 # get the HANA sync status
 # 
-analyze_hana_sync_status()
+function analyze_hana_sync_status()
 {
     local hana_sync_status="" what_does_the_chamelion_say=""
     local secUser="slehaLoc"
@@ -771,7 +771,7 @@ analyze_hana_sync_status()
 # globals:  sidadm(r), DIR_EXECUTABLE(r)
 # get the HANA landscape status
 #
-get_hana_landscape_status()
+function get_hana_landscape_status()
 {
     local ls_rc=0
     #
@@ -791,7 +791,7 @@ get_hana_landscape_status()
 # globals:  sidadm(r), remoteHost(r), InstanceNr(r), sr_mode(r), sr_name(r)
 # register_hana_secondary
 #
-register_hana_secondary()
+function register_hana_secondary()
 {
     local rc=2;
     local remoteInstance="";
@@ -816,7 +816,7 @@ register_hana_secondary()
 # params:   variable-names variable-values
 # globals:  -
 #
-saphana_notify_log_values()
+function saphana_notify_log_values()
 {
     local name=$1
     local value=$2
@@ -839,7 +839,7 @@ saphana_notify_log_values()
 # globals:  TBD
 # saphana_start : Start the SAP HANA instance
 #
-saphana_start() {
+function saphana_start() {
 
 
   local rc=$OCF_NOT_RUNNING
@@ -914,7 +914,7 @@ saphana_start() {
 # globals:  -
 # saphana_recover: Try startup of failed instance by cleaning up resources
 #
-saphana_recover() {
+function saphana_recover() {
   cleanup_instance
   saphana_start
   return $?
@@ -927,7 +927,7 @@ saphana_recover() {
 # globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
 # saphana_stop: Stop the SAP instance
 #
-saphana_stop() {
+function saphana_stop() {
   local output=""
   local rc
 
@@ -974,7 +974,7 @@ saphana_stop() {
 # globals:  OCF_*(r), SAPCONTROL(r), InstanveNr(r)
 # saphana_monitor: Can the given SAP instance do anything useful?
 #
-saphana_monitor() {
+function saphana_monitor() {
   local MONLOG=$1
   local rc
 
@@ -1042,7 +1042,7 @@ saphana_monitor() {
 # globals:  SID(r), InstanceName(r), OCF_*(r), sidarm(r)
 # saphana_status: Lightweight check of SAP instance only with OS tools
 #
-saphana_status() {
+function saphana_status() {
   local pid
   local pids
   local killsap="/usr/sap/$SID/$InstanceName/${HOSTNAME}/trace/kill.sap"
@@ -1067,7 +1067,7 @@ echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 # saphana_validate: Check the symantic of the input parameters 
 # TODO: Need to add more coding here - check other params, check prereqisites such as secure store users
 #
-saphana_validate() {
+function saphana_validate() {
   local rc=$OCF_SUCCESS
   if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
   then
@@ -1101,7 +1101,7 @@ saphana_validate() {
 # params:
 # globals: OCF_*(r), TBD
 #
-saphana_start_primary()
+function saphana_start_primary()
 {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
@@ -1214,7 +1214,7 @@ saphana_start_primary()
 # params:
 # globals: OCF_*(r), TBD
 #
-saphana_start_secondary()
+function saphana_start_secondary()
 {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
@@ -1279,7 +1279,7 @@ saphana_start_secondary()
 # globals:  TBD
 # saphana_start_clone
 #
-saphana_start_clone() {
+function saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
     check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing (see best practice manual how to setup the users)"
@@ -1299,7 +1299,7 @@ saphana_start_clone() {
 # globals:  HOSTNAME(r)
 # saphana_stop_clone
 #
-saphana_stop_clone() {
+function saphana_stop_clone() {
     # TODO: fh - when to check, if this is/was master already?
     set_hana_clone_state ${HOSTNAME} "UNDEFINED"
     saphana_stop
@@ -1312,7 +1312,7 @@ saphana_stop_clone() {
 # globals:  TBD
 # saphana_monitor_primary
 #
-saphana_monitor_primary()
+function saphana_monitor_primary()
 {
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
@@ -1418,7 +1418,7 @@ saphana_monitor_primary()
 # globals:  TBD
 # saphana_monitor_secondary
 #
-saphana_monitor_secondary()
+function saphana_monitor_secondary()
 {
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
@@ -1502,7 +1502,7 @@ saphana_monitor_secondary()
 # globals:  TBD
 # saphana_monitor_clone
 #
-saphana_monitor_clone() {
+function saphana_monitor_clone() {
 #
 # TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
 #       a) returning 7 here and force cluster a restart of the slave
@@ -1548,7 +1548,7 @@ saphana_monitor_clone() {
 # saphana_promote_clone: 
 #    In a Master/Slave configuration get Master being the primary OR by running hana takeover
 #
-saphana_promote_clone() {
+function saphana_promote_clone() {
   local rc
   rc=$OCF_ERR_GENERIC;
   local hana_sync;
@@ -1614,7 +1614,7 @@ saphana_promote_clone() {
 #   While we could not change a HANA instance to be really demoted, we only mark the status for 
 #   correct monitor return codes
 #
-saphana_demote_clone() {
+function saphana_demote_clone() {
     local rc
     rc=$OCF_ERR_GENERIC;
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
@@ -1629,7 +1629,7 @@ saphana_demote_clone() {
 # globals:  OCF_*(r), ACTION(r), CLACT(r), HOSTNAME(r)
 # saphana_notify: Handle master scoring - to make sure a slave gets the next master
 #
-saphana_notify() {
+function saphana_notify() {
     local promote_attr
     #
     # related to notification
