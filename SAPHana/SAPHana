@@ -53,8 +53,8 @@ SH=/bin/sh
 # globals:  $0(r)
 #
 function saphana_usage() {
-  methods=$(saphana_methods)
-  methods=$(echo $methods | tr ' ' '|')
+    methods=$(saphana_methods)
+    methods=$(echo $methods | tr ' ' '|')
   cat <<-!
 	usage: $0 ($methods)
 
@@ -455,17 +455,17 @@ function saphana_init() {
 #
 function check_secstore_users()
 {
-   local user1=$1
-   local user2=$2
-   local count
-   local rc=1
-   count=$($DIR_EXECUTABLE/hdbuserstore list | awk 'BEGIN {f=0} $0=="KEY " u1 {f++} $0=="KEY " u2 {f++} END {print f}' u1=$user1 u2=$user2)
-   if [ "$count" -eq 2 ]; then
-      rc=0
-   else 
-      rc=2
-   fi
-   return $rc
+    local user1=$1
+    local user2=$2
+    local count
+    local rc=1
+    count=$($DIR_EXECUTABLE/hdbuserstore list | awk 'BEGIN {f=0} $0=="KEY " u1 {f++} $0=="KEY " u2 {f++} END {print f}' u1=$user1 u2=$user2)
+    if [ "$count" -eq 2 ]; then
+        rc=0
+    else
+        rc=2
+    fi
+    return $rc
 }
 
 #
@@ -561,7 +561,7 @@ function check_sapstartsrv() {
 # cleanup_instance : remove resources (processes and shared memory) from a crashed instance)
 #
 function cleanup_instance() {
-# TODO: fh - Do not know what we need for HANA cleanup
+# TODO: Do not know what we need for HANA cleanup
 #
 # Do wee need to cleanup
 #  - process list (kill/signal)
@@ -606,7 +606,7 @@ function set_hana_sync_status_attr()
           ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
           ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
           crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
-	   # TODO: maybe we do need error handling!!
+	      # TODO: maybe we do need error handling!!
       done
       rc=0
    else
@@ -665,7 +665,7 @@ function get_hana_primary_at_attr()
 function check_for_primary() {
 
    # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
-   # TODO: Change stderr location!!
+   # DONE: Change stderr location!!
    #sidadm=lnxadm
    node_status=$(check_for_primary_single) 
    ocf_log info "check_for_primary: node_status=$node_status"
@@ -706,10 +706,10 @@ function check_for_primary_single()
     local node_full_status node_status
     echo " ========== $(date) ============== " >>/tmp/null
     #
-    # TODO: remove debug-output to /tmp/null
+    # DONE: remove debug-output to /tmp/null
     #
     # ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
-    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
+    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
     echo "${node_full_status}" >>/tmp/null
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     echo "$node_status"
@@ -724,7 +724,7 @@ function check_for_primary_single()
 function get_site_name()
 {
     local node_full_status node_site_name
-    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>>/tmp/null )
+    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
     echo "${node_full_status}" >>/tmp/null
     node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "<%s>/n", $3 } ' )
     echo "$node_site_name"
@@ -809,7 +809,7 @@ function register_hana_secondary()
     # --remoteInstance= this is the (new) primaries instance number - do we assume the same number?
     # --name= this is the local(!) site name 
 
-    # TODO: For first we assume both SIDs and InstanceNumbers are equal - so we could use our values
+    # REMARK: For first we assume both SIDs and InstanceNumbers are equal - so we could use our values
   
     remoteInstance=$InstanceNr
 
@@ -1510,11 +1510,11 @@ function saphana_monitor_secondary()
 # saphana_monitor_clone
 #
 function saphana_monitor_clone() {
-#
-# TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
-#       a) returning 7 here and force cluster a restart of the slave
-#       b) starting the instance here inside the monitor -> may result in longer runtime, timeouts
-#
+    #
+    # TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
+    #       a) returning 7 here and force cluster a restart of the slave
+    #       b) starting the instance here inside the monitor -> may result in longer runtime, timeouts
+    #
 	# first check with the status function (OS tools) if there could be something like a SAP instance running
 	# as we do not know here, if we are in master or slave state we do not want to start our monitoring
 	# agents (sapstartsrv) on the wrong host
