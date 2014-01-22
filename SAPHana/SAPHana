@@ -228,7 +228,7 @@ function saphana_methods() {
 function dequote()
 {
     super_log "* function: $FUNCNAME $1 $2 $3 $4"
-    local rc
+    local rc=0
     tr -d '"'
     return $rc
 }
@@ -313,7 +313,7 @@ function set_crm_master()
     if [ -n "$1" ]; then
         score=$1
     fi
-    ${HA_SBIN_DIR}/crm_master -v $score -l reboot
+    ${HA_SBIN_DIR}/crm_master -v $score -l reboot; rc=$?
     logger -t fhLOG "crm_master with: $OCF_RESOURCE_INSTANCE -v $score -l reboot"
     return $rc
 }
@@ -327,8 +327,7 @@ function get_crm_master()
 {
   super_log "* function: $FUNCNAME $1 $2 $3 $4"
   local rc=0
-   ${HA_SBIN_DIR}/crm_master -G -q -l reboot
-   rc=$?
+   ${HA_SBIN_DIR}/crm_master -G -q -l reboot; rc=$?
    return $rc
 }
 
@@ -521,7 +520,7 @@ function check_sapstartsrv() {
     super_log "* function: $FUNCNAME $1 $2 $3 $4"
     local restart=0
     local runninginst=""
-    local chkrc=$OCF_SUCCESS
+    local rc=$OCF_SUCCESS
     local output=""
 
     if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
@@ -585,15 +584,15 @@ function check_sapstartsrv() {
         if [ $srvrc -ne 1 ]
         then
             ocf_log info "sapstartsrv for instance $SID-$InstanceName was restarted !"
-            chkrc=$OCF_SUCCESS
+            rc=$OCF_SUCCESS
         else
             ocf_log error "sapstartsrv for instance $SID-$InstanceName could not be started!"
-            chkrc=$OCF_ERR_GENERIC
-            ocf_is_probe && chkrc=$OCF_NOT_RUNNING
+            rc=$OCF_ERR_GENERIC
+            ocf_is_probe && rc=$OCF_NOT_RUNNING
         fi
     fi
 
-    return $chkrc
+    return $rc
 }
 
 #
@@ -643,7 +642,7 @@ function saphana_hdbsql_check()
 function set_hana_sync_status_attr()
 {
    super_log "* function: $FUNCNAME $1 $2 $3 $4"
-   local rc theStatus theHosts
+   local rc=0 theStatus theHosts
    if [ $# -ge 2 ]; then
       theStatus=$1
       shift
@@ -671,7 +670,7 @@ function get_hana_sync_status_attr()
    super_log "* function: $FUNCNAME $1 $2 $3 $4"
    local sync_attr
    local rc=0
-   sync_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q)
+sync_attr=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q); rc=$?
 
    # OLD ATTRIBUTE IN PROPETRY INSTEAD OF HOSTS ATTRIBUTES
    #crm_attribute -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -q
@@ -727,11 +726,11 @@ function check_for_primary() {
    ocf_log info "check_for_primary: node_status=$node_status"
    case "$node_status" in
        primary ) 
-                  return $HANA_STATE_PRIMARY;;
+                  rc=$HANA_STATE_PRIMARY;;
        syncmem | sync | async )
-                  return $HANA_STATE_SECONDARY;;
+                  rc=$HANA_STATE_SECONDARY;;
        none )     # have seen that mode on second side BEFEORE we registered it as replica
-                  return $HANA_STATE_DEFECT;;
+                  rc=$HANA_STATE_DEFECT;;
        * )
 		  ocf_log err "check_for_primary:  we didn't expect node_status to be: <$node_status>"
                   ocf_log err "check_for_primary: trying multiple times to get primary status"
@@ -740,16 +739,17 @@ function check_for_primary() {
                       ocf_log info "check_for_primary: (loop nr $i) node_status=$node_status"
                       case "$node_status" in
                            primary )
-                                     return $HANA_STATE_PRIMARY;;
+                                     rc=$HANA_STATE_PRIMARY;;
                            syncmem | sync | async )
-                                     return $HANA_STATE_SECONDARY;;
+                                     rc=$HANA_STATE_SECONDARY;;
                       esac
                       sleep 10
                   done
 		  # sync and async seen in the hdbnsutil help -- need to know how to handle them
-                  return $HANA_STATE_DEFECT;;
+          # TODO: exit loop when rc is set
+                  #       rc=$HANA_STATE_DEFECT;;
    esac;
-   return $HANA_STATE_DEFECT
+   return $rc
 }
 
 #
@@ -1020,8 +1020,7 @@ function saphana_stop() {
     return $OCF_SUCCESS
   fi
 
-  check_sapstartsrv
-  rc=$?
+  check_sapstartsrv; rc=$?
   if [ $rc -eq $OCF_SUCCESS ]; then
     output=$($SAPCONTROL -nr $InstanceNr -function Stop)
     rc=$?
