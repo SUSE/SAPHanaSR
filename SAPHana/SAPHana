@@ -843,7 +843,7 @@ function analyze_hana_sync_status()
     local query_failed_secondaries="select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')"
     local all_cluster_hosts all_secondary_hosts all_broken_secondaries
     hana_sync_status=$(timeout 60 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state | dequote); sqlrc=$?
-    if [ "$sqlrc" -eq 0 ]; then
+    if [ "$sqlrc" -eq 0 -a "$hana_sync_status" != "" ]; then
         #
         # UNKNOWN, ACTIVE, ERROR, INITIALIZING
         #
@@ -980,6 +980,8 @@ function saphana_start() {
   local rc=$OCF_NOT_RUNNING
   local output=""
   local loopcount=0
+  
+  
 
   while [ $loopcount -lt 2 ]
   do
@@ -1434,6 +1436,33 @@ function saphana_start_clone() {
     super_ocf_log info "* function: $FUNCNAME $1 $2 $3 $4"
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
+    #
+    # TODO: IMPLEMENT THE "LAST PRIMARY ALGORITHM (LPM)"
+    #
+    #  1.     - IF DOWN AND CONFIGURED AS PRIMARY -> READ LPT (Last primary timestamp) from FILE
+    #         - IF UP AND CONFIGURED A PRIMARY -> TODO :)
+    #
+    #  2.     - COMPARE LPTlocal with LPTremote  
+    #         - If LPTlocal > LPTremote ==> we have win the race => STARTUP
+    #         - If LPTlocal < LPTremote ==> we lost race => REGISTER
+    #         - If LPTlocal = LPTremote = 0 ==> we are initializing!  ==> Promote must set the attribute!
+    #         - If LPTlocal = LPTremote != 0 ==> we are FAILING on both nodes!!
+    #         - If undef LPTlocal or undef LPTremote ==> WAITING
+    #
+    #  Actions:
+    #         START -> CHECK the LPTs (cluster+file), SECONDARY sets cluster attribute to 0, primary sets cluster attribute to Time in FILE
+    #         STOP  -> Write file, reset attr in cluster (=0)  (or DEMOTE)
+    #         PROMOTE -> set the attribute
+    #         NOTIFY-DEMOTE -> reset attr in cluster (=0)
+    #         DEMOTE -> Write file, reset attr in cluster (=0) (or STOP)
+    #         MONITOR-DEMOTED -> ---
+    #         MONITOR-PROMOTED -> update cluster attr (=T), writeFile(?)
+    #
+    #
+    #  PREREQ.:
+    #         CLuster must be in same NTP "zone"
+    #         In a completely stopped cluster - we wait till both nodes reports their timestamp
+    # 
     check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing (see best practice manual how to setup the users)"
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
 	check_for_primary; primary_status=$?
