@@ -1437,23 +1437,24 @@ function saphana_start_clone() {
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lsrc sqlrc;
     #
-    # TODO: IMPLEMENT THE "LAST PRIMARY ALGORITHM (LPM)"
+    # TODO: IMPLEMENT THE "LAST PRIMARY ALGORITHM (LPA)"
     #
-    #  1.     - IF DOWN AND CONFIGURED AS PRIMARY -> READ LPT (Last primary timestamp) from FILE
+    #  1.     - IF DOWN AND CONFIGURED AS PRIMARY -> READ LPT (Last Primary Timestamp) from FILE
     #         - IF UP AND CONFIGURED A PRIMARY -> TODO :)
     #
     #  2.     - COMPARE LPTlocal with LPTremote  
-    #         - If LPTlocal > LPTremote ==> we have win the race => STARTUP
-    #         - If LPTlocal < LPTremote ==> we lost race => REGISTER
-    #         - If LPTlocal = LPTremote = 0 ==> we are initializing!  ==> Promote must set the attribute!
-    #         - If LPTlocal = LPTremote != 0 ==> we are FAILING on both nodes!!
-    #         - If undef LPTlocal or undef LPTremote ==> WAITING
+    #         - 0: If LPTlocal > LPTremote ==> we have win the race => STARTUP
+    #         - 1: If LPTlocal < LPTremote ==> we lost race => REGISTER
+    #         - 2: If LPTlocal = LPTremote = 0 ==> we are initializing!  ==> Promote must set the attribute!
+    #         - 3: If LPTlocal = LPTremote != 0 ==> we are FAILING on both nodes!!
+    #         - 4: If undef LPTlocal and undef LPTremote ==> WAITING  ==> would mean also MONITORS need to do something...
+    #         - 5: If undef LPTlocal and LPTremote=0  ==> STARTUP
     #
     #  Actions:
     #         START -> CHECK the LPTs (cluster+file), SECONDARY sets cluster attribute to 0, primary sets cluster attribute to Time in FILE
     #         STOP  -> Write file, reset attr in cluster (=0)  (or DEMOTE)
     #         PROMOTE -> set the attribute
-    #         NOTIFY-DEMOTE -> reset attr in cluster (=0)
+    #         NOTIFY-DEMOTE -> reset attr of gone in cluster (=0)  ??
     #         DEMOTE -> Write file, reset attr in cluster (=0) (or STOP)
     #         MONITOR-DEMOTED -> ---
     #         MONITOR-PROMOTED -> update cluster attr (=T), writeFile(?)
@@ -1462,6 +1463,7 @@ function saphana_start_clone() {
     #  PREREQ.:
     #         CLuster must be in same NTP "zone"
     #         In a completely stopped cluster - we wait till both nodes reports their timestamp
+    #         LPT is number of seconds since ... (like unix time)
     # 
     check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing (see best practice manual how to setup the users)"
     set_hana_clone_state ${HOSTNAME} "DEMOTED"
