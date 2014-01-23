@@ -35,6 +35,7 @@
 #
 #######################################################################
 # Initialization:
+timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
@@ -121,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.53.2014.01.22.5</version>
+<version>0.54.2014.01.22.6</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1356,15 +1357,15 @@ function saphana_start_secondary()
             sync_attr=$(get_hana_sync_status_attr)
             case "$sync_attr" in
                 "OK"   )    # This is a possible node to promote, when primary is missing
-                            super_ocf_log info "fhDEC: secondary with sync status OK -> posible takeover node"
+                            super_ocf_log info "fhDEC: secondary with sync status OK -> INCLUDE as possible takeover node"
                             set_crm_master  10
                             ;;
                 "FAILURE" ) # This is currently NOT a possible node to promote
-                            super_ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
+                            super_ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as possible takeover node"
                             set_crm_master -INFINITY
                             ;;
                 "*" )       # Unknown sync status
-                            super_ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
+                            super_ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as possible takeover node"
                             set_crm_master -INFINITY
                             ;;
             esac
@@ -1930,5 +1931,8 @@ case "$ACTION" in
 esac
 #super_log "*** Resource Agent Return Code: $ra_rc"
 #super_log "---END--------------------------------------------------------------"
+timeE=$(date '+%s')
+(( timeR = timeE - timeB ))
+super_ocf_log info "\ process time for action $ACTION$CLACT was $timeR (s) ==="
 super_ocf_log info "==== end action $ACTION$CLACT with rc=${ra_rc} ($THE_VERSION) ===="
 exit ${ra_rc}
