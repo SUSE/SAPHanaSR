@@ -122,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.55.2014.01.23.1</version>
+<version>0.56.2014.01.23.2</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -838,37 +838,58 @@ function analyze_hana_sync_status()
     local hana_sync_status="" what_does_the_chamelion_say=""
     local secUser="slehaLoc"
     local rc=0
-    hana_sync_status=$(timeout 60 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'  | dequote)
-    #
-    # UNKNOWN, ACTIVE, ERROR, INITIALIZING
-    #
-    if [ "${hana_sync_status}" == "ACTIVE" ]; then
-        super_ocf_log info set_hana_sync_status_attr "OK"
-        set_hana_sync_status_attr "OK"
-    else
-        super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
-        super_ocf_log info set_hana_sync_status_attr "FAILURE"
-        set_hana_sync_status_attr "FAILURE"
-    fi
+    local sqlrc=0
+    local query_state='select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
+    local query_secondaries='select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION'
+    local query_failed_secondaries="select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')"
+    local all_cluster_hosts all_secondary_hosts all_broken_secondaries
+    hana_sync_status=$(timeout 60 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state | dequote); sqlrc=$?
+    if [ "$sqlrc" -eq 0 ]; then
+        #
+        # UNKNOWN, ACTIVE, ERROR, INITIALIZING
+        #
+        if [ "${hana_sync_status}" == "ACTIVE" ]; then
+            super_ocf_log info set_hana_sync_status_attr "OK"
+            set_hana_sync_status_attr "OK"
+        else
+            super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
+            super_ocf_log info set_hana_sync_status_attr "FAILURE"
+            set_hana_sync_status_attr "FAILURE"
+        fi
 
-    # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
-    #    TODO: for first we assume there is only ONE secondary site
-    #    TODO: error handling of hdbsql
-    #    TODO: what to do when all sqls run in timeout -  which nodes to be set to sync status failure?
-    #
-    all_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser "select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION") || all_secondary_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }') 
-    all_broken_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser "select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')" | dequote) || all_broken_secondary_hosts="cluster_nodes" 
-    if [ -n "$all_broken_secondary_hosts" ]; then
+        # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
+        #    TODO: for first we assume there is only ONE secondary site (like ROT)
         #
-        # we have a broken secondary site - set all hosts to "FAILURE"
-        #
-        what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1); rc=$?
-    else 
-        #
-        # we have an ACTIVE secondary site - set all hosts to "OK"
-        #
-        what_does_the_chamelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1); rc=$?
-    fi
+        all_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser $query_secondaries ); sqlrc=$?
+        if [ "$sqlrc" -eq 0 ]; then
+            all_broken_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser $query_failed_secondaries | dequote); sqlrc=$?
+            if  [ "$sqlrc" -eq 0 ]; then                 
+                 if [ -n "$all_broken_secondary_hosts" ]; then
+                     #
+                     # we have a broken secondary site - set all hosts to "FAILURE"
+                     #
+                     what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1); rc=$?
+                 else 
+                     #
+                     # we have an ACTIVE secondary site - set all hosts to "OK"
+                     #
+                     what_does_the_chamelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1); rc=$?
+                 fi
+            else
+                super_ocf_log warn "Was not able to fetch HANA list of broken secondary hosts - set sync status to FAILURE for ALL cluster hosts"
+                all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
+                what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_cluster_hosts 2>&1); rc=$?
+            fi
+        else
+            super_ocf_log warn "Was not able to fetch HANA secondary hosts - set sync status to FAILURE for ALL cluster hosts"
+            all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
+            what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_cluster_hosts 2>&1); rc=$?            
+        fi                  
+    else
+        super_ocf_log warn "Was not able to fetch HANA SYNC STATUS - set sync status to FAILURE for ALL cluster hosts"
+        all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
+        what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_cluster_hosts 2>&1); rc=$?        
+    fi  
     return $rc
 }
 
