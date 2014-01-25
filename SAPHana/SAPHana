@@ -122,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.57.2014.01.24.1</version>
+<version>0.65.2014.01.24.10</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -914,6 +914,10 @@ function get_hana_landscape_status()
     # 2 : WARN
     # 3 : INFO
     # 4 : OK
+
+    # TODO: ASK: What to do on return code 2?
+    # TODO: ASK: Can we defitive rely on landscapeHostConfiguration.py?
+    #            We have seen hanging hdbsql but the python script still reported rc=4 (OK)
     super_log "  -> landscape return code (0=FATAL,1=ERROR,2=WARN,3=INFO,4=OK) = $rc"
     return $rc;
 }
@@ -983,9 +987,7 @@ function saphana_start() {
 
   local rc=$OCF_NOT_RUNNING
   local output=""
-  local loopcount=0
-  
-  
+  local loopcount=0  
 
   while [ $loopcount -lt 2 ]
   do
@@ -1260,6 +1262,7 @@ function saphana_start_primary()
     local lsrc sqlrc;
     local rc=0
     local lpa_dec=4
+    local lpa_advice=""
     #
     # we will be a master (PRIMARY) so checking, if the is an OTHER master
     #
@@ -1271,118 +1274,102 @@ function saphana_start_primary()
     lpa_check_lpt_status; lpa_dec=$?
     case "$lpa_dec" in
         0 ) # LPA says start-up
+            lpa_advice="start"
             ;;
         1)  # LPA says register!
+            lpa_advice="register"
             ;;
         2)  # LPA says wait for second LPT
+            lpa_advice="wait"
             ;;
         3 | 4 ) # LPA says something is completely wrong - FAIL resource
+            lpa_advice="fail"
             ;;
         * ) # LPA failed with an unkonown status - FAIL resource
+            lpa_advice="fail"
             ;;
     esac
     #
     ##### LPA end
     #
     get_hana_landscape_status; lsrc=$?
-    saphana_hdbsql_check remote; sqlrc=$?
-    # TODO: Include also check for remote attribute for primary status (DEMOTED/PROMOTED)
-    if [ $lsrc -ge 2 ]; then
+    if [ $lsrc -gt 2 ]; then
        super_ocf_log info "fhDBG: get_hana_landscape_status reports an already running HANA"
-       if [ $sqlrc -eq 0 ]; then  
-           super_ocf_log info "fhDBG: saphana_hdbsql_check remote reports an already reachable HANA"
-           #
-           #TODO: for all cases - we need to check, if $sqlrc reports a connetcion failure or a user failure (auth) or key faiilure (secstore)
-           #
-           # LANDSCAPE SAYS UP, SQL ANSWERES
-           #
-           saphana_hdbsql_check local; sqlrc=$?
-           if [ $sqlrc -eq 0 ]; then              
-              #
-              # LOCAL SQL ANSWERS ==> WE ARE UP ALREADY
-              #
-              super_ocf_log info "fhDBG: saphana_hdbsql_check local reports an already reachable HANA"
-              super_ocf_log info "fhDEC: primary and up already ==> JUST KEEP IT RUNNING"
-              set_crm_master 1000
-              rc=$OCF_SUCCSESS
-           else
-              #
-              # LOCAL SQL ANSWERS NOT ==> How to recover: local up, remote sql ansers, local sql answers not?
-              #
-              # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
-              super_ocf_log info "fhDBG: saphana_hdbsql_check local reports NOT an already reachable HANA"
-              super_ocf_log info "fhDEC: primary up but does not answer ==> THIS IS AN UNRECOVERABLE ERROR"
-              rc=$OCF_ERR_GENERIC
-           fi
-       else 
-           #
-           # LANDSCAPE SAYS UP, SQL DOES NOT ANSWER ==> How to recover that? As we should be primary?
-           #
-           # TODO: decide if we should ignore that status or returning OCF_ERR_GENERIC or something else
-           super_ocf_log info "fhDBG: saphana_hdbsql_check remote reports NOT an already reachable HANA"
-           super_ocf_log info "fhDEC: primary up but service does not answer ==> THIS IS AN UNRECOVERABLE ERROR"
-           rc=$OCF_ERR_GENERIC
-       fi
-    else 
-       super_ocf_log info "fhDBG: get_hana_landscape_status reports NOT an already running HANA"
-       case "$sqlrc" in
-            0 ) # SQL ANSWERS
-               # LANDSCAPE SAYS DOWN, SQL ANSWERS ==>  AN OTHER INSTANCE IS PRIMARY!! ===> Should we register?
-               # TODO: should we have a option wether we automatically register or not?
-               #
-               super_ocf_log info "fhDBG: saphana_hdbsql_check remote reports an already reachable HANA"
-               super_ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
-               set_crm_master  0
-               register_hana_secondary 
-               check_for_primary; primary_status=$?
-               if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
-                    super_ocf_log info "Register successful"
-                    set_crm_master  0
+       case "$lpa_advice" in
+           start )  
+                    # as landcape says we are up - just set the scores and return code
+                    super_ocf_log info "fhLPA: landcape: UP, LPA: start ==> keep running"
+                    set_crm_master 1000
+                    rc=$OCF_SUCCSESS
+                    ;;
+           register )
+                    # upps we are up - but shoudn't?
+                    # TODO: check if this reaction is correct - tell cluster about failed start
+                    super_ocf_log info "fhLPA: landcape: UP, LPA: register ==> take down"
+                    set_crm_master -inf
+                    rc=$OCF_NOT_RUNNING 
+                    ;;
+           wait )
+                    # as we ARE up we just keep it up
+                    super_ocf_log info "fhLPA: landcape: UP, LPA: wait ==> keep running"
+                    set_crm_master 1000
+                    rc=$OCF_SUCCSESS
+                    ;;
+           fail )   
+                    super_ocf_log info "fhLPA: landcape: UP, LPA: fail ==> take down" 
+                    set_crm_master -inf
+                    rc=$OCF_NOT_RUNNING 
+                    ;;                  
+       esac
+   else
+       super_ocf_log info "fhDBG: get_hana_landscape_status reports a stopped HANA"
+       # TODO: ASK: How should we handle returncodes 1 and 2 (as HANA is down)?
+       case "$lpa_advice" in
+           start )  
+                    # landcape says we are down, lets start and adjust scores and return code
+                    super_ocf_log info "fhLPA: landcape: DOWN, LPA: start ==> keep running"
+                    set_crm_master 1000
                     saphana_start
-                    rc=$?
-               else
-                    super_ocf_log err "Register failed"
-                    rc=$OCF_ERR_GENERIC
-               fi
-               ;;
-           43 ) # SQL: No connection 
-                #
-                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER ==> Should be a classical start :)
-                #
-                # TODO: Do we need to differenciate between the return codes rc=43 (no connection) rc=136 (bad key) rc=124 (timeout rised)
-                #
-                super_ocf_log info "fhDBG: saphana_hdbsql_check remote reports NOT an already reachable HANA (rc=$sqlrc)"
-                super_ocf_log info "fhDEC: ===> NO OTHER HANA IS AVAILABLE ==> JUST START AS PRIMARY"
-                set_crm_master  1000
-                saphana_start
-                rc=$?
-                ;;
-            124 | 137 ) # SQL: timeout rised / hdbsql killed
-                #
-                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER IN TIME ==> This is critical
-                #
-                super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out)"
-                rc=$OCF_ERR_GENERIC
-                ;;
-            10 | 136 ) # SQL NOT OK - bad key / invalid user/pwd
-                #
-                # LANDSCAPE SAYS DOWN, SQL means bad key (secstore user)
-                #
-                super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (bad key/secstore user or wrong username/password)"
-                rc=$OCF_ERR_GENERIC
-                ;;
-            * ) # SQL: unknown error
-                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER CORRECTLY ==> This is critical
-                #
-                super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (unknown error rc=$sqlrc)"
-                rc=$OCF_ERR_GENERIC
-                ;;
+                    rc=$?                    
+                    ;;
+           register )
+                    # lets try to register
+                    # TODO: Like Action in start_secondary
+                    super_ocf_log info "fhLPA: landcape: DOWN, LPA: register ==> try to register"
+                    super_ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
+                    set_crm_master  0
+                    register_hana_secondary 
+                    check_for_primary; primary_status=$?
+                    if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+                        super_ocf_log info "Register successful"
+                        lpa_push_lpt 1
+                        lpa_set_lpt  1
+                        set_crm_master  0
+                        saphana_start_secondary
+                        rc=$?
+                    else
+                        super_ocf_log err "Register failed"
+                        rc=$OCF_ERR_GENERIC
+                    fi                                         
+                    ;;
+           wait )
+                    # we are down, so we should wait --> Must be implemented in monitor!!
+                    # TODO: Implement WAITING-RESOLUTION in Monitor                  
+                    super_ocf_log info "fhLPA: landcape: DOWN, LPA: wait ==> keep waiting"
+                    set_hana_clone_state ${HOSTNAME} "WAITING"
+                    set_crm_master -9000
+                    rc=$OCF_SUCCSESS
+                    ;;
+           fail )   
+                    super_ocf_log info "fhLPA: landcape: DOWN, LPA: fail ==> keep down" 
+                    set_crm_master -inf
+                    rc=$OCF_NOT_RUNNING 
+                    ;;                  
        esac
     fi
     super_ocf_log info "$FUNCNAME  -> return code = $rc"
     return $rc
 }
-
 
 #
 # function: saphana_start_secondary - handle startup of PRIMARY in M/S
@@ -1410,21 +1397,6 @@ function saphana_start_secondary()
     case "$sqlrc" in
         0 ) # SQL OK
             saphana_start; rc=$?
-            sync_attr=$(get_hana_sync_status_attr)
-            case "$sync_attr" in
-                "OK"   )    # This is a possible node to promote, when primary is missing
-                            super_ocf_log info "fhDEC: secondary with sync status OK -> INCLUDE as possible takeover node"
-                            set_crm_master  10
-                            ;;
-                "FAILURE" ) # This is currently NOT a possible node to promote
-                            super_ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as possible takeover node"
-                            set_crm_master -INFINITY
-                            ;;
-                "*" )       # Unknown sync status
-                            super_ocf_log info "fhDEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as possible takeover node"
-                            set_crm_master -INFINITY
-                            ;;
-            esac
             ;;
         43 ) # SQL NOT OK - NO CONNECTION
             set_hana_clone_state ${HOSTNAME} "WAITING"
@@ -1473,15 +1445,14 @@ function lpa_get_lpt() {
     super_ocf_log info "* function: $FUNCNAME $1 $2 $3 $4"
     local rc=1
     local node=$1
-    local lpt=-1
-    local readrest=0
-    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
+    local lpt=""
     #
     # TODO: Implement lpa_get_lpt
     #
-    crm_attribute -G -n "$LPA_ATTR" -q; rc=$?
+    # super_ocf_log info "fhDBG: crm_attribute -G -n \"$LPA_ATTR\" -N $node -q -l reboot"
+    lpt=$(crm_attribute -G -n "$LPA_ATTR" -N $node -q -l reboot 2>>/mnt/lala.$HOSTNAME); rc=$?
     if [ -n "$lpt" ]; then
-        rc=1
+        rc=0
         echo $lpt
     else
         rc=2
@@ -1493,7 +1464,7 @@ function lpa_get_lpt() {
 #
 # function: lpa_set_lpt - set lpt in cluster
 # params:   LPT
-# globals:  LPA_ATTR(r), TBD
+# globals:  LPA_ATTR(r), HOSTNAME(r), TBD
 # rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
 #
 function lpa_set_lpt() {
@@ -1533,7 +1504,7 @@ function lpa_pull_lpt() {
     # TODO: Implement lpa_pull_lpt
     read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
     if [ -n "$lpt" ]; then
-        rc=1
+        rc=0
         echo $lpt
     else
         rc=2
@@ -1560,7 +1531,7 @@ function lpa_push_lpt() {
     # HANA_STATE_PRIMARY
     mkdir -p $LPA_DIRECTORY
     echo "$lpt" > $lpa_file
-    clpt=$(lpa_pull_lpt); $lpt_rc=$?
+    clpt=$(lpa_pull_lpt); lpt_rc=$?
     if [ "$clpt" != "$lpt" -o "$lpt_rc" -ne 0 ]; then
         rc=2
     else
@@ -1596,7 +1567,7 @@ function lpa_init_lpt() {
     mkdir -p $LPA_DIRECTORY
     if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
         # init primary
-        lpa_push_lpt "2; rc=$?
+        lpa_push_lpt "2"; rc=$?
     elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
         # init secondary
         lpa_push_lpt "0"; rc=$?
@@ -1651,7 +1622,7 @@ function lpa_check_lpt_status() {
         fi
     fi
     LPTrem=$(lpa_get_lpt $remoteHost); lparc=$?
-    if [ -z "$LPTlrem" -o "$LPTrem" -eq -1 -o "$lparc" -ne 0 ]; then
+    if [ $lparc -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
         super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc, LPTrem undefined => WAIT"
         rc=2
@@ -1756,8 +1727,9 @@ function saphana_monitor_primary()
 	local promoted=0
     local init_attribute=0
     local LPTloc=-1
+    local lparc=4
     #
-    # OK, we are running as HANA PRIMARY
+    # OK, we are running/are configured as HANA PRIMARY
     #
     super_ocf_log info "fhDBG saphana_monitor_clone: HANA_STATE_PRIMARY"
     
@@ -1786,7 +1758,18 @@ function saphana_monitor_primary()
             DEMOTED )
                 promoted=0;
                 ;;
-            WAITING )  # However - WAITING should never happeb for a PRIMARY
+            WAITING )  
+                # DONE: lpa_check_lpt_status to come out of here :)
+                lpa_check_lpt_status; lparc=$?
+                if [ $lparc -ne 2 ]; then
+                    # lpa - no need to wait any longer - lets try a new start
+                    sap_hana_start_clone
+                    rc=$?
+                else
+                    # still waiting for second site to report lpa-lpt
+                    super_ocf_log info "fhLPA: Still waiting for remote site to report LPA status"
+                    return $OCF_SUCCESS
+                fi                             
                 promoted=0;
                 ;;
             * )
@@ -1800,7 +1783,7 @@ function saphana_monitor_primary()
     get_hana_landscape_status; lss=$? 
     super_ocf_log info "fhDBG saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
-        0 | 1 | 2 ) # FATAL or ERROR
+        0 | 1 | 2 ) # FATAL or ERROR or WARN
             if ocf_is_probe; then
                 # 
                 # leave master score untouched, only set return code
@@ -1829,7 +1812,7 @@ function saphana_monitor_primary()
                 fi
             fi
             ;;
-        3 | 4 ) # WARN INFO OK
+        3 | 4 ) # INFO or OK
             if ocf_is_probe; then
                 rc=$OCF_SUCCESS
             else
@@ -1894,13 +1877,13 @@ function saphana_monitor_secondary()
         promoted=0;
     else
         case "$promote_attr" in
-            PROMOTED ) # However - WAITING should never happen for a SECONDARY
+            PROMOTED ) # However - PROMOTED should never happen for a SECONDARY
                 promoted=1;
                 ;;
             DEMOTED )  # This is the status we expect
                 promoted=0;
                 ;;
-            WAITING )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
+            WAITING* )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
                 saphana_hdbsql_check remote; sqlrc=$?
                 if [ $sqlrc -eq 0 ]; then
                     super_ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
@@ -2242,6 +2225,10 @@ case "$ACTION" in
         ;;
     validate-all) 
         saphana_validate
+        ra_rc=$?
+        ;;
+    lpa_check)
+        lpa_check_lpt_status
         ra_rc=$?
         ;;
     *)  # seams to be a unknown request 
