@@ -2365,45 +2365,7 @@ else
     then
         super_ocf_log err "$ACTION called in a non master/slave environment"
         exit $OCF_ERR_ARGS
-    finode lv9041 \
-        attributes standby="off" site="WALLDORF"
-node lv9042 \
-        attributes standby="off" site="ROT" hana_lnx_sync_state_TEST="LALA1"
-primitive rsc_SAPHana_LNX_HDB42 ocf:fh:SAPHana \
-        operations $id="rsc_sap_LNX_HDB42-operations" \
-        op monitor interval="120" timeout="700" \
-        op monitor interval="121" role="Slave" timeout="700" \
-        op start interval="0" timeout="3600" \
-        op stop interval="0" timeout="300" \
-        op monitor interval="60" role="Master" timeout="700" \
-        params InstanceName="LNX_HDB42" PREFER_SITE_TAKEOVER="1" HANA_SERVICE_ADDRESS="10.17.140.200" HANA_SR_TOPOLOGY="lv9041:WALLDORF:lv9042 lv9042:ROT:lv9041" HANA_SR_MODE="syncmem"
-primitive rsc_ip_lnxhdb42 ocf:heartbeat:IPaddr2 \
-        meta target-role="Started" is-managed="true" \
-        operations $id="rsc_ip_lnxhdb42-operations" \
-        op monitor interval="10s" timeout="20s" \
-        params ip="10.17.140.200"
-primitive stonith-sbd stonith:external/sbd
-ms msl_SAPHana_LNX_HDB42 rsc_SAPHana_LNX_HDB42 \
-        meta is-managed="true" notify="true" clone-max="2" clone-node-max="1"
-colocation col_saphana_ip_lnxhdb42 2000: rsc_ip_lnxhdb42:Started msl_SAPHana_LNX_HDB42:Master
-property $id="cib-bootstrap-options" \
-        dc-version="1.1.10-65bb87e" \
-        cluster-infrastructure="classic openais (with plugin)" \
-        expected-quorum-votes="2" \
-        no-quorum-policy="ignore" \
-        stonith-enabled="true" \
-        stonith-action="reboot" \
-        stonith-timeout="150s" \
-        last-lrm-refresh="1390488346"
-property $id="hana" \
-        hana_master_at="WALLDORF"
-rsc_defaults $id="rsc_default-options" \
-        resource-stickiness="1000" \
-        migration-threshold="5000"
-op_defaults $id="op_defaults-options" \
-        record-pending="false" \
-        timeout="600"
-    
+    fi
 fi
 
 # What kind of method was invoked?
