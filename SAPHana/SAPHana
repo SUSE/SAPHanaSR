@@ -122,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.65.2014.01.24.10</version>
+<version>0.66.2014.01.29.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1290,9 +1290,7 @@ function saphana_start_primary()
             lpa_advice="fail"
             ;;
     esac
-    #
-    ##### LPA end
-    #
+    
     get_hana_landscape_status; lsrc=$?
     if [ $lsrc -gt 2 ]; then
        super_ocf_log info "fhDBG: get_hana_landscape_status reports an already running HANA"
@@ -1368,6 +1366,9 @@ function saphana_start_primary()
                     ;;                  
        esac
     fi
+    #
+    ##### LPA end
+    #
     super_ocf_log info "$FUNCNAME  -> return code = $rc"
     return $rc
 }
@@ -1386,8 +1387,8 @@ function saphana_start_secondary()
     ####### LPA - begin
     #
     lpa_push_lpt 1
-    lpa_set_lpt 1
-    #
+    lpa_set_lpt  1
+    # 
     ####### LPA - end
     # 
     #
@@ -1735,15 +1736,6 @@ function saphana_monitor_primary()
     super_ocf_log info "fhDBG saphana_monitor_clone: HANA_STATE_PRIMARY"
     
     #
-    #### LPA begin
-    #
-    LPTloc=$(date '+%s')
-    lpa_set_lpt $LPTloc
-    lpa_push_lpt $LPTloc
-    #
-    #### LPA end
-    #
-    #
     ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
     #
     promote_attr=$(get_hana_clone_state ${HOSTNAME})
@@ -1817,6 +1809,15 @@ function saphana_monitor_primary()
             if ocf_is_probe; then
                 rc=$OCF_SUCCESS
             else
+                #
+                #### LPA begin
+                #
+                LPTloc=$(date '+%s')
+                lpa_set_lpt $LPTloc
+                lpa_push_lpt $LPTloc
+                #
+                #### LPA end
+                #
                 if [ "$promoted" -eq 1 ]; then
                     rc=$OCF_RUNNING_MASTER
                 else
