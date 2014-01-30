@@ -1,0 +1,54 @@
+#!/bin/bash
+
+   sid="lnx"
+   node1="lv9041"
+   node2="lv9042"
+
+
+   node1_lpt=$(crm_attribute -N $node1 -G -n  lpa_${sid}_lpt -l reboot -q)
+   node2_lpt=$(crm_attribute -N $node2 -G -n  lpa_${sid}_lpt -l reboot -q)
+
+
+   node1_sync=$(crm_attribute -N $node1 -G -n  hana_${sid}_sync_state -l reboot -q)
+   node2_sync=$(crm_attribute -N $node2 -G -n  hana_${sid}_sync_state -l reboot -q)
+
+   node1_state=$(crm_attribute -N $node1 -G -n  hana_${sid}_clone_state -l reboot -q)
+   node2_state=$(crm_attribute -N $node2 -G -n  hana_${sid}_clone_state -l reboot -q)
+
+   s_state=$(crmadmin -q -S $(crmadmin -Dq 2>&1 1>/dev/null ) 2>&1 1>/dev/null)
+
+
+   currtime=$(date +'%s')
+   if [ $node1_lpt -gt 3600 ]; then
+	   node1_time=$(date -d @$node1_lpt)
+       (( node1_age = currtime - node1_lpt ))
+   else
+           node1_time="(secondary)"
+           node1_age=-1
+   fi
+
+   if [ $node2_lpt -gt 3600 ]; then
+	   node2_time=$(date -d @$node2_lpt)
+       (( node2_age = currtime - node2_lpt ))
+   else
+           node2_time="(secondary)"
+           node2_age=-1
+   fi
+
+   echo "Last Primary Arbitration (LPA) Algorithm"
+   echo "Time: $(date -d @$currtime) Cluster-Status: $s_state"
+   echo "$node1: $node1_lpt : $node1_time (sync=$node1_sync, state=$node1_state, age=$node1_age)"
+   echo "$node2: $node2_lpt : $node2_time (sync=$node2_sync, state=$node2_state, age=$node2_age)"
+
+   if [ $node1_lpt -gt $node2_lpt ]; then
+      echo "$node1 wins LPA"
+   fi
+   if [ $node2_lpt -gt $node1_lpt ]; then
+      echo "$node2 wins LPA"
+   fi
+   if [ $node2_lpt -eq $node1_lpt ]; then
+      echo "$node1 / $node2 LPA stalemate"
+   fi
+   
+   
+   ptest -sL | grep promo 
