@@ -122,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.71.2014.01.30.1</version>
+<version>0.73.2014.01.30.3</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1413,8 +1413,10 @@ function saphana_start_secondary()
             #
             # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER IN TIME ==> This is critical
             #
-            super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out)"
-            rc=$OCF_ERR_GENERIC
+            super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out) -> WAITING"
+            set_hana_clone_state ${HOSTNAME} "WAITING"
+            set_crm_master -INFINITY
+            rc=$OCF_SUCCSESS
             ;;
         10 | 136 ) # SQL NOT OK - bad key / invalid user/pwd
             #
@@ -1642,9 +1644,18 @@ function lpa_check_lpt_status() {
             super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc < LPTrem=$LPTrem => REGISTER"
             rc=1
         else                                     
-            # OhOh - That should not happen :/ - LPA says FAIL!
-            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc == LPTrem=$LPTrem => FAIL"
-            rc=3
+            if [ $LPTloc -eq 1 ]; then
+                # TODO: Do we need to differ between a 1=1 with different sync status?
+                # This case can happen: a) when really to secondaries would in the cluster 
+                #                       b) when a primary failed and restarts with prefrred remote takeover 
+                #                        
+                super_ocf_log info "fhDBG: LPA: Both LPTloc=$LPTloc and LPTrem=$LPTrem => WAIT"
+                rc=2
+            else
+                # OhOh - That should not happen :/ - LPA says FAIL!
+                super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc == LPTrem=$LPTrem => FAIL"
+                rc=3
+            fi
         fi        
     fi    
     super_ocf_log info "$FUNCNAME  -> return code = $rc"
@@ -1807,6 +1818,7 @@ function saphana_monitor_primary()
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
                         #set_crm_master -9000
+                        set_crm_master 1000
                         rc=$OCF_FAILED_MASTER
                     fi
                     rc=$OCF_FAILED_MASTER
