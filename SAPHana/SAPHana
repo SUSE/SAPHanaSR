@@ -32,7 +32,7 @@
 #   OCF_RESKEY_HANA_SR_MODE
 #
 #   TODO: See TODOs in this script
-#
+#   TODO: Change sync attribute OK -> S_OK, FAILURE -> S_FAIL, (keep PRIM)
 #######################################################################
 # Initialization:
 timeB=$(date '+%s')
@@ -122,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.66.2014.01.29.1</version>
+<version>0.71.2014.01.30.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -156,9 +156,11 @@ The SAPHana resource agent will interpret returncodes 0,1 and 2 as NOT-RUNNING (
   <content type="string" default="" />
  </parameter>
  <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
- <longdesc lang="en">Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default=No</longdesc>
+ <longdesc lang="en">Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default=0 
+0: Do restart locally
+1: Do takever to remote site</longdesc>
  <shortdesc lang="en">Local or site recover preferred?</shortdesc>
-  <content type="boolean" default="0" />
+  <content type="string" default="0" />
  </parameter>
  <parameter name="DIR_EXECUTABLE" unique="0" required="0">
   <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
@@ -1544,7 +1546,7 @@ function lpa_push_lpt() {
 }
 
 #
-# function: lpa_init_lpt - initialize local lpt 
+# function: lpa_init_lpt - initialize local lpt, if needed
 # params:   HANA_STATE
 # globals:  HANA_STATE_*(r), LPA_DIRECTORY(r), sid(r), HOSTNAME(r), TBD
 # lpa_init_lpt
@@ -1567,15 +1569,17 @@ function lpa_init_lpt() {
     # TODO: Implement lpa_init_lpt
     #
     mkdir -p $LPA_DIRECTORY
-    if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
-        # init primary
-        lpa_push_lpt "2"; rc=$?
-    elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
-        # init secondary
-        lpa_push_lpt "0"; rc=$?
-    else
-        rc=2                                   
-    fi
+    LPTloc=$(lpa_get_lpt ${HOSTNAME}) || LPTloc=$(lpa_pull_lpt) || \
+        if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
+            # init primary
+            lpa_push_lpt "2"; rc=$?
+        elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
+            # init secondary
+            lpa_push_lpt "1"; rc=$?
+        else
+            rc=2                                   
+        fi
+    lpa_set_lpt $LPTloc
     super_ocf_log info "$FUNCNAME  -> return code = $rc"
     return $rc    
 }
@@ -1719,7 +1723,7 @@ function saphana_stop_clone() {
 #
 # function: saphana_monitor_primary - monitor a hana clone instance
 # params:   -
-# globals:  TBD
+# globals:  HANA_STATE_*(r), TBD
 # saphana_monitor_primary
 #
 function saphana_monitor_primary()
@@ -1756,9 +1760,10 @@ function saphana_monitor_primary()
                 lpa_check_lpt_status; lparc=$?
                 if [ $lparc -ne 2 ]; then
                     # lpa - no need to wait any longer - lets try a new start
-                    sap_hana_start_clone
+                    saphana_start_clone
                     rc=$?
                 else
+                    lpa_init_lpt $HANA_STATE_PRIMARY
                     # still waiting for second site to report lpa-lpt
                     super_ocf_log info "fhLPA: Still waiting for remote site to report LPA status"
                     return $OCF_SUCCESS
@@ -1791,8 +1796,18 @@ function saphana_monitor_primary()
                     # ===>  Should we rely on the migration threshold?
                     #       set_crm_master 
                     if [ $PreferSiteTakeover -eq 1 ]; then
+                        #
+                        # TODO: first check, if remote site is already (and still) in sync, so it could at least takeover
+                        #
                         super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
                         set_crm_master -9000
+                        lpa_set_lpt 1
+                    else 
+                        # TODO:  Implement for local restart
+                        #        It maybe that for the local restart we only need to decrease the secondaries promotion score
+                        #super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
+                        #set_crm_master -9000
+                        rc=$OCF_FAILED_MASTER
                     fi
                     rc=$OCF_FAILED_MASTER
                 else
@@ -1819,6 +1834,7 @@ function saphana_monitor_primary()
                 #### LPA end
                 #
                 if [ "$promoted" -eq 1 ]; then
+                    set_hana_sync_status_attr "PRIM" ${HOSTNAME}
                     rc=$OCF_RUNNING_MASTER
                 else
                     if [ "$init_attribute" -eq 1 ]; then
