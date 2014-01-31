@@ -122,7 +122,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.73.2014.01.30.3</version>
+<version>0.78.2014.01.31.3</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -859,8 +859,8 @@ function analyze_hana_sync_status()
             set_hana_sync_status_attr "OK"
         else
             super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
-            super_ocf_log info set_hana_sync_status_attr "FAILURE"
-            set_hana_sync_status_attr "FAILURE"
+            super_ocf_log info set_hana_sync_status_attr "FAIL"
+            set_hana_sync_status_attr "FAIL"
         fi
 
         # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
@@ -872,9 +872,9 @@ function analyze_hana_sync_status()
             if  [ "$sqlrc" -eq 0 ]; then                 
                  if [ -n "$all_broken_secondary_hosts" ]; then
                      #
-                     # we have a broken secondary site - set all hosts to "FAILURE"
+                     # we have a broken secondary site - set all hosts to "FAIL"
                      #
-                     what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_broken_secondary_hosts 2>&1); rc=$?
+                     what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAIL" $all_broken_secondary_hosts 2>&1); rc=$?
                  else 
                      #
                      # we have an ACTIVE secondary site - set all hosts to "OK"
@@ -882,19 +882,19 @@ function analyze_hana_sync_status()
                      what_does_the_chamelion_say=$(set_hana_sync_status_attr "OK" $all_secondary_hosts 2>&1); rc=$?
                  fi
             else
-                super_ocf_log warn "Was not able to fetch HANA list of broken secondary hosts - set sync status to FAILURE for ALL cluster hosts"
-                all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
-                what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_cluster_hosts 2>&1); rc=$?
+                super_ocf_log warn "Was not able to fetch HANA list of broken secondary hosts - set sync status to FAIL for ALL cluster hosts BUT not myself"
+                all_cluster_hosts=$(crm_node -Q -l -A | awk '($3 == "member") && ($2 != lh)  { print $2 }' lh=${HOSTNAME})
+                what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAIL" $all_cluster_hosts 2>&1); rc=$?
             fi
         else
-            super_ocf_log warn "Was not able to fetch HANA secondary hosts - set sync status to FAILURE for ALL cluster hosts"
+            super_ocf_log warn "Was not able to fetch HANA secondary hosts - set sync status to FAIL for ALL cluster hosts"
             all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
-            what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_cluster_hosts 2>&1); rc=$?            
+            what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAIL" $all_cluster_hosts 2>&1); rc=$?            
         fi                  
     else
-        super_ocf_log warn "Was not able to fetch HANA SYNC STATUS - set sync status to FAILURE for ALL cluster hosts"
+        super_ocf_log warn "Was not able to fetch HANA SYNC STATUS - set sync status to FAIL for ALL cluster hosts"
         all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
-        what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAILURE" $all_cluster_hosts 2>&1); rc=$?        
+        what_does_the_chamelion_say=$(set_hana_sync_status_attr "FAIL" $all_cluster_hosts 2>&1); rc=$?        
     fi  
     return $rc
 }
@@ -1773,6 +1773,8 @@ function saphana_monitor_primary()
                     # lpa - no need to wait any longer - lets try a new start
                     saphana_start_clone
                     rc=$?
+                    super_ocf_log info "$FUNCNAME  -> return code = $rc"
+                    return $rc
                 else
                     lpa_init_lpt $HANA_STATE_PRIMARY
                     # still waiting for second site to report lpa-lpt
@@ -1809,15 +1811,15 @@ function saphana_monitor_primary()
                     if [ $PreferSiteTakeover -eq 1 ]; then
                         #
                         # TODO: first check, if remote site is already (and still) in sync, so it could at least takeover
+                        # TODO: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
                         super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
-                        set_crm_master -9000
+                        set_crm_master 5
                         lpa_set_lpt 1
                     else 
                         # TODO:  Implement for local restart
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
-                        #set_crm_master -9000
                         set_crm_master 1000
                         rc=$OCF_FAILED_MASTER
                     fi
@@ -1839,6 +1841,8 @@ function saphana_monitor_primary()
                 #
                 #### LPA begin
                 #
+                # TODO: DO NOT set this lpt, if have started a secondary before!
+                #
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc
                 lpa_push_lpt $LPTloc
@@ -1856,6 +1860,7 @@ function saphana_monitor_primary()
                         rc=$OCF_SUCCESS
                     fi
                 fi
+                set_crm_master 1000
                 analyze_hana_sync_status
             fi
             ;;
@@ -1950,7 +1955,7 @@ function saphana_monitor_secondary()
                     super_ocf_log info "fhDEC: secondary with sync status OK -> posible takeover node"
                     set_crm_master  10
                     ;;
-                "FAILURE" ) # This is currently NOT a possible node to promote
+                "FAIL" | "FAILURE" ) # This is currently NOT a possible node to promote
                     super_ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
                     set_crm_master -INFINITY
                     ;;
