@@ -2,11 +2,7 @@
 #
 # SAPHana
 #
-# Description:	Manages a single SAP Instance as a High-Availability
-#		resource. One SAP Instance is defined by one 
-#               SAP Instance-Profile. start/stop handels all services
-#               of the START-Profile, status and monitor care only
-#               about essential services.
+# Description:	Manages a single SAP HANA Instance or twi of them in System Replication
 #
 ################################################################################################################################################
 #
@@ -33,9 +29,12 @@
 #
 #   TODO: See TODOs in this script
 #   TODO: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)?
+#   TODO: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?
+#   TODO: How to "migrate" a primary? Simply promote the secondary does not work as the running primary will not be demoted to a secondary
+#   TODO: NUR Return-Code 1 von landscapeHostConfiguration.py führt zur Übernahme!! ReturnCode 0 nicht!!
 #
-#   DONE: Change sync attribute OK -> SOK, FAILURE -> SFAIL, (keep PRIM)
 #######################################################################
+#
 # Initialization:
 timeB=$(date '+%s')
 
@@ -96,7 +95,6 @@ function super_ocf_log() {
             * ) mtype=${message%% *}
                 mtype=${mtype%:}
                 mtype=${mtype#fh}
-                #ocf_log "info" "super_ocf_log: f:$shf t: $mtype l:$level m:$message"
                 echo "$shf"|  grep -iq ${mtype}; search=$?
                 if [ $search -eq 0 ]; then
                      skip=0  
@@ -132,15 +130,15 @@ function saphana_usage() {
 
     $0 manages a SAP HANA Instance as an HA resource.
 
-    The 'start' operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
-    The 'stop' operation stops the HANA instance
-    The 'status' operation reports whether the HANA instance is running
-    The 'monitor' operation reports whether the HANA instance seems to be working in master/slave it also needs to check the system replication status
-    The 'promote' operation either runs a takeover for a secondary or a just-nothing for a primary
-    The 'demote' operation neary does nothing and just mark the instance as demoted
-    The 'notify' operation always returns SUCCESS
+    The 'start'        operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
+    The 'stop'         operation stops the HANA instance
+    The 'status'       operation reports whether the HANA instance is running
+    The 'monitor'      operation reports whether the HANA instance seems to be working in master/slave it also needs to check the system replication status
+    The 'promote'      operation either runs a takeover for a secondary or a just-nothing for a primary
+    The 'demote'       operation neary does nothing and just mark the instance as demoted
+    The 'notify'       operation always returns SUCCESS
     The 'validate-all' operation reports whether the parameters are valid
-    The 'methods' operation reports on the methods $0 supports
+    The 'methods'      operation reports on the methods $0 supports
 
 	!
 	return $rc
@@ -158,7 +156,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.82.2014.02.04.3</version>
+<version>0.86.2014.02.12.2</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -182,7 +180,7 @@ status is reported by the returncode of the script:
 2: WARNING
 3: INFO (maybe a switch of the resource running)
 4: OK
-The SAPHana resource agent will interpret returncodes 0,1 and 2 as NOT-RUNNING (or failure) and returncodes 3+4 as RUNNING.
+The SAPHana resource agent will interpret returncodes 0+1 as NOT-RUNNING (or 1 failure) and returncodes 2+3+4 as RUNNING.
 
 </longdesc>
 <parameters>
@@ -213,7 +211,7 @@ The SAPHana resource agent will interpret returncodes 0,1 and 2 as NOT-RUNNING (
   <shortdesc lang="en">HANA instance profile name</shortdesc>
   <content type="string" default="" />
  </parameter>
- <parameter name="HANA_SR_TOPOLOGY" unique="1" required="1">
+ <parameter name="HANA_SR_TOPOLOGY" unique="1" required="0">
   <shortdesc lang="en">Define the HANA System Replication Tolology</shortdesc>
  <longdesc lang="en">HANA_SR_TOPOLOGY is a space separated list of tupels, which define the system replication topology.
  Each tuple has the syntax node:site:remoteNode.
@@ -471,33 +469,9 @@ function saphana_init() {
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     LPA_ATTR=lpa_${sid}_lpt
     
-    HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
-    super_ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
-    local one two three rest1
-    for node_top in $HANA_SR_TOPOLOGY; do 
-        one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
-        rest1=${node_top#*:} # cut-out the first field (so have all the rest)
-        two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
-        three=${rest1#*:}    # cut-out  the first field of the rest 
-                             # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
-        super_ocf_log info "fhDBG: node_top=$node_top, one=$one, two=$two, three=$three"
-        if [ "$one" = "$HOSTNAME" ]; then
-           # found "own" datarecord
-           sr_name=$two
-           remoteHost=$three
-            # WORKING-ZONE
-        fi
-    done
-
-    if [ -n "$OCF_RESKEY_HANA_SR_MODE" ]; then
-        sr_mode=$OCF_RESKEY_HANA_SR_MODE
-    else
-        sr_mode="sync"
-    fi
 
     super_ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
 
-    super_ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, sr_mode=$sr_mode"
 
 
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
@@ -507,6 +481,43 @@ function saphana_init() {
     ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"   # Not really used
     ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state" # UKNOWN?, DEMOTED, PROMOTED
 
+    ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
+    ATTR_NAME_HANA_SITE="hana_${sid}_site"
+
+    if [ -n "$OCF_RESKEY_HANA_SR_TOPOLOGY" ]; then
+        HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
+        super_ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
+        local one two three rest1
+        for node_top in $HANA_SR_TOPOLOGY; do 
+            one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
+            rest1=${node_top#*:} # cut-out the first field (so have all the rest)
+            two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
+            three=${rest1#*:}    # cut-out  the first field of the rest 
+                                 # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
+            super_ocf_log info "fhDBG: node_top=$node_top, one=$one, two=$two, three=$three"
+            if [ "$one" = "$HOSTNAME" ]; then
+               # found "own" datarecord
+               sr_name=$two
+               remoteHost=$three
+                # WORKING-ZONE
+            fi
+        done
+        super_ocf_log info "fhDBG: OCFP remoteHost=$remoteHost sr_name=$sr_name"
+    else
+        # ATTR_NAME_HANA_REMOTEHOST
+        remoteHost=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot | dequote);
+        #  ATTR_NAME_HANA_SITE
+        sr_name=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_SITE" -l reboot | dequote);
+        super_ocf_log info "fhDBG: ATTR remoteHost=$remoteHost sr_name=$sr_name"
+    fi
+
+
+    if [ -n "$OCF_RESKEY_HANA_SR_MODE" ]; then
+        sr_mode=$OCF_RESKEY_HANA_SR_MODE
+    else
+        sr_mode="sync"
+    fi
+    # super_ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
@@ -730,6 +741,7 @@ function set_hana_sync_status_attr()
           super_ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
           super_ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
           crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
+          super_ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost => rc=$crm_rc"
       done
       rc=0
    else
@@ -877,7 +889,7 @@ function get_site_name()
 #
 # function: analyze_hana_sync_status - query and check hana system replication status
 # params:   -
-# globals:  DIR_EXECUTABLE(r), 
+# globals:  DIR_EXECUTABLE(r), remoteHost(r)
 # get the HANA sync status
 # 
 function analyze_hana_sync_status()
@@ -898,11 +910,11 @@ function analyze_hana_sync_status()
         #
         if [ "${hana_sync_status}" == "ACTIVE" ]; then
             super_ocf_log info set_hana_sync_status_attr "SOK"
-            set_hana_sync_status_attr "SOK"
+            set_hana_sync_status_attr "SOK" $remoteHost
         else
             super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
             super_ocf_log info set_hana_sync_status_attr "SFAIL"
-            set_hana_sync_status_attr "SFAIL"
+            set_hana_sync_status_attr "SFAIL" $remoteHost
         fi
 
         # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
@@ -960,11 +972,11 @@ function get_hana_landscape_status()
     #
     su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
     # ls_rc:
-    # 0 : FATAL
-    # 1 : ERROR
-    # 2 : WARN
-    # 3 : INFO
-    # 4 : OK
+    # 0 : FATAL  -> (do nothing -> admin must solve that!)
+    # 1 : ERROR  -> HANA is Down (failes or down instance -> takeover if running master/primary fails)
+    # 2 : WARN   -> HANA is UP
+    # 3 : INFO   -> HANA is UP
+    # 4 : OK     -> HANA is UP
 
     # TODO: ASK: What to do on landscapeHostConfiguration return code 2?
     # TODO: ASK: Can we defitive rely on landscapeHostConfiguration.py?
@@ -1016,7 +1028,7 @@ function saphana_notify_log_values()
     
     if [ -n "$value" ]; then
        if [ "$(echo $value | tr -d ' ')" != "$separator" ]; then
-		ocf_log info "saphana_notify: $name $value"
+		super_ocf_log info "fhDBG: saphana_notify: $name $value"
           
        fi 
     fi
@@ -1310,14 +1322,14 @@ function saphana_start_primary()
 {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
-    local lsrc sqlrc;
+    local lss sqlrc;
     local rc=0
     local lpa_dec=4
     local lpa_advice=""
     #
     # we will be a master (PRIMARY) so checking, if the is an OTHER master
     #
-    super_ocf_log info "fhDBG: saphana_start_clone - check_for_primary reports HANA_STATE_PRIMARY"
+    super_ocf_log info "fhDBG: saphana_primary - check_for_primary reports HANA_STATE_PRIMARY"
 # WORKING-ZONE
     #
     ##### LPA beg
@@ -1341,8 +1353,9 @@ function saphana_start_primary()
             ;;
     esac
     
-    get_hana_landscape_status; lsrc=$?
-    if [ $lsrc -gt 2 ]; then
+    get_hana_landscape_status; lss=$?
+    # TODO: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
+    if [ $lss -ge 2 ]; then
        super_ocf_log info "fhDBG: get_hana_landscape_status reports an already running HANA"
        case "$lpa_advice" in
            start )  
@@ -1432,7 +1445,7 @@ function saphana_start_secondary()
 {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
-    local lsrc sqlrc;
+    local sqlrc;
     #
     ####### LPA - begin
     #
@@ -1471,7 +1484,7 @@ function saphana_start_secondary()
             # LANDSCAPE SAYS DOWN, SQL means bad key (secstore user)
             #
             super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (bad key/secstore user or wrong username/password)"
-            rc=$OCF_ERR_GENERIC
+            rc=$OCF_ERR_CONFIGURED
             ;;
         * ) # SQL: unknown error
             # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER CORRECTLY ==> This is critical
@@ -1666,7 +1679,7 @@ function lpa_check_lpt_status() {
     # First fetch LPT from cluster attributes
     #
     LPTloc=$(lpa_get_lpt $HOSTNAME); lparc=$?
-    if [ -z "$LPTloc" -o "$LPTloc" -eq -1 -o "$lparc" -ne 0 ]; then
+    if [ "$lparc" -ne 0 ]; then
         # as a fallback try to fetch the value from external status file
         LPTloc=$(lpa_pull_lpt); 
         lparc=$?
@@ -1723,7 +1736,8 @@ function lpa_check_lpt_status() {
 function saphana_start_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
-    local lsrc sqlrc;
+    local sqlrc;
+    local chkusr;
     #
     # TODO: IMPLEMENT THE "LAST PRIMARY ALGORITHM (LPA)"
     #
@@ -1752,16 +1766,24 @@ function saphana_start_clone() {
     #         CLuster must be in same NTP "zone"
     #         In a completely stopped cluster - we wait till both nodes reports their timestamp
     #         LPT is number of seconds since ... (like unix time)
-    # 
-    check_secstore_users SLEHALOC SLEHAREM || assert "Secure store users are missing (see best practice manual how to setup the users)"
-    set_hana_clone_state ${HOSTNAME} "DEMOTED"
-	check_for_primary; primary_status=$?
-	if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-        saphana_start_primary; rc=$?
-	else 
-        saphana_start_secondary; rc=$?
-	fi 
-	return $rc
+    #
+    # TODO ASK: Can we assume that also SAP "needs" cluster nodes in time-sync?
+    # TODO ASK: which minimal grants/permissions does the dbuser need to access the sync view?
+    #
+    check_secstore_users SLEHALOC SLEHAREM; chkusr=$?
+    if [ $chkusr -ne 0 ]; then
+         super_ocf_log err  "fhDEC: Secure store users are missing (see best practice manual how to setup the users)"
+         rc=$OCF_ERR_CONFIGURED
+    else
+        set_hana_clone_state ${HOSTNAME} "DEMOTED"
+        check_for_primary; primary_status=$?
+        if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+            saphana_start_primary; rc=$?
+        else 
+            saphana_start_secondary; rc=$?
+        fi 
+    fi
+    return $rc
 }
 
 #
@@ -1793,6 +1815,7 @@ function saphana_monitor_primary()
     local init_attribute=0
     local LPTloc=-1
     local lparc=4
+    local lss
     local remoreSync=""
     #
     # OK, we are running/are configured as HANA PRIMARY
@@ -1843,7 +1866,8 @@ function saphana_monitor_primary()
     get_hana_landscape_status; lss=$? 
     super_ocf_log info "fhDBG saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
-        0 | 1 | 2 ) # FATAL or ERROR or WARN
+        0 | 1 ) # FATAL or ERROR 
+            # TODO: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
             if ocf_is_probe; then
                 # 
                 # leave master score untouched, only set return code
@@ -1894,7 +1918,7 @@ function saphana_monitor_primary()
                 fi
             fi
             ;;
-        3 | 4 ) # INFO or OK
+        2 | 3 | 4 ) # WARN, INFO or OK
             if ocf_is_probe; then
                 rc=$OCF_SUCCESS
             else
@@ -1952,6 +1976,7 @@ function saphana_monitor_secondary()
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
     local init_attribute=0
+    local lss
     #
     # OK, we are running as HANA SECONDARY (or even not as PRIMARY)
     #    
@@ -2003,10 +2028,11 @@ function saphana_monitor_secondary()
     get_hana_landscape_status; lss=$? 
     super_ocf_log info "fhDBG saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
-        0 | 1 | 2 ) # FATAL or ERROR
+        0 | 1 ) # FATAL or ERROR
+            # TODO: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
             rc=$OCF_NOT_RUNNING
             ;;
-        3 | 4 ) # WARN INFO OK
+        2 | 3 | 4 ) # WARN INFO OK
             rc=$OCF_SUCCESS
             sync_attr=$(get_hana_sync_status_attr ${HOSTNAME})
             super_ocf_log info "fhDBG sync_attr=$sync_attr"

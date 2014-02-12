@@ -1,0 +1,1158 @@
+#!/bin/bash
+#
+# SAPHana
+#
+# Description:	Clone resource to anylyze SAPHana Topology
+#
+################################################################################################################################################
+#
+# SAPHanaTopology is a fork of SAPHana
+# Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
+#
+# SAPHanaTopology: (short sht)
+# Author:       Fabian Herschel, February 2014
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2014 SUSE Linux Products GmbH
+#
+# An example usage: 
+#      See usage() function below for more details...
+#
+# OCF instance parameters:
+#	OCF_RESKEY_InstanceName
+#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
+#
+#######################################################################
+#
+# Initialization:
+timeB=$(date '+%s')
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+#######################################################################
+
+HANA_STATE_PRIMARY=0
+HANA_STATE_SECONDARY=1
+HANA_STATE_DEFECT=2
+
+SH=/bin/sh
+
+#
+# function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
+# params:   LOG_MESSAGE
+# globals:  SUPER_LOG_PATH, SAPHanaFilter
+function super_ocf_log() {
+    local level="$1"
+    local message="$2"
+    local skip=1
+    local mtype=""
+    local search=0
+    local shf="${SAPHanaFilter:-all}"
+    #ocf_log "info" "super_ocf_log: f:$shf l:$level m:$message"
+    # message levels: (dbg)|info|warn|err|error
+    # 
+    # message types:  (fhACT|fhRA|fhFLOW|fhDBG|fhLPA|fhDEC
+    case "$level" in
+        warn | err | error ) skip=0
+        ;;
+        info )
+        case "$shf" in
+            all) skip=0
+            ;;          
+            none )
+                skip=1
+                ;;
+            * ) mtype=${message%% *}
+                mtype=${mtype%:}
+                mtype=${mtype#fh}
+                echo "$shf"|  grep -iq ${mtype}; search=$?
+                if [ $search -eq 0 ]; then
+                     skip=0  
+                else
+                    skip=1
+                fi
+            ;;
+        esac
+        ;;    
+    esac
+    
+    if [ $skip -eq 0 ]; then
+        ocf_log "$level" "$message"
+    fi
+}
+
+#
+# function: sht_usage - short usage info
+# params:   -
+# globals:  $0(r)
+#
+function sht_usage() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    methods=$(sht_methods)
+    methods=$(echo $methods | tr ' ' '|')
+  cat <<-!
+	usage: $0 ($methods)
+
+    $0 manages a SAP HANA Instance as an HA resource.
+
+    The 'start'        operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
+    The 'stop'         operation stops the HANA instance
+    The 'status'       operation reports whether the HANA instance is running
+    The 'monitor'      operation reports whether the HANA instance seems to be working in master/slave it also needs to check the system replication status
+    The 'notify'       operation always returns SUCCESS
+    The 'validate-all' operation reports whether the parameters are valid
+    The 'methods'      operation reports on the methods $0 supports
+
+	!
+	return $rc
+}
+
+#
+# function: sht_meta_data - print resource agent meta-data for cluster
+# params:   -
+# globals:  -
+#
+function sht_meta_data() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+	cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="SAPHanaTopology">
+<version>0.12.2014.02.12.12</version>
+
+<shortdesc lang="en">Analyzes SAP HANA topology.</shortdesc>
+<longdesc lang="en">
+TBD
+</longdesc>
+<parameters>
+ <parameter name="InstanceName" unique="1" required="1">
+  <longdesc lang="en">The full qualified SAPHana system name like SLE_HDB10.</longdesc>
+  <shortdesc lang="en">Instance name: SID_INSTANCE</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
+ <longdesc lang="en">
+Should the RA calculate for SITE takeover or for local takeover?
+ </longdesc>
+ <shortdesc lang="en">Calculation: Local or site recover preferred?</shortdesc>
+  <content type="string" default="0" />
+ </parameter>
+ <parameter name="DIR_EXECUTABLE" unique="0" required="0">
+  <longdesc lang="en">TBD.</longdesc>
+  <shortdesc lang="en">Path</shortdesc>
+  <content type="string" default="" />
+ </parameter>
+ <parameter name="SAPHanaDebug" unique="0" required="0">
+<shortdesc lang="en">Define SAPHana messages to be printed</shortdesc>
+ <longdesc lang="en">Define SAPHana messages to be printed. Currently only partially implemented.
+ Values: all, none, 
+ TODO: describe which combinations are supported
+ Planned: Allowed values are all, none (and combinations of): dbg, dec, lpa, func</longdesc>
+ <content type="string" default="sync" />
+ </parameter>
+ <parameter name="SAPHanaFilter" unique="0" required="0">
+<shortdesc lang="en">Define SAPHana messages to be printed</shortdesc>
+ <longdesc lang="en">Define SAPHana messages to be printed. Currently only partially implemented.
+ Values: all, none, 
+ TODO: describe which combinations are supported
+ Planned: Allowed values are all, none (and combinations of): dbg, dec, lpa, func</longdesc>
+ <content type="string" default="sync" />
+ </parameter>
+</parameters>
+
+<actions>
+<action name="start" timeout="180" />
+<action name="stop" timeout="60" />
+<action name="status" timeout="60" />
+<action name="monitor" depth="0" timeout="60" interval="120" />
+<action name="validate-all" timeout="5" />
+<action name="meta-data" timeout="5" />
+<action name="methods" timeout="5" />
+</actions>
+</resource-agent>
+END
+return $rc
+}
+
+
+#
+# function: sht_methods - report supported cluster methods
+# params:   -
+# globals:  -
+# methods: What methods/operations do we support?
+#
+function sht_methods() {
+  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+  local rc=0
+  cat <<-!
+    start
+    stop
+    status
+    monitor
+    notify
+    validate-all
+    methods
+    meta-data
+    usage
+    admin-setup
+	!
+	return $rc
+}
+
+#
+# function: dequote - filter: remove quotes (") from stdin
+# params:   -
+# globals:  -
+#
+function dequote()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    tr -d '"'
+    return $rc
+}
+
+#
+# function: is_clone - report, if resource is configured as a clone (also master/slave)
+# params:   -
+# globals:  OCF_*(r)
+# descript: is_clone : find out if we are configured to run in a Master/Slave configuration
+#   rc: 0: it is a clone
+#       1: it is not a clone
+#   Special EXIT of RA, if clone is missconfigured
+#
+# TODO: For the case of a clone/master/slave we also need to check more parameters to be set
+#       such as HANA_SR_TOPOLOGY, ...
+#
+function is_clone() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    #
+    # is a clone config?
+    #
+    if [ -n "$OCF_RESKEY_CRM_meta_clone_max" ] \
+       && [ "$OCF_RESKEY_CRM_meta_clone_max" -gt 0 ]; then
+       #
+       # yes it is a clone config - check, if its configured well
+       #
+        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] ; then 
+                super_ocf_log err "fhACT Clone options misconfigured. (expect: clone_node_max=1)"
+                exit $OCF_ERR_CONFIGURED
+        fi
+        rc=0;
+    else
+        rc=1;
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc
+}
+
+#
+# function: get_hana_clone_state - get the multi-state status of the a clone
+# params:   NODE 
+# globals:  ATTR_NAME_HANA_CLONE_STATE(r)
+#
+function get_hana_clone_state()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    local attr_node=$1
+    crm_attribute -N ${attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q; rc=$?
+    return $rc
+}
+
+#
+# function: set_hana_clone_state - set the multi-state status of a node
+# params:   NODE STATUS
+# globals:  ATTR_NAME_HANA_CLONE_STATE(r)
+#
+function set_hana_clone_state()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local attr_node=$1
+    local attr_status=$2
+    local rc=1
+    local attr_old
+    attr_old=$(get_hana_clone_state $attr_node)
+    if [ "$attr_old" != "$attr_status" ]; then
+        super_ocf_log info "fhDBG SET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} to ${attr_status}"
+        crm_attribute -N $attr_node -v $attr_status -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot; rc=$?
+    else
+        super_ocf_log info "fhDBG LET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} still be ${attr_status}"
+        rc=0
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc
+}
+
+#
+# function: sht_init - initialize variables for the resource agent
+# params:   InstanceName
+# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w), 
+# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w) 
+# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
+# globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
+# globals:  LPA_DIRECTORY(w)
+# sht_init : Define global variables with default values, if optional parameters are not set
+#
+#
+
+function sht_init() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    
+    local myInstanceName="$1"
+    local rc=$OCF_SUCCESS
+
+    SID=$(echo "$myInstanceName" | cut -d_ -f1)
+    sid=$(echo "$SID" | tr [:upper:] [:lower:])
+    sidadm="${sid}adm"
+    InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
+    SIDInstanceName=${myInstanceName}
+    InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
+    SAPVIRHOST=${HOSTNAME}
+    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
+
+    SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-all}"
+
+    LPA_DIRECTORY=/var/lib/SAPHanaRA
+    LPA_ATTR=lpa_${sid}_lpt
+    
+    #super_ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
+    #super_ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, sr_mode=$sr_mode"
+
+    ocf_env=$(env | grep 'OCF_RESKEY_CRM')
+    super_ocf_log info "fhDBG: OCF: $ocf_env"
+   
+    ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"  # SOK, SFAIL, UNKNOWN?
+    ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"   # Not really used
+    ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state" # UKNOWN?, DEMOTED, PROMOTED
+
+    ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
+    ATTR_NAME_HANA_SITE="hana_${sid}_site"
+
+    # optional OCF parameters, we try to guess which directories are correct
+    if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
+    then
+        DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
+    else
+        DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
+    fi
+
+    if [ -z "$DIR_EXECUTABLE" ]; then
+        super_ocf_log err "fhDEC: Can not determine DIR_EXECUTABLE. Please set this parameter. -> OCF_ERR_CONFIGURED"
+        rc=$OCF_ERR_CONFIGURED
+    fi
+
+    if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
+    then
+        DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+    else
+        DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
+    fi
+
+    # as root user we need the library path to the SAP kernel to be able to call sapcontrol
+    # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
+    if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
+    then
+        LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+        export LD_LIBRARY_PATH
+    fi
+
+    PATH=${PATH}:${DIR_EXECUTABLE}
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $OCF_SUCCESSs"
+    return $OCF_SUCCESS
+}
+
+# function: check_secstore_users
+# params:   USER1 USER2
+# globals:  DIR_EXECUTABLE(r)
+#
+function check_secstore_users()
+{
+   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local user1=$1
+    local user2=$2
+    local count
+    local rc=1
+    count=$($DIR_EXECUTABLE/hdbuserstore list | awk 'BEGIN {f=0} $0=="KEY " u1 {f++} $0=="KEY " u2 {f++} END {print f}' u1=$user1 u2=$user2)
+    if [ "$count" -eq 2 ]; then
+        rc=0
+    else
+        rc=2
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc
+}
+
+#
+# function: sht_hdbsql_check - query SR view
+# params:   remote [local,remote]
+# globals:  DIR_EXECUTABLE(r)
+#
+function sht_hdbsql_check()
+{
+   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+   local rc=1
+   local remote=$1
+   local secUser
+   case "$remote" in 
+        local* ) secUser="slehaLoc";;
+        remote*) secUser="slehaRem";;
+   esac
+   super_ocf_log info "fhDBG: $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'"
+   timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
+   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+   return $rc
+}
+
+#
+# function: set_hana_sync_status_attr - set the HANA syst-repl. status attribute 
+# params:   STATUS [ HOST-LIST ]
+# globals:  ATTR_NAME_HANA_SYNC_STATUS(r)
+# set the hana_sync_status attribute
+function set_hana_sync_status_attr()
+{
+   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+   local rc=0 theStatus theHosts
+   if [ $# -ge 2 ]; then
+      theStatus=$1
+      shift
+      theHosts=$(echo $* | dequote)
+      for theHost in $theHosts; do
+          super_ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
+          super_ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
+          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
+          super_ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost => rc=$crm_rc"
+      done
+      rc=0
+   else
+      rc=1
+   fi
+   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+   return $rc
+}
+
+#
+# function: get_hana_sync_status_attr - get the HANA syst-repl. status attribute
+# params:   NODE
+# globals:  HOSTNAME(r), ATTR_NAME_HANA_SYNC_STATUS(r)
+#
+function get_hana_sync_status_attr()
+{
+   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+   local sync_attr
+   local Node="$1"
+   local rc=0
+   sync_attr=$(crm_attribute -N ${Node} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q); rc=$?
+   if [ -z "$sync_attr" ]; then
+       rc=1
+   fi
+   echo "$sync_attr"
+   return $rc
+}
+
+#
+# function: set_hana_primary_at_attr - set the location where the cluster expects the primary
+# params:   location (like WALLDORF or ROT)
+# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
+# set the hana_primary_at attribute
+#
+function set_hana_primary_at_attr()
+{
+   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+   local theLocation=$1
+   local rc=0
+   crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"; rc=$?
+   # TODO: Do we need error handling?
+   return $rc
+}
+
+#
+# function: get_hana_primary_at_attr - get the location where the cluster expects the primary
+# params:   -
+# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
+# 
+# get the hana_primary_at attribute
+#
+function get_hana_primary_at_attr()
+{
+   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+   local rc=0
+   crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q; rc=$?
+   # TODO: Do we need error handling?
+   return $rc
+}
+
+#
+# function: check_for_primary - check if local SAP HANA is configured as primary
+# params:   -
+# globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r)
+#
+function check_for_primary() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
+   # DONE: Change stderr location!!
+   #sidadm=lnxadm
+   node_status=$(check_for_primary_single) 
+   super_ocf_log info "fhDBG: check_for_primary: node_status=$node_status"
+   case "$node_status" in
+       primary ) 
+                  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = HANA_STATE_PRIMARY"
+                  return $HANA_STATE_PRIMARY;;
+       syncmem | sync | async )
+                  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = HANA_STATE_SECONDARY"
+                  return $HANA_STATE_SECONDARY;;
+       none )     # have seen that mode on second side BEFEORE we registered it as replica
+                  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = HANA_STATE_DEFECT"
+                  return $HANA_STATE_DEFECT;;
+       * )
+		          super_ocf_log err "check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                  return $HANA_STATE_DEFECT;;
+   esac;
+   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = HANA_STATE_DEFECT"
+   return $HANA_STATE_DEFECT
+}
+
+#
+# function: check_for_primary_single - query hdbnsutil to get HANA primary/secondary status
+# params:   -
+# globals:  SID(r), LD_LIBRARY_PATH(r), PATH(r), DIR_EXECUTABLE(r)
+#
+function check_for_primary_single()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local node_full_status node_status
+    local rc=0
+    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
+    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+    echo "$node_status"
+    return $rc
+}
+
+#
+# function: get_site_name - query site name
+# params:   -
+# globals:  LD_LIBRARY_PATH(r), DIR_EXECUTABLE(r)
+# get site name of local HANA instance
+#
+function get_site_name()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local node_full_status node_site_name
+    local rc=0
+    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
+    echo "${node_full_status}" >>/tmp/null
+    node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "%s", $3 } ' )
+    echo "$node_site_name"
+    return $rc
+}
+
+#
+# function: analyze_hana_sync_status - query and check hana system replication status
+# params:   -
+# globals:  DIR_EXECUTABLE(r), remoteHost(r)
+# get the HANA sync status
+# 
+function analyze_hana_sync_status()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local hana_sync_status="" what_does_the_chamelion_say=""
+    local secUser="slehaLoc"
+    local rc=0
+    local sqlrc=0
+    local query_state='select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
+    local query_secondaries='select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION'
+    local query_failed_secondaries="select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')"
+    local all_cluster_hosts all_secondary_hosts all_broken_secondaries
+    hana_sync_status=$(timeout 60 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state | dequote); sqlrc=$?
+    if [ "$sqlrc" -eq 0 -a "$hana_sync_status" != "" ]; then
+        #
+        # UNKNOWN, ACTIVE, ERROR, INITIALIZING
+        #
+        if [ "${hana_sync_status}" == "ACTIVE" ]; then
+            super_ocf_log info set_hana_sync_status_attr "SOK"
+            set_hana_sync_status_attr "SOK" $remoteHost
+        else
+            super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
+            super_ocf_log info set_hana_sync_status_attr "SFAIL"
+            set_hana_sync_status_attr "SFAIL" $remoteHost
+        fi
+    else
+        super_ocf_log warn "Was not able to fetch HANA SYNC STATUS - set sync status to SFAIL for ALL cluster hosts"
+        all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
+        what_does_the_chamelion_say=$(set_hana_sync_status_attr "SFAIL" $all_cluster_hosts 2>&1); rc=$?        
+    fi  
+    return $rc
+}
+
+#
+# function: get_hana_landscape_status - figure out hana ladscape status
+# params:   -
+# globals:  sidadm(r), DIR_EXECUTABLE(r)
+# get the HANA landscape status
+#
+function get_hana_landscape_status()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    #
+    su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+    # ls_rc:
+    # 0 : FATAL  -> (do nothing -> admin must solve that!)
+    # 1 : ERROR  -> HANA is Down (failes or down instance -> takeover if running master/primary fails)
+    # 2 : WARN   -> HANA is UP
+    # 3 : INFO   -> HANA is UP
+    # 4 : OK     -> HANA is UP
+
+    # TODO: ASK: What to do on landscapeHostConfiguration return code 2?
+    # TODO: ASK: Can we defitive rely on landscapeHostConfiguration.py?
+    #            We have seen hanging hdbsql but the python script still reported rc=4 (OK)
+    super_ocf_log "  -> landscape return code (0=FATAL,1=ERROR,2=WARN,3=INFO,4=OK) = $rc"
+    return $rc;
+}
+
+#
+#############################################################################
+#
+# function: sht_start - start a hana instance
+# params:   -
+# globals:  TBD
+# sht_start : Start the SAP HANA instance
+#
+function sht_start() {
+  
+  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+
+  local rc=$OCF_NOT_RUNNING
+  local output=""
+  local loopcount=0  
+
+  mkdir -p /var/lib/SAPHana
+  touch /var/lib/SAPHana/SAPTopologyON
+
+  rc=$OCF_SUCCESS
+
+  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+  return $rc
+}
+
+#
+# function: sht_stop - stop a hana instance
+# params:   -
+# globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
+# sht_stop: Stop the SAP instance
+#
+function sht_stop() {
+  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+  local output=""
+  local rc=0
+
+  rm /var/lib/SAPHana/SAPTopologyON
+  rc=$OCF_SUCCESS
+  
+  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+  return $rc
+}
+
+
+#
+# function: sht_monitor - monitor a hana topology instance
+# params:   --
+# globals:  OCF_*(r), SAPCONTROL(r), InstanveNr(r)
+# sht_monitor: Can the given SAP instance do anything useful?
+#
+function sht_monitor() {
+  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+  local rc=0
+
+  if [ -f /var/lib/SAPHana/SAPTopologyON ]; then
+     rc=$OCF_SUCCESS
+  else
+     rc=$OCF_NOT_RUNNING
+  fi
+
+  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc" 
+  return $rc
+}
+
+
+#
+# function: sht_status - get status of a hana instance (os tools only)
+# params:   -
+# globals:  SID(r), InstanceName(r), OCF_*(r), sidarm(r)
+# sht_status: Lightweight check of SAP instance only with OS tools
+#
+function sht_status() {
+  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+  local rc=0
+
+  sht_monitor; rc=$?
+  return $rc
+}
+
+
+#
+# function: sht_validate - validation of (some) variables/parameters
+# params:   -
+# globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
+# sht_validate: Check the symantic of the input parameters 
+# TODO: Need to add more coding here - check other params, check prereqisites such as secure store users
+#
+function sht_validate() {
+  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+  local rc=$OCF_SUCCESS
+  if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
+  then
+    super_ocf_log err "Parsing instance profile name: '$SID' is not a valid system ID!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  if [ $(echo "$InstanceName" | grep -c '^[A-Z].*[0-9][0-9]$') -ne 1 ]
+  then
+    super_ocf_log err "Parsing instance profile name: '$InstanceName' is not a valid instance name!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  if [ $(echo "$InstanceNr" | grep -c '^[0-9][0-9]$') -ne 1 ]
+  then
+    super_ocf_log err "Parsing instance profile name: '$InstanceNr' is not a valid instance number!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  if [ $(echo "$SAPVIRHOST" | grep -c '^[A-Za-z][A-Za-z0-9_-]*$') -ne 1 ]
+  then
+    super_ocf_log err "Parsing instance profile name: '$SAPVIRHOST' is not a valid hostname!"
+    rc=$OCF_ERR_ARGS
+  fi
+
+  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+  return $rc
+}
+
+#
+############################### LPA / LPT functions -BEGIN
+#
+
+#
+# function: lpa_get_lpt - get lpt from cluster
+# params:   NODE
+# globals:  LPA_ATTR(r), TBD
+# output:   LPT
+# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+#
+function lpa_get_lpt() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=1
+    local node=$1
+    local lpt=""
+    #
+    # TODO: Implement lpa_get_lpt
+    #
+    # super_ocf_log info "fhDBG: crm_attribute -G -n \"$LPA_ATTR\" -N $node -q -l reboot"
+    lpt=$(crm_attribute -G -n "$LPA_ATTR" -N $node -q -l reboot 2>>/mnt/lala.$HOSTNAME); rc=$?
+    if [ -n "$lpt" ]; then
+        rc=0
+        echo $lpt
+    else
+        rc=2
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc    
+}
+
+#
+# function: lpa_set_lpt - set lpt in cluster
+# params:   LPT
+# globals:  LPA_ATTR(r), HOSTNAME(r), TBD
+# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+#
+function lpa_set_lpt() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=1
+    local crm_rc=1
+    local lpt=$1
+    local clpt=-1
+    #
+    # TODO: Implement lpa_set_lpt
+    #
+    crm_attribute -v "$lpt" -n "$LPA_ATTR" -l reboot; crm_rc=$?
+    clpt=$(lpa_get_lpt $HOSTNAME)
+    if [ "$lpt" != "$clpt" ]; then
+        rc=2
+    else
+        rc=0
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc    
+}
+
+#
+# function: lpa_pull_lpt - fetch lpt from file
+# params:   TBD
+# globals:  LPA_DIRECTORY(r)
+# output:   LPT
+# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+#
+function lpa_pull_lpt() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=1
+    local lpt=-1
+    local readrest=0
+    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
+    #
+    # TODO: Implement lpa_pull_lpt
+    read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
+    if [ -n "$lpt" ]; then
+        rc=0
+        echo $lpt
+    else
+        rc=2
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc    
+}
+
+#
+# function: lpa_push_lpt - put lpt to file
+# params:   LPT
+# globals:  LPA_DIRECTORY(r)
+# output:   --
+# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+#
+function lpa_push_lpt() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local lpt=$1
+    local clpt=-1
+    local rc=1
+    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
+    #
+    # TODO: Implement lpa_push_lpt
+    # HANA_STATE_PRIMARY
+    mkdir -p $LPA_DIRECTORY
+    echo "$lpt" > $lpa_file
+    clpt=$(lpa_pull_lpt); lpt_rc=$?
+    if [ "$clpt" != "$lpt" -o "$lpt_rc" -ne 0 ]; then
+        rc=2
+    else
+        rc=0
+    fi     
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc    
+}
+
+#
+# function: lpa_init_lpt - initialize local lpt, if needed
+# params:   HANA_STATE
+# globals:  HANA_STATE_*(r), LPA_DIRECTORY(r), sid(r), HOSTNAME(r), TBD
+# lpa_init_lpt
+#
+# Returncodes:
+#    rc=0: OK,  rc=1 TBD,  rc=2: ERROR
+#
+# Initializing (if NO local LPT-file):
+#    SECONDARY sets to 0
+#    PRIMARY   sets to 1
+# 
+function lpa_init_lpt() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=1
+    local LPTloc=-1
+    local LPTrem=-1
+    local hana_state=$1
+    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
+    #
+    # TODO: Implement lpa_init_lpt
+    #
+    mkdir -p $LPA_DIRECTORY
+    LPTloc=$(lpa_get_lpt ${HOSTNAME}) || LPTloc=$(lpa_pull_lpt) || \
+        if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
+            # init primary
+            lpa_push_lpt "2"; rc=$?
+        elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
+            # init secondary
+            lpa_push_lpt "1"; rc=$?
+        else
+            rc=2                                   
+        fi
+    lpa_set_lpt $LPTloc
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc    
+}
+
+#
+# function: lpa_check_lpt_status - start a hana clone instance
+# params:   TBD
+# globals:  TBD
+# lpa_check_lpt_status
+#
+# Returncodes:
+#    rc=0: LPA-PRIMARY-STARTUP, rc=1: LPA-SECONDARY-REGISTER, rc=2: LPA-WAITING, rc=3: LPA-FATAL
+#
+# Initializing (if NO local LPT-file):
+#    SECONDARY sets to 0
+#    PRIMARY   sets to 1
+# 
+# - 0: If LPTlocal > LPTremote ==> we have win the race => STARTUP
+# - 0: If undef LPTlocal and LPTremote=0  ==> STARTUP
+# - 1: If LPTlocal < LPTremote ==> we lost race => REGISTER
+# - 2: If undef(=-1) LPTremote ==> WAITING  ==> would mean also MONITORS need to do something...
+# - 3: If LPTlocal = LPTremote = 1 ==> we are FAILING - to SECONDARIES!!
+# - 3: If LPTlocal = LPTremote != 1 ==> we are FAILING - to PRIMARIES and no valid LPT to decide on both nodes!!
+# - 4: Something really went wrong           
+#
+function lpa_check_lpt_status() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    local LPTloc=-1
+    local LPTrem=-1
+    #
+    # TODO: Implement lpa_check_lpt_status
+    #
+    # First fetch LPT from cluster attributes
+    #
+    LPTloc=$(lpa_get_lpt $HOSTNAME); lparc=$?
+    if [ "$lparc" -ne 0 ]; then
+        # as a fallback try to fetch the value from external status file
+        LPTloc=$(lpa_pull_lpt); 
+        lparc=$?
+        if [ -z "$LPTloc" -o "$LPTloc" -eq -1 -o "$lparc" -ne 0 ]; then
+            # last option - try to initialize as PRIMARY
+            lpa_push_lpt 2
+            lpa_set_lpt  2
+            LPTloc=2
+        fi
+    fi
+    LPTrem=$(lpa_get_lpt $remoteHost); lparc=$?
+    if [ $lparc -ne 0 ]; then
+        # LPT of the other node could not be evaluated - LPA says WAIT
+        super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc, LPTrem undefined => WAIT"
+        rc=2
+    else
+        if [ $LPTloc -gt $LPTrem ]; then 
+            # We are the winner :) - LPA says STARTUP
+            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc > LPTrem=$LPTrem => START"
+            rc=0
+        elif [ $LPTloc -lt $LPTrem ]; then 
+            # The other one has won :( - LPA says REGISTER
+            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc < LPTrem=$LPTrem => REGISTER"
+            rc=1
+        else                                     
+            if [ $LPTloc -eq 1 ]; then
+                # TODO: Do we need to differ between a 1=1 with different sync status?
+                # This case can happen: a) when really to secondaries would in the cluster 
+                #                       b) when a primary failed and restarts with prefrred remote takeover 
+                #                        
+                super_ocf_log info "fhDBG: LPA: Both LPTloc=$LPTloc and LPTrem=$LPTrem => WAIT"
+                rc=2
+            else
+                # OhOh - That should not happen :/ - LPA says FAIL!
+                super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc == LPTrem=$LPTrem => FAIL"
+                rc=3
+            fi
+        fi        
+    fi    
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc    
+}
+
+#
+############################### LPA / LPT functions - END
+#
+
+#
+# function: sht_start_clone - start a hana clone instance
+# params:   -
+# globals:  TBD
+# sht_start_clone
+#
+function sht_start_clone() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+	local rc=$OCF_NOT_RUNNING
+    sht_start; rc=$?
+    return $rc
+}
+
+#
+# function: sht_stop_clone - stop a hana clone instance
+# params:   -
+# globals:  HOSTNAME(r)
+# sht_stop_clone
+#
+function sht_stop_clone() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    sht_stop; rc=$?
+    return $rc
+}
+
+#
+# function: sht_monitor_clone - monitor a hana clone instance
+# params:   -
+# globals:  TBD
+# sht_monitor_clone
+#
+function sht_monitor_clone() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    #
+    # TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
+    #       a) returning 7 here and force cluster a restart of the slave
+    #       b) starting the instance here inside the monitor -> may result in longer runtime, timeouts
+    #
+	# first check with the status function (OS tools) if there could be something like a SAP instance running
+	# as we do not know here, if we are in master or slave state we do not want to start our monitoring
+	# agents (sapstartsrv) on the wrong host
+	local rc=$OCF_ERR_GENERIC
+	local promoted=0
+    local init_attribute=0
+
+
+	if ocf_is_probe; then
+		super_ocf_log info "fhDBG: PROBE ONLY"
+	else
+		super_ocf_log info "fhDBG: REGULAR MONITOR"
+	fi
+	#
+	# First check, if we are PRIMARY or SECONDARY
+	# 
+    super_ocf_log info "fhACT: HANA SID $SID"
+    super_ocf_log info "fhACT: HANA InstanceName $InstanceName"
+    super_ocf_log info "fhACT: HANA InstanceNr $InstanceNr"
+	check_for_primary; primary_status=$?
+    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+        super_ocf_log info "fhACT: HANA IS PRIMARY"
+        sht_monitor; rc=$?
+    else
+        if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
+            super_ocf_log info "fhACT: HANA IS SECONDARY"
+            sht_monitor; rc=$?
+        else
+            super_ocf_log info "fhDBG sht_monitor_clone: HANA_STATE_DEFECT"
+            rc=$OCF_ERR_CONFIGURE
+        fi
+    fi
+    site=$(get_site_name)
+    hanarole=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${HOSTNAME})
+    hanamap=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state --sapcontrol=1" | awk -F= '($1 ~ "mapping" ) &&($2 !~ site "/" ) ' site=$site)
+    hanaRemoteHost=$(echo $hanamap | awk -F/ '{print $3}')
+    super_ocf_log info "fhACT: HANA SITE $site"
+    super_ocf_log info "fhACT: HANA ROLES $hanarole"
+    super_ocf_log info "fhACT: HANA MAP $hanamap"
+    super_ocf_log info "fhACT: HANA remoteHost $hanaRemoteHost"
+crm_attribute -N ${HOSTNAME} -v $hanaRemoteHost -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot;
+crm_attribute -N ${HOSTNAME} -v $site -n "$ATTR_NAME_HANA_SITE" -l reboot;
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc
+}
+
+#
+# function: sht_notify - notify action
+# params:   -
+# globals:  OCF_*(r), ACTION(r), CLACT(r), HOSTNAME(r)
+# sht_notify: Handle master scoring - to make sure a slave gets the next master
+#
+function sht_notify() {
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local promote_attr
+    local rc=0
+    super_ocf_log info "fhRA ==== end action $ACTION$CLACT (${n_type}/${n_op})===="
+    return $rc
+}
+
+#
+# function: main - main function to operate 
+# params:   ACTION
+# globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
+#
+
+## GLOBALS
+SID=""
+sidadm=""
+InstanceName=""
+InstanceNr=""
+SAPVIRHOST=""
+DIR_EXECUTABLE=""
+SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-all}"
+
+
+if [ $# -ne 1 ]
+then
+  sht_usage
+  exit $OCF_ERR_ARGS
+fi
+
+ACTION=$1
+if [ "$ACTION" = "status" ]; then
+    ACTION=monitor
+fi
+
+# These operations don't require OCF parameters to be set
+# TODO: check, if notify is still not needing OCF parameters
+case "$ACTION" in
+    usage|methods)  sht_$ACTION
+                    exit $OCF_SUCCESS;;
+    meta-data)      sht_meta_data
+                    exit $OCF_SUCCESS;;
+    notify)         sht_notify
+                    exit $OCF_SUCCESS;;
+    admin-setup)   admin-setup
+                                 exit $OCF_SUCCESS;;  
+    *);;
+esac
+sht_init $OCF_RESKEY_InstanceName
+
+if ! ocf_is_root
+then
+    super_ocf_log err "$0 must be run as root"
+    exit $OCF_ERR_PERM
+fi
+
+# parameter check
+if  [ -z "$OCF_RESKEY_InstanceName" ]
+then
+    super_ocf_log err "Please set OCF_RESKEY_InstanceName to the name to the SAP instance profile!"
+    exit $OCF_ERR_ARGS
+fi
+
+if is_clone
+then
+    CLACT=_clone
+else
+    if [ "$ACTION" = "promote" -o "$ACTION" = "demote" ]
+    then
+        super_ocf_log err "$ACTION called in a non master/slave environment"
+        exit $OCF_ERR_ARGS
+    fi
+fi
+
+# What kind of method was invoked?
+THE_VERSION=$(sht_meta_data | grep '<version')
+super_ocf_log info "fhRA ==== begin action $ACTION$CLACT ($THE_VERSION) ===="
+ra_rc=$OCF_ERR_UNIMPLEMENTED
+case "$ACTION" in
+    start|stop|monitor|promote|demote) # Standard controling actions
+        sht_$ACTION$CLACT
+        ra_rc=$?
+        ;;
+    validate-all) 
+        sht_validate
+        ra_rc=$?
+        ;;
+    lpa_check)
+        lpa_check_lpt_status
+        ra_rc=$?
+        ;;
+    *)  # seams to be a unknown request 
+        sht_methods 
+        ra_rc=$OCF_ERR_UNIMPLEMENTED
+        ;;
+esac
+timeE=$(date '+%s')
+(( timeR = timeE - timeB ))
+super_ocf_log info "fhRA ---- process time for action $ACTION$CLACT was ${timeR}s ---"
+super_ocf_log info "fhRA ==== end action $ACTION$CLACT with rc=${ra_rc} ($THE_VERSION) ===="
+exit ${ra_rc}
