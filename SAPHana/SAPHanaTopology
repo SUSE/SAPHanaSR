@@ -23,6 +23,10 @@
 #	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #
+#   TODO: See TODOs in this script
+#   TODO: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
+#   TODO: How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
+#
 #######################################################################
 #
 # Initialization:
@@ -122,7 +126,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-<version>0.12.2014.02.12.12</version>
+<version>0.15.2014.02.13.3</version>
 
 <shortdesc lang="en">Analyzes SAP HANA topology.</shortdesc>
 <longdesc lang="en">
@@ -333,6 +337,7 @@ function sht_init() {
 
     ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
     ATTR_NAME_HANA_SITE="hana_${sid}_site"
+    ATTR_NAME_HANA_ROLES="hana_${sid}_roles"
 
     # optional OCF parameters, we try to guess which directories are correct
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -1024,13 +1029,16 @@ function sht_monitor_clone() {
     super_ocf_log info "fhACT: HANA InstanceNr $InstanceNr"
 	check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+        hanaPrim="primary"
         super_ocf_log info "fhACT: HANA IS PRIMARY"
         sht_monitor; rc=$?
     else
         if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
+            hanaPrim="secondary"
             super_ocf_log info "fhACT: HANA IS SECONDARY"
             sht_monitor; rc=$?
         else
+            hanaPrim="---"
             super_ocf_log info "fhDBG sht_monitor_clone: HANA_STATE_DEFECT"
             rc=$OCF_ERR_CONFIGURE
         fi
@@ -1043,8 +1051,10 @@ function sht_monitor_clone() {
     super_ocf_log info "fhACT: HANA ROLES $hanarole"
     super_ocf_log info "fhACT: HANA MAP $hanamap"
     super_ocf_log info "fhACT: HANA remoteHost $hanaRemoteHost"
-crm_attribute -N ${HOSTNAME} -v $hanaRemoteHost -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot;
-crm_attribute -N ${HOSTNAME} -v $site -n "$ATTR_NAME_HANA_SITE" -l reboot;
+    crm_attribute -N ${HOSTNAME} -v $hanaRemoteHost -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot;
+    crm_attribute -N ${HOSTNAME} -v "$hanaPrim:$hanarole" -n "$ATTR_NAME_HANA_ROLES" -l reboot;
+    crm_attribute -N ${HOSTNAME} -v $site -n "$ATTR_NAME_HANA_SITE" -l reboot;
+    # /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
 }
