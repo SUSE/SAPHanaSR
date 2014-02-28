@@ -2,9 +2,12 @@
 #
 # SAPHana
 #
-# Description:	Manages a single SAP HANA Instance or twi of them in System Replication
+# Description:	Manages a single SAP HANA Instance or two of them in System 
+#               Replication Planned: do also manage scale-up scenarios
+#               currently the SAPHana is dependent of the analysis of 
+#               SAPHanaTopology
 #
-################################################################################################################################################
+##############################################################################
 #
 # SAPHana is a fork of SAPInstance to cover special actions needed for running HANA in a SR mode
 # Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
@@ -24,14 +27,21 @@
 #	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
 #	OCF_RESKEY_PROFILE          (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
-#   OCF_RESKEY_HANA_SR_TOPOLOGY
-#   OCF_RESKEY_HANA_SR_MODE
+#   OCF_RESKEY_HANA_SR_TOPOLOGY (optional and deprecated)
+#   OCF_RESKEY_HANA_SR_MODE     (future: optional and deprecated, today: still needed)
 #
 #   TODO: See TODOs in this script
-#   TODO: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)?
-#   TODO: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?
+#   TODO: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)? ANSW: ->> keep!!!
+#   TODO: ASK: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?  ->> ANSW: YES!!!
 #   TODO: How to "migrate" a primary? Simply promote the secondary does not work as the running primary will not be demoted to a secondary
 #   TODO: NUR Return-Code 1 von landscapeHostConfiguration.py führt zur Übernahme!! ReturnCode 0 nicht!!
+#   TODO: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
+#   TODO: How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
+#         Was zeigt landscapeHostConfiguration beim localen SAPHanaHA Umbau an?
+#         Kann man der localen SAPHana site sagen "halt die füsse still"? Oder ist es zunächst einmal "egal" ob wir parallel sr_takeover machen
+#         können 
+#   TODO: lpa-lpt should have a spbilizing-gab of 2hours - so per default the lpts during start must differ at least 2h or we say stalemate
+#   TODO: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes
 #
 #######################################################################
 #
@@ -41,7 +51,9 @@ timeB=$(date '+%s')
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
 
+#
 #######################################################################
+#
 
 HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
@@ -1513,11 +1525,7 @@ function lpa_get_lpt() {
     local rc=1
     local node=$1
     local lpt=""
-    #
-    # TODO: Implement lpa_get_lpt
-    #
-    # super_ocf_log info "fhDBG: crm_attribute -G -n \"$LPA_ATTR\" -N $node -q -l reboot"
-    lpt=$(crm_attribute -G -n "$LPA_ATTR" -N $node -q -l reboot 2>>/mnt/lala.$HOSTNAME); rc=$?
+    lpt=$(crm_attribute -G -n "$LPA_ATTR" -N $node -q -l reboot 2>/dev/null); rc=$?
     if [ -n "$lpt" ]; then
         rc=0
         echo $lpt
@@ -1540,9 +1548,6 @@ function lpa_set_lpt() {
     local crm_rc=1
     local lpt=$1
     local clpt=-1
-    #
-    # TODO: Implement lpa_set_lpt
-    #
     crm_attribute -v "$lpt" -n "$LPA_ATTR" -l reboot; crm_rc=$?
     clpt=$(lpa_get_lpt $HOSTNAME)
     if [ "$lpt" != "$clpt" ]; then
@@ -1567,8 +1572,6 @@ function lpa_pull_lpt() {
     local lpt=-1
     local readrest=0
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
-    #
-    # TODO: Implement lpa_pull_lpt
     read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
     if [ -n "$lpt" ]; then
         rc=0
