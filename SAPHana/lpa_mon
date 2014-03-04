@@ -2,16 +2,23 @@
 set -u
 
    sid="lnx"
-   node1="lv9041"
-   node2="lv9042"
+   Nodes=$(crm_node -l | awk '$3 == "member" { print $2 }' )
+#   node1="lv9041"
+#   node2="lv9042"
 
 format="%-10s %10s %-23s %-6s %-8s %-6s %-6s\n"
 
+#
+# TODO: add parameter handling later ;-)
+#
 while [ $# -gt 0 ]; do
     case $1 in 
         -1 )
             ;;
-        
+        --sid )
+            sid=$(echo "$2" | tr [[:upper:]] [[:lower:]])
+            shift
+            ;;
     esac
     shift
 done
@@ -39,62 +46,56 @@ function print_node()
    printf "$format" "$node" "$node_lpt" "$node_time" "$node_sync" "$node_state" "$age" "$promo"
 }
 
-   node1_lpt=$(crm_attribute -N $node1 -G -n  lpa_${sid}_lpt -l reboot -q 2>/dev/null)
-   node2_lpt=$(crm_attribute -N $node2 -G -n  lpa_${sid}_lpt -l reboot -q 2>/dev/null)
+function get_and_print_node()
+{
+   local node=$1
+   node_lpt=$(crm_attribute -N $node -G -n  lpa_${sid}_lpt -l reboot -q 2>/dev/null)
+#echo "crm_attribute -N $node -G -n  lpa_${sid}_lpt -l reboot -q" >&2
+   node_sync=$(crm_attribute -N $node -G -n  hana_${sid}_sync_state -l reboot -q 2>/dev/null)
+   node_state=$(crm_attribute -N $node -G -n  hana_${sid}_clone_state -l reboot -q 2>/dev/null)
+   node_promo=$(ptest -sL 2>/dev/null | awk '$0 ~ "promotion score on "  h {print $6}' h=$node 2>/dev/null)
 
+   node_lpt=${node_lpt:--1}
+   if [ $node_lpt -gt 3600 ]; then
+	   node_time=$(date -d @$node_lpt)
+       (( node_age = currtime - node_lpt ))
+   else
+           node_time=""
+           node_age="-"
+   fi
+   ANodes[$count]="$node"
+   ALpt[$count]="$node_lpt"
+   print_node "$node" "$node_lpt" "$node_sync" "$node_state" "$node_age" "$node_promo"
+}
 
-   node1_sync=$(crm_attribute -N $node1 -G -n  hana_${sid}_sync_state -l reboot -q 2>/dev/null)
-   node2_sync=$(crm_attribute -N $node2 -G -n  hana_${sid}_sync_state -l reboot -q 2>/dev/null)
-
-   node1_state=$(crm_attribute -N $node1 -G -n  hana_${sid}_clone_state -l reboot -q 2>/dev/null)
-   node2_state=$(crm_attribute -N $node2 -G -n  hana_${sid}_clone_state -l reboot -q 2>/dev/null)
-
-   node1_promo=$(ptest -sL 2>/dev/null | awk '$0 ~ "promotion score on "  h {print $6}' h=$node1 2>/dev/null)
-   node2_promo=$(ptest -sL 2>/dev/null | awk '$0 ~ "promotion score on "  h {print $6}' h=$node2 2>/dev/null)
-
-   dc=$(crmadmin -Dq 2>&1 1>/dev/null )
+   currtime=$(date +'%s')
+   dc=$(crmadmin -q -D 2>/dev/null )
    if [ $? -eq 0 ]; then
       s_state="----"
    else
-       s_state=$(crmadmin -q -S $dc 2>&1 1>/dev/null)
+      s_state=$(crmadmin -q -S $dc 2>/dev/null)
    fi
-
-
-   currtime=$(date +'%s')
-   node1_lpt=${node1_lpt:--1}
-   node2_lpt=${node2_lpt:--1}
-   if [ $node1_lpt -gt 3600 ]; then
-	   node1_time=$(date -d @$node1_lpt)
-       (( node1_age = currtime - node1_lpt ))
-   else
-           node1_time=""
-           node1_age="-"
-   fi
-
-   if [ $node2_lpt -gt 3600 ]; then
-	   node2_time=$(date -d @$node2_lpt)
-       (( node2_age = currtime - node2_lpt ))
-   else
-           node2_time=""
-           node2_age="-"
-   fi
-
    echo "Last Primary Arbitration (LPA) Algorithm"
    echo "Time: $(date -d @$currtime +'%Y-%m-%d %T %Z') Cluster-Status: $s_state"
-print_header "Node" "lpt" "sync" "rcstat" "age" "promo"
-print_node "$node1" "$node1_lpt" "$node1_sync" "$node1_state" "$node1_age" "$node1_promo"
-print_node "$node2" "$node2_lpt" "$node2_sync" "$node2_state" "$node2_age" "$node2_promo"
-echo
+   print_header "Node" "lpt" "sync" "rcstat" "age" "promo"
 
-   if [ $node1_lpt -gt $node2_lpt ]; then
-      echo "==> $node1 wins LPA"
-   fi
-   if [ $node2_lpt -gt $node1_lpt ]; then
-      echo "==> $node2 wins LPA"
-   fi
-   if [ $node2_lpt -eq $node1_lpt ]; then
-      echo "==> $node1 / $node2 LPA stalemate"
-   fi
+   count=0
+   for myNode in $Nodes; do
+       get_and_print_node $myNode
+       (( count++ ))
+   done
+
+    if [ $count -eq 2 ]; then
+       if [ ${ALpt[0]} -gt ${ALpt[1]} ]; then
+          echo "==> ${ANodes[0]} wins LPA"
+       fi
+       if [ ${ALpt[1]} -gt ${ALpt[0]} ]; then
+          echo "==> ${ANodes[1]} wins LPA"
+       fi
+       if [ ${ALpt[1]} -eq ${ALpt[0]} ]; then
+          echo "==> ${ANodes[0]} / ${ANodes[1]} LPA stalemate"
+       fi
+    fi
    
    
    # ptest -sL | grep promo 
