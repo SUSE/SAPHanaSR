@@ -19,7 +19,9 @@
 #      See usage() function below for more details...
 #
 # OCF instance parameters:
-#	OCF_RESKEY_InstanceName
+#	OCF_RESKEY_InstanceName (OBSOLETE!!)
+#   OCF_RESKEY_SID            (LNX, NDB, SLE)
+#   OCF_RESKEY_InstanceNumber (00..99)
 #	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #
@@ -126,18 +128,15 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-<version>0.15.2014.02.13.3</version>
+<version>0.21.2014.03.05.1</version>
 
 <shortdesc lang="en">Analyzes SAP HANA topology.</shortdesc>
 <longdesc lang="en">
 TBD
 </longdesc>
 <parameters>
- <parameter name="InstanceName" unique="1" required="1">
-  <longdesc lang="en">The full qualified SAPHana system name like SLE_HDB10.</longdesc>
-  <shortdesc lang="en">Instance name: SID_INSTANCE</shortdesc>
-  <content type="string" default="" />
- </parameter>
+<parameter name="SID" unique="0" required="1"><longdesc lang="en">TBD</longdesc><shortdesc lang="en">TBD</shortdesc><content type="string" default="" /></parameter>
+<parameter name="InstanceNumber" unique="0" required="1"><longdesc lang="en">TBD</longdesc><shortdesc lang="en">TBD</shortdesc><content type="string" default="" /></parameter>
  <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
  <longdesc lang="en">
 Should the RA calculate for SITE takeover or for local takeover?
@@ -256,46 +255,8 @@ function is_clone() {
 }
 
 #
-# function: get_hana_clone_state - get the multi-state status of the a clone
-# params:   NODE 
-# globals:  ATTR_NAME_HANA_CLONE_STATE(r)
-#
-function get_hana_clone_state()
-{
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local rc=0
-    local attr_node=$1
-    crm_attribute -N ${attr_node} -G -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot -q; rc=$?
-    return $rc
-}
-
-#
-# function: set_hana_clone_state - set the multi-state status of a node
-# params:   NODE STATUS
-# globals:  ATTR_NAME_HANA_CLONE_STATE(r)
-#
-function set_hana_clone_state()
-{
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local attr_node=$1
-    local attr_status=$2
-    local rc=1
-    local attr_old
-    attr_old=$(get_hana_clone_state $attr_node)
-    if [ "$attr_old" != "$attr_status" ]; then
-        super_ocf_log info "fhDBG SET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} to ${attr_status}"
-        crm_attribute -N $attr_node -v $attr_status -n "$ATTR_NAME_HANA_CLONE_STATE" -l reboot; rc=$?
-    else
-        super_ocf_log info "fhDBG LET attribute $ATTR_NAME_HANA_CLONE_STATE for node ${attr_node} still be ${attr_status}"
-        rc=0
-    fi
-    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
-    return $rc
-}
-
-#
 # function: sht_init - initialize variables for the resource agent
-# params:   InstanceName
+# params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w), 
 # globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w) 
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
@@ -308,15 +269,31 @@ function set_hana_clone_state()
 function sht_init() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     
-    local myInstanceName="$1"
+    local myInstanceName=""
     local rc=$OCF_SUCCESS
 
-    SID=$(echo "$myInstanceName" | cut -d_ -f1)
+
+    # two parameter models (for transition only)
+    # OLD: InstanceName
+    # NEW: SID InstanceNumber
+
+    if [ -n "$OCF_RESKEY_SID" ]; then
+       SID=$OCF_RESKEY_SID
+       InstanceNr=$OCF_RESKEY_InstanceNumber
+       myInstanceName="${SID}_HDB${InstanceNr}"
+       InstanceName="HDB${InstanceNr}"
+       super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    else
+       # TODO: OBSOLETE - COULD BE REMOVED
+       myInstanceName="$OCF_RESKEY_InstanceName"
+#
+       SID=$(echo "$myInstanceName" | cut -d_ -f1)
+       InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
+       InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
+       super_ocf_log info "fhACT: Used old method to get SID and InstanceNr"
+    fi
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
-    InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
-    SIDInstanceName=${myInstanceName}
-    InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
     SAPVIRHOST=${HOSTNAME}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
 
@@ -325,7 +302,7 @@ function sht_init() {
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     LPA_ATTR=lpa_${sid}_lpt
     
-    #super_ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
+    #super_ocf_log info "fhDBG: SID=$SID, sid=$sid, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
     #super_ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, sr_mode=$sr_mode"
 
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
@@ -338,6 +315,9 @@ function sht_init() {
     ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
     ATTR_NAME_HANA_SITE="hana_${sid}_site"
     ATTR_NAME_HANA_ROLES="hana_${sid}_roles"
+    ATTR_NAME_HANA_SRMODE="hana_${sid}_srmode"  # TODO: Fill that attribute later
+    ATTR_NAME_HANA_VHOST="hana_${sid}_vhost"    # TODO: Fill that attribute later
+    ATTR_NAME_HANA_STATUS="hana_${sid}_status"  # TODO: Fill that attribute later
 
     # optional OCF parameters, we try to guess which directories are correct
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -533,6 +513,7 @@ function check_for_primary_single()
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local node_full_status node_status
     local rc=0
+super_ocf_log info "fhDBG: su - ${sidadm} -c LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state"
     node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     echo "$node_status"
@@ -1113,7 +1094,7 @@ case "$ACTION" in
                                  exit $OCF_SUCCESS;;  
     *);;
 esac
-sht_init $OCF_RESKEY_InstanceName
+sht_init 
 
 if ! ocf_is_root
 then
@@ -1122,11 +1103,18 @@ then
 fi
 
 # parameter check
-if  [ -z "$OCF_RESKEY_InstanceName" ]
+if  [ -z "$OCF_RESKEY_SID" ]
 then
-    super_ocf_log err "Please set OCF_RESKEY_InstanceName to the name to the SAP instance profile!"
+    super_ocf_log err "Please set OCF_RESKEY_SID!"
     exit $OCF_ERR_ARGS
 fi
+
+if  [ -z "$OCF_RESKEY_InstanceNumber" ]
+then
+    super_ocf_log err "Please set OCF_RESKEY_InstanceNumber!"
+    exit $OCF_ERR_ARGS
+fi
+
 
 if is_clone
 then

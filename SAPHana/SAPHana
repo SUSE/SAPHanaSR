@@ -168,7 +168,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.86.2014.02.12.2</version>
+<version>0.90.2014.03.05.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -196,11 +196,8 @@ The SAPHana resource agent will interpret returncodes 0+1 as NOT-RUNNING (or 1 f
 
 </longdesc>
 <parameters>
- <parameter name="InstanceName" unique="1" required="1">
-  <longdesc lang="en">The full qualified SAP instance name. e.g. P01_DVEBMGS00_sapp01ci. Usually this is the name of the SAP instance profile.</longdesc>
-  <shortdesc lang="en">Instance name: SID_INSTANCE</shortdesc>
-  <content type="string" default="" />
- </parameter>
+<parameter name="SID" unique="0" required="1"><longdesc lang="en">TBD</longdesc><shortdesc lang="en">TBD</shortdesc><content type="string" default="" /></parameter>
+<parameter name="InstanceNumber" unique="0" required="1"><longdesc lang="en">TBD</longdesc><shortdesc lang="en">TBD</shortdesc><content type="string" default="" /></parameter>
  <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
  <longdesc lang="en">Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default=0 
 0: Do restart locally
@@ -464,14 +461,29 @@ function set_hana_clone_state()
 function saphana_init() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     
-    local myInstanceName="$1"
+    local myInstanceName=""
+    local rc=$OCF_SUCCESS
 
-    SID=$(echo "$myInstanceName" | cut -d_ -f1)
+
+    # two parameter models (for transition only)
+    # OLD: InstanceName
+    # NEW: SID InstanceNumber
+
+    if [ -n "$OCF_RESKEY_SID" ]; then
+       SID=$OCF_RESKEY_SID
+       InstanceNr=$OCF_RESKEY_InstanceNumber
+       myInstanceName="${SID}_HDB${InstanceNr}"
+       InstanceName="HDB${InstanceNr}"
+       super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    else
+       myInstanceName="$OCF_RESKEY_InstanceName"
+       SID=$(echo "$myInstanceName" | cut -d_ -f1)
+       InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
+       InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
+       super_ocf_log info "fhACT: Used old method to get SID and InstanceNr"
+    fi
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
-    InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
-    SIDInstanceName=${myInstanceName}
-    InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
     SAPVIRHOST=${HOSTNAME}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     meta_notify_master_uname="$OCF_RESKEY_CRM_meta_notify_master_uname"
@@ -2465,7 +2477,7 @@ case "$ACTION" in
                                  exit $OCF_SUCCESS;;  
     *);;
 esac
-saphana_init $OCF_RESKEY_InstanceName
+saphana_init 
 
 if ! ocf_is_root
 then
@@ -2474,9 +2486,15 @@ then
 fi
 
 # parameter check
-if  [ -z "$OCF_RESKEY_InstanceName" ]
+if  [ -z "$OCF_RESKEY_SID" ]
 then
-    super_ocf_log err "Please set OCF_RESKEY_InstanceName to the name to the SAP instance profile!"
+    super_ocf_log err "Please set OCF_RESKEY_SID!"
+    exit $OCF_ERR_ARGS
+fi
+
+if  [ -z "$OCF_RESKEY_InstanceNumber" ]
+then
+    super_ocf_log err "Please set OCF_RESKEY_InstanceNumber!"
     exit $OCF_ERR_ARGS
 fi
 
