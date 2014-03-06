@@ -168,7 +168,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.90.2014.03.05.1</version>
+<version>0.92.2014.03.06.2</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -215,7 +215,7 @@ The SAPHana resource agent will interpret returncodes 0+1 as NOT-RUNNING (or 1 f
   <shortdesc lang="en">Path of start profile</shortdesc>
   <content type="string" default="" />
  </parameter>
- <parameter name="PROFILE" unique="1" required="0">
+ <parameter name="INSTANCE_PROFILE" unique="1" required="0">
   <longdesc lang="en">The name of the SAP START profile. Specify this parameter, if you have changed the name of the SAP START profile after the default SAP installation. As SAP release 7.10 does not have a START profile anymore, you need to specify the Instance Profile than.</longdesc>
   <shortdesc lang="en">HANA instance profile name</shortdesc>
   <content type="string" default="" />
@@ -530,6 +530,16 @@ function saphana_init() {
     else
         # ATTR_NAME_HANA_REMOTEHOST
         remoteHost=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot | dequote);
+super_ocf_log info "fhDBG: crm_attribute -N ${HOSTNAME} -G -q -n \"$ATTR_NAME_HANA_REMOTEHOST\" -l reboot"
+        if [ -z "$remoteHost" ]; then
+           remoteHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
+           if [ ${#remoteHosts[@]} -eq 1 ]; then # we are a 2 node cluster, lets assume the other is the remote-host
+              remoteHost=${remoteHosts[0]}
+              super_ocf_log info "fhDBG: auto-guess remoteHost=$remoteHost"
+           else
+              super_ocf_log info "fhDBG: Could not auto-guess remoteHost out of list (${remoteHosts[@]})"
+           fi
+        fi
         #  ATTR_NAME_HANA_SITE
         sr_name=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_SITE" -l reboot | dequote);
         super_ocf_log info "fhDBG: ATTR remoteHost=$remoteHost sr_name=$sr_name"
@@ -574,11 +584,11 @@ function saphana_init() {
         DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
     fi
 
-    if [ -z "${OCF_RESKEY_PROFILE}" ]
+    if [ -z "${OCF_RESKEY_INSTANCE_PROFILE}" ]
     then
         SAPSTARTPROFILE="$DIR_PROFILE/${SIDInstanceName}_${SAPVIRHOST}"
     else
-        SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_PROFILE}"
+        SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE}"
     fi
 
     if [ -z "$OCF_RESKEY_START_WAITTIME" ]
@@ -594,8 +604,20 @@ function saphana_init() {
         export LD_LIBRARY_PATH
     fi
 
-    PATH=${PATH}:${DIR_EXECUTABLE}
+    PATH=${PATH}:${DIR_EXECUTABLE}; export $PATH
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $OCF_SUCCESSs"
+
+
+#############################
+# TODO: To be able to call landscapeHostConfig.py without su (so as root)
+#export SAPSYSTEMNAME=ZLF
+#export DIR_INSTANCE=/usr/sap/ZLF/HDB02
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DIR_INSTANCE/exe:$DIR_INSTANCE/exe/Python/lib
+#export PYTHONPATH=$DIR_INSTANCE/$HOST:$DIR_INSTANCE/exe/python_support:$DIR_INSTANCE/exe
+#export PYTHONHOME=$DIR_INSTANCE/exe/Python
+#export SAP_RETRIEVAL_PATH=$DIR_INSTANCE/$HOST
+#export DIR_EXECUTABLE=$DIR_INSTANCE/exe
+#############################
     return $OCF_SUCCESS
 }
 
@@ -673,7 +695,7 @@ function check_sapstartsrv() {
             assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
         fi
 
-        [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set START_PROFILE parameter!"
+        [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
 
         pkill -9 -f "sapstartsrv.*$runninginst"
 
@@ -1033,6 +1055,9 @@ function register_hana_secondary()
 
     super_ocf_log info "fhACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
     su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+#
+# TODO: laut Alex Krauth gibt das Konstruct immer rc=2 zurück -> prüfen
+#
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc;
 }
@@ -1167,14 +1192,6 @@ function saphana_stop() {
   local output=""
   local rc=0
 
-
-  if [ "$OCF_RESKEY_SHUTDOWN_METHOD" = "KILL" ]
-  then
-    super_ocf_log info "fhACT: Stopping SAP Instance $SID-$InstanceName with shutdown method KILL!"
-    cleanup_instance
-    return $OCF_SUCCESS
-  fi
-
   check_sapstartsrv; rc=$?
   if [ $rc -eq $OCF_SUCCESS ]; then
     output=$($SAPCONTROL -nr $InstanceNr -function Stop)
@@ -1244,6 +1261,7 @@ function saphana_monitor() {
 
 #
 # TODO: completely switch-over to landscape script?
+#       OCF_RESKEY_MONITOR_SERVICES wird nicht (mehr) gesetzt, also entweder wieder setzen oder variable hier entfernen
 #
       SEARCH=$(echo "$OCF_RESKEY_MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
       if [ $(echo "$SERVICE" | egrep -c "$SEARCH") -eq 1 ]
@@ -1435,6 +1453,7 @@ function saphana_start_primary()
                         rc=$?
                     else
                         super_ocf_log err "Register failed"
+                        # TODO: Oder besser OCF_FAILED_MASTER oder OCF_NOT_RUNNING? 
                         rc=$OCF_ERR_GENERIC
                     fi                                         
                     ;;
@@ -1705,6 +1724,10 @@ function lpa_check_lpt_status() {
             LPTloc=2
         fi
     fi
+#
+# TODO: How to handle situations where we still do not know "the" remoteHost - should
+#       we just scan for all remoteHosts (shell array)?
+#
     LPTrem=$(lpa_get_lpt $remoteHost); lparc=$?
     if [ $lparc -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
@@ -2166,7 +2189,7 @@ function saphana_promote_clone() {
                     rc=$OCF_SUCCESS;
                 else
                     set_hana_clone_state ${HOSTNAME} "PROMOTED"
-                    rc=$OCF_ERR_GENERIC
+                    rc=$OCF_FAILED_MASTER
                 fi 
                 ;;
              * )
