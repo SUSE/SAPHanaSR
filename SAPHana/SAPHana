@@ -22,11 +22,13 @@
 #      See usage() function below for more details...
 #
 # OCF instance parameters:
-#	OCF_RESKEY_InstanceName
+#	OCF_RESKEY_SID
+#	OCF_RESKEY_InstanceNr       
 #	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
 #	OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
-#	OCF_RESKEY_PROFILE          (optional, well known directories will be searched by default)
+#	OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
+#   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
 #   OCF_RESKEY_HANA_SR_TOPOLOGY (optional and deprecated)
 #   OCF_RESKEY_HANA_SR_MODE     (future: optional and deprecated, today: still needed)
 #
@@ -41,7 +43,7 @@
 #         Kann man der localen SAPHana site sagen "halt die füsse still"? Oder ist es zunächst einmal "egal" ob wir parallel sr_takeover machen
 #         können 
 #   TODO: lpa-lpt should have a spbilizing-gab of 2hours - so per default the lpts during start must differ at least 2h or we say stalemate
-#   TODO: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes
+#   TODO: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes -> DUPLICATE_PRIMARY_TIMEOUT
 #
 #######################################################################
 #
@@ -168,7 +170,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.92.2014.03.06.2</version>
+<version>0.93.2014.03.06.3</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -205,6 +207,12 @@ The SAPHana resource agent will interpret returncodes 0+1 as NOT-RUNNING (or 1 f
  <shortdesc lang="en">Local or site recover preferred?</shortdesc>
   <content type="string" default="0" />
  </parameter>
+<parameter name="DUPLICATE_PRIMARY_TIMEOUT" unique="0" required="0">
+<shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
+<longdesc lang="en">TBD
+TODO: DUPLICATE_PRIMARY_TIMEOUT long description</longdesc>
+<content type="string" default="7200" />
+</parameter>
  <parameter name="DIR_EXECUTABLE" unique="0" required="0">
   <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
   <shortdesc lang="en">Path of sapstartsrv and sapcontrol</shortdesc>
@@ -508,8 +516,15 @@ function saphana_init() {
     ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
     ATTR_NAME_HANA_SITE="hana_${sid}_site"
 
+    DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
+    super_ocf_log info "fhDBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
+
     if [ -n "$OCF_RESKEY_HANA_SR_TOPOLOGY" ]; then
+        #
+        # TODO: Should we remove obsolete HANA_SR_TOPOLOGY?
+        #
         HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
+        super_ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
         super_ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
         local one two three rest1
         for node_top in $HANA_SR_TOPOLOGY; do 
@@ -1431,7 +1446,7 @@ function saphana_start_primary()
        case "$lpa_advice" in
            start )  
                     # landcape says we are down, lets start and adjust scores and return code
-                    super_ocf_log info "fhLPA: landcape: DOWN, LPA: start ==> keep running"
+                    super_ocf_log info "fhLPA: landcape: DOWN, LPA: start ==> start instance"
                     set_crm_master 1000
                     saphana_start
                     rc=$?                    
@@ -1707,6 +1722,7 @@ function lpa_check_lpt_status() {
     local rc=0
     local LPTloc=-1
     local LPTrem=-1
+    local LPTDiff=0
     #
     # TODO: Implement lpa_check_lpt_status
     #
@@ -1734,13 +1750,19 @@ function lpa_check_lpt_status() {
         super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc, LPTrem undefined => WAIT"
         rc=2
     else
-        if [ $LPTloc -gt $LPTrem ]; then 
-            # We are the winner :) - LPA says STARTUP
-            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc > LPTrem=$LPTrem => START"
+        #
+        # TODO: Maye LPA should also say win, if lpa-loc=2 and lpa-rem=1 (as special init case)
+        #
+        (( LPTDiffLoc = LPTloc - LPTrem ))
+        (( LPTDiffRem = LPTrem - LPTloc ))
+## BAUSTELLE
+        if [ $LPTDiffLoc -gt $DUPLICATE_PRIMARY_TIMEOUT ]; then 
+            # We are the winner - LPA says STARTUP
+            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc >> LPTrem=$LPTrem => START"
             rc=0
-        elif [ $LPTloc -lt $LPTrem ]; then 
-            # The other one has won :( - LPA says REGISTER
-            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc < LPTrem=$LPTrem => REGISTER"
+        elif [ $LPTDiffRem -gt $DUPLICATE_PRIMARY_TIMEOUT ]; then 
+            # The other one has won - LPA says REGISTER
+            super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc << LPTrem=$LPTrem => REGISTER"
             rc=1
         else                                     
             if [ $LPTloc -eq 1 ]; then
@@ -1751,9 +1773,10 @@ function lpa_check_lpt_status() {
                 super_ocf_log info "fhDBG: LPA: Both LPTloc=$LPTloc and LPTrem=$LPTrem => WAIT"
                 rc=2
             else
-                # OhOh - That should not happen :/ - LPA says FAIL!
-                super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc == LPTrem=$LPTrem => FAIL"
-                rc=3
+                # THIS IS A STALEMATE, WHICH COULD HAPPEN
+                # TODO: CHeck, if FAIL is the correct behaviour - or just wait for admin to decide via attribute?
+                super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc == LPTrem=$LPTrem => WAIT"
+                rc=2
             fi
         fi        
     fi    
