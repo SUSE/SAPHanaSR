@@ -972,6 +972,13 @@ function sht_start_clone() {
 function sht_stop_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local rc=0
+	check_for_primary; primary_status=$?
+    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+        hanaPrim="primary"
+    else
+        hanaPrim="secondary"
+    fi
+    crm_attribute -N ${HOSTNAME} -v "$hanaPrim:?:?:?" -n "$ATTR_NAME_HANA_ROLES" -l reboot;
     sht_stop; rc=$?
     return $rc
 }
