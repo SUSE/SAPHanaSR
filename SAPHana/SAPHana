@@ -45,6 +45,11 @@
 #   TODO: lpa-lpt should have a spbilizing-gab of 2hours - so per default the lpts during start must differ at least 2h or we say stalemate
 #   TODO: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes -> DUPLICATE_PRIMARY_TIMEOUT
 #
+#   USED CLUSTER CLI COMMANDS:
+#   crm_master
+#   crm_attribute (get/set)
+#   crm_node
+#
 #######################################################################
 #
 # Initialization:
@@ -144,6 +149,7 @@ function saphana_usage() {
 
     $0 manages a SAP HANA Instance as an HA resource.
 
+TODO: Correct the start description
     The 'start'        operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
     The 'stop'         operation stops the HANA instance
     The 'status'       operation reports whether the HANA instance is running
@@ -170,7 +176,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.93.2014.03.06.3</version>
+<version>0.95.2014.03.14.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -299,7 +305,6 @@ function saphana_methods() {
     methods
     meta-data
     usage
-    admin-setup
 	!
 	return $rc
 }
@@ -515,6 +520,7 @@ function saphana_init() {
 
     ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
     ATTR_NAME_HANA_SITE="hana_${sid}_site"
+    ATTR_NAME_HANA_ROLES="hana_${sid}_roles"
 
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     super_ocf_log info "fhDBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
@@ -1476,6 +1482,7 @@ function saphana_start_primary()
                     # we are down, so we should wait --> Must be implemented in monitor!!
                     # DONE: Implement WAITING-RESOLUTION in Monitor                  
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: wait ==> keep waiting"
+# TODO: Check, if WAITING is correct here
                     set_hana_clone_state ${HOSTNAME} "WAITING"
                     set_crm_master -9000
                     rc=$OCF_SUCCSESS
@@ -1492,6 +1499,41 @@ function saphana_start_primary()
     #
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
+}
+
+#
+# forever_wait_for_primary_master: wait forever till a running primary master is shown in attributes
+# params: -
+# globals: TBD
+#
+forever_wait_for_primary_master()
+{
+    local wait=1
+    local otherHosts
+    local ch ch_role
+    super_ocf_log info "fhflow: $FUNCNAME $1 $2 $3 $4"
+
+    #
+    # hana_ndb_roles=primary:master1:master:worker:master
+    #
+    while [ "$wait" -eq 1 ]; do
+        #
+        # get actual list of luster members
+        # 
+        otherHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
+        if [ -n "$otherHosts" ]; then
+            for ch in $otherHosts; do
+                # BAUSTELLE
+                if [ $wait -eq 1 ]; then
+                    ch_role=$(crm_attribute -N ${ch} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                    grep 'primary:[^:]*:master:' <<< $ch_role && wait=0
+                fi
+            done
+        fi 
+        sleep 10
+    done
+    super_ocf_log info "fhflow: $FUNCNAME rc=0"
+    return 0
 }
 
 #
@@ -1516,6 +1558,10 @@ function saphana_start_secondary()
     # we would be slave (secondary)
     # we first need to check, if there are Master Nodes, because the Scecondary only starts
     # successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
+# TODO: Compltely DROP the SQL-based check and replace it by a attribute based implementation
+
+#### BEGIN OLD SQL-METHOD
+    if false; then
     saphana_hdbsql_check remote; sqlrc=$?
     case "$sqlrc" in
         0 ) # SQL OK
@@ -1551,6 +1597,11 @@ function saphana_start_secondary()
             rc=$OCF_ERR_GENERIC
             ;;
     esac
+    else  ##### NEW ATTRIBUTE BASED METHOD
+            super_ocf_log info "fhDBG: wait for promoted side"
+            forever_wait_for_primary_master
+            saphana_start; rc=$?
+    fi
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
 }
@@ -2327,155 +2378,6 @@ function saphana_notify() {
 }
 
 #
-# function: admin-setup - manual cluster configuration
-# params:   -
-# globals:  -
-#
-function admin-setup()
-{
-    #
-    # Questionaire
-    #
-
-    echo ""
-    echo "!!! WARNING: This option changes the cluster configuration !!!"
-    echo "It creates the following resources and constraints:"
-    echo "- Primitive: SAPHana primitve"
-    echo "- Master/Slave: SAPHana master/slave"
-    echo "- Primitive: Service IP address"
-    echo "- Colocation: Colocation rule between service IP primitive and"
-    echo "  SAP Hana master/slave resource"
-    echo ""
-    
-    yes_no "Do you want to continue?"
-    if [ "$?" -eq 2 ]; then
-        return 1
-    fi
-    
-    echo "Ok. Now, I will ask you some questions:"
-    echo ""
-    
-    echo -n "What is the SID of the HANA instace you want to cluster? "
-    local hana_sid haha_sid_lc hana_sid_uc
-    local hana_sid
-    read hana_sid
-    hana_sid_lc=$(echo $hana_sid | awk '{print tolower($0)}')
-    hana_sid_uc=$(echo $hana_sid | awk '{print toupper($0)}')
-    echo -n "What is the instance ID of the HANA instance you want to cluster? "
-    local hana_instance_id
-    read hana_instance_id
-    echo -n "What is the >>hostname<< of the first HANA node? "
-    local hostname_node1
-    read hostname_node1
-    echo -n "What is the >>site name<< of the first HANA node? "
-    local site_name_node1
-    read site_name_node1
-    echo -n "What is the >>hostname<< of the second HANA node? "
-    local hostname_node2
-    read hostname_node2
-    echo -n "What is the >>site name<< of the second HANA node? "
-    local site_name_node2
-    read site_name_node2
-    echo -n "What is the serivce IP address of this HANA system? "
-    local service_ip
-    read service_ip
-    
-    #
-    # Checks
-    #
-    
-    echo ""
-    echo "Ok, thanks."
-    echo "I will now do some basic checks to verify your input... "
-    
-    ping -n -c1 $hostname_node1 &>/dev/null
-    if [ "$?" -ne 0 ]; then
-        echo "Not able to ping hostname $hostname_node1!"
-        exit 1
-    fi
-    
-    ping -n -c1 $hostname_node2 &>/dev/null
-    if [ "$?" -ne 0 ]; then
-        echo "Not able to ping hostname $hostname_node2!"
-        exit 1
-    fi
-
-    ls /usr/sap/${hana_sid_uc}/HDB${hana_instance_id} &>/dev/null
-    if [ "$?" -ne 0 ]; then
-        echo "Not able to find path /usr/sap/${hana_sid_uc}/HDB${hana_instance_id}!"
-        exit 1
-    fi
-    
-    echo "Done."
-    echo ""
-
-    yes_no "Do you really want to configure the cluster?"
-    if [ "$?" -eq 2 ]; then
-        return 1
-    fi
-    
-    #
-    # Configuration
-    #
-
-    local config_snippet
-    cat <<EOF >/tmp/crm_hana_config.txt
-primitive rsc_SAPHana_${hana_sid_uc}_HDB${hana_instance_id} ocf:fh:SAPHana \
-    operations \$id="rsc_sap_${hana_sid_uc}_HDB${hana_instance_id}-operations" \
-    op monitor interval="120" timeout="700" \
-    op monitor interval="121" role="Slave" timeout="700" \
-    op start interval="0" timeout="3600" \
-    op stop interval="0" timeout="300" \
-    op monitor interval="60" role="Master" timeout="700" \
-    params InstanceName="${hana_sid_uc}_HDB${hana_instance_id}" PREFER_SITE_TAKEOVER="1" HANA_SR_TOPOLOGY="${hostname_node1}:${site_name_node1}:${hostname_node2} ${hostname_node2}:${site_name_node2}:${hostname_node1}" HANA_SR_MODE="syncmem"
-primitive rsc_ip_${hana_sid_uc}_HDB${hana_instance_id} ocf:heartbeat:IPaddr2 \
-    meta target-role="Started" is-managed="true" \
-    operations \$id="rsc_ip_${hana_sid_uc}_HDB${hana_instance_id}-operations" \
-    op monitor interval="10s" timeout="20s" \
-    params ip="$service_ip"
-primitive stonith-sbd stonith:external/sbd
-ms msl_SAPHana_${hana_sid_uc}_HDB${hana_instance_id} rsc_SAPHana_${hana_sid_uc}_HDB${hana_instance_id} \
-    meta is-managed="true" notify="true" clone-max="2" clone-node-max="1"
-colocation col_saphana_ip_${hana_sid_uc}_HDB${hana_instance_id} 2000: rsc_ip_${hana_sid_uc}_HDB${hana_instance_id}:Started msl_SAPHana_${hana_sid_uc}_HDB${hana_instance_id}:Master
-EOF
-
-    crm configure update /tmp/crm_hana_config.txt
-
-    if [ "$?" -ne 0 ]; then
-        echo "Something went wrong when loading configuration snippet!"
-        exit 1
-    fi
-
-    echo "All done! :-)"
-
-}
-
-#
-# function: yes_no - ask user yes or no, return 1 in case of y or 2 in case of n
-# params:   question (string) - ask the user a question submitted in string
-# globals:  -
-#
-function yes_no()
-{
-    local question
-    question=$1
-    local rc
-    while [ 1 == 1 ]; do
-        local answer
-        echo -n "$question (y/n): "
-        read -n 1 answer
-        echo ""
-        case "$answer" in
-            y)  rc=1
-                return $rc;;
-            n)  rc=2
-                return $rc;;
-        esac
-    done
-    
-}
-
-#
 # function: main - main function to operate 
 # params:   ACTION
 # globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
@@ -2519,8 +2421,6 @@ case "$ACTION" in
     notify)         saphana_notify
                     super_log "---END--------------------------------------------------------------"
                     exit $OCF_SUCCESS;;
-    admin-setup)   admin-setup
-                                 exit $OCF_SUCCESS;;  
     *);;
 esac
 saphana_init 
