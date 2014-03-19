@@ -33,17 +33,18 @@
 #   OCF_RESKEY_HANA_SR_MODE     (future: optional and deprecated, today: still needed)
 #
 #   TODO: See TODOs in this script
-#   TODO: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)? ANSW: ->> keep!!!
-#   TODO: ASK: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?  ->> ANSW: YES!!!
+#   DONE: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)? ANSW: ->> keep!!!
+#   DONE: ASK: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?  ->> ANSW: YES!!!
 #   TODO: How to "migrate" a primary? Simply promote the secondary does not work as the running primary will not be demoted to a secondary
 #   TODO: NUR Return-Code 1 von landscapeHostConfiguration.py führt zur Übernahme!! ReturnCode 0 nicht!!
 #   TODO: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
-#   TODO: How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
+#   TODO: For SCALE-OUT only:
+#         How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
 #         Was zeigt landscapeHostConfiguration beim localen SAPHanaHA Umbau an?
 #         Kann man der localen SAPHana site sagen "halt die füsse still"? Oder ist es zunächst einmal "egal" ob wir parallel sr_takeover machen
 #         können 
-#   TODO: lpa-lpt should have a spbilizing-gab of 2hours - so per default the lpts during start must differ at least 2h or we say stalemate
-#   TODO: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes -> DUPLICATE_PRIMARY_TIMEOUT
+#   DONE: lpa-lpt should have a spbilizing-gab of 2hours - so per default the lpts during start must differ at least 2h or we say stalemate
+#   DONE: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes -> DUPLICATE_PRIMARY_TIMEOUT
 #
 #   USED CLUSTER CLI COMMANDS:
 #   crm_master
@@ -176,7 +177,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.95.2014.03.14.1</version>
+<version>0.101.2014.03.19.3</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -330,9 +331,6 @@ function dequote()
 #   rc: 0: it is a clone
 #       1: it is not a clone
 #   Special EXIT of RA, if clone is missconfigured
-#
-# TODO: For the case of a clone/master/slave we also need to check more parameters to be set
-#       such as HANA_SR_TOPOLOGY, ...
 #
 function is_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
@@ -607,7 +605,7 @@ super_ocf_log info "fhDBG: crm_attribute -N ${HOSTNAME} -G -q -n \"$ATTR_NAME_HA
 
     if [ -z "${OCF_RESKEY_INSTANCE_PROFILE}" ]
     then
-        SAPSTARTPROFILE="$DIR_PROFILE/${SIDInstanceName}_${SAPVIRHOST}"
+        SAPSTARTPROFILE="$DIR_PROFILE/${SID}_${InstanceName}_${SAPVIRHOST}"
     else
         SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE}"
     fi
@@ -781,6 +779,9 @@ function saphana_hdbsql_check()
    local rc=1
    local remote=$1
    local secUser
+#
+# TODO: We could delete the remote check later, if we completely dropped the remore sql queries
+#
    case "$remote" in 
         local* ) secUser="slehaLoc";;
         remote*) secUser="slehaRem";;
@@ -1045,9 +1046,8 @@ function get_hana_landscape_status()
     # 3 : INFO   -> HANA is UP
     # 4 : OK     -> HANA is UP
 
-    # TODO: ASK: What to do on landscapeHostConfiguration return code 2?
-    # TODO: ASK: Can we defitive rely on landscapeHostConfiguration.py?
-    #            We have seen hanging hdbsql but the python script still reported rc=4 (OK)
+    # DONE: ASK: What to do on landscapeHostConfiguration return code 2? ANSWER: NO TAKEOVER
+    # DONE: ASK: Can we defitive rely on landscapeHostConfiguration.py? ANSWER: YES
     super_log "  -> landscape return code (0=FATAL,1=ERROR,2=WARN,3=INFO,4=OK) = $rc"
     return $rc;
 }
@@ -1263,7 +1263,7 @@ function saphana_monitor() {
     local output
 
 #
-# TODO: completely switch-over to landscape script?
+# TODO: Check - completely switch-over to landscape script?
 #
     output=$($SAPCONTROL -nr $InstanceNr -function GetProcessList -format script)
 
@@ -1281,7 +1281,7 @@ function saphana_monitor() {
       esac 
 
 #
-# TODO: completely switch-over to landscape script?
+# TODO: Check - completely switch-over to landscape script?
 #       OCF_RESKEY_MONITOR_SERVICES wird nicht (mehr) gesetzt, also entweder wieder setzen oder variable hier entfernen
 #
       SEARCH=$(echo "$OCF_RESKEY_MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
@@ -1348,30 +1348,22 @@ echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 function saphana_validate() {
   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
   local rc=$OCF_SUCCESS
+  #
+  # SID is Alpha-AlphaNumeric-Alphanumeric?
+  #
   if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
   then
     super_ocf_log err "Parsing instance profile name: '$SID' is not a valid system ID!"
     rc=$OCF_ERR_ARGS
   fi
-
-  if [ $(echo "$InstanceName" | grep -c '^[A-Z].*[0-9][0-9]$') -ne 1 ]
-  then
-    super_ocf_log err "Parsing instance profile name: '$InstanceName' is not a valid instance name!"
-    rc=$OCF_ERR_ARGS
-  fi
-
+  #
+  # InstanceNr is a two-Digit?
+  #
   if [ $(echo "$InstanceNr" | grep -c '^[0-9][0-9]$') -ne 1 ]
   then
     super_ocf_log err "Parsing instance profile name: '$InstanceNr' is not a valid instance number!"
     rc=$OCF_ERR_ARGS
   fi
-
-  if [ $(echo "$SAPVIRHOST" | grep -c '^[A-Za-z][A-Za-z0-9_-]*$') -ne 1 ]
-  then
-    super_ocf_log err "Parsing instance profile name: '$SAPVIRHOST' is not a valid hostname!"
-    rc=$OCF_ERR_ARGS
-  fi
-
   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
   return $rc
 }
@@ -1393,7 +1385,7 @@ function saphana_start_primary()
     # we will be a master (PRIMARY) so checking, if the is an OTHER master
     #
     super_ocf_log info "fhDBG: saphana_primary - check_for_primary reports HANA_STATE_PRIMARY"
-# WORKING-ZONE
+    # WORKING-ZONE
     #
     ##### LPA beg
     # 
@@ -1482,7 +1474,7 @@ function saphana_start_primary()
                     # we are down, so we should wait --> Must be implemented in monitor!!
                     # DONE: Implement WAITING-RESOLUTION in Monitor                  
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: wait ==> keep waiting"
-# TODO: Check, if WAITING is correct here
+                    # TODO: Check, if WAITING is correct here
                     set_hana_clone_state ${HOSTNAME} "WAITING"
                     set_crm_master -9000
                     rc=$OCF_SUCCSESS
@@ -1502,38 +1494,65 @@ function saphana_start_primary()
 }
 
 #
-# forever_wait_for_primary_master: wait forever till a running primary master is shown in attributes
+# check_for_primary_master
 # params: -
+# globals: TBD
+#
+check_for_primary_master()
+{
+    super_ocf_log info "fhflow: $FUNCNAME $1 $2 $3 $4"
+    local rc=1
+    local otherHosts
+    local ch ch_role
+    #
+    # get actual list of cluster members
+    # 
+    otherHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
+    if [ -n "$otherHosts" ]; then
+        for ch in $otherHosts; do
+            if [ $rc -eq 1 ]; then
+                ch_role=$(crm_attribute -N ${ch} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                grep 'primary:[^:]*:master:' <<< $ch_role && rc=0
+            fi
+        done
+    fi 
+    super_ocf_log info "fhflow: $FUNCNAME rc=$rc"
+    return $rc
+}
+
+#
+# forever_wait_for_primary_master: wait forever till a running primary master is shown in attributes
+# params: optional: loop count ;-) 
 # globals: TBD
 #
 forever_wait_for_primary_master()
 {
     local wait=1
-    local otherHosts
-    local ch ch_role
+    local rc=1
+    local loops=${1:-0}
+    local count=0
     super_ocf_log info "fhflow: $FUNCNAME $1 $2 $3 $4"
 
     #
     # hana_ndb_roles=primary:master1:master:worker:master
     #
     while [ "$wait" -eq 1 ]; do
-        #
-        # get actual list of luster members
-        # 
-        otherHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
-        if [ -n "$otherHosts" ]; then
-            for ch in $otherHosts; do
-                # BAUSTELLE
-                if [ $wait -eq 1 ]; then
-                    ch_role=$(crm_attribute -N ${ch} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                    grep 'primary:[^:]*:master:' <<< $ch_role && wait=0
-                fi
-            done
-        fi 
-        sleep 10
+        if check_for_primary_master; then
+           wait=0
+           rc=0
+        else
+           if [ $loops -gt 0 ]; then
+              (( count++ ))
+              if [ $count -gt $loops ]; then
+                 wait=0
+                 rc=1
+              fi
+           fi
+           sleep 10
+        fi
     done
-    super_ocf_log info "fhflow: $FUNCNAME rc=0"
-    return 0
+    super_ocf_log info "fhflow: $FUNCNAME rc=1"
+    return $rc
 }
 
 #
@@ -1546,6 +1565,7 @@ function saphana_start_secondary()
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local sqlrc;
+    set_crm_master 0
     #
     ####### LPA - begin
     #
@@ -1558,49 +1578,61 @@ function saphana_start_secondary()
     # we would be slave (secondary)
     # we first need to check, if there are Master Nodes, because the Scecondary only starts
     # successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-# TODO: Compltely DROP the SQL-based check and replace it by a attribute based implementation
 
-#### BEGIN OLD SQL-METHOD
     if false; then
-    saphana_hdbsql_check remote; sqlrc=$?
-    case "$sqlrc" in
-        0 ) # SQL OK
-            saphana_start; rc=$?
-            ;;
-        43 ) # SQL NOT OK - NO CONNECTION
-            set_hana_clone_state ${HOSTNAME} "WAITING"
-            super_ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
-            super_ocf_log info "fhDEC: secondary in status WAITING -> EXCLUDE as posible takeover node"
-            set_crm_master -INFINITY
-            rc=$OCF_SUCCSESS
-            ;;
-        124 | 137 ) # SQL: timeout rised / hdbsql killed
-            #
-            # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER IN TIME ==> This is critical
-            #
-            super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out) -> WAITING"
-            set_hana_clone_state ${HOSTNAME} "WAITING"
-            set_crm_master -INFINITY
-            rc=$OCF_SUCCSESS
-            ;;
-        10 | 136 ) # SQL NOT OK - bad key / invalid user/pwd
-            #
-            # LANDSCAPE SAYS DOWN, SQL means bad key (secstore user)
-            #
-            super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (bad key/secstore user or wrong username/password)"
-            rc=$OCF_ERR_CONFIGURED
-            ;;
-        * ) # SQL: unknown error
-            # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER CORRECTLY ==> This is critical
-            #
-            super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (unknown error rc=$sqlrc)"
-            rc=$OCF_ERR_GENERIC
-            ;;
-    esac
-    else  ##### NEW ATTRIBUTE BASED METHOD
-            super_ocf_log info "fhDBG: wait for promoted side"
-            forever_wait_for_primary_master
-            saphana_start; rc=$?
+        #
+        # TODO: Completely DROP the SQL-based check and replace it by a attribute based implementation
+        # OLD code based on sql query
+        #
+        saphana_hdbsql_check remote; sqlrc=$?
+        case "$sqlrc" in
+            0 ) # SQL OK
+                saphana_start; rc=$?
+                ;;
+            43 ) # SQL NOT OK - NO CONNECTION
+                set_hana_clone_state ${HOSTNAME} "WAITING"
+                super_ocf_log info "fhDBG: set_hana_clone_state - got return code $sqlrc"
+                super_ocf_log info "fhDEC: secondary in status WAITING -> EXCLUDE as posible takeover node"
+                set_crm_master -INFINITY
+                rc=$OCF_SUCCSESS
+                ;;
+            124 | 137 ) # SQL: timeout rised / hdbsql killed
+                #
+                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER IN TIME ==> This is critical
+                #
+                super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (time-out) -> WAITING"
+                set_hana_clone_state ${HOSTNAME} "WAITING"
+                set_crm_master -INFINITY
+                rc=$OCF_SUCCSESS
+                ;;
+            10 | 136 ) # SQL NOT OK - bad key / invalid user/pwd
+                #
+                # LANDSCAPE SAYS DOWN, SQL means bad key (secstore user)
+                #
+                super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (bad key/secstore user or wrong username/password)"
+                rc=$OCF_ERR_CONFIGURED
+                ;;
+            * ) # SQL: unknown error
+                # LANDSCAPE SAYS DOWN, SQL DOES NOT ANSWER CORRECTLY ==> This is critical
+                #
+                super_ocf_log info "fhDBG: saphana_hdbsql_check remote fails (unknown error rc=$sqlrc)"
+                rc=$OCF_ERR_GENERIC
+                ;;
+        esac
+    else  
+        #
+        # NEW code based on cluster attributes
+        # TODO: forever_wait_for_primary_master 10 is just a test value: 10 loops x10 seconds than go to WAITING
+        #
+        super_ocf_log info "fhDBG: wait for promoted side"
+        if forever_wait_for_primary_master 10; then
+           saphana_start; rc=$?
+        else
+           super_ocf_log info "fhDBG: forever_wait_for_primary_master (too much loops) -> WAITING"
+           set_hana_clone_state ${HOSTNAME} "WAITING"
+           set_crm_master -INFINITY
+           rc=$OCF_SUCCSESS
+        fi
     fi
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
@@ -1806,7 +1838,6 @@ function lpa_check_lpt_status() {
         #
         (( LPTDiffLoc = LPTloc - LPTrem ))
         (( LPTDiffRem = LPTrem - LPTloc ))
-## BAUSTELLE
         if [ $LPTDiffLoc -gt $DUPLICATE_PRIMARY_TIMEOUT ]; then 
             # We are the winner - LPA says STARTUP
             super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc >> LPTrem=$LPTrem => START"
@@ -2116,14 +2147,32 @@ function saphana_monitor_secondary()
                 promoted=0;
                 ;;
             WAITING* )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-                saphana_hdbsql_check remote; sqlrc=$?
-                if [ $sqlrc -eq 0 ]; then
-                    super_ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
-                    saphana_start_clone
-                    rc=$?
+                if false; then
+                    #
+                    # TODO: remove this and maybe replace it by the attribute-check
+                    # OLD code based on SQL query
+                    #
+                    saphana_hdbsql_check remote; sqlrc=$?
+                    if [ $sqlrc -eq 0 ]; then
+                        super_ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
+                        saphana_start_clone
+                        rc=$?
+                    else
+                        super_ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing (sqlrc=$sqlrc)"
+                        return $OCF_SUCCESS
+                    fi
                 else
-                    super_ocf_log info "fhDBG saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing (sqlrc=$sqlrc)"
-                    return $OCF_SUCCESS
+                    #
+                    # NEW code based on cluster attributes
+                    #
+                    if check_for_primary_master; then
+                        super_ocf_log info "fhDBG NEW saphana_monitor_clone: SECONDARY still in status WAITING - Primary now available - try a new start"
+                        saphana_start_clone
+                        rc=$?
+                    else
+                        super_ocf_log info "fhDBG NEW saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing"
+                        return $OCF_SUCCESS
+                    fi
                 fi
                 
                 promoted=0;
@@ -2309,70 +2358,56 @@ function saphana_demote_clone() {
 # saphana_notify: Handle master scoring - to make sure a slave gets the next master
 #
 function saphana_notify() {
+    super_ocf_log info "fhRA ==== begin action $ACTION$CLACT (${n_type}/${n_op})===="
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local promote_attr
     local rc=0
     #
     # related to notification
     #
-
     local n_type="$OCF_RESKEY_CRM_meta_notify_type"
     local n_op="$OCF_RESKEY_CRM_meta_notify_operation"
-    super_ocf_log info "fhRA ==== begin action $ACTION$CLACT (${n_type}/${n_op})===="
-
     #
     # related to resources
     #
-
     local n_act="$OCF_RESKEY_CRM_meta_notify_active_resource"
     local n_iact="$OCF_RESKEY_CRM_meta_notify_inactive_resource"
-    saphana_notify_log_values "n_act/n_iact" "${n_act}/${n_iact}"
-
     local n_master="$OCF_RESKEY_CRM_meta_notify_master_resource"
     local n_slave="$OCF_RESKEY_CRM_meta_notify_slave_resource"
-    saphana_notify_log_values "n_master/n_slave" "${n_master}/${n_slave}"
-
     local n_start="$OCF_RESKEY_CRM_meta_notify_start_resource"
     local n_stop="$OCF_RESKEY_CRM_meta_notify_stop_resource"
-    saphana_notify_log_values "n_start/n_stop" "${n_start}/${n_stop}"
-
     local n_promote="$OCF_RESKEY_CRM_meta_notify_promote_resource"
     local n_demote="$OCF_RESKEY_CRM_meta_notify_demote_resource"
-    saphana_notify_log_values "n_promote/n_demote" "${n_promote}/${n_demote}"
-
     #
     # related to nodes
     #
-
     local n_startU="$OCF_RESKEY_CRM_meta_notify_start_uname"
     local n_stopU="$OCF_RESKEY_CRM_meta_notify_stop_uname"
-    saphana_notify_log_values "n_startU/n_stopU" "${n_startU}/${n_stopU}"
-
     local n_promoteU="$OCF_RESKEY_CRM_meta_notify_promote_uname"
     local n_demoteU="$OCF_RESKEY_CRM_meta_notify_demote_uname"
-    saphana_notify_log_values "n_promoteU/n_demoteU" "${n_promoteU}/${n_demoteU}"
-
     local n_actU="$OCF_RESKEY_CRM_meta_notify_active_uname"
     local n_iactU="$OCF_RESKEY_CRM_meta_notify_inactive_uname"
-    saphana_notify_log_values "n_actU/n_iactU" "${n_actU}/${n_iactU}"
-
     local n_masterU="$OCF_RESKEY_CRM_meta_notify_master_uname"
     local n_slaveU="$OCF_RESKEY_CRM_meta_notify_slave_uname"
+
+    saphana_notify_log_values "n_act/n_iact" "${n_act}/${n_iact}"
+    saphana_notify_log_values "n_master/n_slave" "${n_master}/${n_slave}"
+    saphana_notify_log_values "n_start/n_stop" "${n_start}/${n_stop}"
+    saphana_notify_log_values "n_promote/n_demote" "${n_promote}/${n_demote}"
+    saphana_notify_log_values "n_startU/n_stopU" "${n_startU}/${n_stopU}"
+    saphana_notify_log_values "n_promoteU/n_demoteU" "${n_promoteU}/${n_demoteU}"
+    saphana_notify_log_values "n_actU/n_iactU" "${n_actU}/${n_iactU}"
     saphana_notify_log_values "n_masterU/n_slaveU" "${n_masterU}/${n_slaveU}"
-
-
     case "${n_type}_${n_op}" in
-	post_promote )
-# WORKING-ZONE
-             promote_attr=$(get_hana_clone_state ${HOSTNAME})
-		     case "$promote_attr" in
-                         WAITING )  
-                                    
-                                    ;;
-                     esac
-                     ;;
+        post_promote )
+            # WORKING-ZONE
+            promote_attr=$(get_hana_clone_state ${HOSTNAME})
+		    case "$promote_attr" in
+                WAITING )  
+                    ;;
+            esac
+            ;;
     esac
-
     super_ocf_log info "fhRA ==== end action $ACTION$CLACT (${n_type}/${n_op})===="
     return $rc
 }
@@ -2380,7 +2415,8 @@ function saphana_notify() {
 #
 # function: main - main function to operate 
 # params:   ACTION
-# globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
+# globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w), 
+# globals:  SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
 #
 
 ## GLOBALS
