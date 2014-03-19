@@ -27,7 +27,8 @@
 #
 #   TODO: See TODOs in this script
 #   TODO: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
-#   TODO: How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
+#   TODO: SCALE-OUT ONLY: prevent a parallel takeover
+#         How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
 #
 #######################################################################
 #
@@ -228,9 +229,6 @@ function dequote()
 #       1: it is not a clone
 #   Special EXIT of RA, if clone is missconfigured
 #
-# TODO: For the case of a clone/master/slave we also need to check more parameters to be set
-#       such as HANA_SR_TOPOLOGY, ...
-#
 function is_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local rc=0
@@ -277,21 +275,11 @@ function sht_init() {
     # OLD: InstanceName
     # NEW: SID InstanceNumber
 
-    if [ -n "$OCF_RESKEY_SID" ]; then
-       SID=$OCF_RESKEY_SID
-       InstanceNr=$OCF_RESKEY_InstanceNumber
-       myInstanceName="${SID}_HDB${InstanceNr}"
-       InstanceName="HDB${InstanceNr}"
-       super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
-    else
-       # TODO: OBSOLETE - COULD BE REMOVED
-       myInstanceName="$OCF_RESKEY_InstanceName"
-#
-       SID=$(echo "$myInstanceName" | cut -d_ -f1)
-       InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
-       InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
-       super_ocf_log info "fhACT: Used old method to get SID and InstanceNr"
-    fi
+    SID=$OCF_RESKEY_SID
+    InstanceNr=$OCF_RESKEY_InstanceNumber
+    myInstanceName="${SID}_HDB${InstanceNr}"
+    InstanceName="HDB${InstanceNr}"
+    super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
     SAPVIRHOST=${HOSTNAME}
@@ -503,7 +491,6 @@ function sht_status() {
 # params:   -
 # globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
 # sht_validate: Check the symantic of the input parameters 
-# TODO: Need to add more coding here - check other params, check prereqisites such as secure store users
 #
 function sht_validate() {
   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
@@ -511,12 +498,6 @@ function sht_validate() {
   if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
   then
     super_ocf_log err "Parsing instance profile name: '$SID' is not a valid system ID!"
-    rc=$OCF_ERR_ARGS
-  fi
-
-  if [ $(echo "$InstanceName" | grep -c '^[A-Z].*[0-9][0-9]$') -ne 1 ]
-  then
-    super_ocf_log err "Parsing instance profile name: '$InstanceName' is not a valid instance name!"
     rc=$OCF_ERR_ARGS
   fi
 
@@ -552,14 +533,6 @@ function lpa_get_lpt() {
     local rc=1
     local node=$1
     local lpt=""
-    #
-    # TODO: Implement lpa_get_lpt
-    #
-    # super_ocf_log info "fhDBG: crm_attribute -G -n \"$LPA_ATTR\" -N $node -q -l reboot"
-    lpt=$(crm_attribute -G -n "$LPA_ATTR" -N $node -q -l reboot 2>>/mnt/lala.$HOSTNAME); rc=$?
-    if [ -n "$lpt" ]; then
-        rc=0
-        echo $lpt
     else
         rc=2
     fi
@@ -579,9 +552,6 @@ function lpa_set_lpt() {
     local crm_rc=1
     local lpt=$1
     local clpt=-1
-    #
-    # TODO: Implement lpa_set_lpt
-    #
     crm_attribute -v "$lpt" -n "$LPA_ATTR" -l reboot; crm_rc=$?
     clpt=$(lpa_get_lpt $HOSTNAME)
     if [ "$lpt" != "$clpt" ]; then
@@ -606,8 +576,6 @@ function lpa_pull_lpt() {
     local lpt=-1
     local readrest=0
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
-    #
-    # TODO: Implement lpa_pull_lpt
     read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
     if [ -n "$lpt" ]; then
         rc=0
@@ -632,9 +600,6 @@ function lpa_push_lpt() {
     local clpt=-1
     local rc=1
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
-    #
-    # TODO: Implement lpa_push_lpt
-    # HANA_STATE_PRIMARY
     mkdir -p $LPA_DIRECTORY
     echo "$lpt" > $lpa_file
     clpt=$(lpa_pull_lpt); lpt_rc=$?
@@ -673,9 +638,6 @@ function lpa_check_lpt_status() {
     local rc=0
     local LPTloc=-1
     local LPTrem=-1
-    #
-    # TODO: Implement lpa_check_lpt_status
-    #
     # First fetch LPT from cluster attributes
     #
     LPTloc=$(lpa_get_lpt $HOSTNAME); lparc=$?
@@ -769,13 +731,6 @@ function sht_stop_clone() {
 function sht_monitor_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     #
-    # TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
-    #       a) returning 7 here and force cluster a restart of the slave
-    #       b) starting the instance here inside the monitor -> may result in longer runtime, timeouts
-    #
-	# first check with the status function (OS tools) if there could be something like a SAP instance running
-	# as we do not know here, if we are in master or slave state we do not want to start our monitoring
-	# agents (sapstartsrv) on the wrong host
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
     local init_attribute=0
@@ -866,7 +821,6 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 # These operations don't require OCF parameters to be set
-# TODO: check, if notify is still not needing OCF parameters
 case "$ACTION" in
     usage|methods)  sht_$ACTION
                     exit $OCF_SUCCESS;;
