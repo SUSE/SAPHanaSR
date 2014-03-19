@@ -128,7 +128,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-<version>0.21.2014.03.05.1</version>
+<version>0.22.2014.03.19.1</version>
 
 <shortdesc lang="en">Analyzes SAP HANA topology.</shortdesc>
 <longdesc lang="en">
@@ -352,126 +352,6 @@ function sht_init() {
     return $OCF_SUCCESS
 }
 
-# function: check_secstore_users
-# params:   USER1 USER2
-# globals:  DIR_EXECUTABLE(r)
-#
-function check_secstore_users()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local user1=$1
-    local user2=$2
-    local count
-    local rc=1
-    count=$($DIR_EXECUTABLE/hdbuserstore list | awk 'BEGIN {f=0} $0=="KEY " u1 {f++} $0=="KEY " u2 {f++} END {print f}' u1=$user1 u2=$user2)
-    if [ "$count" -eq 2 ]; then
-        rc=0
-    else
-        rc=2
-    fi
-    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
-    return $rc
-}
-
-#
-# function: sht_hdbsql_check - query SR view
-# params:   remote [local,remote]
-# globals:  DIR_EXECUTABLE(r)
-#
-function sht_hdbsql_check()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local rc=1
-   local remote=$1
-   local secUser
-   case "$remote" in 
-        local* ) secUser="slehaLoc";;
-        remote*) secUser="slehaRem";;
-   esac
-   super_ocf_log info "fhDBG: $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'"
-   timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
-   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
-   return $rc
-}
-
-#
-# function: set_hana_sync_status_attr - set the HANA syst-repl. status attribute 
-# params:   STATUS [ HOST-LIST ]
-# globals:  ATTR_NAME_HANA_SYNC_STATUS(r)
-# set the hana_sync_status attribute
-function set_hana_sync_status_attr()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local rc=0 theStatus theHosts
-   if [ $# -ge 2 ]; then
-      theStatus=$1
-      shift
-      theHosts=$(echo $* | dequote)
-      for theHost in $theHosts; do
-          super_ocf_log info "fhDBG Seting node $theHost attribute $ATTR_NAME_HANA_SYNC_STATUS = $theStatus"
-          super_ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost"
-          crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost; crm_rc=$?
-          super_ocf_log info "fhDBG crm_attribute -v "$theStatus" -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -N $theHost => rc=$crm_rc"
-      done
-      rc=0
-   else
-      rc=1
-   fi
-   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
-   return $rc
-}
-
-#
-# function: get_hana_sync_status_attr - get the HANA syst-repl. status attribute
-# params:   NODE
-# globals:  HOSTNAME(r), ATTR_NAME_HANA_SYNC_STATUS(r)
-#
-function get_hana_sync_status_attr()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local sync_attr
-   local Node="$1"
-   local rc=0
-   sync_attr=$(crm_attribute -N ${Node} -G -n "$ATTR_NAME_HANA_SYNC_STATUS" -l reboot -q); rc=$?
-   if [ -z "$sync_attr" ]; then
-       rc=1
-   fi
-   echo "$sync_attr"
-   return $rc
-}
-
-#
-# function: set_hana_primary_at_attr - set the location where the cluster expects the primary
-# params:   location (like WALLDORF or ROT)
-# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
-# set the hana_primary_at attribute
-#
-function set_hana_primary_at_attr()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local theLocation=$1
-   local rc=0
-   crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"; rc=$?
-   # TODO: Do we need error handling?
-   return $rc
-}
-
-#
-# function: get_hana_primary_at_attr - get the location where the cluster expects the primary
-# params:   -
-# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
-# 
-# get the hana_primary_at attribute
-#
-function get_hana_primary_at_attr()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local rc=0
-   crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q; rc=$?
-   # TODO: Do we need error handling?
-   return $rc
-}
-
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
@@ -536,70 +416,6 @@ function get_site_name()
     node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "%s", $3 } ' )
     echo "$node_site_name"
     return $rc
-}
-
-#
-# function: analyze_hana_sync_status - query and check hana system replication status
-# params:   -
-# globals:  DIR_EXECUTABLE(r), remoteHost(r)
-# get the HANA sync status
-# 
-function analyze_hana_sync_status()
-{
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local hana_sync_status="" what_does_the_chamelion_say=""
-    local secUser="slehaLoc"
-    local rc=0
-    local sqlrc=0
-    local query_state='select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
-    local query_secondaries='select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION'
-    local query_failed_secondaries="select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')"
-    local all_cluster_hosts all_secondary_hosts all_broken_secondaries
-    hana_sync_status=$(timeout 60 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state | dequote); sqlrc=$?
-    if [ "$sqlrc" -eq 0 -a "$hana_sync_status" != "" ]; then
-        #
-        # UNKNOWN, ACTIVE, ERROR, INITIALIZING
-        #
-        if [ "${hana_sync_status}" == "ACTIVE" ]; then
-            super_ocf_log info set_hana_sync_status_attr "SOK"
-            set_hana_sync_status_attr "SOK" $remoteHost
-        else
-            super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
-            super_ocf_log info set_hana_sync_status_attr "SFAIL"
-            set_hana_sync_status_attr "SFAIL" $remoteHost
-        fi
-    else
-        super_ocf_log warn "Was not able to fetch HANA SYNC STATUS - set sync status to SFAIL for ALL cluster hosts"
-        all_cluster_hosts=$(crm_node -Q -l -A | awk '$3 == "member" { print $2 }')
-        what_does_the_chamelion_say=$(set_hana_sync_status_attr "SFAIL" $all_cluster_hosts 2>&1); rc=$?        
-    fi  
-    return $rc
-}
-
-#
-# function: get_hana_landscape_status - figure out hana ladscape status
-# params:   -
-# globals:  sidadm(r), DIR_EXECUTABLE(r)
-# get the HANA landscape status
-#
-function get_hana_landscape_status()
-{
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local rc=0
-    #
-    su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
-    # ls_rc:
-    # 0 : FATAL  -> (do nothing -> admin must solve that!)
-    # 1 : ERROR  -> HANA is Down (failes or down instance -> takeover if running master/primary fails)
-    # 2 : WARN   -> HANA is UP
-    # 3 : INFO   -> HANA is UP
-    # 4 : OK     -> HANA is UP
-
-    # TODO: ASK: What to do on landscapeHostConfiguration return code 2?
-    # TODO: ASK: Can we defitive rely on landscapeHostConfiguration.py?
-    #            We have seen hanging hdbsql but the python script still reported rc=4 (OK)
-    super_ocf_log "  -> landscape return code (0=FATAL,1=ERROR,2=WARN,3=INFO,4=OK) = $rc"
-    return $rc;
 }
 
 #
@@ -832,45 +648,6 @@ function lpa_push_lpt() {
 }
 
 #
-# function: lpa_init_lpt - initialize local lpt, if needed
-# params:   HANA_STATE
-# globals:  HANA_STATE_*(r), LPA_DIRECTORY(r), sid(r), HOSTNAME(r), TBD
-# lpa_init_lpt
-#
-# Returncodes:
-#    rc=0: OK,  rc=1 TBD,  rc=2: ERROR
-#
-# Initializing (if NO local LPT-file):
-#    SECONDARY sets to 0
-#    PRIMARY   sets to 1
-# 
-function lpa_init_lpt() {
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local rc=1
-    local LPTloc=-1
-    local LPTrem=-1
-    local hana_state=$1
-    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
-    #
-    # TODO: Implement lpa_init_lpt
-    #
-    mkdir -p $LPA_DIRECTORY
-    LPTloc=$(lpa_get_lpt ${HOSTNAME}) || LPTloc=$(lpa_pull_lpt) || \
-        if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
-            # init primary
-            lpa_push_lpt "2"; rc=$?
-        elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
-            # init secondary
-            lpa_push_lpt "1"; rc=$?
-        else
-            rc=2                                   
-        fi
-    lpa_set_lpt $LPTloc
-    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
-    return $rc    
-}
-
-#
 # function: lpa_check_lpt_status - start a hana clone instance
 # params:   TBD
 # globals:  TBD
@@ -1039,9 +816,9 @@ function sht_monitor_clone() {
     super_ocf_log info "fhACT: HANA ROLES $hanarole"
     super_ocf_log info "fhACT: HANA MAP $hanamap"
     super_ocf_log info "fhACT: HANA remoteHost $hanaRemoteHost"
-    crm_attribute -N ${HOSTNAME} -v $hanaRemoteHost -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot;
-    crm_attribute -N ${HOSTNAME} -v "$hanaPrim:$hanarole" -n "$ATTR_NAME_HANA_ROLES" -l reboot;
-    crm_attribute -N ${HOSTNAME} -v $site -n "$ATTR_NAME_HANA_SITE" -l reboot;
+    crm_attribute -N ${HOSTNAME} -v "$hanaRemoteHost"     -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot;
+    crm_attribute -N ${HOSTNAME} -v "$hanaPrim:$hanarole" -n "$ATTR_NAME_HANA_ROLES"      -l reboot;
+    crm_attribute -N ${HOSTNAME} -v "$site"               -n "$ATTR_NAME_HANA_SITE"       -l reboot;
     # /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
