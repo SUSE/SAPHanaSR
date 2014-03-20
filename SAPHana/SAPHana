@@ -32,19 +32,23 @@
 #   OCF_RESKEY_HANA_SR_TOPOLOGY (optional and deprecated)
 #   OCF_RESKEY_HANA_SR_MODE     (future: optional and deprecated, today: still needed)
 #
-#   TODO: See TODOs in this script
+#   TODO: PRIO1: See TODOs in this script
 #   DONE: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)? ANSW: ->> keep!!!
 #   DONE: ASK: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?  ->> ANSW: YES!!!
-#   TODO: How to "migrate" a primary? Simply promote the secondary does not work as the running primary will not be demoted to a secondary
-#   TODO: NUR Return-Code 1 von landscapeHostConfiguration.py führt zur Übernahme!! ReturnCode 0 nicht!!
-#   TODO: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
-#   TODO: For SCALE-OUT only:
+#   TODO: PRIO3: How to "migrate" a primary? Simply promote the secondary does not work as the running primary will not be demoted to a secondary
+#   TODO: PRIO1: NUR Return-Code 1 von landscapeHostConfiguration.py führt zur Übernahme!! ReturnCode 0 nicht!!
+#   TODO: PRIO3: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
+#   TODO: PRIO5: For SCALE-OUT only:
 #         How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
 #         Was zeigt landscapeHostConfiguration beim localen SAPHanaHA Umbau an?
 #         Kann man der localen SAPHana site sagen "halt die füsse still"? Oder ist es zunächst einmal "egal" ob wir parallel sr_takeover machen
 #         können 
 #   DONE: lpa-lpt should have a spbilizing-gab of 2hours - so per default the lpts during start must differ at least 2h or we say stalemate
 #   DONE: the lpa-lpt-gab should be configurable (with default 2h -> 7200 sec) for testing purposes -> DUPLICATE_PRIMARY_TIMEOUT
+#   TODO: PRIO2: Handle crash of BOTH hana deamons
+#   TODO: PRIO1: COME OUT OF WATING SITS
+#   TODO: PRIO2: ASK:  DESCRIBE FOR MATTHIAS MAENNICH WHICH HOOKS WOULD BE HELPFUL
+#   TODO: PRIO3: SCRIPT FOR UPDATE PROCEDURE (ROLLING UPDATE)
 #
 #   USED CLUSTER CLI COMMANDS:
 #   crm_master
@@ -150,8 +154,7 @@ function saphana_usage() {
 
     $0 manages a SAP HANA Instance as an HA resource.
 
-TODO: Correct the start description
-    The 'start'        operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
+    The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
     The 'stop'         operation stops the HANA instance
     The 'status'       operation reports whether the HANA instance is running
     The 'monitor'      operation reports whether the HANA instance seems to be working in master/slave it also needs to check the system replication status
@@ -177,7 +180,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.101.2014.03.19.3</version>
+<version>0.102.2014.03.20.1</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -217,7 +220,7 @@ The SAPHana resource agent will interpret returncodes 0+1 as NOT-RUNNING (or 1 f
 <parameter name="DUPLICATE_PRIMARY_TIMEOUT" unique="0" required="0">
 <shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
 <longdesc lang="en">TBD
-TODO: DUPLICATE_PRIMARY_TIMEOUT long description</longdesc>
+TODO: PRIO3: DUPLICATE_PRIMARY_TIMEOUT long description</longdesc>
 <content type="string" default="7200" />
 </parameter>
  <parameter name="DIR_EXECUTABLE" unique="0" required="0">
@@ -252,7 +255,7 @@ TODO: DUPLICATE_PRIMARY_TIMEOUT long description</longdesc>
 <shortdesc lang="en">Define SAPHana messages to be printed</shortdesc>
  <longdesc lang="en">Define SAPHana messages to be printed. Currently only partially implemented.
  Values: all, none, 
- TODO: describe which combinations are supported
+ TODO: PRIO3: describe which combinations are supported
  Planned: Allowed values are all, none (and combinations of): dbg, dec, lpa, func</longdesc>
  <content type="string" default="sync" />
  </parameter>
@@ -260,7 +263,7 @@ TODO: DUPLICATE_PRIMARY_TIMEOUT long description</longdesc>
 <shortdesc lang="en">Define SAPHana messages to be printed</shortdesc>
  <longdesc lang="en">Define SAPHana messages to be printed. Currently only partially implemented.
  Values: all, none, 
- TODO: describe which combinations are supported
+ TODO: PRIO3: describe which combinations are supported
  Planned: Allowed values are all, none (and combinations of): dbg, dec, lpa, func</longdesc>
  <content type="string" default="sync" />
  </parameter>
@@ -462,7 +465,7 @@ function set_hana_clone_state()
 # params:   InstanceName
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w), 
 # globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w) 
-# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
+# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
 # globals:  LPA_DIRECTORY(w)
 # saphana_init : Define global variables with default values, if optional parameters are not set
@@ -513,7 +516,6 @@ function saphana_init() {
     super_ocf_log info "fhDBG: OCF: $ocf_env"
    
     ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"  # SOK, SFAIL, UNKNOWN?
-    ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"   # Not really used
     ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state" # UKNOWN?, DEMOTED, PROMOTED
 
     ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
@@ -523,46 +525,21 @@ function saphana_init() {
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     super_ocf_log info "fhDBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
 
-    if [ -n "$OCF_RESKEY_HANA_SR_TOPOLOGY" ]; then
-        #
-        # TODO: Should we remove obsolete HANA_SR_TOPOLOGY?
-        #
-        HANA_SR_TOPOLOGY=$OCF_RESKEY_HANA_SR_TOPOLOGY
-        super_ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
-        super_ocf_log info "fhDBG: HANA_SR_TOPOLOGY=$HANA_SR_TOPOLOGY"
-        local one two three rest1
-        for node_top in $HANA_SR_TOPOLOGY; do 
-            one=${node_top%%:*}  # cut-out all after the first field (so have the first field of node_top)
-            rest1=${node_top#*:} # cut-out the first field (so have all the rest)
-            two=${rest1%%:*}     # cut-out all after the first field of the rest (so have the second field of node_top)
-            three=${rest1#*:}    # cut-out  the first field of the rest 
-                                 # (so have the third field of node_top, we need to add more code, if we will have more than 3 fields)
-            super_ocf_log info "fhDBG: node_top=$node_top, one=$one, two=$two, three=$three"
-            if [ "$one" = "$HOSTNAME" ]; then
-               # found "own" datarecord
-               sr_name=$two
-               remoteHost=$three
-                # WORKING-ZONE
-            fi
-        done
-        super_ocf_log info "fhDBG: OCFP remoteHost=$remoteHost sr_name=$sr_name"
-    else
-        # ATTR_NAME_HANA_REMOTEHOST
-        remoteHost=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot | dequote);
+    # ATTR_NAME_HANA_REMOTEHOST
+    remoteHost=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot | dequote);
 super_ocf_log info "fhDBG: crm_attribute -N ${HOSTNAME} -G -q -n \"$ATTR_NAME_HANA_REMOTEHOST\" -l reboot"
-        if [ -z "$remoteHost" ]; then
-           remoteHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
-           if [ ${#remoteHosts[@]} -eq 1 ]; then # we are a 2 node cluster, lets assume the other is the remote-host
-              remoteHost=${remoteHosts[0]}
-              super_ocf_log info "fhDBG: auto-guess remoteHost=$remoteHost"
-           else
-              super_ocf_log info "fhDBG: Could not auto-guess remoteHost out of list (${remoteHosts[@]})"
-           fi
-        fi
-        #  ATTR_NAME_HANA_SITE
-        sr_name=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_SITE" -l reboot | dequote);
-        super_ocf_log info "fhDBG: ATTR remoteHost=$remoteHost sr_name=$sr_name"
+    if [ -z "$remoteHost" ]; then
+       remoteHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
+       if [ ${#remoteHosts[@]} -eq 1 ]; then # we are a 2 node cluster, lets assume the other is the remote-host
+          remoteHost=${remoteHosts[0]}
+          super_ocf_log info "fhDBG: auto-guess remoteHost=$remoteHost"
+       else
+          super_ocf_log info "fhDBG: Could not auto-guess remoteHost out of list (${remoteHosts[@]})"
+       fi
     fi
+    #  ATTR_NAME_HANA_SITE
+    sr_name=$(crm_attribute -N ${HOSTNAME} -G -q -n "$ATTR_NAME_HANA_SITE" -l reboot | dequote);
+    super_ocf_log info "fhDBG: ATTR remoteHost=$remoteHost sr_name=$sr_name"
 
 
     if [ -n "$OCF_RESKEY_HANA_SR_MODE" ]; then
@@ -628,7 +605,7 @@ super_ocf_log info "fhDBG: crm_attribute -N ${HOSTNAME} -G -q -n \"$ATTR_NAME_HA
 
 
 #############################
-# TODO: To be able to call landscapeHostConfig.py without su (so as root)
+# TODO: RPRIO5: To be able to call landscapeHostConfig.py without su (so as root)
 #export SAPSYSTEMNAME=ZLF
 #export DIR_INSTANCE=/usr/sap/ZLF/HDB02
 #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DIR_INSTANCE/exe:$DIR_INSTANCE/exe/Python/lib
@@ -757,7 +734,7 @@ function check_sapstartsrv() {
 function cleanup_instance() {
   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
   local rc=0
-# TODO: Do not know what we need for HANA cleanup
+# TODO: PRIO5: Check, if we need HANA cleanup procedure
 #
 # Do wee need to cleanup
 #  - process list (kill/signal)
@@ -780,7 +757,7 @@ function saphana_hdbsql_check()
    local remote=$1
    local secUser
 #
-# TODO: We could delete the remote check later, if we completely dropped the remore sql queries
+# TODO: PRIO5: We could delete the remote check later, if we completely dropped the remore sql queries
 #
    case "$remote" in 
         local* ) secUser="slehaLoc";;
@@ -839,38 +816,6 @@ function get_hana_sync_status_attr()
 }
 
 #
-# function: set_hana_primary_at_attr - set the location where the cluster expects the primary
-# params:   location (like WALLDORF or ROT)
-# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
-# set the hana_primary_at attribute
-#
-function set_hana_primary_at_attr()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local theLocation=$1
-   local rc=0
-   crm_attribute -v "$theLocation" -n "$ATTR_NAME_HANA_PRIMARY_AT"; rc=$?
-   # TODO: Do we need error handling?
-   return $rc
-}
-
-#
-# function: get_hana_primary_at_attr - get the location where the cluster expects the primary
-# params:   -
-# globals:  ATTR_NAME_HANA_PRIMARY_AT(r)
-# 
-# get the hana_primary_at attribute
-#
-function get_hana_primary_at_attr()
-{
-   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-   local rc=0
-   crm_attribute -G -n "$ATTR_NAME_HANA_PRIMARY_AT" -q; rc=$?
-   # TODO: Do we need error handling?
-   return $rc
-}
-
-#
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
 # globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r)
@@ -924,13 +869,7 @@ function check_for_primary_single()
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local node_full_status node_status
     local rc=0
-    echo " ========== $(date) ============== " >>/tmp/null
-    #
-    # DONE: remove debug-output to /tmp/null
-    #
-    # super_ocf_log info "fhDBG sidadm=${sidadm}, SID=${SID}, LD_LIBRARY_PATH=${LD_LIBRARY_PATH}, PATH=${PATH}, DIR_EXECUTABLE=$DIR_EXECUTABLE"
     node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
-    echo "${node_full_status}" >>/tmp/null
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     echo "$node_status"
     return $rc
@@ -948,7 +887,6 @@ function get_site_name()
     local node_full_status node_site_name
     local rc=0
     node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
-    echo "${node_full_status}" >>/tmp/null
     node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "<%s>/n", $3 } ' )
     echo "$node_site_name"
     return $rc
@@ -986,7 +924,7 @@ function analyze_hana_sync_status()
         fi
 
         # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
-        #    TODO: for first we assume there is only ONE secondary site (like ROT)
+        #    TODO: PRIO9: for first we assume there is only ONE secondary site (like ROT)
         #
         all_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser $query_secondaries ); sqlrc=$?
         if [ "$sqlrc" -eq 0 ]; then
@@ -1004,7 +942,7 @@ function analyze_hana_sync_status()
                      what_does_the_chamelion_say=$(set_hana_sync_status_attr "SOK" $all_secondary_hosts 2>&1); rc=$?
                  fi
             else
-                # TODO: We should NOT set SFAIL, if HDB is exactly broken now
+                # TODO: PRIO1: We should NOT set SFAIL, if HDB is exactly broken now
                 #       When HDB breaks during monitor this could prevent a prositive remote failover
                 #       
                 super_ocf_log warn "Was not able to fetch HANA list of broken secondary hosts - set sync status to SFAIL for ALL cluster hosts BUT not myself"
@@ -1012,7 +950,7 @@ function analyze_hana_sync_status()
                 what_does_the_chamelion_say=$(set_hana_sync_status_attr "SFAIL" $all_cluster_hosts 2>&1); rc=$?
             fi
         else
-            # TODO: We should NOT set SFAIL, if HDB is exactly broken now
+            # TODO: PRIO1: We should NOT set SFAIL, if HDB is exactly broken now
             #       When HDB breaks during monitor this could prevent a prositive remote failover
             #
             super_ocf_log warn "Was not able to fetch HANA secondary hosts - set sync status to SFAIL for ALL cluster hosts"
@@ -1077,7 +1015,7 @@ function register_hana_secondary()
     super_ocf_log info "fhACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
     su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
 #
-# TODO: laut Alex Krauth gibt das Konstruct immer rc=2 zurück -> prüfen
+# TODO: PRIO2: laut Alex Krauth gibt das Konstruct immer rc=2 zurück -> prüfen
 #
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc;
@@ -1129,7 +1067,7 @@ function saphana_start() {
     check_sapstartsrv
     rc=$?
     #
-    # TODO: ASK: For scale-out - do we need to use an other call like StartSystem? Or better to use the HDB command?
+    # TODO: ASK: PRIO5: For SCALE-OUT - do we need to use an other call like StartSystem? Or better to use the HDB command?
     #
     if [ $rc -eq $OCF_SUCCESS ]; then
       output=$($SAPCONTROL -nr $InstanceNr -function Start)
@@ -1263,7 +1201,7 @@ function saphana_monitor() {
     local output
 
 #
-# TODO: Check - completely switch-over to landscape script?
+# TODO: PRIO2: Check - completely switch-over to landscape script?
 #
     output=$($SAPCONTROL -nr $InstanceNr -function GetProcessList -format script)
 
@@ -1281,7 +1219,7 @@ function saphana_monitor() {
       esac 
 
 #
-# TODO: Check - completely switch-over to landscape script?
+# TODO: PRIO2: Check - completely switch-over to landscape script?
 #       OCF_RESKEY_MONITOR_SERVICES wird nicht (mehr) gesetzt, also entweder wieder setzen oder variable hier entfernen
 #
       SEARCH=$(echo "$OCF_RESKEY_MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
@@ -1343,7 +1281,6 @@ echo "fhDBD: saphana_status: InstanceName=$InstanceName"
 # params:   -
 # globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
 # saphana_validate: Check the symantic of the input parameters 
-# TODO: Need to add more coding here - check other params, check prereqisites such as secure store users
 #
 function saphana_validate() {
   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
@@ -1409,7 +1346,11 @@ function saphana_start_primary()
     esac
     
     get_hana_landscape_status; lss=$?
-    # TODO: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
+    # TODO: PRI02: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
+    #       RC 0 means either a stopped or a fatal failed database/landcape
+    #            While RC 0 could be ok to restart/react, if one has stopped the HDB there might be
+    #            also just a communication error.
+    #            Takeover should only occur if we run into a RC 1
     if [ $lss -ge 2 ]; then
        super_ocf_log info "fhDBG: get_hana_landscape_status reports an already running HANA"
        case "$lpa_advice" in
@@ -1421,7 +1362,7 @@ function saphana_start_primary()
                     ;;
            register )
                     # upps we are up - but shoudn't? - we could not register with started HDB
-                    # TODO: check if this reaction is correct - tell cluster about failed start
+                    # TODO: RRIO1: check if this reaction is correct - tell cluster about failed start
                     super_ocf_log info "fhLPA: landcape: UP, LPA: register ==> take down"
                     set_crm_master -inf
                     rc=$OCF_NOT_RUNNING 
@@ -1440,7 +1381,7 @@ function saphana_start_primary()
        esac
    else
        super_ocf_log info "fhDBG: get_hana_landscape_status reports a stopped HANA"
-       # TODO: ASK: How should we handle returncodes 1 and 2 (as HANA is down)?
+       # TODO: ASK: PRIO2: How should we handle returncodes 1 and 2 (as HANA is down)?
        case "$lpa_advice" in
            start )  
                     # landcape says we are down, lets start and adjust scores and return code
@@ -1451,7 +1392,7 @@ function saphana_start_primary()
                     ;;
            register )
                     # lets try to register
-                    # TODO: Like Action in start_secondary
+                    # TODO: PRIO2: Like Action in start_secondary
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: register ==> try to register"
                     super_ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
                     set_crm_master  0
@@ -1466,15 +1407,14 @@ function saphana_start_primary()
                         rc=$?
                     else
                         super_ocf_log err "Register failed"
-                        # TODO: Oder besser OCF_FAILED_MASTER oder OCF_NOT_RUNNING? 
-                        rc=$OCF_ERR_GENERIC
+                        rc=$OCF_NOT_RUNNING
                     fi                                         
                     ;;
            wait )
                     # we are down, so we should wait --> Must be implemented in monitor!!
                     # DONE: Implement WAITING-RESOLUTION in Monitor                  
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: wait ==> keep waiting"
-                    # TODO: Check, if WAITING is correct here
+                    # TODO: PRIO1: Check, if WAITING is correct here
                     set_hana_clone_state ${HOSTNAME} "WAITING"
                     set_crm_master -9000
                     rc=$OCF_SUCCSESS
@@ -1581,7 +1521,7 @@ function saphana_start_secondary()
 
     if false; then
         #
-        # TODO: Completely DROP the SQL-based check and replace it by a attribute based implementation
+        # TODO: PRIO2: Completely DROP the SQL-based check and replace it by a attribute based implementation
         # OLD code based on sql query
         #
         saphana_hdbsql_check remote; sqlrc=$?
@@ -1622,7 +1562,8 @@ function saphana_start_secondary()
     else  
         #
         # NEW code based on cluster attributes
-        # TODO: forever_wait_for_primary_master 10 is just a test value: 10 loops x10 seconds than go to WAITING
+        # TODO: PRIO3: forever_wait_for_primary_master 10 is just a test value: 10 loops x10 seconds than go to WAITING
+        # TODO: PRIO3: rename 'forever_wait_for_primary_master' to match better the use case ("wait_some_time")
         #
         super_ocf_log info "fhDBG: wait for promoted side"
         if forever_wait_for_primary_master 10; then
@@ -1726,8 +1667,6 @@ function lpa_push_lpt() {
     local rc=1
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
     #
-    # TODO: Implement lpa_push_lpt
-    # HANA_STATE_PRIMARY
     mkdir -p $LPA_DIRECTORY
     echo "$lpt" > $lpa_file
     clpt=$(lpa_pull_lpt); lpt_rc=$?
@@ -1760,9 +1699,6 @@ function lpa_init_lpt() {
     local LPTrem=-1
     local hana_state=$1
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${HOSTNAME}
-    #
-    # TODO: Implement lpa_init_lpt
-    #
     mkdir -p $LPA_DIRECTORY
     LPTloc=$(lpa_get_lpt ${HOSTNAME}) || LPTloc=$(lpa_pull_lpt) || \
         if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
@@ -1807,8 +1743,6 @@ function lpa_check_lpt_status() {
     local LPTrem=-1
     local LPTDiff=0
     #
-    # TODO: Implement lpa_check_lpt_status
-    #
     # First fetch LPT from cluster attributes
     #
     LPTloc=$(lpa_get_lpt $HOSTNAME); lparc=$?
@@ -1824,7 +1758,7 @@ function lpa_check_lpt_status() {
         fi
     fi
 #
-# TODO: How to handle situations where we still do not know "the" remoteHost - should
+# TODO: PRIO2: How to handle situations where we still do not know "the" remoteHost - should
 #       we just scan for all remoteHosts (shell array)?
 #
     LPTrem=$(lpa_get_lpt $remoteHost); lparc=$?
@@ -1834,7 +1768,7 @@ function lpa_check_lpt_status() {
         rc=2
     else
         #
-        # TODO: Maye LPA should also say win, if lpa-loc=2 and lpa-rem=1 (as special init case)
+        # TODO: PRIO1: Maybe LPA should also say win, if lpa-loc=2 and lpa-rem=1 (as special init case)
         #
         (( LPTDiffLoc = LPTloc - LPTrem ))
         (( LPTDiffRem = LPTrem - LPTloc ))
@@ -1848,7 +1782,7 @@ function lpa_check_lpt_status() {
             rc=1
         else                                     
             if [ $LPTloc -eq 1 ]; then
-                # TODO: Do we need to differ between a 1=1 with different sync status?
+                # TODO: PRIO1: Do we need to differ between a 1=1 with different sync status?
                 # This case can happen: a) when really to secondaries would in the cluster 
                 #                       b) when a primary failed and restarts with prefrred remote takeover 
                 #                        
@@ -1856,7 +1790,7 @@ function lpa_check_lpt_status() {
                 rc=2
             else
                 # THIS IS A STALEMATE, WHICH COULD HAPPEN
-                # TODO: CHeck, if FAIL is the correct behaviour - or just wait for admin to decide via attribute?
+                # TODO: PRIO1: CHeck, if FAIL is the correct behaviour - or just wait for admin to decide via attribute?
                 super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc == LPTrem=$LPTrem => WAIT"
                 rc=2
             fi
@@ -1882,7 +1816,7 @@ function saphana_start_clone() {
     local sqlrc;
     local chkusr;
     #
-    # TODO: IMPLEMENT THE "LAST PRIMARY ALGORITHM (LPA)"
+    # DONE: IMPLEMENT THE "LAST PRIMARY ALGORITHM (LPA)"
     #
     #  1.     - IF DOWN AND CONFIGURED AS PRIMARY -> READ LPT (Last Primary Timestamp) from FILE
     #         - IF UP AND CONFIGURED A PRIMARY -> TODO :)
@@ -1910,8 +1844,8 @@ function saphana_start_clone() {
     #         In a completely stopped cluster - we wait till both nodes reports their timestamp
     #         LPT is number of seconds since ... (like unix time)
     #
-    # TODO ASK: Can we assume that also SAP "needs" cluster nodes in time-sync?
-    # TODO ASK: which minimal grants/permissions does the dbuser need to access the sync view?
+    # DONE: ASK: Can we assume that also SAP "needs" cluster nodes in time-sync? Answer: Yes, they need to be in time sync.
+    # TODO PRIO5: ASK: which minimal grants/permissions does the dbuser need to access the sync view?
     #
     check_secstore_users SLEHALOC SLEHAREM; chkusr=$?
     if [ $chkusr -ne 0 ]; then
@@ -1938,7 +1872,7 @@ function saphana_start_clone() {
 function saphana_stop_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local rc=0
-    # TODO: fh - when to check, if this is/was master already?
+    # TODO: PRIO3: fh - when to check, if this is/was master already?
     set_hana_clone_state ${HOSTNAME} "UNDEFINED"
     saphana_stop; rc=$?
     return $rc
@@ -1948,6 +1882,7 @@ function saphana_stop_clone() {
 # function: saphana_monitor_primary - monitor a hana clone instance
 # params:   -
 # globals:  HANA_STATE_*(r), remoteHost, TBD
+                promoted=0;
 # saphana_monitor_primary
 #
 function saphana_monitor_primary()
@@ -1964,7 +1899,6 @@ function saphana_monitor_primary()
     # OK, we are running/are configured as HANA PRIMARY
     #
     super_ocf_log info "fhDBG saphana_monitor_clone: HANA_STATE_PRIMARY"
-    
     #
     ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
     #
@@ -1983,6 +1917,14 @@ function saphana_monitor_primary()
                 ;;
             WAITING )  
                 # DONE: lpa_check_lpt_status to come out of here :)
+                # TODO: PRIO1: CHECK IF THE FIX FOR COMING OUT OF WAITING IS CORRECT
+                get_hana_landscape_status; lss=$?
+                if [ $lss -ge 2 ]; then
+                    # seems admin already decided that for us? -> we are running - set DEMOTED
+                    promoted=0;
+                    LPTloc=$(date '+%s')
+                    lpa_set_lpt $LPTloc
+                fi
                 lpa_check_lpt_status; lparc=$?
                 if [ $lparc -ne 2 ]; then
                     # lpa - no need to wait any longer - lets try a new start
@@ -1998,19 +1940,24 @@ function saphana_monitor_primary()
                 fi                             
                 promoted=0;
                 ;;
+            UNDEFINED )
+                if ocf_is_probe; then
+                   promoted=0;
+                else
+                   set_hana_clone_state ${HOSTNAME} "DEMOTED"
+                   promoted=0;
+                fi
+                ;;
             * )
                 promoted=0;
                 ;;
         esac
     fi
-    #
-    ##### old method was: saphana_monitor - new method is get_hana_landscape_status
-    #
     get_hana_landscape_status; lss=$? 
     super_ocf_log info "fhDBG saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
         0 | 1 ) # FATAL or ERROR 
-            # TODO: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
+            # TODO: PRIO2: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
             if ocf_is_probe; then
                 # 
                 # leave master score untouched, only set return code
@@ -2019,21 +1966,41 @@ function saphana_monitor_primary()
             else
                 if [ "$promoted" -eq 1 ]; then
                     # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
-                    # TODO: Adjust with set_crm_master?
+                    # TODO: PRIO2: Adjust with set_crm_master?
                     #       For Migration it would be good to decrease master score
                     #       For Reload locally we should NOT adjust the master score
                     # ===>  Should we rely on the migration threshold?
                     #       set_crm_master 
                     if [ $PreferSiteTakeover -eq 1 ]; then
                         #
-                        # TODO: first check, if remote site is already (and still) in sync, so it could at least takeover
-                        # TODO: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
+                        # TODO: PRIO1: first check, if remote site is already (and still) in sync, so it could at least takeover
+                        # TODO: PRIO2: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
                         remoteSync=$(get_hana_sync_status_attr $remoteHost)
                         case "$remoteSync" in
                             SOK )
                                  super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
                                  set_crm_master 5
+                                 # TODO: PRIO1: CHECK, IF lpa_set_lpt 1 IS CORRECT HERE 
+                                 #       - IS IT BETTER TO SET lpa_set_lpt 2?
+                                 #       1. lpa_set_lpt 1
+                                 #       - Problem is, if BOTH hana sites failed, but remoteSync is still SOK than I get a lpa 1-1 situation
+                                 #       2. lpa_set_lpt 2:
+                                 #       a) both instances are failing:
+                                 #          both clones been restarted coming up with lpa 2-1 -> local wins which is OK
+                                 #       b) only former primary failed:
+                                 #          former primary restarted and former secondary promoted (sequence not sure!)
+                                 #          b1) primary coming up first -> lpa 2-1 -> This would be WRONG!!
+                                 #          b2) secondary promted first -> lpa 2-lpt -> former secondary wins which is OK
+                                 #       3. lpa_set_lpt UNTUCHED (lpt)
+                                 #       a) both instances are failing:
+                                 #          both clones been restarted and coming up with lpa lpt-1 -> local wins which is OK
+                                 #       b) only former primary failed:
+                                 #          former primary restarted and former secondary promoted (sequence not sure!)
+                                 #          b1) primary coming up first -> lpa lpt-1 -> This would be WRONG!!
+                                 #          b2) secondary promted first -> lpa lpt1-lpt2 -> former primary will wait until gab is closed
+                                 #       
+                                 #
                                  lpa_set_lpt 1
                                  ;;
                             SFAIL )
@@ -2044,7 +2011,7 @@ function saphana_monitor_primary()
                                  ;;
                         esac                        
                     else 
-                        # TODO:  Implement for local restart
+                        # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
                         set_crm_master 1000
@@ -2053,7 +2020,7 @@ function saphana_monitor_primary()
                     rc=$OCF_FAILED_MASTER
                 else
                     # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
-                    # TODO: Adjust with set_crm_master?
+                    # TODO: PRIO3: Adjust with set_crm_master?
                     #       Current decission: Do NOT adjust master score now as other
                     #       steps ahould already have done that
                     #
@@ -2068,7 +2035,7 @@ function saphana_monitor_primary()
                 #
                 #### LPA begin
                 #
-                # TODO: DO NOT set this lpt, if have started a secondary before!
+                # TODO: PRIO2: DO NOT set this lpt, if have started a secondary before!
                 #
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc
@@ -2136,7 +2103,7 @@ function saphana_monitor_secondary()
     super_ocf_log info "fhDBG saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
-        #  TODO: do we need to inizialize also the DEMOTED attribute value?
+        #  TODO: PRIO3: do we need to inizialize also the DEMOTED attribute value?
         promoted=0;
     else
         case "$promote_attr" in
@@ -2149,7 +2116,7 @@ function saphana_monitor_secondary()
             WAITING* )  # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
                 if false; then
                     #
-                    # TODO: remove this and maybe replace it by the attribute-check
+                    # TODO: PRIO1: remove this and maybe replace it by the attribute-check
                     # OLD code based on SQL query
                     #
                     saphana_hdbsql_check remote; sqlrc=$?
@@ -2177,6 +2144,14 @@ function saphana_monitor_secondary()
                 
                 promoted=0;
                 ;;
+            UNDEFINED )
+                if ocf_is_probe; then
+                   promoted=0;
+                else
+                   set_hana_clone_state ${HOSTNAME} "DEMOTED"
+                   promoted=0;
+                fi
+                ;;
             * )
                 promoted=0;
                 ;;
@@ -2190,7 +2165,7 @@ function saphana_monitor_secondary()
     super_ocf_log info "fhDBG saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
         0 | 1 ) # FATAL or ERROR
-            # TODO: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
+            # TODO: PRIO1: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
             rc=$OCF_NOT_RUNNING
             ;;
         2 | 3 | 4 ) # WARN INFO OK
@@ -2229,7 +2204,7 @@ function saphana_monitor_secondary()
 function saphana_monitor_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     #
-    # TODO: For the secondary, which is missing the primary (so in status WAITING) what is better:
+    # TODO: PRIO1: For the secondary, which is missing the primary (so in status WAITING) what is better:
     #       a) returning 7 here and force cluster a restart of the slave
     #       b) starting the instance here inside the monitor -> may result in longer runtime, timeouts
     #
@@ -2259,7 +2234,7 @@ function saphana_monitor_clone() {
             # OK, we are neither HANA PRIMARY nor HANA SECONDARY
             #
             super_ocf_log info "fhDBG saphana_monitor_clone: HANA_STATE_DEFECT"
-            # TODO: Or only set_crm_master -INFINITY ?
+            # TODO: PRIO2: Or only set_crm_master -INFINITY ?
             rc=$OCF_ERR_GENERIC
         fi
     fi
@@ -2305,7 +2280,7 @@ function saphana_promote_clone() {
                 #
                 # now gain check, if we are primary NOW
                 #
-                # TODO: check, if we need to destigush between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+                # TODO: PRIO3: check, if we need to destigush between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
                 #
                 if check_for_primary; then
                     set_hana_clone_state ${HOSTNAME} "PROMOTED"
@@ -2446,7 +2421,7 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 # These operations don't require OCF parameters to be set
-# TODO: check, if notify is still not needing OCF parameters
+# TODO: PRIO5: check, if notify is still not needing OCF parameters
 case "$ACTION" in
     usage|methods)  saphana_$ACTION
                     super_log "---END--------------------------------------------------------------"
