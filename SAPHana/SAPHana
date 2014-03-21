@@ -180,7 +180,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.103.2014.03.20.2</version>
+<version>0.106.2014.03.20.5</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1405,6 +1405,7 @@ function saphana_start_primary()
                         set_crm_master  0
                         saphana_start_secondary
                         rc=$?
+                        lpa_set_lpt  30
                     else
                         super_ocf_log err "Register failed"
                         rc=$OCF_NOT_RUNNING
@@ -1773,6 +1774,7 @@ function lpa_check_lpt_status() {
         super_ocf_log info "fhDBG: LPA: LPTloc=$LPTloc, LPTrem undefined => WAIT"
         rc=2
     else
+        super_ocf_log info "fhDBG: LPA: LPTloc ($LPTloc) LPTrem ($LPTrem) delta ($delta)"
         if [ $LPTloc -lt $LPTMark -a $LPTrem -lt $LPTMark ]; then
            delta=0   # both lpts are not a real timestamp so just take the greater one
         else
@@ -1782,9 +1784,9 @@ function lpa_check_lpt_status() {
             # We are the winner - LPA says STARTUP
             super_ocf_log info "fhDBG: LPA: LPTloc wins $LPTloc > $LPTrem + $delta => START"
             rc=0
-        elif (( delta < LPTRem - LPTloc )); then 
+        elif (( delta < LPTrem - LPTloc )); then 
             # The other one has won - LPA says REGISTER
-            super_ocf_log info "fhDBG: LPA: LPTrem wins $LPTrem > $LPTrem + $delta => REGISTER"
+            super_ocf_log info "fhDBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta => REGISTER"
             rc=1
         else                                     
             super_ocf_log info "fhDBG: LPA: Difference between LPTloc and LPTrem is less than delta ($delta) => WAIT"
@@ -1854,6 +1856,7 @@ function saphana_start_clone() {
             saphana_start_primary; rc=$?
         else 
             saphana_start_secondary; rc=$?
+            lpa_set_lpt  30
         fi 
     fi
     return $rc
@@ -1862,14 +1865,19 @@ function saphana_start_clone() {
 #
 # function: saphana_stop_clone - stop a hana clone instance
 # params:   -
-# globals:  HOSTNAME(r)
+# globals:  HOSTNAME(r), HANA_STATE_*(r)
 # saphana_stop_clone
 #
 function saphana_stop_clone() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local rc=0
+    local primary_status="x"
     # TODO: PRIO3: fh - when to check, if this is/was master already?
     set_hana_clone_state ${HOSTNAME} "UNDEFINED"
+        check_for_primary; primary_status=$?
+        if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+            lpa_set_lpt  10
+        fi 
     saphana_stop; rc=$?
     return $rc
 }
@@ -1996,8 +2004,9 @@ function saphana_monitor_primary()
                                  #          b1) primary coming up first -> lpa lpt-10 -> This would be WRONG!!
                                  #          b2) secondary promted first -> lpa lpt1-lpt2 -> former primary will wait until gab is closed
                                  #       
+                                 # SOLUTION THE VALUE OF 20 HERE NEEDS A "HOT" SECONDARY TO SET VALUE 30 and a "COLD" 10
                                  #
-                                 lpa_set_lpt 10
+                                 lpa_set_lpt 20
                                  ;;
                             SFAIL )
                                  super_ocf_log info "fhDEC: PreferSiteTakeover selected BUT remoteHost is not in sync (SFAIL) -> local restart preferred"                            
@@ -2162,10 +2171,12 @@ function saphana_monitor_secondary()
     case "$lss" in
         0 | 1 ) # FATAL or ERROR
             # TODO: PRIO1: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is "down/error"
+            lpa_set_lpt  10
             rc=$OCF_NOT_RUNNING
             ;;
         2 | 3 | 4 ) # WARN INFO OK
             rc=$OCF_SUCCESS
+            lpa_set_lpt  30
             sync_attr=$(get_hana_sync_status_attr ${HOSTNAME})
             super_ocf_log info "fhDBG sync_attr=$sync_attr"
             case "$sync_attr" in
