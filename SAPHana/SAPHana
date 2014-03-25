@@ -33,6 +33,9 @@
 #   OCF_RESKEY_HANA_SR_MODE     (future: optional and deprecated, today: still needed)
 #
 #   TODO: PRIO1: See TODOs in this script
+#   TODO: PRIO1: Secondary mit SFAIL sollte eventuell auf lpa=30 gesetzt werden?
+#   TODO: PRIO3: Absolutely minimize setting of attributes (each set should check first)
+#   TODO: PRIO2: Primary alone in cluster (other standby - does it set its own attribute to SFAIL?) should set it to PRIM
 #   DONE: ASK: What to do on landscapeHostConfiguration return code 2 (=WARN)? ANSW: ->> keep!!!
 #   DONE: ASK: Do we need to support virtual hostnames for SAPHana like we have for SAPInstance?  ->> ANSW: YES!!!
 #   TODO: PRIO3: How to "migrate" a primary? Simply promote the secondary does not work as the running primary will not be demoted to a secondary
@@ -50,6 +53,24 @@
 #   TODO: PRIO2: ASK:  DESCRIBE FOR MATTHIAS MAENNICH WHICH HOOKS WOULD BE HELPFUL
 #   TODO: PRIO3: SCRIPT FOR UPDATE PROCEDURE (ROLLING UPDATE)
 #
+#   TODO: PRIO5: For SCALE-OUT only: Need scoring table for primary/secondary master/slave/xxx
+#
+#         I) with prefer-site-takeover (without optimized local takeover)
+#                 primary     secondary
+#         master     150           100 
+#         slave       60            10
+#         xxx
+#         ? (down)
+#         ( 100 points for master, +50 points for primary OR +10 points for slave, BUT -INFINITY, if SFAIL or secondary/down )
+#
+#         II) with noprefer-site-takeover
+#                 primary     secondary
+#         master     150            50 
+#         slave      110            10
+#         xxx
+#         ? (down)
+#        
+
 #   USED CLUSTER CLI COMMANDS:
 #   crm_master
 #   crm_attribute (get/set)
@@ -180,7 +201,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.106.2014.03.20.5</version>
+<version>0.110.2014.03.25.2</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1357,7 +1378,22 @@ function saphana_start_primary()
            start )  
                     # as landcape says we are up - just set the scores and return code
                     super_ocf_log info "fhLPA: landcape: UP, LPA: start ==> keep running"
-                    set_crm_master 1000
+                # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
+                my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::master -> crm_master 150"
+                   set_crm_master 150
+                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
+                   set_crm_master  60
+                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::? -> crm_master 0"
+                   set_crm_master  0
+                else
+                   super_ocf_log info "fhDEC: primary::unknown -> crm_master -1"
+                   set_crm_master  -1
+                fi
+                 #   set_crm_master 1000
                     rc=$OCF_SUCCSESS
                     ;;
            register )
@@ -1369,8 +1405,23 @@ function saphana_start_primary()
                     ;;
            wait )
                     # as we ARE up we just keep it up
+                # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
+                my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::master -> crm_master 150"
+                   set_crm_master 150
+                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
+                   set_crm_master  60
+                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::? -> crm_master 0"
+                   set_crm_master  0
+                else
+                   super_ocf_log info "fhDEC: primary::unknown -> crm_master -1"
+                   set_crm_master  -1
+                fi
                     super_ocf_log info "fhLPA: landcape: UP, LPA: wait ==> keep running"
-                    set_crm_master 1000
+                 #   set_crm_master 1000
                     rc=$OCF_SUCCSESS
                     ;;
            fail )   
@@ -1386,7 +1437,22 @@ function saphana_start_primary()
            start )  
                     # landcape says we are down, lets start and adjust scores and return code
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: start ==> start instance"
-                    set_crm_master 1000
+                # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
+                my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::master -> crm_master 150"
+                   set_crm_master 150
+                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
+                   set_crm_master  60
+                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::? -> crm_master 1"
+                   set_crm_master  1
+                else
+                   super_ocf_log info "fhDEC: primary::unknown -> crm_master -1"
+                   set_crm_master  -1
+                fi
+                 #   set_crm_master 1000
                     saphana_start
                     rc=$?                    
                     ;;
@@ -1449,11 +1515,13 @@ check_for_primary_master()
     # get actual list of cluster members
     # 
     otherHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
+super_ocf_log info "fhDBG: **** otherHosts: ${otherHosts[@]} ***"
     if [ -n "$otherHosts" ]; then
-        for ch in $otherHosts; do
+        for ch in ${otherHosts[@]}; do
             if [ $rc -eq 1 ]; then
                 ch_role=$(crm_attribute -N ${ch} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
                 grep 'primary:[^:]*:master:' <<< $ch_role && rc=0
+super_ocf_log info "fhDBG: **** Checking ATTR_NAME_HANA_ROLES of node ${ch}: ${ch_role} ==> rc=$rc"
             fi
         done
     fi 
@@ -1899,6 +1967,7 @@ function saphana_monitor_primary()
     local lparc=4
     local lss
     local remoreSync=""
+    local my_role=""
     #
     # OK, we are running/are configured as HANA PRIMARY
     #
@@ -2019,7 +2088,22 @@ function saphana_monitor_primary()
                         # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
-                        set_crm_master 1000
+                # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES / AND SCORES
+                my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::master -> crm_master 150"
+                   set_crm_master 150
+                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
+                   set_crm_master  60
+                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::? -> crm_master 0"
+                   set_crm_master  0
+                else
+                   super_ocf_log info "fhDEC: primary::unknown -> crm_master -1"
+                   set_crm_master  -1
+                fi
+                 #       set_crm_master 1000
                         rc=$OCF_FAILED_MASTER
                     fi
                     rc=$OCF_FAILED_MASTER
@@ -2059,8 +2143,26 @@ function saphana_monitor_primary()
                         rc=$OCF_SUCCESS
                     fi
                 fi
-                set_crm_master 1000
-                analyze_hana_sync_status
+                # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
+                my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::master -> crm_master 150"
+                   set_crm_master 150
+                   # only analyze sync status at primary::master
+                   analyze_hana_sync_status
+                    set_hana_sync_status_attr "PRIM" ${HOSTNAME}
+                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
+                   set_crm_master  60
+                    set_hana_sync_status_attr "PRIM" ${HOSTNAME}
+                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: primary::? -> crm_master 0"
+                   set_crm_master  0
+                else 
+                   super_ocf_log info "fhDEC: primary::unknown -> crm_master -1"
+                   set_crm_master  -1
+                fi
+                #set_crm_master 1000
             fi
             ;;
         * ) # UNDEFINED STATUS
@@ -2182,7 +2284,18 @@ function saphana_monitor_secondary()
             case "$sync_attr" in
                 "SOK"   )    # This is a possible node to promote, when primary is missing
                     super_ocf_log info "fhDEC: secondary with sync status SOK -> posible takeover node"
-                    set_crm_master  10
+                #    set_crm_master  10
+                # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
+                my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
+                if grep 'secondary:[^:]*:master:' <<< $my_role ; then
+                   set_crm_master 150
+                elif grep 'secondary:[^:]*:slave:' <<< $my_role ; then
+                   set_crm_master  60
+                elif grep 'secondary:[^:]*:\?:' <<< $my_role ; then
+                   set_crm_master  0
+                else
+                   set_crm_master  -1
+                fi
                     ;;
                 "SFAIL" ) # This is currently NOT a possible node to promote
                     super_ocf_log info "fhDEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
