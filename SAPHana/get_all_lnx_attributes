@@ -3,15 +3,71 @@
 # get_all_lnx_attributes
 #
 # <nvpair id="status-lv9041-hana_lnx_roles" name="hana_lnx_roles" value="primary:master1:slave:worker:slave"/>
+use POSIX;
 
-my $sid="lnx";
+my $sid="";
+
+sub print_attr_host()
+{
+	printf "%-22s", "Attribute \\ Host";
+	foreach $HKey (sort keys %Host) {
+	   printf "%-16s ", $HKey;
+	}
+	printf "\n";
+
+	printf "%s\n", "-" x 120 ;
+
+	foreach $AKey (sort keys %Name) {
+	   printf "%-22s", $AKey;
+	   foreach $HKey (sort keys %Host) {
+		   printf "%-16.16s ", $Host{$HKey} -> {$AKey};
+		}
+
+	   printf "\n";
+	}
+	return 0;
+}
+
+sub print_host_attr()
+{
+	printf "%-18.18s", "Host \\ Attribute";
+	foreach $AKey (sort keys %Name) {
+	   printf "%-22.22s ", $AKey;
+	}
+	printf "\n";
+	printf "%s\n", "-" x 120 ;
+	foreach $HKey (sort keys %Host) {
+	   printf "%-18.18s", $HKey;
+	   foreach $AKey (sort keys %Name) {
+		   printf "%-22.22s ", $Host{$HKey} -> {$AKey};
+		}
+	   printf "\n";
+	}
+	return 0;
+}
+
+open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
+while (<ListInstances>) {
+   # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+   chomp;
+   if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-/ ) {
+      $sid=tolower("$1");
+   }
+}
+close ListInstances;
 
 
 open CIB, "cibadmin -Ql |";
-
 while (<CIB>) {
    chomp;
    if ( $_ =~ /nvpair\s+id="status-([a-zA-Z0-9]+)-\w+"\s+name="(\w+_${sid}_\w+)"\s+value="([^"]+)"/ ) {
-       printf "%-8s %-20s %-30s\n", $1, $2, $3;
+       my ($host, $name, $value) = ( $1, $2, $3 );
+       $Host{$host}->{$name}=${value};
+       $Name{$name}->{$host}=${value};
+       # printf "%-8s %-20s %-30s\n", $1, $2, $3;
    }
 }
+close CIB;
+
+print_attr_host;
+print_host_attr;
