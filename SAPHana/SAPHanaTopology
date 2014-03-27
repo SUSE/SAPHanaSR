@@ -129,7 +129,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-<version>0.24.2014.03.27.1</version>
+<version>0.24.2014.03.27.2</version>
 
 <shortdesc lang="en">Analyzes SAP HANA topology.</shortdesc>
 <longdesc lang="en">
@@ -324,7 +324,7 @@ function sht_init() {
     InstanceNr=$OCF_RESKEY_InstanceNumber
     myInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
-    super_ocf_log info "fhDBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    super_ocf_log info "fhDBG2: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
     SAPVIRHOST=${HOSTNAME}
@@ -339,7 +339,7 @@ function sht_init() {
     #super_ocf_log info "fhDBG: sr_name=$sr_name, remoteHost=$remoteHost, sr_mode=$sr_mode"
 
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
-    super_ocf_log info "fhDBG: OCF: $ocf_env"
+    super_ocf_log info "fhDBG2: OCF: $ocf_env"
    
     ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"  # SOK, SFAIL, UNKNOWN?
     ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"   # Not really used
@@ -397,7 +397,7 @@ function check_for_primary() {
    # DONE: Change stderr location!!
    #sidadm=lnxadm
    node_status=$(check_for_primary_single) 
-   super_ocf_log info "fhDBG: check_for_primary: node_status=$node_status"
+   super_ocf_log info "fhDBG2: check_for_primary: node_status=$node_status"
    case "$node_status" in
        primary ) 
                   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = HANA_STATE_PRIMARY"
@@ -426,7 +426,7 @@ function check_for_primary_single()
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local node_full_status node_status
     local rc=0
-super_ocf_log info "fhDBG: su - ${sidadm} -c LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state"
+super_ocf_log info "fhDBG2: su - ${sidadm} -c LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state"
     node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     echo "$node_status"
@@ -786,29 +786,29 @@ function sht_monitor_clone() {
 
 
 	if ocf_is_probe; then
-		super_ocf_log info "fhDBG: PROBE ONLY"
+		super_ocf_log info "fhDBG2: PROBE ONLY"
 	else
-		super_ocf_log info "fhDBG: REGULAR MONITOR"
+		super_ocf_log info "fhDBG2: REGULAR MONITOR"
 	fi
 	#
 	# First check, if we are PRIMARY or SECONDARY
 	# 
-    super_ocf_log info "fhACT: HANA SID $SID"
-    super_ocf_log info "fhACT: HANA InstanceName $InstanceName"
-    super_ocf_log info "fhACT: HANA InstanceNr $InstanceNr"
+    super_ocf_log info "fhDBG2: HANA SID $SID"
+    super_ocf_log info "fhDBG2: HANA InstanceName $InstanceName"
+    super_ocf_log info "fhDBG2: HANA InstanceNr $InstanceNr"
 	check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         hanaPrim="P"
-        super_ocf_log info "fhACT: HANA IS PRIMARY"
+        super_ocf_log info "fhDBG2: HANA IS PRIMARY"
         sht_monitor; rc=$?
     else
         if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
             hanaPrim="S"
-            super_ocf_log info "fhACT: HANA IS SECONDARY"
+            super_ocf_log info "fhDBG2: HANA IS SECONDARY"
             sht_monitor; rc=$?
         else
             hanaPrim="-"
-            super_ocf_log warn "fhDBG sht_monitor_clone: HANA_STATE_DEFECT"
+            super_ocf_log warn "fhDBG2: sht_monitor_clone: HANA_STATE_DEFECT"
             rc=$OCF_ERR_CONFIGURE
         fi
     fi
@@ -817,10 +817,10 @@ function sht_monitor_clone() {
     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${HOSTNAME})
     hanamap=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state --sapcontrol=1" | awk -F= '($1 ~ "mapping" ) &&($2 !~ site "/" ) ' site=$site)
     hanaRemoteHost=$(echo $hanamap | awk -F/ '{print $3}')
-    super_ocf_log info "fhACT: HANA SITE $site"
-    super_ocf_log info "fhACT: HANA ROLES $hanarole"
-    super_ocf_log info "fhACT: HANA MAP $hanamap"
-    super_ocf_log info "fhACT: HANA remoteHost $hanaRemoteHost"
+    super_ocf_log info "fhDBG2: HANA SITE $site"
+    super_ocf_log info "fhDBG2: HANA ROLES $hanarole"
+    super_ocf_log info "fhDBG2: HANA MAP $hanamap"
+    super_ocf_log info "fhDBG2: HANA remoteHost $hanaRemoteHost"
     set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_REMOTEHOST" "$hanaRemoteHost" "reboot"
     set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_ROLES" "$hanalrc:$hanaPrim:$hanarole" "reboot"
     set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_SITE" "$site" "reboot"
