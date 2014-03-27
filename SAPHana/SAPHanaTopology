@@ -129,7 +129,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-<version>0.23.2014.03.24.1</version>
+<version>0.24.2014.03.27.1</version>
 
 <shortdesc lang="en">Analyzes SAP HANA topology.</shortdesc>
 <longdesc lang="en">
@@ -182,6 +182,49 @@ END
 return $rc
 }
 
+###
+#
+# function: get_hana_attribute 
+# params:   NODE ATTR [STORE]
+# globals:  -
+#
+function get_hana_attribute()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0
+    local attr_node=$1
+    local attr_name=$2
+    local attr_store="reboot" # TODO: PRIO5 get this (optional) from parameter
+    crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q; rc=$?
+    super_ocf_log info "fhFLOW function: $FUNCNAME rc=$rc"
+    return $rc
+}
+
+#
+# function: set_hana_attribute - set the multi-state status of a node
+# params:   NODE ATTR VALUE [STORE]
+# globals:  -
+#
+function set_hana_attribute()
+{
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local attr_node=$1
+    local attr_name=$2
+    local attr_value=$3
+    local attr_store="reboot" # TODO: PRIO5 get this (optional) from parameter
+    local rc=1
+    local attr_old
+    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store)
+    if [ "$attr_old" != "$attr_value" ]; then
+        super_ocf_log info "fhDBG SET attribute $attr_name for node ${attr_node} to ${attr_value}"
+        crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store; rc=$?
+    else
+        super_ocf_log info "fhDBG LET attribute $attr_name for node ${attr_node} still be ${attr_value}"
+        rc=0
+    fi
+    super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
+    return $rc
+}
 ###
 
 
@@ -281,7 +324,7 @@ function sht_init() {
     InstanceNr=$OCF_RESKEY_InstanceNumber
     myInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
-    super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    super_ocf_log info "fhDBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
     SAPVIRHOST=${HOSTNAME}
@@ -558,7 +601,7 @@ function lpa_set_lpt() {
     local crm_rc=1
     local lpt=$1
     local clpt=-1
-    crm_attribute -v "$lpt" -n "$LPA_ATTR" -l reboot; crm_rc=$?
+    set_hana_attribute "${HOSTNAME}" "${LPA_ATTR}" "${lpt}" "reboot";  crm_rc=$?
     clpt=$(lpa_get_lpt $HOSTNAME)
     if [ "$lpt" != "$clpt" ]; then
         rc=2
@@ -723,7 +766,7 @@ function sht_stop_clone() {
     else
         hanaPrim="S"
     fi
-    crm_attribute -N ${HOSTNAME} -v "0:$hanaPrim:-:-:-:-" -n "$ATTR_NAME_HANA_ROLES" -l reboot;
+    set_hana_attribute "${HOSTNAME}" "$ATTR_NAME_HANA_ROLES" "0:$hanaPrim:-:-:-:-" "reboot"
     sht_stop; rc=$?
     return $rc
 }
@@ -778,9 +821,9 @@ function sht_monitor_clone() {
     super_ocf_log info "fhACT: HANA ROLES $hanarole"
     super_ocf_log info "fhACT: HANA MAP $hanamap"
     super_ocf_log info "fhACT: HANA remoteHost $hanaRemoteHost"
-    crm_attribute -N ${HOSTNAME} -v "$hanaRemoteHost"     -n "$ATTR_NAME_HANA_REMOTEHOST" -l reboot;
-    crm_attribute -N ${HOSTNAME} -v "$hanalrc:$hanaPrim:$hanarole" -n "$ATTR_NAME_HANA_ROLES"      -l reboot;
-    crm_attribute -N ${HOSTNAME} -v "$site"               -n "$ATTR_NAME_HANA_SITE"       -l reboot;
+    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_REMOTEHOST" "$hanaRemoteHost" "reboot"
+    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_ROLES" "$hanalrc:$hanaPrim:$hanarole" "reboot"
+    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_SITE" "$site" "reboot"
     # /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
