@@ -7,6 +7,15 @@ use POSIX;
 
 my $sid="";
 
+
+my $table_title = "Host \\ Attr";
+
+sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
+ my $a = shift;
+ my $b = shift;
+ return $a > $b ? $a : $b;
+}
+
 sub print_attr_host()
 {
 	printf "%-22s", "Attribute \\ Host";
@@ -30,17 +39,37 @@ sub print_attr_host()
 
 sub print_host_attr()
 {
-	printf "%-18.18s", "Host \\ Attribute";
+    my ($AKey, $HKey, $len, $line_len, $hclen);
+    $hclen=$Name{_hosts}->{_length};
+    $line_len=$hclen+1;
+	printf "%-$hclen.${hclen}s ", "$table_title";
 	foreach $AKey (sort keys %Name) {
-	   printf "%-22.22s ", $AKey;
+       if ($AKey ne "_hosts") {
+           $len = $Name{$AKey}->{_length};
+           $line_len=$line_len+$len+1;
+           printf "%-$len.${len}s ", $Name{$AKey}->{_title};
+       }
 	}
 	printf "\n";
-	printf "%s\n", "-" x 120 ;
+if (0) {
+    printf "%-$hclen.${hclen}s", "$hclen";
+	foreach $AKey (sort keys %Name) {
+       if ($AKey ne "_hosts") {
+           $len = $Name{$AKey}->{_length};
+           printf "%-$len.${len}s ", $Name{$AKey}->{_length};
+       }
+	}
+    printf "\n";
+}
+	printf "%s\n", "-" x $line_len ;
 	foreach $HKey (sort keys %Host) {
-	   printf "%-18.18s", $HKey;
+	   printf "%-$hclen.${hclen}s ", $HKey;
 	   foreach $AKey (sort keys %Name) {
-		   printf "%-22.22s ", $Host{$HKey} -> {$AKey};
-		}
+           if ($AKey ne "_hosts") {
+               $len = $Name{$AKey}->{_length};
+               printf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
+            }
+        }
 	   printf "\n";
 	}
 	return 0;
@@ -62,12 +91,36 @@ while (<CIB>) {
    chomp;
    if ( $_ =~ /nvpair\s+id="status-([a-zA-Z0-9]+)-\w+"\s+name="(\w+_${sid}_\w+)"\s+value="([^"]+)"/ ) {
        my ($host, $name, $value) = ( $1, $2, $3 );
+       #
+       # handle the hosts name and table-title
+       #
        $Host{$host}->{$name}=${value};
+       if ( defined ($Name{_hosts}->{_length})) {
+          $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
+       } else {
+          $Name{_hosts}->{_length} = length($host );
+       }
+       $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
+       #
+       # now handle the attributes name and value
+       #
        $Name{$name}->{$host}=${value};
+       if ( defined ($Name{$name}->{_length})) {
+          $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
+       } else {
+          $Name{$name}->{_length} = length($value );
+       }
+       if ( $name =~ /hana_${sid}_(.*)/ ) {
+          $Name{$name}->{_title} =  $1;
+       } else {
+          $Name{$name}->{_title} = $name; 
+       }
+       $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
+
        # printf "%-8s %-20s %-30s\n", $1, $2, $3;
    }
 }
 close CIB;
 
-print_attr_host;
+#print_attr_host;
 print_host_attr;
