@@ -52,21 +52,23 @@
 #   TODO: PRIO1: COME OUT OF WATING SITS
 #   TODO: PRIO2: ASK:  DESCRIBE FOR MATTHIAS MAENNICH WHICH HOOKS WOULD BE HELPFUL
 #   TODO: PRIO3: SCRIPT FOR UPDATE PROCEDURE (ROLLING UPDATE)
-#
 #   TODO: PRIO5: For SCALE-OUT only: Need scoring table for primary/secondary master/slave/xxx
 #
 #         I) with prefer-site-takeover (without optimized local takeover)
-#                 primary     secondary
-#         master     150           100 
-#         slave       60            10
-#         xxx
-#         ? (down)
+#                 primary     secondary   other
+#         master     150           100    -inf
+#         slave+PRIM  60             -    -inf
+#         slave+SOK    -            10    -inf
+#         slave+SFAIL  -          -inf    -inf  
+#         ? (down)     0             0    -inf
+#         UKNOWN    -inf          -inf    -inf
+#
 #         ( 100 points for master, +50 points for primary OR +10 points for slave, BUT -INFINITY, if SFAIL or secondary/down )
 #
 #         II) with noprefer-site-takeover
 #                 primary     secondary
 #         master     150            50 
-#         slave      110            10
+#         slave+SOK  110            10
 #         xxx
 #         ? (down)
 #        
@@ -201,7 +203,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.110.2014.03.25.2</version>
+<version>0.112.2014.03.27.3</version>
 
 <shortdesc lang="en">Manages a SAP HANA instance.</shortdesc>
 <longdesc lang="en">
@@ -1380,13 +1382,13 @@ function saphana_start_primary()
                     super_ocf_log info "fhLPA: landcape: UP, LPA: start ==> keep running"
                 # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
                 my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                if grep '[0-9]*:P:[^:]*:master:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::master -> crm_master 150"
                    set_crm_master 150
-                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:slave:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
                    set_crm_master  60
-                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:\?:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::? -> crm_master 0"
                    set_crm_master  0
                 else
@@ -1407,13 +1409,13 @@ function saphana_start_primary()
                     # as we ARE up we just keep it up
                 # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
                 my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                if grep '[0-9]*:P:[^:]*:master:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::master -> crm_master 150"
                    set_crm_master 150
-                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:slave:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
                    set_crm_master  60
-                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:\?:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::? -> crm_master 0"
                    set_crm_master  0
                 else
@@ -1439,13 +1441,13 @@ function saphana_start_primary()
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: start ==> start instance"
                 # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
                 my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                if grep '[0-9]*:P:[^:]*:master:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::master -> crm_master 150"
                    set_crm_master 150
-                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:slave:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
                    set_crm_master  60
-                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:\?:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::? -> crm_master 1"
                    set_crm_master  1
                 else
@@ -1462,20 +1464,25 @@ function saphana_start_primary()
                     super_ocf_log info "fhLPA: landcape: DOWN, LPA: register ==> try to register"
                     super_ocf_log info "fhDEC: ===> AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
                     set_crm_master  0
-                    register_hana_secondary 
-                    check_for_primary; primary_status=$?
-                    if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
-                        super_ocf_log info "fhACT: Register successful"
-                        lpa_push_lpt 10
-                        lpa_set_lpt  10
-                        set_crm_master  0
-                        saphana_start_secondary
-                        rc=$?
-                        lpa_set_lpt  30
+                    if forever_wait_for_primary_master 1; then
+                        register_hana_secondary 
+                        check_for_primary; primary_status=$?
+                        if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+                            super_ocf_log info "fhACT: Register successful"
+                            lpa_push_lpt 10
+                            lpa_set_lpt  10
+                            set_crm_master  0
+                            saphana_start_secondary
+                            rc=$?
+                            lpa_set_lpt  30
+                        else
+                            super_ocf_log err "Register failed"
+                            rc=$OCF_NOT_RUNNING
+                        fi                                         
                     else
-                        super_ocf_log err "Register failed"
-                        rc=$OCF_NOT_RUNNING
-                    fi                                         
+                        # lets check next monitor, if we can register
+                        rc=$OCF_SUCCESS
+                    fi
                     ;;
            wait )
                     # we are down, so we should wait --> Must be implemented in monitor!!
@@ -1520,7 +1527,7 @@ super_ocf_log info "fhDBG: **** otherHosts: ${otherHosts[@]} ***"
         for ch in ${otherHosts[@]}; do
             if [ $rc -eq 1 ]; then
                 ch_role=$(crm_attribute -N ${ch} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                grep 'primary:[^:]*:master:' <<< $ch_role && rc=0
+                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
 super_ocf_log info "fhDBG: **** Checking ATTR_NAME_HANA_ROLES of node ${ch}: ${ch_role} ==> rc=$rc"
             fi
         done
@@ -2090,13 +2097,13 @@ function saphana_monitor_primary()
                         #super_ocf_log info "fhDEC: PreferSiteTakeover selected so decrease promotion score here"
                 # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES / AND SCORES
                 my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                if grep '[0-9]*:P:[^:]*:master:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::master -> crm_master 150"
                    set_crm_master 150
-                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:slave:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
                    set_crm_master  60
-                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:\?:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::? -> crm_master 0"
                    set_crm_master  0
                 else
@@ -2145,17 +2152,17 @@ function saphana_monitor_primary()
                 fi
                 # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
                 my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                if grep 'primary:[^:]*:master:' <<< $my_role ; then
+                if grep '[0-9]*:P:[^:]*:master:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::master -> crm_master 150"
                    set_crm_master 150
                    # only analyze sync status at primary::master
                    analyze_hana_sync_status
                     set_hana_sync_status_attr "PRIM" ${HOSTNAME}
-                elif grep 'primary:[^:]*:slave:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:slave:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::slave -> crm_master 60"
                    set_crm_master  60
                     set_hana_sync_status_attr "PRIM" ${HOSTNAME}
-                elif grep 'primary:[^:]*:\?:' <<< $my_role ; then
+                elif grep '[0-9]*:P:[^:]*:\?:' <<< $my_role ; then
                    super_ocf_log info "fhDEC: primary::? -> crm_master 0"
                    set_crm_master  0
                 else 
@@ -2287,11 +2294,14 @@ function saphana_monitor_secondary()
                 #    set_crm_master  10
                 # TODO: PRIO4: Check for ATTR_NAME_HANA_ROLES
                 my_role=$(crm_attribute -N ${HOSTNAME} -G -n "$ATTR_NAME_HANA_ROLES" -l reboot;)
-                if grep 'secondary:[^:]*:master:' <<< $my_role ; then
-                   set_crm_master 150
-                elif grep 'secondary:[^:]*:slave:' <<< $my_role ; then
-                   set_crm_master  60
-                elif grep 'secondary:[^:]*:\?:' <<< $my_role ; then
+                if grep '[0-9]*:S:[^:]*:master:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: secondary::master -> crm_master 100"
+                   set_crm_master 100
+                elif grep '[0-9]*:S:[^:]*:slave:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: secondary::slave -> crm_master 10"
+                   set_crm_master  10
+                elif grep '[0-9]*:S:[^:]*:\?:' <<< $my_role ; then
+                   super_ocf_log info "fhDEC: secondary::? -> crm_master 0"
                    set_crm_master  0
                 else
                    set_crm_master  -1
