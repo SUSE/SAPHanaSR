@@ -129,7 +129,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.25.2014.03.28.4</version>
+    <version>0.25.2014.03.28.10</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
@@ -146,8 +146,8 @@ function sht_meta_data() {
         <content type="string" default="" />
     </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
-        <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/<SID>/<InstanceName>/exe.
-        While InstanceName is the string of "HDB" and <InstanceNumber> for SAP Hana databases.
+        <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/\$SID/\$InstanceName/exe.
+        While InstanceName is the string of "HDB" and \$InstanceNumber for SAP Hana databases.
         </longdesc>
         <shortdesc lang="en">Path to the SAP Hana Instance executable directory.</shortdesc>
         <content type="string" default="" />
@@ -194,21 +194,21 @@ function get_hana_attribute()
 
 #
 # function: set_hana_attribute - set the multi-state status of a node
-# params:   NODE ATTR VALUE [STORE]
+# params:   NODE VALUE ATTR [STORE]
 # globals:  -
 #
 function set_hana_attribute()
 {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local attr_node=$1
-    local attr_name=$2
-    local attr_value=$3
-    local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
+    local attr_value=$2
+    local attr_name=$3
+    local attr_store=${4:-reboot} # DONE: PRIO5 get this (optional) from parameter
     local rc=1
     local attr_old
-    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store)
+    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store); get_rc=$?
     if [ "$attr_old" != "$attr_value" ]; then
-        super_ocf_log info "fhDBG SET attribute $attr_name for node ${attr_node} to ${attr_value}"
+        super_ocf_log info "fhDBG SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store; rc=$?
     else
         super_ocf_log info "fhDBG LET attribute $attr_name for node ${attr_node} still be ${attr_value}"
@@ -289,6 +289,7 @@ function sht_init() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local myInstanceName=""
     local rc=$OCF_SUCCESS
+    local hdbANSWER=""
     HOSTEXECNAME=saphostexec
     USRSAP=/usr/sap
     SAPSERVICE_PATH=${USRSAP}/sapservices
@@ -305,15 +306,15 @@ function sht_init() {
     SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-all}"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log info "fhDBG3: OCF: $ocf_env"
-    ATTR_NAME_HANA_SYNC_STATUS="hana_${sid}_sync_state"  # SOK, SFAIL, UNKNOWN?
-    ATTR_NAME_HANA_PRIMARY_AT="hana_${sid}_primary_at"   # Not really used
-    ATTR_NAME_HANA_CLONE_STATE="hana_${sid}_clone_state" # UKNOWN?, DEMOTED, PROMOTED
-    ATTR_NAME_HANA_REMOTEHOST="hana_${sid}_remoteHost"
-    ATTR_NAME_HANA_SITE="hana_${sid}_site"
-    ATTR_NAME_HANA_ROLES="hana_${sid}_roles"
-    ATTR_NAME_HANA_SRMODE="hana_${sid}_srmode"  # TODO: PRIO2: Fill that attribute later
-    ATTR_NAME_HANA_VHOST="hana_${sid}_vhost"
-    ATTR_NAME_HANA_STATUS="hana_${sid}_status"  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
+    ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")   # SOK, SFAIL, UNKNOWN?
+    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
+    ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UKNOWN?, DEMOTED, PROMOTED
+    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "reboot")
+    ATTR_NAME_HANA_SITE=("hana_${sid}_site" "reboot")
+    ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
+    ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "reboot")
+    ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "reboot")
+    ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
 
     # optional OCF parameters, we try to guess which directories are correct
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -344,9 +345,17 @@ function sht_init() {
     fi
 
     PATH=${PATH}:${DIR_EXECUTABLE}
+    #
+    # figure-out all needed values from system replication status with ONE call
+    # we need: mode=primary|sync|syncmem|...; site name=<site>; mapping/<me>=<site>/<node> (multiple lines)
+    hdbANSWER=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state --sapcontrol=1")
+    site=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
+    srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 ~ "mapping" && $3 !~ site { print $4 }' site=$site)
+    super_ocf_log info "fhDBG site=$site, mode=$srmode, MAPPING=$MAPPING"
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $OCF_SUCCESSs"
     return $OCF_SUCCESS
-}
+}  
 
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
@@ -356,10 +365,10 @@ function sht_init() {
 function check_for_primary() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local rc=0
-   # node_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null | awk '/mode/ {print $2}')
    # DONE: Change stderr location!!
    #sidadm=lnxadm
-   node_status=$(check_for_primary_single) 
+   #node_status=$(check_for_primary_single) 
+   node_status=$srmode
    super_ocf_log info "fhDBG2: check_for_primary: node_status=$node_status"
    case "$node_status" in
        primary ) 
@@ -379,42 +388,12 @@ function check_for_primary() {
    return $HANA_STATE_DEFECT
 }
 
+
 #
-# function: check_for_primary_single - query hdbnsutil to get HANA primary/secondary status
+# function: start_saphostagent
 # params:   -
-# globals:  SID(r), LD_LIBRARY_PATH(r), PATH(r), DIR_EXECUTABLE(r)
+# globals:  
 #
-function check_for_primary_single()
-{
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local node_full_status node_status
-    local rc=0
-super_ocf_log info "fhDBG2: su - ${sidadm} -c LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state"
-    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
-    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-    echo "$node_status"
-    return $rc
-}
-
-#
-# function: get_site_name - query site name
-# params:   -
-# globals:  LD_LIBRARY_PATH(r), DIR_EXECUTABLE(r)
-# get site name of local HANA instance
-#
-function get_site_name()
-{
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local node_full_status node_site_name
-    local rc=0
-    node_full_status=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state" 2>/dev/null )
-    echo "${node_full_status}" >>/tmp/null
-    node_site_name=$(echo "$node_full_status" | awk '/^site name:/ { printf "%s", $3 } ' )
-    echo "$node_site_name"
-    return $rc
-}
-
-
 function start_saphostagent()
 {
     if [ -x "${HOSTEXEC_PATH}" ]; then
@@ -423,6 +402,11 @@ function start_saphostagent()
     return 0
 }
 
+#
+# function: stop_saphostagent
+# params:   -
+# globals: 
+#
 function stop_saphostagent()
 {
         if [ -x "${HOSTEXEC_PATH}" ]; then
@@ -430,6 +414,11 @@ function stop_saphostagent()
         fi
 }
 
+#
+# function: check_saphostagent
+# params:   -
+# globals:
+#
 function check_saphostagent()
 {
     local rc=1
@@ -565,7 +554,7 @@ function sht_stop_clone() {
     else
         hanaPrim="S"
     fi
-    set_hana_attribute "${HOSTNAME}" "$ATTR_NAME_HANA_ROLES" "0:$hanaPrim:-:-:-:-" "reboot"
+    set_hana_attribute "${HOSTNAME}" "0:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLE[@]} 
     sht_stop; rc=$?
     return $rc
 }
@@ -620,18 +609,26 @@ function sht_monitor_clone() {
     vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
         | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr)
     super_ocf_log info "fhDBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
-    site=$(get_site_name)
+    #site=$(get_site_name)
     hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py"); hanalrc="$?" 
     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
-    hanamap=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state --sapcontrol=1" \
-        | awk -F= '($1 ~ "mapping/" host ) &&($2 !~ site "/" ) ' site=$site host=$vName)
-    hanaRemoteHost=$(echo "$hanamap" | awk -F/ '{print $3}')
-    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_REMOTEHOST" "$hanaRemoteHost" "reboot"
-    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_ROLES" "$hanalrc:$hanaPrim:$hanarole" "reboot"
-    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_SITE" "$site" "reboot"
-    set_hana_attribute ${HOSTNAME} "$ATTR_NAME_HANA_VHOST" "$vName" "reboot"
-    #ATTR_NAME_HANA_SRMODE
-    #ATTR_NAME_HANA_STATUS
+    #hanamap=$(su - ${sidadm} -c "LD_LIBRARY_PATH=$LD_LIBRARY_PATH $DIR_EXECUTABLE/hdbnsutil -sr_state --sapcontrol=1" \
+    #    | awk -F= '($1 ~ "mapping/" host ) &&($2 !~ site "/" ) ' site=$site host=$vName)
+    #hanaRemoteHost=$(echo "$hanamap" | awk -F/ '{print $3}')
+    hanaRemoteHost=$MAPPING
+    set_hana_attribute ${HOSTNAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]} 
+    set_hana_attribute ${HOSTNAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]} 
+    set_hana_attribute ${HOSTNAME} "$site" ${ATTR_NAME_HANA_SITE[@]} 
+    set_hana_attribute ${HOSTNAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
+    case "$hanaPrim" in
+       P ) ;;
+       S ) # only secondary may propargate its sync status
+        for n in $(crm_node -l | awk '/member/ {print $2}'); do
+           set_hana_attribute ${n} "$srmode" ${ATTR_NAME_HANA_SRMODE[@]}
+        done
+          ;;
+    esac
+    #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
 }
@@ -723,7 +720,7 @@ THE_VERSION=$(sht_meta_data | grep '<version')
 super_ocf_log info "fhRA ==== begin action $ACTION$CLACT ($THE_VERSION) ===="
 ra_rc=$OCF_ERR_UNIMPLEMENTED
 case "$ACTION" in
-    start|stop|monitor|promote|demote) # Standard controling actions
+    start|stop|monitor) # Standard controling actions
         sht_$ACTION$CLACT
         ra_rc=$?
         ;;
