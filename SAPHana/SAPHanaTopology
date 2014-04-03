@@ -2,7 +2,7 @@
 #
 # SAPHana
 #
-# Description:	Clone resource to anylyze SAPHana Topology
+# Description:	Clone resource to anylyze SAPHana-Topology
 #
 ###########################################################################################################################
 #
@@ -128,11 +128,31 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.27.2014.04.02.2</version>
+    <version>0.28.2014.04.03.3</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
         In addition it starts and monitors the local saphostagent.
+
+1. Interface to start/stop a HANA instance/system: sapcontrol/sapstartsrv
+TODO: PRIO3: Check, if this interface is really needed
+
+2. Interface to monitor a HANA system: landscapeHostConfiguration.py 
+landscapeHostConfiguration.py has some detailed output about HANA system status
+and node roles. For our monitor the overall status is relevant. This overall 
+status is reported by the returncode of the script:
+0: Internal Fatal
+1: ERROR
+2: WARNING
+3: INFO (maybe a switch of the resource running)
+4: OK
+The SAPHanaTopology resource agent will interpret returncodes 1 as NOT-RUNNING (or 1 failure) and returncodes 2+3+4 as RUNNING.
+SAPHanaTopology scans the output table of landscapeHostConfiguration.py to identify the roles of the cluster node. Roles means configured and current role of the nameserver as well as the indexserver.
+
+2. Interface is hdbnsutil
+TODO PRIO3: TBD
+
+3. Interface is saphostctrl (ListInstances)
     </longdesc>
 <parameters>
     <parameter name="SID" unique="0" required="1">
@@ -153,8 +173,8 @@ function sht_meta_data() {
         <content type="string" default="" />
     </parameter>
     <parameter name="SAPHanaFilter" unique="0" required="0">
-        <shortdesc lang="en">Define type of SAPHana RA messages to be printed</shortdesc>
-        <longdesc lang="en">Define type of SAPHana RA messages to be printed. 
+        <shortdesc lang="en">Define type of SAPHanaTopology RA messages to be printed</shortdesc>
+        <longdesc lang="en">Define type of SAPHanaTopology RA messages to be printed. 
         Values: ra-act-lpa-dec-flow-dbg
         You could specify any combination of the above values like "ra-act-flow"
         </longdesc>
