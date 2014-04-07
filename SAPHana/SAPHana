@@ -173,7 +173,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.118.2014.04.02.10</version>
+<version>0.129.2014.04.03.2</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in sytem replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -1344,7 +1344,9 @@ check_for_primary_master()
         for ch in ${otherHosts[@]}; do
             if [ $rc -eq 1 ]; then
                 ch_role=$(get_hana_attribute ${ch} ${ATTR_NAME_HANA_ROLES[@]})
-                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
+# TODO: PRIO2: check if [0-9] or [34] is correct
+#                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
+                grep '[34]*:P:[^:]*:master:' <<< $ch_role && rc=0
             fi
         done
     fi 
@@ -1414,6 +1416,9 @@ function saphana_start_secondary()
     # TODO: PRIO3: rename 'forever_wait_for_primary_master' to match better the use case ("wait_some_time")
     #
     super_ocf_log info "fhDBG: wait for promoted side"
+    # TODO: PRIO3: Check if setting SFAIL during secondary start is ok
+    # BAUSTELLE2
+    set_hana_attribute "${HOSTNAME}" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
     if forever_wait_for_primary_master 10; then
        saphana_start; rc=$?
     else
