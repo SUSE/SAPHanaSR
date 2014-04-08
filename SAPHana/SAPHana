@@ -45,6 +45,7 @@
 #   TODO: PRIO3: NUR Return-Code 1 von landscapeHostConfiguration.py führt zur Übernahme!! ReturnCode 0 nicht!!
 #   TODO: PRIO3: Virtual Hostname mit saphostctrl -function ListInstances -> search SID/Ino -> Virtual Host
 #   TODO: PRIO3: avoid su-commands
+#   TODO: PRIO4: Check id we need a saphana_status() function and method
 #   TODO: PRIO5: For SCALE-OUT only:
 #         How to prevent a parallel takeover to remote site AND local switchover of Row-Space in post-productive swarm, if PREFER_SITE_TAKEOVER
 #         Was zeigt landscapeHostConfiguration beim localen SAPHanaHA Umbau an?
@@ -177,36 +178,25 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.131.2014.04.08.3</version>
+<version>0.132.2014.04.08.4</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in sytem replication (SR).</shortdesc>
 <longdesc lang="en">
 TODO: PRIO3 TBD
 
 1. Interface to start/stop a HANA instance/system: sapcontrol/sapstartsrv
-sapstartsrv knows 4 status colours:
-- GREEN   = everything is fine
-- YELLOW  = something is wrong, but the service is still working
-- RED     = the service does not work
-- GRAY    = the service has not been started
-The SAPHana resource agent will interpret GREEN and YELLOW as OK. That means that minor problems will not be reported to the Heartbeat cluster. This prevents the cluster from doing an unwanted failover.
-The statuses RED and GRAY are reported as NOT_RUNNING to the cluster. Depending on the status the cluster expects from the resource, it will do a restart, failover or just nothing.
 
 2. Interface to monitor a HANA system: landscapeHostConfiguration.py 
 landscapeHostConfiguration.py has some detailed output about HANA system status
 and node roles. For our monitor the overall status is relevant. This overall 
 status is reported by the returncode of the script:
-0: Internal Fatal
-1: ERROR
-2: WARNING
-3: INFO (maybe a switch of the resource running)
-4: OK
-The SAPHana resource agent will interpret returncodes 0+1 as NOT-RUNNING (or 1 failure) and returncodes 2+3+4 as RUNNING.
+0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
+The SAPHana resource agent will interpret returncodes 0 as ERROR, 1 as not-running and and returncodes 2+3+4 as RUNNING.
 
 3. Interface is hdbnsutil
 TODO PRIO3: TBD
 
-4. Interface is SQL query into HANA (system replication table)
+4. Interface is SQL query into HANA (system replication table) -> will be replaced by a python script later
 TODO PRIO3: TBD
 
 </longdesc>
@@ -288,21 +278,11 @@ return $rc
 # methods: What methods/operations do we support?
 #
 function saphana_methods() {
-  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-  local rc=0
-  cat <<-!
-    start
-    stop
-    status
-    monitor
-    promote
-    demote
-    notify
-    validate-all
-    methods
-    meta-data
-    usage
-	!
+    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
+    local rc=0 m
+    for m in start stop status monitor promote demote notify validate-all methods meta-data usage; do
+        echo "$m"
+    done
 	return $rc
 }
 
@@ -310,13 +290,10 @@ function saphana_methods() {
 # function: dequote - filter: remove quotes (") from stdin
 # params:   -
 # globals:  -
-#
+# TODO: PRIO4: Check, if the "forwarding" of returncodes works as expected
 function dequote()
 {
-    local rc=$?
-    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    tr -d '"'
-    return $rc
+    local rc=$?; tr -d '"'; return $rc
 }
 
 #
@@ -324,9 +301,7 @@ function dequote()
 # params:   -
 # globals:  OCF_*(r)
 # descript: is_clone : find out if we are configured to run in a Master/Slave configuration
-#   rc: 0: it is a clone
-#       1: it is not a clone
-#   Special EXIT of RA, if clone is missconfigured
+# rc: 0: it is a clone, 1: it is not a clone
 #
 # TODO: PRIO2: For the first shippment (scale-out) we need to limit the clones to 2
 #
@@ -402,27 +377,20 @@ function set_hana_attribute()
 # function: assert - quickly go out of here with minimal error/return code handling and log
 # params:   MESSAGE
 # globals:  OCF_*(r)
-# assert : essential things are missing, but in the natur of a SAP installation - which can be very different
-#                from customer to customer - we cannot handle this always as an error
-#                This would be the case, if the software is installed on shared disks and not visible
-#                to all cluster nodes at all times.
 #
 function assert() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
     local err_msg=$1 local default_rc=$OCF_NOT_RUNNING
-
     # DONE: Check, if we need to destinguish between probe and others
     if ocf_is_probe; then
         default_exit=$OCF_NOT_RUNNING
     else
         default_exit=$OCF_ERR_CONFIGURED
     fi
-
     if [ "$ACTION" = "stop" ]; then
         cleanup_instance
         exit $OCF_SUCCESS
     fi
-
     super_ocf_log err "fhACT $err_msg"
     exit $default_exit
 }
@@ -497,41 +465,32 @@ function get_crm_master()
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w), 
-# globals:  meta_notify_master_uname(w), sr_name(w), remoteHost(w) 
+# globals:  sr_name(w), remoteHost(w) 
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
-# globals:  LPA_DIRECTORY(w)
+# globals:  LPA_DIRECTORY(w), SIDInstanceName(w)
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
 function saphana_init() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-    local myInstanceName=""
     local rc=$OCF_SUCCESS
     # two parameter models (for transition only)
     # OLD: InstanceName
     # NEW: SID InstanceNumber
-    if [ -n "$OCF_RESKEY_SID" ]; then
-       SID=$OCF_RESKEY_SID
-       InstanceNr=$OCF_RESKEY_InstanceNumber
-       myInstanceName="${SID}_HDB${InstanceNr}"
-       InstanceName="HDB${InstanceNr}"
-       super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
-    else
-       myInstanceName="$OCF_RESKEY_InstanceName"
-       SID=$(echo "$myInstanceName" | cut -d_ -f1)
-       InstanceName=$(echo "$myInstanceName" | cut -d_ -f2)
-       InstanceNr=$(echo "$InstanceName" | sed 's/.*\([0-9][0-9]\)$/\1/')
-       super_ocf_log info "fhACT: Used old method to get SID and InstanceNr"
-    fi
+    SID=$OCF_RESKEY_SID
+    InstanceNr=$OCF_RESKEY_InstanceNumber
+    SIDInstanceName="${SID}_HDB${InstanceNr}"
+    InstanceName="HDB${InstanceNr}"
+    super_ocf_log info "fhACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
+    # TODO: PRIO4: SAPVIRHOST might be different to HOSTNAME
     SAPVIRHOST=${HOSTNAME}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
-    meta_notify_master_uname="$OCF_RESKEY_CRM_meta_notify_master_uname"
     SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-all}"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     LPA_ATTR=("lpa_${sid}_lpt" "reboot")
-    super_ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST meta_notify_master_uname=$meta_notify_master_uname"
+    super_ocf_log info "fhDBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log info "fhDBG: OCF: $ocf_env"
     #
@@ -560,6 +519,19 @@ function saphana_init() {
        "[0-9]*:S:[^:]*:-      .*    0"
        ".*                    .*   -1"
     )
+    SCORING_TABLE_PREFERRED_LOCAL_RESTART=(
+       "[0-9]*:P:[^:]*:master .*  150"
+       "[0-9]*:P:[^:]*:slave  .*  140"
+       "[0-9]*:P:[^:]*:\?     .*    0"
+       "[0-9]*:P:[^:]*:-     .*     0"
+       "[0-9]*:S:[^:]*:master SOK    100"
+       "[0-9]*:S:[^:]*:master SFAIL  -INFINITY"
+       "[0-9]*:S:[^:]*:slave  SOK     10"
+       "[0-9]*:S:[^:]*:slave  SFAIL  -INFINITY"
+       "[0-9]*:S:[^:]*:\?     .*    0"
+       "[0-9]*:S:[^:]*:-      .*    0"
+       ".*                    .*   -1"
+    )
     #
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     super_ocf_log info "fhDBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
@@ -576,10 +548,7 @@ function saphana_init() {
     fi
     #  ATTR_NAME_HANA_SITE
     sr_name=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SITE[@]});
-    super_ocf_log info "fhDBG: ATTR remoteHost=$remoteHost sr_name=$sr_name"
-
     sr_mode=$(get_hana_attribute "${HOSTNAME}" ${ATTR_NAME_HANA_SRMODE[@]})
-
     if [ -z "$sr_mode" ]; then
         sr_mode="sync"
     fi
@@ -590,44 +559,19 @@ function saphana_init() {
         if have_binary /usr/sap/$SID/$InstanceName/exe/sapstartsrv && have_binary /usr/sap/$SID/$InstanceName/exe/sapcontrol
         then
             DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
-            SAPSTARTSRV="/usr/sap/$SID/$InstanceName/exe/sapstartsrv"
-            SAPCONTROL="/usr/sap/$SID/$InstanceName/exe/sapcontrol"
-        elif have_binary /usr/sap/$SID/SYS/exe/run/sapstartsrv && have_binary /usr/sap/$SID/SYS/exe/run/sapcontrol
-        then
-            DIR_EXECUTABLE="/usr/sap/$SID/SYS/exe/run"
-            SAPSTARTSRV="/usr/sap/$SID/SYS/exe/run/sapstartsrv"
-            SAPCONTROL="/usr/sap/$SID/SYS/exe/run/sapcontrol"
         fi
     else
         if have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv" && have_binary "$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
         then
             DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
-            SAPSTARTSRV="$OCF_RESKEY_DIR_EXECUTABLE/sapstartsrv"
-            SAPCONTROL="$OCF_RESKEY_DIR_EXECUTABLE/sapcontrol"
         fi
     fi
+    SAPSTARTSRV="$DIR_EXECUTABLE/sapstartsrv"
+    SAPCONTROL="$DIR_EXECUTABLE/sapcontrol"
 
     [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
-
-    if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
-    then
-        DIR_PROFILE="/usr/sap/$SID/SYS/profile"
-    else
-        DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
-    fi
-
-    if [ -z "${OCF_RESKEY_INSTANCE_PROFILE}" ]
-    then
-        SAPSTARTPROFILE="$DIR_PROFILE/${SID}_${InstanceName}_${SAPVIRHOST}"
-    else
-        SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE}"
-    fi
-
-    if [ -z "$OCF_RESKEY_START_WAITTIME" ]
-    then
-        export OCF_RESKEY_START_WAITTIME=3600
-    fi
-
+    DIR_PROFILE="${OCF_RESKEY_DIR_PROFILE:-/usr/sap/$SID/SYS/profile}"
+    SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_${SAPVIRHOST}}"
     # as root user we need the library path to the SAP kernel to be able to call sapcontrol
     # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
     if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
@@ -635,22 +579,19 @@ function saphana_init() {
         LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
         export LD_LIBRARY_PATH
     fi
-
     PATH=${PATH}:${DIR_EXECUTABLE}; export $PATH
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $OCF_SUCCESSs"
-
-
-#############################
-# TODO: RPIO4: To be able to call landscapeHostConfig.py without su (so as root)
-# TODO: PRIO4: Research for environment script .htacces or something like that
-#export SAPSYSTEMNAME=ZLF
-#export DIR_INSTANCE=/usr/sap/ZLF/HDB02
-#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DIR_INSTANCE/exe:$DIR_INSTANCE/exe/Python/lib
-#export PYTHONPATH=$DIR_INSTANCE/$HOST:$DIR_INSTANCE/exe/python_support:$DIR_INSTANCE/exe
-#export PYTHONHOME=$DIR_INSTANCE/exe/Python
-#export SAP_RETRIEVAL_PATH=$DIR_INSTANCE/$HOST
-#export DIR_EXECUTABLE=$DIR_INSTANCE/exe
-#############################
+    #############################
+    # TODO: RPIO4: To be able to call landscapeHostConfig.py without su (so as root)
+    # TODO: PRIO4: Research for environment script .htacces or something like that
+    #export SAPSYSTEMNAME=ZLF
+    #export DIR_INSTANCE=/usr/sap/ZLF/HDB02
+    #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DIR_INSTANCE/exe:$DIR_INSTANCE/exe/Python/lib
+    #export PYTHONPATH=$DIR_INSTANCE/$HOST:$DIR_INSTANCE/exe/python_support:$DIR_INSTANCE/exe
+    #export PYTHONHOME=$DIR_INSTANCE/exe/Python
+    #export SAP_RETRIEVAL_PATH=$DIR_INSTANCE/$HOST
+    #export DIR_EXECUTABLE=$DIR_INSTANCE/exe
+    #############################
     return $OCF_SUCCESS
 }
 
@@ -673,9 +614,7 @@ function check_secstore_users()
 # function: check_sapstartsrv - check for sapstartsrv - optional start
 # params:   -
 # globals:  DIR_PROFILE(w), SAPSTARTPROFILE(r), SAPCONTROL(r), SID(r), InstanceName(r), InstanceNr(r), OCF_*(r)
-# check_sapstartsrv : Before using sapcontrol we make sure that the sapstartsrv is running for the correct instance.
-#                     We cannot use sapinit and the /usr/sap/sapservices file in case of an enquerep instance,
-#                     because then we have two instances with the same instance number.
+# check_sapstartsrv : Before using sapcontrol we make sure that the sapstartsrv is running.
 #
 function check_sapstartsrv() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
@@ -683,7 +622,6 @@ function check_sapstartsrv() {
     local runninginst=""
     local rc=$OCF_SUCCESS
     local output=""
-
     if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
         super_ocf_log warn "fhACT sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
         restart=1
@@ -709,30 +647,22 @@ function check_sapstartsrv() {
             restart=1
         fi
     fi
-
     if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
-
     if [ $restart -eq 1 ]
     then
-
         if [ -d /usr/sap/$SID/SYS/profile/ ]
         then
             DIR_PROFILE="/usr/sap/$SID/SYS/profile"
         else
             assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
         fi
-
         [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
-
         pkill -9 -f "sapstartsrv.*$runninginst"
-
         # removing the unix domain socket files as they might have wrong permissions
         # or ownership - they will be recreated by sapstartsrv during next start
         rm -f /tmp/.sapstream5${InstanceNr}13
         rm -f /tmp/.sapstream5${InstanceNr}14
-
         $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
-
         # now make sure the daemon has been started and is able to respond
         local srvrc=1
         while [ $srvrc -eq 1 -a $(pgrep -f "sapstartsrv.*$runninginst" | wc -l) -gt 0 ]
@@ -741,7 +671,6 @@ function check_sapstartsrv() {
             $SAPCONTROL -nr $InstanceNr -function GetProcessList > /dev/null 2>&1
             srvrc=$?
         done
-
         if [ $srvrc -ne 1 ]
         then
             super_ocf_log info "fhACT sapstartsrv for instance $SID-$InstanceName was restarted !"
@@ -752,7 +681,6 @@ function check_sapstartsrv() {
             ocf_is_probe && rc=$OCF_NOT_RUNNING
         fi
     fi
-
     return $rc
 }
 
@@ -760,45 +688,15 @@ function check_sapstartsrv() {
 # function: cleanup_instance - remove resources from a crashed instance
 # params:   -
 # globals:  -
-# cleanup_instance : remove resources (processes and shared memory) from a crashed instance)
 #
 function cleanup_instance() {
   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
   local rc=0
-# TODO: PRIO5: Check, if we need HANA cleanup procedure
-#
-# Do wee need to cleanup
-#  - process list (kill/signal)
-#  - ipc objects
-#  - process-pid files and other files
+# TODO: PRIO5: Check, if we need HANA cleanup procedure (processes, ipc obj, pid files)
   super_ocf_log warn "fhDBG: cleanup_instance currently not implemented"
   rc=0
   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
 }
-
-##
-## function: saphana_hdbsql_check - query SR view
-## params:   remote [local,remote]
-## globals:  DIR_EXECUTABLE(r)
-##
-#function saphana_hdbsql_check()
-#{
-#   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-#   local rc=1
-#   local remote=$1
-#   local secUser
-##
-## TODO: PRIO5: We could delete the remote check later, if we completely dropped the remore sql queries
-##
-#   case "$remote" in 
-#        local* ) secUser="slehaLoc";;
-#        remote*) secUser="slehaRem";;
-#   esac
-#   super_ocf_log info "fhDBG: $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'"
-#   timeout 300 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser 'select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION' 2>/dev/null 1>/dev/null; rc=$?
-#   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
-#   return $rc
-#}
 
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
@@ -823,20 +721,6 @@ function check_for_primary() {
     super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
     return $rc
 }
-
-##
-## function: check_for_primary_single - query hdbnsutil to get HANA primary/secondary status
-## params:   -
-## globals:  SID(r), LD_LIBRARY_PATH(r), PATH(r), DIR_EXECUTABLE(r)
-##
-#function check_for_primary_single()
-#{
-#    super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-#    local node_full_status node_status
-#    local rc=0
-#    echo "$node_status"
-#    return $rc
-#}
 
 #
 # function: analyze_hana_sync_status - query and check hana system replication status
@@ -868,7 +752,6 @@ function analyze_hana_sync_status()
             super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
             set_hana_attribute "$remoteHost" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
         fi
-
         # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
         #    TODO: PRIO9: for first we assume there is only ONE secondary site (like ROT)
         #    TODO: PRIO3: should we loop over all cluster nodes fetching their roles-attribute? To minimize sql-queries?
@@ -910,7 +793,6 @@ function analyze_hana_sync_status()
 # function: get_hana_landscape_status - figure out hana ladscape status
 # params:   -
 # globals:  sidadm(r), DIR_EXECUTABLE(r)
-# get the HANA landscape status
 #
 function get_hana_landscape_status()
 {
@@ -940,12 +822,21 @@ function register_hana_secondary()
 }
 
 #
-#############################################################################
+# function: saphana_status - pure status check
+# params:   -
+# globals:  TBD
+function saphana_status() {
+# BAUSTELLE0
+    local binDeam="hdb.sap${SIDInstanceName}" rc=0
+    binDeam=${binDeam:0:15}   # Process name is limited to the first 15 characters
+    if pgrep $binDeam 1>/dev/null; then rc=$OCF_SUCCESS; else rc=$OCF_NOT_RUNNING; fi
+    return $rc
+}
+
 #
 # function: saphana_start - start a hana instance
 # params:   -
 # globals:  TBD
-# saphana_start : Start the SAP HANA instance
 #
 function saphana_start() {
     super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
@@ -992,14 +883,12 @@ function saphana_stop() {
   super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
   local output=""
   local rc=0
-
   check_sapstartsrv; rc=$?
   if [ $rc -eq $OCF_SUCCESS ]; then
     output=$($SAPCONTROL -nr $InstanceNr -function Stop)
     rc=$?
     super_ocf_log info "fhACT: Stopping SAP Instance $SID-$InstanceName: $output"
   fi
-
   if [ $rc -eq 0 ]
   then
     output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped 3600 1)
@@ -1015,104 +904,9 @@ function saphana_stop() {
     super_ocf_log err "fhACT: SAP Instance $SID-$InstanceName stop failed: $output"
     rc=$OCF_ERR_GENERIC
   fi
-
-
   super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc"
   return $rc
 }
-
-
-##
-## function: saphana_monitor - monitor a hana instance
-## params:   MONLOG
-## globals:  OCF_*(r), SAPCONTROL(r), InstanveNr(r)
-## saphana_monitor: Can the given SAP instance do anything useful?
-##
-#function saphana_monitor() {
-#  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-#  local MONLOG=$1
-#  local rc=0
-#
-#  check_sapstartsrv
-#  rc=$?
-#
-#  if [ $rc -eq $OCF_SUCCESS ]
-#  then
-#    local count=0
-#    local SERVNO
-#    local output
-##
-##
-## DONE: PRIO3: Check - completely switch-over to landscape script?
-##
-#    output=$($SAPCONTROL -nr $InstanceNr -function GetProcessList -format script)
-#
-#    # we have to parse the output, because the returncode doesn't tell anything about the instance status
-#    for SERVNO in $(echo "$output" | grep '^[0-9] ' | cut -d' ' -f1 | sort -u)
-#    do
-#      local COLOR=$(echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3)
-#      local SERVICE=$(echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3)
-#      local STATE=0
-#      local SEARCH
-#
-#      case $COLOR in
-#        GREEN|YELLOW)       STATE=$OCF_SUCCESS;;
-#        *)                  STATE=$OCF_NOT_RUNNING;;
-#      esac 
-#
-##
-## DONE: PRIO2: Check - completely switch-over to landscape script?
-##       OCF_RESKEY_MONITOR_SERVICES wird nicht (mehr) gesetzt, also entweder wieder setzen oder variable hier entfernen
-##
-#      SEARCH=$(echo "$OCF_RESKEY_MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
-#      if [ $(echo "$SERVICE" | egrep -c "$SEARCH") -eq 1 ]
-#      then
-#          if [ $STATE -eq $OCF_NOT_RUNNING ]
-#          then
-#            [ "$MONLOG" != "NOLOG" ] && super_ocf_log err "SAP instance service $SERVICE is not running (status $COLOR) !"
-#            rc=$STATE
-#          fi
-#          count=1
-#      fi
-#    done
-#
-#    if [ $count -eq 0 -a $rc -eq $OCF_SUCCESS ]
-#    then
-#      if ocf_is_probe
-#      then
-#        rc=$OCF_NOT_RUNNING
-#      else
-#        [ "$MONLOG" != "NOLOG" ] && super_ocf_log err "The SAP instance does not run any services which this RA could monitor!"
-#        rc=$OCF_ERR_GENERIC
-#      fi
-#    fi
-#  fi
-# 
-#  super_ocf_log info "fhFLOW $FUNCNAME  -> return code = $rc" 
-#  return $rc
-#}
-#
-
-##
-## function: saphana_status - get status of a hana instance (os tools only)
-## params:   -
-## globals:  SID(r), InstanceName(r), OCF_*(r), sidarm(r)
-## saphana_status: Lightweight check of SAP instance only with OS tools
-##
-#function saphana_status() {
-#  super_ocf_log info "fhFLOW function: $FUNCNAME $1 $2 $3 $4"
-#  local pid
-#  local pids
-#  local killsap="/usr/sap/$SID/$InstanceName/${HOSTNAME}/trace/kill.sap"
-#  [ ! -f ${killsap} ] && return $OCF_NOT_RUNNING
-#  pids=$(awk '/^kill -[0-9]/ {print $3}' ${killsap})
-#  for pid in $pids
-#  do
-#    [ $(pgrep -f -U $sidadm $InstanceName | grep -c $pid) -gt 0 ] && return $OCF_SUCCESS
-#  done
-#  return $OCF_NOT_RUNNING
-#}
-
 
 #
 # function: saphana_validate - validation of (some) variables/parameters
