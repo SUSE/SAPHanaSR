@@ -1,0 +1,309 @@
+#!/usr/bin/perl
+
+use POSIX;
+use strict;
+use Sys::Syslog;                          # all except setlogsock(), or:
+use Sys::Hostname;
+
+
+
+my %Name;
+my %Host;
+my $host = hostname();
+
+sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
+ my $a = shift;
+ my $b = shift;
+ return $a > $b ? $a : $b;
+}
+
+sub check_both_nodes_online($) ### check if exactly n nodes are online
+{
+    use Switch;
+    my $rc=0;
+    my ($needed)=shift;
+    my $match="#--#";
+    open crm, "crm_mon -s |";
+    switch ($needed) {
+        case 0 { $match="TBD"; }
+        case 1 { $match="(Ok: 1 nodes online, 1 standby nodes|Warning:offline node)"; }
+        case 2 { $match="Ok: 2 nodes online"; }
+        else { $match="#--#"; }
+    }
+    while (<crm>) {
+        if (/$match/) {
+           $rc=1
+        }
+    }
+    close crm;
+    return $rc;
+}
+
+sub get_node_status($)
+{
+    # typically returns online, standby or offline
+    my $result="offline";
+    my $node=shift;
+    open crm, "crm_mon -1 |";
+    #- case one offline/standby and one online
+    # Node fscs99: OFFLINE (standby)
+    # Online: [ fscs98 ]
+    #- case both standby
+    # Node fscs99: standby
+    # Node fscs98: standby
+    #- case one standby one online
+    # Node fscs99: standby
+    # Online: [ fscs98 ]
+    #- case both online
+    # Online: [ fscs98 fscs99 ]
+    while (<crm>) {
+        if ( /^Online:.*\s$node\s/ ) {
+           #printf("O: %s\n", $_);
+           $result="online";
+        } elsif ( /^Node\s+$node:\s+(\S+)/  ) {
+           #printf("N: %s: %s\n", $_, $1);
+           $result=tolower($1);
+
+        }
+    }
+    close crm;
+    return $result;
+}
+
+sub get_sid()
+{
+    my $sid="";
+    open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
+    while (<ListInstances>) {
+       # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+       chomp;
+       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-/ ) {
+          $sid=tolower("$1");
+       }
+    }
+    close ListInstances;
+    return $sid;
+}
+
+sub get_hana_attributes($)
+{
+    my $sid = shift;
+    my $table_title = "Host \\ Attr";
+    open CIB, "cibadmin -Ql |";
+    while (<CIB>) {
+       chomp;
+       if ( $_ =~ /nvpair\s+id="status-([a-zA-Z0-9]+)-\w+"\s+name="(\w+_${sid}_\w+)"\s+value="([^"]+)"/ ) {
+           my ($host, $name, $value) = ( $1, $2, $3 );
+           #
+           # handle the hosts name and table-title
+           #
+           $Host{$host}->{$name}=${value};
+           if ( defined ($Name{_hosts}->{_length})) {
+              $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
+           } else {
+              $Name{_hosts}->{_length} = length($host );
+           }
+           $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
+           #
+           # now handle the attributes name and value
+           #
+           $Name{$name}->{$host}=${value};
+           if ( defined ($Name{$name}->{_length})) {
+              $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
+           } else {
+              $Name{$name}->{_length} = length($value );
+           }
+           if ( $name =~ /hana_${sid}_(.*)/ ) {
+              $Name{$name}->{_title} =  $1;
+           } else {
+              $Name{$name}->{_title} = $name; 
+           }
+           $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
+       }
+    }
+    close CIB;
+    return 0;
+}
+
+sub get_hana_sync_state($)
+{
+    my $sid=shift;
+    my $result="";
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_sync_state"}}) ) {
+        if ( $Name{"hana_${sid}_sync_state"}->{$h} =~ /(S.*)/ ) {
+           $result=$1;
+        }
+    }
+    return $result;
+}
+
+sub get_number_primary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $rc=0;
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
+           $rc++;
+        }
+    }
+    return $rc;
+}
+
+sub get_number_secondary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $rc=0;
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
+           $rc++;
+        }
+    }
+    return $rc;
+}
+
+sub get_host_primary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $result="";
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
+           $result=$h;
+        }
+    }
+    return $result;
+}
+
+sub get_host_secondary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $result="";
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
+           $result=$h;
+        }
+    }
+    return $result;
+}
+
+sub check_all_ok($)
+{
+    my $sid=shift;
+    my $rc=0;
+    my $failed="";
+    if ( ! check_both_nodes_online(2)) {
+         $rc=1;  
+         $failed .= " #N<>2"; 
+    }
+    if ( get_hana_sync_state($sid) ne "SOK" ) {
+         $rc=1;  
+         $failed .= " sync<>SOK ";
+    }
+    if ( get_number_primary($sid, "34") != 1 ) {
+         $rc=1;  
+         $failed .= " #P<>1 ";
+    }
+    if ( get_number_secondary($sid, "34") != 1 ) {
+         $rc=1;  
+         $failed .= " #S<>1 ";
+    }
+
+         
+#    get_hana_sync_state($sid) eq "SOK" or { $rc=1;  $failed .= " get_hana_sync_state-SOK "; };
+#    get_number_primary($sid, "34") == 1 or { $rc=1;  $failed .= " get_number_primary "; };
+#    get_number_secondary($sid, "34") == 1 or { $rc=1;  $failed .= " get_number_secondary "; };
+
+    return ($rc, $failed);
+}
+
+my $ident = "fhTD";
+my $logopt = "pid";
+my $facility = "LOCAL0";
+my $priority = "info";
+
+openlog $ident, $logopt, $facility;       # don't forget this
+my $sid="";
+    
+$sid = get_sid();
+
+#if (check_both_nodes_online(2)) {
+#    printf "Both online\n";
+#}
+#if (check_both_nodes_online(1)) {
+#    printf "One  online\n";
+#}
+#
+#printf "status=%s\n",get_node_status("fscs99");
+#
+#printf "sync=%s\n", get_hana_sync_state($sid);
+#printf "ok_prims=%s\n", get_number_primary($sid, "34");
+#printf "ok_secs=%s\n", get_number_secondary($sid, "34");
+#printf "warn_prims=%s\n", get_number_primary($sid, "2");
+
+sub run_test_stop_primary( $ $ $ ) 
+{
+    my $sid=shift;
+    my $phost=shift;
+    my $testNr=shift;
+    my $rc=0;
+
+    syslog $priority, "%s", "Try to stop HDB at $phost test=$testNr";
+    if ( $phost eq $host ) {
+       # local
+       system("su - ${sid}adm -c \"HDB stop\"");
+    } else {
+       # remote
+       system("ssh ${sid}adm\@$phost HDB stop");
+    }
+
+    syslog $priority, "%s", "Stopped HDB at $phost test=$testNr";
+    return $rc;
+}
+
+printf "fhTD: Tests running... \n";
+my $goodloops=0;
+my $badloops=0;
+my $testcount=0;
+while ( 1==1 ) {
+    my $message;
+    my $phost;
+    my $shost;
+    my $laststate="";
+    get_hana_attributes($sid);
+    $phost=get_host_primary($sid, "1234");
+    $shost=get_host_secondary($sid, "1234");
+
+    my ($checkOK, $failures ) = check_all_ok($sid);
+
+
+    if ( $checkOK == 0 ) {
+        $badloops=0;
+        $goodloops++;
+        $message="All checks passed - primary=$phost secondary=$shost loop=$goodloops\n";
+        syslog $priority, "%s", $message;
+        if ( $goodloops > 12 ) {
+            $testcount++;
+            run_test_stop_primary($sid, $phost, $testcount);  # maybe add max wished test time till good again?
+            $goodloops=0;
+        }
+    } else {
+        $goodloops=0;
+        $badloops++;
+        $message="Some checks failed ($failures) - primary=$phost secondary=$shost loop=$badloops test=$testcount\n";
+        syslog $priority, "%s", $message;
+    }
+    #printf "%s\n", $message;
+   
+    sleep 10;
+}
+  
+#$oldmask = setlogmask $mask_priority;
+closelog;
