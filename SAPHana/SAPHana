@@ -132,23 +132,38 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.134.2014.04.10.1</version>
+<version>0.135.2014.04.23.1</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in sytem replication (SR).</shortdesc>
 <longdesc lang="en">
-TODO: PRIO3 TBD
+The SAPHanaSR resource agent manages two SAP Hana instances (databases) which are configured
+in system replication. This first version is limitted to the scale-up scenario. Scale-Up is
+not supported in this version.
 
-1. Interface to start/stop a HANA instance/system: sapcontrol/sapstartsrv
+Managing the two SAP HANA instances means that the resource agent controls the start/stop of the
+instances. In addition the resource agent is able to monitor the SAP HANA databases to check their
+availability on application level. For this monitoring the resource agent relies on interfaces
+provided by SAP. A third task of the resource agent is to also check the synchronisation status
+of the two SAP HANA databases. If the synchronisation is not "SOK", than the cluster avoids to
+failover to the secondary side, if the primary fails. This is to improve the data consistency.
 
-2. Interface to monitor a HANA system: landscapeHostConfiguration.py 
-landscapeHostConfiguration.py has some detailed output about HANA system status
-and node roles. For our monitor the overall status is relevant. This overall 
-status is reported by the returncode of the script:
-0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
-The SAPHana resource agent will interpret returncodes 0 as ERROR, 1 as not-running and and returncodes 2+3+4 as RUNNING.
+The resource agent uses the following four interfaces provided by SAP:
 
-3. Interface is hdbnsutil
-TODO PRIO3: TBD
+1. sapcontrol/sapstartsrv
+   The interface sapcontrol/sapstartsrv is used to start/stop a HANA database instance/system
+
+2. landscapeHostConfiguration
+   The interface is used to monitor a HANA system. The python script is named landscapeHostConfiguration.py.
+   landscapeHostConfiguration.py has some detailed output about HANA system status
+   and node roles. For our monitor the overall status is relevant. This overall 
+   status is reported by the returncode of the script:
+   0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
+   The SAPHana resource agent will interpret returncodes 0 as ERROR, 1 as not-running and and returncodes 2+3+4 as RUNNING.
+
+3. hdbnsutil
+   The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
+   (primary/secondary) of a SAP HANA database instance. A second task of the interface is the posibility to run a
+   system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
 
 4. Interface is SQL query into HANA (system replication table) -> will be replaced by a python script later
 TODO PRIO3: TBD
@@ -175,8 +190,11 @@ TODO PRIO3: TBD
     </parameter>
     <parameter name="DUPLICATE_PRIMARY_TIMEOUT" unique="0" required="0">
         <shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
-        <longdesc lang="en">TBD
-        TODO: PRIO3: DUPLICATE_PRIMARY_TIMEOUT long description
+        <longdesc lang="en">TODO PRIO4: Review description
+        Time difference needed between to primary time stamps, if a dual-primary situation occurs. If the time difference is
+        less than the time gap, than the cluster hold one or both instances in a "WAITING" status. This is to give a admin
+        a chance to react on a failover. A failed former primary will be registered after the time difference is passed. After
+        this registration to the new primary all data will be overwritten by the system replication.
         </longdesc>
         <content type="string" default="7200" />
     </parameter>
@@ -191,18 +209,16 @@ TODO PRIO3: TBD
         <content type="string" default="" />
     </parameter>
     <parameter name="INSTANCE_PROFILE" unique="1" required="0">
-        <longdesc lang="en">TODO: PRIO3: To be changed description The name of the SAP START profile. Specify this parameter, if you have changed the name of the SAP START profile after the default SAP installation. As SAP release 7.10 does not have a START profile anymore, you need to specify the Instance Profile than.</longdesc>
+        <longdesc lang="en">The name of the SAP HANA instance profile. Specify this parameter, if you have changed the name of the SAP HANA instance profile after the default SAP installation. Normally you do not need to set this parameter.</longdesc>
         <shortdesc lang="en">HANA instance profile name</shortdesc>
         <content type="string" default="" />
     </parameter>
     <parameter name="SAPHanaFilter" unique="0" required="0">
-        <shortdesc lang="en">Define SAPHana messages to be printed</shortdesc>
-        <longdesc lang="en">Define SAPHana messages to be printed. Currently only partially implemented.
- Values: all, none, 
- TODO: PRIO3: describe which combinations are supported
- Planned: Allowed values are all, none (and combinations of): dbg, dec, lpa, func
+        <shortdesc lang="en">Define SAPHana resource agent messages to be printed</shortdesc>
+        <longdesc lang="en">Define SAPHana resource agent messages to be printed.
+        This parameter should only be set of been requested by SUSE support. The default is sufficient for normal operation.
         </longdesc>
-        <content type="string" default="sync" />
+        <content type="string" default="" />
     </parameter>
 </parameters>
 
@@ -243,10 +259,9 @@ function saphana_methods() {
 # function: dequote - filter: remove quotes (") from stdin
 # params:   -
 # globals:  -
-# TODO: PRIO4: Check, if the "forwarding" of returncodes works as expected
 function dequote()
 {
-    local rc=$?; tr -d '"'; return $rc
+    local rc=0; tr -d '"'; return $rc
 }
 
 #
@@ -256,7 +271,7 @@ function dequote()
 # descript: is_clone : find out if we are configured to run in a Master/Slave configuration
 # rc: 0: it is a clone, 1: it is not a clone
 #
-# TODO: PRIO2: For the first shippment (scale-out) we need to limit the clones to 2
+# DONE: PRIO2: For the first shippment (scale-out) we need to limit the clones to 2
 #
 function is_clone() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -270,9 +285,10 @@ function is_clone() {
        # yes it is a clone config - check, if its configured well
        #
         if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] || \
+            [ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ] || \
             [ "$OCF_RESKEY_CRM_meta_master_node_max" -ne 1 ] || \
             [ "$OCF_RESKEY_CRM_meta_master_max" -ne 1 ]; then
-                super_ocf_log err "ACT Clone options misconfigured. (expect: clone_node_max=1,master_node_max=1,master_max=1)"
+                super_ocf_log err "ACT Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
                 exit $OCF_ERR_CONFIGURED
         fi
         rc=0;
@@ -532,7 +548,7 @@ function saphana_init() {
         LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
         export LD_LIBRARY_PATH
     fi
-    PATH=${PATH}:${DIR_EXECUTABLE}; export $PATH
+    PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     #############################
     # TODO: RPIO4: To be able to call landscapeHostConfig.py without su (so as root)
@@ -1516,9 +1532,9 @@ function saphana_monitor_primary()
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here"
 #BAUSTELLE1 Primary
-    my_role=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_ROLES[@]})
-    my_sync=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
-    scoring_crm_master "$my_role" "$my_sync"
+                        my_role=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_ROLES[@]})
+                        my_sync=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                        scoring_crm_master "$my_role" "$my_sync"
                         rc=$OCF_FAILED_MASTER
                     fi
                     rc=$OCF_FAILED_MASTER
@@ -1544,7 +1560,7 @@ function saphana_monitor_primary()
                     rc=$OCF_RUNNING_MASTER
                 else
                     if [ "$init_attribute" -eq 1 ]; then
-                        set_hana_attribute ${HOSTNAME} "PROMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+                        set_hana_attribute ${HOSTNAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
                         rc=$OCF_RUNNING_MASTER
                     else
                         rc=$OCF_SUCCESS
@@ -1623,16 +1639,13 @@ function saphana_monitor_secondary()
                 fi
                 promoted=0;
                 ;;
-            UNDEFINED )
+            UNDEFINED | * )
                 if ocf_is_probe; then
                    promoted=0;
                 else
                    set_hana_attribute ${HOSTNAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
                    promoted=0;
                 fi
-                ;;
-            * )
-                promoted=0;
                 ;;
         esac
     fi
