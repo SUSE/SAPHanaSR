@@ -15,25 +15,33 @@
 # Please submit bugfixes or comments via http://bugs.opensuse.org/
 #
 
-
-
 Name:           SAPHanaSR
-License:        GPL v2 only
+License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
-Summary:        Set of resource agents to control the SAPHana database in system replication setup
-Version:        0.132
-#Release:        0.<RELEASE5>
-Release:      1
+Summary:        Resource agents to control the HANA database in system replication setup
+Version:        0.135
+Release:        <RELEASE1>
+Url:        http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
+#Release:      1
 Source0:        SAPHana
 Source1:        SAPHanaTopology
+Source2:        README
+Source3:        LICENSE
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
+Requires:       resource-agents
 
 %description
-TODO: PRIO2: TBD
+The resource agents SAPHana and SAPHanaTopology are responsible for controlling a SAP HANA Database which is
+running in system replication (SR) configuration.
 
+For SAP HANA Databases in System Replication only the described or referenced scanios in the README file of this
+package are supported. For any scenario not matching the scenarios named or referenced in the README file
+please contact SUSE at SAP LinuxLab (sap-lab@suse.de).
+
+The following SCN blog gives a first overwiew about running SAP HANA in system replication with our resource agents:
 http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
 
@@ -48,21 +56,29 @@ Authors:
 %build
 cp %{S:0} .
 cp %{S:1} .
-
+cp %{S:2} .
+cp %{S:3} .
 
 %clean
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
 
 %install
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
+mkdir -p %{buildroot}%{_docdir}/%{name}
 install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0755 SAPHanaTopology %{buildroot}/usr/lib/ocf/resource.d/suse
-
-%post
+install -m 0444 LICENSE         %{buildroot}/%{_docdir}/%{name}
+install -m 0444 README          %{buildroot}/%{_docdir}/%{name}
 
 %files
 %defattr(-,root,root)
+%dir /usr/lib/ocf
+%dir /usr/lib/ocf/resource.d
+%dir /usr/lib/ocf/resource.d/suse
 /usr/lib/ocf/resource.d/suse/SAPHana
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
+%dir %{_docdir}/%{name}
+%doc %{_docdir}/%{name}/README
+%doc %{_docdir}/%{name}/LICENSE
 
 %changelog
