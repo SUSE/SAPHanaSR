@@ -2,17 +2,16 @@
 #
 # SAPHana
 #
-# Description:	Manages a single SAP HANA Instance or two of them in System 
-#               Replication Planned: do also manage scale-up scenarios
+# Description:	Manages two single SAP HANA Instance in System Replication 
+#               Planned: do also manage scale-up scenarios
 #               currently the SAPHana is dependent of the analysis of 
 #               SAPHanaTopology
+#               For supported scenarios please read the README file provided
+#               in the same software package (rpm)
 #
 ##############################################################################
 #
-# SAPHana is a fork of SAPInstance to cover special actions needed for running HANA in a SR mode
-# Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
-#
-# SAPHana:
+# SAPHana
 # Author:       Fabian Herschel, November 2013
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
@@ -126,13 +125,14 @@ function saphana_usage() {
 # globals:  -
 #
 function saphana_meta_data() {
+# TODO RRIO3: TBD in longdescription, review of description and paramater descriptions - search for TBD
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
 	cat <<END
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.135.2014.04.23.1</version>
+<version>0.136.2014.04.24.1</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in sytem replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -165,8 +165,13 @@ The resource agent uses the following four interfaces provided by SAP:
    (primary/secondary) of a SAP HANA database instance. A second task of the interface is the posibility to run a
    system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
 
-4. Interface is SQL query into HANA (system replication table) -> will be replaced by a python script later
-TODO PRIO3: TBD
+4. hdbsql / XXX
+   Interface is SQL query into HANA (system replication table) -> will be replaced by a python script "XXX" later
+   TBD
+
+5. saphostctrl
+   The interface saphostctrl uses the function ListInstances to figure out the virtual host name of the 
+   SAP HANA instance. This is the hostname used during the HANA installation.
 
 </longdesc>
 <parameters>
@@ -190,7 +195,7 @@ TODO PRIO3: TBD
     </parameter>
     <parameter name="DUPLICATE_PRIMARY_TIMEOUT" unique="0" required="0">
         <shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
-        <longdesc lang="en">TODO PRIO4: Review description
+        <longdesc lang="en">TBD - 
         Time difference needed between to primary time stamps, if a dual-primary situation occurs. If the time difference is
         less than the time gap, than the cluster hold one or both instances in a "WAITING" status. This is to give a admin
         a chance to react on a failover. A failed former primary will be registered after the time difference is passed. After
@@ -443,6 +448,7 @@ function get_crm_master()
 function saphana_init() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=$OCF_SUCCESS
+    local vName
     # two parameter models (for transition only)
     # OLD: InstanceName
     # NEW: SID InstanceNumber
@@ -454,7 +460,12 @@ function saphana_init() {
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
     # TODO: PRIO4: SAPVIRHOST might be different to HOSTNAME
-    SAPVIRHOST=${HOSTNAME}
+    # TODO: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
+    # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+    # We rely on the following format: SID is word#4, NR is work#6, vHost is word#8
+    vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
+        | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr)
+    SAPVIRHOST=${vName}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-all}"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
@@ -568,7 +579,7 @@ function saphana_init() {
 # params:   USER
 # globals:  DIR_EXECUTABLE(r)
 #
-# TODO: PRIO3: Might be dropped, if we get a script for fetching the sync status
+# TODO: PRIO5: Might be dropped, if we get a script for fetching the sync status
 function check_secstore_users()
 {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -661,7 +672,7 @@ function check_sapstartsrv() {
 function cleanup_instance() {
   super_ocf_log info "FLOW $FUNCNAME ($*)"
   local rc=0
-# TODO: PRIO5: Check, if we need HANA cleanup procedure (processes, ipc obj, pid files)
+  # TODO: PRIO5: Check, if we need HANA cleanup procedure (processes, ipc obj, pid files)
   super_ocf_log warn "DBG: cleanup_instance currently not implemented"
   rc=0
   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
@@ -950,7 +961,7 @@ function saphana_start_primary()
     if [ $lss -eq 0 ]; then
        super_ocf_log err "DEC: get_hana_landscape_status reports FATAL"
        # DONE: PRIO1: what to do for lss=0?
-       # TODO: PRIO3: Check if OCF_ERR_GENERIC is best reaction
+       # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
        lpa_advice="skip"
        rc=$OCF_ERR_GENERIC
     fi
@@ -1123,7 +1134,7 @@ function saphana_start_secondary()
     # we would be slave (secondary)
     # we first need to check, if there are Master Nodes, because the Scecondary only starts
     # successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-    # TODO: PRIO3: wait_for_primary_master 10 is just a test value: 10 loops x10 seconds than go to WAITING
+    # DONE: PRIO3: wait_for_primary_master 10 is just a test value: 10 loops x10 seconds than go to WAITING
     # DONE: PRIO3: rename 'wait_for_primary_master' to match better the use case ("wait_some_time")
     #
     super_ocf_log info "DBG: wait for promoted side"
