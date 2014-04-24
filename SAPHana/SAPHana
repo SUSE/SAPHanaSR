@@ -270,6 +270,34 @@ function dequote()
 }
 
 #
+# function: remoteHost2remoteNode - convert a SAP remoteHost to the cluster node name
+# params:   remoteHost
+# globals:  ATTR_NAME_HANA_VHOST[*]
+#
+function remoteHost2remoteNode()
+{
+    local -a clusterNodes=()
+    local cl=""
+    local vHost=""
+    local remoteHost="$1"
+    local remoteNode=""
+    local rc=1
+### BAUSTELLE1
+    clusterNodes=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
+    for cl in ${clusterNodes[@]}; do
+        vHost=$(get_hana_attribute $cl  ${ATTR_NAME_HANA_VHOST[@]})
+        if [ "$vHost" = "$remoteHost" ]; then # we found the correct node
+            remoteNode=$cl
+            rc=0
+        fi
+    done
+    if [ -n "$remodeNode"  ]; then
+        echo "$remoteNode"
+    fi
+    return $rc
+}
+
+#
 # function: is_clone - report, if resource is configured as a clone (also master/slave)
 # params:   -
 # globals:  OCF_*(r)
@@ -442,7 +470,7 @@ function get_crm_master()
 # globals:  sr_name(w), remoteHost(w) 
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
-# globals:  LPA_DIRECTORY(w), SIDInstanceName(w)
+# globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w)
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
 function saphana_init() {
@@ -521,10 +549,17 @@ function saphana_init() {
        remoteHosts=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
        if [ ${#remoteHosts[@]} -eq 1 ]; then # we are a 2 node cluster, lets assume the other is the remote-host
           remoteHost=${remoteHosts[0]}
+          remoteNode=$remoteHost
           super_ocf_log info "DBG: auto-guess remoteHost=$remoteHost"
        else
           super_ocf_log info "DBG: Could not auto-guess remoteHost out of list (${remoteHosts[@]})"
        fi
+    else
+        #
+        # search cluster node which vhost is equal remoteHost
+        #
+        remoteNode=$(remoteHost2remoteNode $remoteHost)
+        # TODO: PRIO5: catch rc!=0
     fi
     #  ATTR_NAME_HANA_SITE
     sr_name=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SITE[@]});
@@ -727,10 +762,10 @@ function analyze_hana_sync_status()
         # UNKNOWN, ACTIVE, ERROR, INITIALIZING
         #
         if [ "${hana_sync_status}" == "ACTIVE" ]; then
-            set_hana_attribute "$remoteHost" "SOK" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
+            set_hana_attribute "$remoteNode" "SOK" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
         else
             super_ocf_log warn "HANA SYNC STATUS is: ${hana_sync_status}"
-            set_hana_attribute "$remoteHost" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
+            set_hana_attribute "$remoteNode" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
         fi
         # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
         #    TODO: PRIO9: for first we assume there is only ONE secondary site (like ROT)
@@ -1297,7 +1332,7 @@ function lpa_init_lpt() {
 #
 # function: lpa_check_lpt_status - start a hana clone instance
 # params:   TBD
-# globals:  TBD
+# globals:  TBD, remoteNode
 # lpa_check_lpt_status
 #
 # Returncodes:
@@ -1344,7 +1379,7 @@ function lpa_check_lpt_status() {
             LPTloc=20                           # DEFAULT
         fi
     fi
-    LPTrem=$(lpa_get_lpt $remoteHost); lparc=$?
+    LPTrem=$(lpa_get_lpt $remoteNode); lparc=$?
     if [ $lparc -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
         super_ocf_log info "DBG: LPA: LPTloc=$LPTloc, LPTrem undefined => WAIT"
@@ -1522,7 +1557,7 @@ function saphana_monitor_primary()
                         # DONE: PRIO1: first check, if remote site is already (and still) in sync
                         # TODO: PRIO4: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
-                        remoteSync=$(get_hana_attribute $remoteHost ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                        remoteSync=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_SYNC_STATUS[@]})
                         case "$remoteSync" in
                             SOK )
                                  super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
