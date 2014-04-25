@@ -1,15 +1,46 @@
 #!/usr/bin/perl
+#
+# fh_test_driver
+# (c) 2014 SUSE Linux Products GmbH
+# Author: Fabian Herschel
+# License: GPL v2+
+# Version: 0.1.2014.04.25.1
+#
+##################################################################
+# THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
+# AS IT TESTS THE FUNCTIONALITY OF THE SAPHanaSR RESOURCE AGENTS
+# THEIRFORE IT STOPS, KILLS AND EVEN MORE SAP HANA INSTANCES AND
+# ALSO SHUTDOWN, FENCES OR BLOCK CLUSTER NODES
+##################################################################
 
 use POSIX;
 use strict;
-use Sys::Syslog;                          # all except setlogsock(), or:
+use Sys::Syslog;
 use Sys::Hostname;
-
+use File::Path;
 
 
 my %Name;
 my %Host;
 my $host = hostname();
+
+my $varlib='/var/lib/SAPHanaTD';
+my $testfile='SAPHanaTD.status';
+my $testcount=0;
+
+sub init() 
+{
+    mkpath($varlib, { mode => 0700, });
+    open(STATFILE, "<", "$varlib/$testfile");
+    while (<STATFILE>) {
+      if ( /^testnr=(.+)/ ) {
+         $testcount=$1;
+      }
+    }
+    close STATFILE;
+    return 0;
+}
+
 
 sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  my $a = shift;
@@ -248,30 +279,72 @@ $sid = get_sid();
 #printf "ok_secs=%s\n", get_number_secondary($sid, "34");
 #printf "warn_prims=%s\n", get_number_primary($sid, "2");
 
-sub run_test_stop_primary( $ $ $ ) 
+
+# TODO: For all tests we need to define the pre-requisite, the test action and the expected-test-result
+#       Like: STOP_HANA_PRIMARY  :  ALL_OK :   TAKEOVER + ALL_OK (after some time ;-)
+#             STOP_HANA_SECONDARY : ALL_OK :   NOTAKEOVER + ALL_OK (after some time ;-)
+#             STANDBY_NODE_PRIMARY : ALL_OK :  TAKEOVER + ALL_OK, lost secondary, one node standby
+#             ONLINE_NODE : ALL_OK, lost secondary, node standby : NOTAKEOVER + ALL_OK
+#             STANDBY_NODE_SECONDARY: ALL_OK : NOTAKEOVER + ALL_OK, lost secondary, node standby
+#             KILL_DEAMON_PRIMARY : ALL_OK ....
+#             KILL_DAEMON_SECONDARY : ALL_OK ...
+#             KILL_DAEMON_BOTH :
+#             STANDBY_NODE_BOTH :
+#             ONLINE_NODE_BOTH :
+#             FENCE_NODE_PRIMARY :
+#             FENCE_NODE_SECONDARY :
+#             STOP_CLUSTER_PRIMARY :
+#             START_CLUSTER :
+#             STOP_CLUSTER_SECONDARY :
+#             BREAK_SYNC :
+#             REPAIR_SYNC :
+#             UNMANAGE_RESOURCE :
+#             MANAGE_RESOURCE : 
+#     Either we use tests like the above - defined one per line - or we use complete test modules which tests a 
+#     failere, messures the reaction (immediate not-ALL_OK) than doing a "anti-dot-action" and checking if ALL_OK
+#     comes back and than to run the next test module.
+#     A test module would be:
+#             STOP_HANA_PRIMARY + WAIT + CHECK
+#             STANDBY_NODE_PRIMARY + WAIT + ONLINE_NODE + WAIT + CHECK
+#             FENCE_NODE_PRIMARY + WAIT + START_CLUSTER + WAIT + CHECK
+#     For all FENCE, CLUSTER, BOOT ACTIONS we need to run either without cluster interaction (as fallback) and we need to
+#     run exactly on one node per time only (maybe we use DC)
+#             
+
+sub run_test_stop_hana( $ $ $ ) 
 {
     my $sid=shift;
-    my $phost=shift;
+    my $theHost=shift;
     my $testNr=shift;
     my $rc=0;
-
-    syslog $priority, "%s", "Try to stop HDB at $phost test=$testNr";
-    if ( $phost eq $host ) {
+    syslog $priority, "%s", "Try to stop HDB at $theHost test=$testNr";
+    if ( $theHost eq $host ) {
        # local
        system("su - ${sid}adm -c \"HDB stop\"");
     } else {
        # remote
-       system("ssh ${sid}adm\@$phost HDB stop");
+       system("ssh ${sid}adm\@$theHost HDB stop");
     }
-
-    syslog $priority, "%s", "Stopped HDB at $phost test=$testNr";
+    syslog $priority, "%s", "Stopped HDB at $theHost test=$testNr";
     return $rc;
 }
 
-printf "fhTD: Tests running... \n";
+sub run_test_standby_node( $ $ $ )
+{
+    my $sid=shift;
+    my $node=shift;
+    my $testNr=shift;
+    my $rc=0;
+    syslog $priority, "%s", "Try standby $node test=$testNr";
+    system("crm node standby $node");
+    syslog $priority, "%s", "Set standby for $node test=$testNr";
+    return $rc;
+}
+
+init();
+printf "fhTD: Tests running. Next TestNr=%i\n", $testcount;
 my $goodloops=0;
 my $badloops=0;
-my $testcount=0;
 while ( 1==1 ) {
     my $message;
     my $phost;
@@ -280,10 +353,7 @@ while ( 1==1 ) {
     get_hana_attributes($sid);
     $phost=get_host_primary($sid, "1234");
     $shost=get_host_secondary($sid, "1234");
-
     my ($checkOK, $failures ) = check_all_ok($sid);
-
-
     if ( $checkOK == 0 ) {
         $badloops=0;
         $goodloops++;
@@ -291,7 +361,11 @@ while ( 1==1 ) {
         syslog $priority, "%s", $message;
         if ( $goodloops > 12 ) {
             $testcount++;
-            run_test_stop_primary($sid, $phost, $testcount);  # maybe add max wished test time till good again?
+            # TODO: Later add other values for writing the status file (now only testnr)
+            open(STATFILE, ">", "$varlib/$testfile");
+            printf STATFILE "testnr=%i\n", $testcount;
+            close STATFILE;
+            run_test_stop_hana($sid, $phost, $testcount);  # maybe add max wished test time till good again?
             $goodloops=0;
         }
     } else {
