@@ -4,7 +4,7 @@
 # (c) 2014 SUSE Linux Products GmbH
 # Author: Fabian Herschel
 # License: GPL v2+
-# Version: 0.1.2014.04.25.1
+# Version: 0.3.2014.04.25.3
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -329,15 +329,48 @@ sub run_test_stop_hana( $ $ $ )
     return $rc;
 }
 
+sub run_test_kill_hana( $ $ $ $ ) 
+{
+    my $sid=shift;
+    my $theHost=shift;
+    my $testNr=shift;
+    my $signal=shift;
+    my $rc=0;
+    syslog $priority, "%s", "Try to kill-$signal HDB at $theHost test=$testNr";
+    if ( $theHost eq $host ) {
+       # local
+       system("su - ${sid}adm -c \"HDB kill-$signal\"");
+    } else {
+       # remote
+       system("ssh ${sid}adm\@$theHost HDB kill-$signal");
+    }
+    syslog $priority, "%s", "Killed HDB at $theHost test=$testNr";
+    return $rc;
+}
+
 sub run_test_standby_node( $ $ $ )
 {
     my $sid=shift;
     my $node=shift;
     my $testNr=shift;
     my $rc=0;
-    syslog $priority, "%s", "Try standby $node test=$testNr";
-    system("crm node standby $node");
-    syslog $priority, "%s", "Set standby for $node test=$testNr";
+    if ( check_both_nodes_online(2) ) {
+        syslog $priority, "%s", "Try standby $node test=$testNr";
+        system("crm node standby $node");
+        while ( ! check_both_nodes_online(1) ) {
+            syslog $priority, "%s", "Wait for standby status for $node test=$testNr";
+            sleep 10;
+        }
+        syslog $priority, "%s", "Set standby for $node test=$testNr";
+        sleep 10;
+        syslog $priority, "%s", "Try set online for $node test=$testNr";
+        system("crm node online $node");
+        while ( ! check_both_nodes_online(2) ) {
+            syslog $priority, "%s", "Wait for online status for $node test=$testNr";
+            sleep 10;
+        }
+        syslog $priority, "%s", "Set online for $node test=$testNr";
+    }
     return $rc;
 }
 
@@ -365,7 +398,33 @@ while ( 1==1 ) {
             open(STATFILE, ">", "$varlib/$testfile");
             printf STATFILE "testnr=%i\n", $testcount;
             close STATFILE;
-            run_test_stop_hana($sid, $phost, $testcount);  # maybe add max wished test time till good again?
+            switch ($testcount % 10) {
+                case [0,4] { 
+                                   syslog $priority, "%s", "Testcase: Stop primary SAP Hana instance. test=$testcount";
+                                   run_test_stop_hana($sid, $phost, $testcount); 
+                                 } # maybe add max wished test time till good again?  
+                case [2,6] { 
+                                   syslog $priority, "%s", "Testcase: Kill-11 primary SAP Hana instance. test=$testcount";
+                                   run_test_kill_hana($sid, $phost, $testcount, 11); 
+                                 }
+                case [5,9] { 
+                                   syslog $priority, "%s", "Testcase: Stop secondary SAP Hana instance. test=$testcount";
+                                   run_test_stop_hana($sid, $shost, $testcount); 
+                                 }
+                case [3,7] { 
+                                   syslog $priority, "%s", "Testcase: Kill-11 secondary SAP Hana instance. test=$testcount";
+                                   run_test_kill_hana($sid, $shost, $testcount, 11); 
+                                 } 
+                case  [1] {
+                                   syslog $priority, "%s", "Testcase: standby node with secondary SAP Hana instance. test=$testcount";
+                                   run_test_standby_node($sid, $shost, $testcount); 
+                                 }
+                case  [8] {
+                                   syslog $priority, "%s", "Testcase: standby node with primary SAP Hana instance. test=$testcount";
+                                   run_test_standby_node($sid, $phost, $testcount); 
+                                 }
+                else   { syslog $priority, "%s", "Uncovered remainder";}
+            }
             $goodloops=0;
         }
     } else {
