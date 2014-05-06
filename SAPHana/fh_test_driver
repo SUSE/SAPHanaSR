@@ -4,7 +4,7 @@
 # (c) 2014 SUSE Linux Products GmbH
 # Author: Fabian Herschel
 # License: GPL v2+
-# Version: 0.3.2014.04.25.3
+# Version: 0.4.2014.04.30.1
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -27,6 +27,7 @@ my $host = hostname();
 my $varlib='/var/lib/SAPHanaTD';
 my $testfile='SAPHanaTD.status';
 my $testcount=0;
+my $msl;
 
 sub init() 
 {
@@ -37,6 +38,7 @@ sub init()
          $testcount=$1;
       }
     }
+    $msl="msl_SAPHana_NDB_HDB00";
     close STATFILE;
     return 0;
 }
@@ -362,7 +364,9 @@ sub run_test_standby_node( $ $ $ )
             sleep 10;
         }
         syslog $priority, "%s", "Set standby for $node test=$testNr";
-        sleep 10;
+        # TODO: We should wait till S_IDLE - for now we wait for 3 minutes
+        syslog $priority, "%s", "sleeping 180s test=$testNr";
+        sleep 180;
         syslog $priority, "%s", "Try set online for $node test=$testNr";
         system("crm node online $node");
         while ( ! check_both_nodes_online(2) ) {
@@ -372,6 +376,19 @@ sub run_test_standby_node( $ $ $ )
         syslog $priority, "%s", "Set online for $node test=$testNr";
     }
     return $rc;
+}
+
+sub run_test_stop_masterslave( $ $ )
+{
+    my $msl=shift;
+    my $testNr=shift;
+    syslog $priority, "%s", "Try stop msl $msl test=$testNr";
+    system("crm resource stop $msl");
+    syslog $priority, "%s", "sleeping 180s test=$testNr";
+    sleep 180;
+    syslog $priority, "%s", "Try start msl $msl test=$testNr";
+    system("crm resource start $msl");
+    return 0;
 }
 
 init();
@@ -407,7 +424,7 @@ while ( 1==1 ) {
                                    syslog $priority, "%s", "Testcase: Kill-11 primary SAP Hana instance. test=$testcount";
                                    run_test_kill_hana($sid, $phost, $testcount, 11); 
                                  }
-                case [5,9] { 
+                case [5] { 
                                    syslog $priority, "%s", "Testcase: Stop secondary SAP Hana instance. test=$testcount";
                                    run_test_stop_hana($sid, $shost, $testcount); 
                                  }
@@ -422,6 +439,10 @@ while ( 1==1 ) {
                 case  [8] {
                                    syslog $priority, "%s", "Testcase: standby node with primary SAP Hana instance. test=$testcount";
                                    run_test_standby_node($sid, $phost, $testcount); 
+                                 }
+                case  [9] {
+                                   syslog $priority, "%s", "Testcase: stop and start master/slave";
+                                   run_test_stop_masterslave($msl, $testcount);
                                  }
                 else   { syslog $priority, "%s", "Uncovered remainder";}
             }
