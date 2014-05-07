@@ -132,7 +132,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.139.2014.05.07.1</version>
+<version>0.139.2014.05.07.2</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in sytem replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -845,8 +845,13 @@ function register_hana_secondary()
     local rc=2;
     local remoteInstance="";
     remoteInstance=$InstanceNr
-    super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
-    su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+    if ocf_is_true ${AUTOMATED_REGISTER}; then
+       super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+       su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+    else
+       super_ocf_log info "ACT: IGNORE REGISTER because AUTOMATED_REGISTER is set to FALSE"
+       rc=1
+    fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc;
 }
