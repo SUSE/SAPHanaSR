@@ -28,7 +28,7 @@
 #	OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
-#   OCF_RESKEY_SAPHanaFilter    (optional)
+#   OCF_RESKEY_SAPHanaFilter    (optional, should only be set if been told by support or for debugging purposes)
 #
 #
 #######################################################################
@@ -132,7 +132,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.136.2014.04.24.4</version>
+<version>0.139.2014.05.07.1</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in sytem replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -165,9 +165,12 @@ The resource agent uses the following four interfaces provided by SAP:
    (primary/secondary) of a SAP HANA database instance. A second task of the interface is the posibility to run a
    system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
 
-4. hdbsql / XXX
-   Interface is SQL query into HANA (system replication table) -> will be replaced by a python script "XXX" later
-   TBD
+4. hdbsql / systemReplicationStatus
+   Interface is SQL query into HANA (system replication table).  The hsbaql query will be replaced by a python script 
+   "systemReplicationStatus.py" in SAP HANA SPS8 or 9.
+   As long as wee need to use hdbsql you need to setup secure store users for linux user root to be able to
+   access the SAP HANA database. You need to configure a secure store user key "SLEHALOC" which can connect the SAP
+   HANA database: 
 
 5. saphostctrl
    The interface saphostctrl uses the function ListInstances to figure out the virtual host name of the 
@@ -192,6 +195,13 @@ The resource agent uses the following four interfaces provided by SAP:
         </longdesc>
         <shortdesc lang="en">Local or site recover preferred?</shortdesc>
         <content type="string" default="0" />
+    </parameter>
+    <parameter name="AUTOMATED_REGISTER"  unique="0" required="0">
+        <shortdesc lang="en">Define, if a former primary should automatically be registered.</shortdesc>
+        <longdesc lang="en">The parameter AUTOMATED_REGISTER defines, wether a former primary instance should
+             be registered automatically by the resource agent during cluster/resource start, if  the DUPLICATE_PRIMARY_TIMEOUT is expired... TDB
+        </longdesc>
+        <content type="boolean" default="false" />
     </parameter>
     <parameter name="DUPLICATE_PRIMARY_TIMEOUT" unique="0" required="0">
         <shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
@@ -489,8 +499,8 @@ function saphana_init() {
     super_ocf_log info "ACT: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
-    # TODO: PRIO4: SAPVIRHOST might be different to HOSTNAME
-    # TODO: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
+    # DONE: PRIO4: SAPVIRHOST might be different to HOSTNAME
+    # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API? Answer: Yes
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, NR is work#6, vHost is word#8
     vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
@@ -498,6 +508,7 @@ function saphana_init() {
     SAPVIRHOST=${vName}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-all}"
+    AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     LPA_ATTR=("lpa_${sid}_lpt" "reboot")
     super_ocf_log info "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
@@ -514,14 +525,16 @@ function saphana_init() {
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "reboot")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
     #
-    # TODO: PRIO2: Table for non-preferred-site-takeover
+    # TODO: PRIO4: Table for non-preferred-site-takeover
     #
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER=(
-       "[0-9]*:P:[^:]*:master .*  150"
-       "[0-9]*:P:[^:]*:slave  .*   60"
-       "[0-9]*:P:[^:]*:\?     .*    0"
-       "[0-9]*:P:[^:]*:-     .*     0"
-       "[0-9]*:S:[^:]*:master SOK    100"
+       "[234]*:P:[^:]*:master .*     150"
+       "[015-9]*:P:[^:]*:master .*    90"
+       "[0-9]*:P:[^:]*:slave  .*      60"
+       "[0-9]*:P:[^:]*:\?     .*       0"
+       "[0-9]*:P:[^:]*:-      .*       0"
+       "[234]*:S:[^:]*:master SOK    100"
+       "[015-9]*:S:[^:]*:master SOK   80"
        "[0-9]*:S:[^:]*:master SFAIL  -INFINITY"
        "[0-9]*:S:[^:]*:slave  SOK     10"
        "[0-9]*:S:[^:]*:slave  SFAIL  -INFINITY"
@@ -599,8 +612,8 @@ function saphana_init() {
     PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     #############################
-    # TODO: RPIO4: To be able to call landscapeHostConfig.py without su (so as root)
-    # TODO: PRIO4: Research for environment script .htacces or something like that
+    # TODO: PRIO9: To be able to call landscapeHostConfig.py without su (so as root)
+    # TODO: PRIO9: Research for environment script .htacces or something like that
     #export SAPSYSTEMNAME=ZLF
     #export DIR_INSTANCE=/usr/sap/ZLF/HDB02
     #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DIR_INSTANCE/exe:$DIR_INSTANCE/exe/Python/lib
@@ -709,7 +722,7 @@ function check_sapstartsrv() {
 function cleanup_instance() {
   super_ocf_log info "FLOW $FUNCNAME ($*)"
   local rc=0
-  # TODO: PRIO5: Check, if we need HANA cleanup procedure (processes, ipc obj, pid files)
+  # TODO: PRIO5: Check, if we need HANA cleanup procedure (processes, ipc obj, pid files); Currently not needed
   super_ocf_log warn "DBG: cleanup_instance currently not implemented"
   rc=0
   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
@@ -872,7 +885,7 @@ function saphana_start() {
     fi
     if [ $rc -eq 0 ]
     then
-        # TODO: PRIO3: something more dynamic than 3600 seconds in WaitforStarted
+        # TODO: PRIO9: something more dynamic than 3600 seconds in WaitforStarted
         output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted 3600 1)
         if [ $? -eq 0 ]
         then
@@ -1020,7 +1033,7 @@ function saphana_start_primary()
         register ) # process a REGISTER
             case "$lss" in
                 2 | 3 | 4 ) # upps we are up - but shoudn't? - we could not register with started HDB
-                    # TODO: PRIO3: check if this reaction is correct - tell cluster about failed start
+                    # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
                     super_ocf_log info "LPA: landcape: UP, LPA: register ==> take down"
                     set_crm_master -inf
                     rc=$OCF_NOT_RUNNING 
@@ -1224,7 +1237,7 @@ function lpa_get_lpt() {
 
 #
 # function: lpa_set_lpt - set lpt in cluster
-# params:   LPT
+# params:   LPT [node]
 # globals:  LPA_ATTR(r), HOSTNAME(r), TBD
 # rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
 #
@@ -1234,7 +1247,8 @@ function lpa_set_lpt() {
     local crm_rc=1
     local lpt=$1
     local clpt=-1
-    set_hana_attribute ${HOSTNAME} "$lpt" ${LPA_ATTR[@]}; crm_rc=$?
+    local node=${2:-${HOSTNAME}}
+    set_hana_attribute ${node} "$lpt" ${LPA_ATTR[@]}; crm_rc=$?
     clpt=$(lpa_get_lpt $HOSTNAME)
     if [ "$lpt" != "$clpt" ]; then
         rc=2
@@ -1398,12 +1412,18 @@ function lpa_check_lpt_status() {
             super_ocf_log info "DBG: LPA: LPTloc wins $LPTloc > $LPTrem + $delta => START"
             rc=0
         elif (( delta < LPTrem - LPTloc )); then 
-            # The other one has won - LPA says REGISTER
-            super_ocf_log info "DBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta => REGISTER"
-            rc=1
+            if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                # The other one has won - LPA says REGISTER
+                super_ocf_log info "DBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta => REGISTER"
+                rc=1
+            else
+                super_ocf_log info "DBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta BUT AUTOMATED_REGISTER='false' => WAIT"
+                rc=2
+            fi
+
         else                                     
             super_ocf_log info "DBG: LPA: Difference between LPTloc and LPTrem is less than delta ($delta) => WAIT"
-            # TODO: PRIO3: ADD STALEMATE-HANDLING HERE
+            # TODO: PRIO3: ADD STALEMATE-HANDLING HERE; currently admin should set one of the lpa to 20
             rc=2
         fi        
     fi    
@@ -1832,6 +1852,10 @@ function saphana_promote_clone() {
         case "$hana_sync" in
              SOK )
                 super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
+                LPTloc=$(date '+%s')
+                # lpa_set_lpt 20 $remoteNode
+                lpa_set_lpt $LPTloc
+                lpa_push_lpt $LPTloc
                 su - $sidadm -c "hdbnsutil -sr_takeover"
                 #
                 # now gain check, if we are primary NOW
