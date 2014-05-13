@@ -86,8 +86,19 @@ close ListInstances;
 open CIB, "cibadmin -Ql |";
 while (<CIB>) {
    chomp;
-   if ( $_ =~ /nvpair\s+id="status-([a-zA-Z0-9]+)-\w+"\s+name="(\w+_${sid}_\w+)"\s+value="([^"]+)"/ ) {
-       my ($host, $name, $value) = ( $1, $2, $3 );
+   my ($host, $name, $value);
+   my $found=0;
+   if ( $_ =~ /nvpair.*name="(\w+_${sid}_\w+)"/ ) {
+      $name=$1;
+      if ( $_ =~ /id="(status|nodes)-([a-zA-Z0-9]+)-/ ) {
+         $host=$2;
+      }
+      if ( $_ =~ /value="([^"]+)"/ ) {
+         $value=$1;
+         $found=1;
+      }
+   }
+   if ( $found == 1 ) {
        #
        # handle the hosts name and table-title
        #
@@ -113,7 +124,6 @@ while (<CIB>) {
           $Name{$name}->{_title} = $name; 
        }
        $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
-
        # printf "%-8s %-20s %-30s\n", $1, $2, $3;
    }
 }
