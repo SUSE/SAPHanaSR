@@ -122,16 +122,13 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.31.2014.04.24.2</version>
+    <version>0.33.2014.05.13.1</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
         In addition it starts and monitors the local saphostagent.
 
-1. Interface to start/stop a HANA instance/system: sapcontrol/sapstartsrv
-TODO: PRIO3: Check, if this interface is really needed
-
-2. Interface to monitor a HANA system: landscapeHostConfiguration.py 
+1. Interface to monitor a HANA system: landscapeHostConfiguration.py 
 landscapeHostConfiguration.py has some detailed output about HANA system status
 and node roles. For our monitor the overall status is relevant. This overall 
 status is reported by the returncode of the script:
@@ -144,7 +141,9 @@ The SAPHanaTopology resource agent will interpret returncodes 1 as NOT-RUNNING (
 SAPHanaTopology scans the output table of landscapeHostConfiguration.py to identify the roles of the cluster node. Roles means configured and current role of the nameserver as well as the indexserver.
 
 2. Interface is hdbnsutil
-TODO PRIO3: TBD
+   The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
+   (primary/secondary) of a SAP HANA database instance. A second task of the interface is the posibility to run a
+   system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
 
 3. saphostctrl
    The interface saphostctrl uses the function ListInstances to figure out the virtual host name of the 
@@ -325,11 +324,11 @@ function sht_init() {
     ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")   # SOK, SFAIL, UNKNOWN?
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UKNOWN?, DEMOTED, PROMOTED
-    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "reboot")
-    ATTR_NAME_HANA_SITE=("hana_${sid}_site" "reboot")
+    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
+    ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
-    ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "reboot")
-    ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "reboot")
+    ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
+    ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
 
     # optional OCF parameters, we try to guess which directories are correct
@@ -627,7 +626,7 @@ function sht_monitor_clone() {
             rc=$OCF_ERR_CONFIGURE
         fi
     fi
-    # TODO: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
+    # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, NR is work#6, vHost is word#8
     vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
