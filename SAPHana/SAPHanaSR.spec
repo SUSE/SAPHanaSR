@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.136
+Version:        0.142
 Release:        <RELEASE1>
 Url:        http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -28,6 +28,8 @@ Source0:        SAPHana
 Source1:        SAPHanaTopology
 Source2:        README
 Source3:        LICENSE
+Source4:        show_SAPHanaSR_attributes
+Source5:        Setup-Guide.pdf
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
@@ -58,6 +60,8 @@ cp %{S:0} .
 cp %{S:1} .
 cp %{S:2} .
 cp %{S:3} .
+cp %{S:4} .
+cp %{S:5} .
 
 %clean
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
@@ -65,10 +69,13 @@ test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
 %install
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}%{_docdir}/%{name}
+mkdir -p %{buildroot}/usr/share/%{name}/tests
 install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0755 SAPHanaTopology %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0444 LICENSE         %{buildroot}/%{_docdir}/%{name}
 install -m 0444 README          %{buildroot}/%{_docdir}/%{name}
+install -m 0444 Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
+install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
 
 %files
 %defattr(-,root,root)
@@ -77,8 +84,10 @@ install -m 0444 README          %{buildroot}/%{_docdir}/%{name}
 %dir /usr/lib/ocf/resource.d/suse
 /usr/lib/ocf/resource.d/suse/SAPHana
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
+/usr/share/%{name}
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/README
 %doc %{_docdir}/%{name}/LICENSE
+%doc %{_docdir}/%{name}/Setup-Guide.pdf
 
 %changelog
