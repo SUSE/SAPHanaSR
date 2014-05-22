@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<workflow name="90-SAPHanaSR">
+
+<shortdesc lang="en">SAPHanaSR</shortdesc>
+<longdesc lang="en">
+The SAPHanaSR HAWK wizzard is capable to configure all needed resources,
+master slave and clone definitions as well as constraints.
+
+As SAPHanaSR configurations are intended to be very standardized the
+wizzard asks only three needed parameters: SID, InstanceNumber and ip 
+address.
+</longdesc>
+
+<templates>
+<template name="SAPHanaSR" required="1">
+<stepdesc lang="en">
+SAPHana, SAPHanaTopology ...
+</stepdesc>
+</template>
+</templates>
+
+<crm_script>
+ms msl_SAPHana_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/> rsc_SAPHana_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/>
+	meta clone-max="2" clone-node-max="1" 
+clone cln_SAPHanaTopology_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/> rsc_SAPHanaTopology_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/>
+	meta is-managed="true" clone-node-max="1"
+colocation col_saphana_ip_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/> 2000: rsc_ip_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/>:Started msl_SAPHana_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/>:Master
+order ord_SAPHana_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/> 2000: cln_SAPHanaTopology_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/> msl_SAPHana_<insert param="sid" from_template="SAPHanaSR"/>_HDB<insert param="ino" from_template="SAPHanaSR"/>
+</crm_script>
+
+</workflow>
