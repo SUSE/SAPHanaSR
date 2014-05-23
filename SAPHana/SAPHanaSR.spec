@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.143
+Version:        0.145
 Release:        <RELEASE1>
 Url:        http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -30,6 +30,8 @@ Source2:        README
 Source3:        LICENSE
 Source4:        show_SAPHanaSR_attributes
 Source5:        Setup-Guide.pdf
+Source6:        SAPHanaSR.xml
+Source7:        90-SAPHanaSR.xml
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
@@ -69,6 +71,8 @@ cp %{S:2} .
 cp %{S:3} .
 cp %{S:4} .
 cp %{S:5} .
+cp %{S:6} .
+cp %{S:7} .
 
 %clean
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
@@ -77,12 +81,16 @@ test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/tests
+mkdir -p %{buildroot}/srv/www/hawk/config/wizard/templates
+mkdir -p %{buildroot}/srv/www/hawk/config/wizard/workflows
 install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0755 SAPHanaTopology %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0444 LICENSE         %{buildroot}/%{_docdir}/%{name}
 install -m 0444 README          %{buildroot}/%{_docdir}/%{name}
 install -m 0444 Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
 install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
+install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
+install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
 
 %files
 %defattr(-,root,root)
@@ -92,6 +100,13 @@ install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
 /usr/lib/ocf/resource.d/suse/SAPHana
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
 /usr/share/%{name}
+%dir /srv/www/hawk
+%dir /srv/www/hawk/config
+%dir /srv/www/hawk/config/wizard
+%dir /srv/www/hawk/config/wizard/templates
+%dir /srv/www/hawk/config/wizard/workflows
+/srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
+/srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/README
 %doc %{_docdir}/%{name}/LICENSE
