@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.142
+Version:        0.143
 Release:        <RELEASE1>
 Url:        http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -34,6 +34,10 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
 Requires:       resource-agents
+
+%package doc
+Summary:        Setup-Guide for SAPHanaSR
+Group:          Productivity/Clustering/HA
 
 %description
 The resource agents SAPHana and SAPHanaTopology are responsible for controlling a SAP HANA Database which is
@@ -51,6 +55,9 @@ http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-
 Authors:
 --------
     Fabian Herschel
+
+%description doc
+This sub package includes the Setup-Guide for getting SAP HANA system replication under cluster control.
 
 %prep
 %setup -n %{name} -c -T
@@ -88,6 +95,9 @@ install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/README
 %doc %{_docdir}/%{name}/LICENSE
+
+%files doc
+%defattr(-,root,root)
 %doc %{_docdir}/%{name}/Setup-Guide.pdf
 
 %changelog
