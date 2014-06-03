@@ -125,14 +125,13 @@ function saphana_usage() {
 # globals:  -
 #
 function saphana_meta_data() {
-# TODO RRIO3: TBD in longdescription, review of description and paramater descriptions - search for TBD
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
 	cat <<END
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.146.2014.05.27.2</version>
+<version>0.147.2014.06.02.1</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -142,7 +141,7 @@ not supported in this version.
 
 Managing the two SAP HANA instances means that the resource agent controls the start/stop of the
 instances. In addition the resource agent is able to monitor the SAP HANA databases to check their
-availability on application level. For this monitoring the resource agent relies on interfaces
+availability on landscape host configuration level. For this monitoring the resource agent relies on interfaces
 provided by SAP. A third task of the resource agent is to also check the synchronisation status
 of the two SAP HANA databases. If the synchronisation is not "SOK", than the cluster avoids to
 failover to the secondary side, if the primary fails. This is to improve the data consistency.
@@ -158,7 +157,7 @@ The resource agent uses the following four interfaces provided by SAP:
    and node roles. For our monitor the overall status is relevant. This overall 
    status is reported by the returncode of the script:
    0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
-   The SAPHana resource agent will interpret returncodes 0 as ERROR, 1 as not-running and and returncodes 2+3+4 as RUNNING.
+   The SAPHana resource agent will interpret returncodes 0 as FATAL, 1 as not-running or ERROR and and returncodes 2+3+4 as RUNNING.
 
 3. hdbnsutil
    The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
@@ -179,13 +178,13 @@ The resource agent uses the following four interfaces provided by SAP:
 </longdesc>
 <parameters>
     <parameter name="SID" unique="0" required="1">
-        <longdesc lang="en">TBD</longdesc>
-        <shortdesc lang="en">TBD</shortdesc>
+        <longdesc lang="en">SAP System Identifier (SID) like "SLE" or "HAE"</longdesc>
+        <shortdesc lang="en">SAP System Identifier (SID)</shortdesc>
         <content type="string" default="" />
     </parameter>
     <parameter name="InstanceNumber" unique="0" required="1">
-        <longdesc lang="en">TBD</longdesc>
-        <shortdesc lang="en">TBD</shortdesc>
+        <longdesc lang="en">SAP instance number like "00" or "07"</longdesc>
+        <shortdesc lang="en">SAP instance number</shortdesc>
         <content type="string" default="" />
     </parameter>
     <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
@@ -205,8 +204,8 @@ The resource agent uses the following four interfaces provided by SAP:
     </parameter>
     <parameter name="DUPLICATE_PRIMARY_TIMEOUT" unique="0" required="0">
         <shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
-        <longdesc lang="en">TBD - 
-        Time difference needed between to primary time stamps, if a dual-primary situation occurs. If the time difference is
+        <longdesc lang="en">Time difference needed between to primary time stamps, 
+        if a dual-primary situation occurs. If the time difference is
         less than the time gap, than the cluster hold one or both instances in a "WAITING" status. This is to give a admin
         a chance to react on a failover. A failed former primary will be registered after the time difference is passed. After
         this registration to the new primary all data will be overwritten by the system replication.
@@ -293,7 +292,6 @@ function remoteHost2remoteNode()
     local remoteHost="$1"
     local remoteNode=""
     local rc=1
-### BAUSTELLE1
     clusterNodes=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${HOSTNAME}))
     for cl in ${clusterNodes[@]}; do
         vHost=$(get_hana_attribute $cl  ${ATTR_NAME_HANA_VHOST[@]})
@@ -859,9 +857,8 @@ function register_hana_secondary()
 #
 # function: saphana_status - pure status check
 # params:   -
-# globals:  TBD
+# globals:  SIDInstanceName, OCF_*, 
 function saphana_status() {
-# BAUSTELLE0
     local binDeam="hdb.sap${SIDInstanceName}" rc=0
     binDeam=${binDeam:0:15}   # Process name is limited to the first 15 characters
     if pgrep $binDeam 1>/dev/null; then rc=$OCF_SUCCESS; else rc=$OCF_NOT_RUNNING; fi
@@ -871,7 +868,7 @@ function saphana_status() {
 #
 # function: saphana_start - start a hana instance
 # params:   -
-# globals:  TBD
+# globals:  OCF_*, SAPCONTROL, InstanceNr, SID, InstanceName, 
 #
 function saphana_start() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -975,7 +972,7 @@ function saphana_validate() {
 #
 # function: saphana_start_primary - handle startup of PRIMARY in M/S
 # params:
-# globals: OCF_*(r), TBD
+# globals: OCF_*(r), HOSTNAME, ATTR_NAME_*, HANA_STATE_*, 
 #
 function saphana_start_primary()
 {
@@ -1118,7 +1115,7 @@ check_for_primary_master()
             if [ $rc -eq 1 ]; then
                 ch_role=$(get_hana_attribute ${ch} ${ATTR_NAME_HANA_ROLES[@]})
 # TODO: PRIO3: check if [0-9], [234] or [34] is correct
-# TODO: PRIO4: Do we need differen checks like "any-primary-master" or "running-primary-master" ?
+# TODO: PRIO4: Do we need different checks like "any-primary-master" or "running-primary-master" ?
 #                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
 #                grep '[34]:P:[^:]*:master:' <<< $ch_role && rc=0
 #               Match "Running+Available Primary" Master -> Match field 1: 3/4, 2: P, 4: master 
@@ -1169,7 +1166,7 @@ wait_for_primary_master()
 #
 # function: saphana_start_secondary - handle startup of PRIMARY in M/S
 # params:
-# globals: OCF_*(r), TBD
+# globals: OCF_*(r), HOSTNAME, ATTR_NAME_*, 
 #
 function saphana_start_secondary()
 {
@@ -1194,7 +1191,6 @@ function saphana_start_secondary()
     #
     super_ocf_log debug "DBG: wait for promoted side"
     # TODO: PRIO3: Check if setting SFAIL during secondary start is ok
-    # BAUSTELLE2
     set_hana_attribute "${HOSTNAME}" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
     if wait_for_primary_master 10; then
        saphana_start; rc=$?
@@ -1222,7 +1218,8 @@ function saphana_start_secondary()
 # function: lpa_get_lpt - get lpt from cluster
 # params:   NODE
 # output:   LPT
-# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
+# globals:  LPA_ATTR_*, 
 #
 function lpa_get_lpt() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -1243,8 +1240,8 @@ function lpa_get_lpt() {
 #
 # function: lpa_set_lpt - set lpt in cluster
 # params:   LPT [node]
-# globals:  LPA_ATTR(r), HOSTNAME(r), TBD
-# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+# globals:  LPA_ATTR(r), HOSTNAME(r),
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
 #
 function lpa_set_lpt() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -1266,10 +1263,10 @@ function lpa_set_lpt() {
 
 #
 # function: lpa_pull_lpt - fetch lpt from file
-# params:   TBD
-# globals:  LPA_DIRECTORY(r)
+# params:   -
+# globals:  LPA_DIRECTORY(r), sid, HOSTNAME
 # output:   LPT
-# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
 #
 function lpa_pull_lpt() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -1291,9 +1288,9 @@ function lpa_pull_lpt() {
 #
 # function: lpa_push_lpt - put lpt to file
 # params:   LPT
-# globals:  LPA_DIRECTORY(r)
+# globals:  LPA_DIRECTORY(r), sid, HOSTNAME
 # output:   --
-# rc:       rc=0: OK, rc=1: TBD, rc=2: ERROR
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
 #
 function lpa_push_lpt() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -1317,11 +1314,11 @@ function lpa_push_lpt() {
 #
 # function: lpa_init_lpt - initialize local lpt, if needed
 # params:   HANA_STATE
-# globals:  HANA_STATE_*(r), LPA_DIRECTORY(r), sid(r), HOSTNAME(r), TBD
+# globals:  HANA_STATE_*(r), LPA_DIRECTORY(r), sid(r), HOSTNAME(r), 
 # lpa_init_lpt
 #
 # Returncodes:
-#    rc=0: OK,  rc=1 TBD,  rc=2: ERROR
+#    rc=0: OK,  rc=1 InternalERROR,  rc=2: ERROR
 #
 # Initializing (if NO local LPT-file):
 #    SECONDARY sets to 0
@@ -1352,8 +1349,8 @@ function lpa_init_lpt() {
 
 #
 # function: lpa_check_lpt_status - start a hana clone instance
-# params:   TBD
-# globals:  TBD, remoteNode
+# params:   -
+# globals:  DUPLICATE_PRIMARY_TIMEOUT, HOSTNAME, remoteNode
 # lpa_check_lpt_status
 #
 # Returncodes:
@@ -1439,7 +1436,7 @@ function lpa_check_lpt_status() {
 #
 # function: saphana_start_clone - start a hana clone instance
 # params:   -
-# globals:  TBD
+# globals:  OCF_*, ATTR_NAME_*, HANA_STATE_*, HOSTNAME
 # saphana_start_clone
 #
 function saphana_start_clone() {
@@ -1487,7 +1484,7 @@ function saphana_stop_clone() {
 #
 # function: saphana_monitor_primary - monitor a hana clone instance
 # params:   -
-# globals:  HANA_STATE_*(r), remoteHost, TBD
+# globals:  HANA_STATE_*(r), remoteHost, HOSTNAME, ATTR_NAME_*, OCF_*, PreferSiteTakeover
 #
 function saphana_monitor_primary()
 {
@@ -1604,7 +1601,6 @@ function saphana_monitor_primary()
                         # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here"
-#BAUSTELLE1 Primary
                         my_role=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_ROLES[@]})
                         my_sync=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
                         scoring_crm_master "$my_role" "$my_sync"
@@ -1670,7 +1666,7 @@ function saphana_monitor_primary()
 #
 # function: saphana_monitor_secondary - monitor a hana clone instance
 # params:   -
-# globals:  TBD
+# globals:  OCF_*, ATTR_NAME_*, HOSTNAME
 # saphana_monitor_secondary
 #
 function saphana_monitor_secondary()
@@ -1746,19 +1742,17 @@ function saphana_monitor_secondary()
             sync_attr=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
             super_ocf_log debug "DBG sync_attr=$sync_attr"
             case "$sync_attr" in
-                "SOK"   )    # This is a possible node to promote, when primary is missing
+                "SOK"   ) # This is a possible node to promote, when primary is missing
                     super_ocf_log info "DEC: secondary with sync status SOK -> posible takeover node"
-                #    set_crm_master  10
-#BAUSTELLE1 Secondary
-    my_role=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_ROLES[@]})
-    my_sync=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
-    scoring_crm_master "$my_role" "$my_sync"
+                    my_role=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_ROLES[@]})
+                    my_sync=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                    scoring_crm_master "$my_role" "$my_sync"
                     ;;
                 "SFAIL" ) # This is currently NOT a possible node to promote
                     super_ocf_log info "DEC: secondary with sync status FAILED -> EXCLUDE as posible takeover node"
                     set_crm_master -INFINITY
                     ;;
-                "*" )       # Unknown sync status
+                "*" )     # Unknown sync status
                     super_ocf_log info "DEC: secondary with sync status UKNOWN/UNDEFINED -> EXCLUDE as posible takeover node"
                     set_crm_master -INFINITY
                     ;;
@@ -1775,7 +1769,7 @@ function saphana_monitor_secondary()
 #
 # function: saphana_monitor_clone - monitor a hana clone instance
 # params:   -
-# globals:  TBD
+# globals:  OCF_*, ATTR_NAME_*, HOSTNANE, HANA_STATE_*
 # saphana_monitor_clone
 #
 function saphana_monitor_clone() {
