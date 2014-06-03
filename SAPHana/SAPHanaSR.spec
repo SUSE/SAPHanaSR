@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.146
+Version:        0.147
 Release:        <RELEASE1>
 Url:        http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -29,7 +29,7 @@ Source1:        SAPHanaTopology
 Source2:        README
 Source3:        LICENSE
 Source4:        show_SAPHanaSR_attributes
-Source5:        Setup-Guide.pdf
+Source5:        SAPHanaSR-Setup-Guide.pdf
 Source6:        SAPHanaSR.xml
 Source7:        90-SAPHanaSR.xml
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -87,7 +87,7 @@ install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0755 SAPHanaTopology %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0444 LICENSE         %{buildroot}/%{_docdir}/%{name}
 install -m 0444 README          %{buildroot}/%{_docdir}/%{name}
-install -m 0444 Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
+install -m 0444 SAPHanaSR-Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
 install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
 install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
 install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
@@ -113,6 +113,6 @@ install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workfl
 
 %files doc
 %defattr(-,root,root)
-%doc %{_docdir}/%{name}/Setup-Guide.pdf
+%doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
 
 %changelog
