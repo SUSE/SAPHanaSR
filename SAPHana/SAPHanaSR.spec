@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.147
+Version:        0.148
 Release:        <RELEASE1>
 Url:        http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -32,6 +32,8 @@ Source4:        show_SAPHanaSR_attributes
 Source5:        SAPHanaSR-Setup-Guide.pdf
 Source6:        SAPHanaSR.xml
 Source7:        90-SAPHanaSR.xml
+Source8:        ocf_suse_SAPHana.7
+Source9:        ocf_suse_SAPHanaTopology.7
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
@@ -73,6 +75,10 @@ cp %{S:4} .
 cp %{S:5} .
 cp %{S:6} .
 cp %{S:7} .
+cp %{S:8} .
+cp %{S:9} .
+gzip ocf_suse_SAPHana.7
+gzip ocf_suse_SAPHanaTopology.7
 
 %clean
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
@@ -81,6 +87,7 @@ test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/tests
+mkdir -p %{buildroot}/usr/share/man/man7
 mkdir -p %{buildroot}/srv/www/hawk/config/wizard/templates
 mkdir -p %{buildroot}/srv/www/hawk/config/wizard/workflows
 install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
@@ -91,6 +98,8 @@ install -m 0444 SAPHanaSR-Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
 install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
 install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
 install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
+install -m 0444 ocf_suse_SAPHana.7.gz %{buildroot}/usr/share/man/man7
+install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
 
 %files
 %defattr(-,root,root)
@@ -114,5 +123,7 @@ install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workfl
 %files doc
 %defattr(-,root,root)
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
+%doc /usr/share/man/man7/ocf_suse_SAPHana.7.gz
+%doc /usr/share/man/man7/ocf_suse_SAPHanaTopology.7.gz
 
 %changelog
