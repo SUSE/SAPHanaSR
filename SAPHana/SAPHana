@@ -131,7 +131,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.148.2</version>
+<version>0.148.3</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -1537,7 +1537,12 @@ function saphana_monitor_primary()
                 else
                     lpa_init_lpt $HANA_STATE_PRIMARY
                     # still waiting for second site to report lpa-lpt
-                    super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+                    if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                       super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+                    else
+                       super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
+                    fi
+
                     return $OCF_SUCCESS
                 fi                             
                 promoted=0;

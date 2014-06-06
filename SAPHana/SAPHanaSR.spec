@@ -1,7 +1,7 @@
 #
 # spec file for package SAPHanaSR
 #
-# Copyright (c) 2011-2012 SUSE LINUX Products GmbH, Nuernberg, Germany.
+# Copyright (c) 2013-2014 SUSE LINUX Products GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
