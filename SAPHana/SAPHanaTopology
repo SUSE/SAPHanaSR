@@ -2,7 +2,7 @@
 #
 # SAPHanaTopology
 #
-# Description:	Clone resource to analyze SAPHana-Topology
+# Description:	Clone resource to anylyze SAPHana-Topology
 #
 ###########################################################################################################################
 #
@@ -36,7 +36,8 @@ timeB=$(date '+%s')
 
 HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
-HANA_STATE_DEFECT=2
+HANA_STATE_STANDALONE=2
+HANA_STATE_DEFECT=3
 
 SH=/bin/sh
 
@@ -384,7 +385,7 @@ function sht_init() {
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
-# globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r)
+# globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r), HANA_STATE_STANDALONE(r)
 #
 function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -394,20 +395,28 @@ function check_for_primary() {
    #node_status=$(check_for_primary_single) 
    node_status=$srmode
    super_ocf_log debug "DBG2: check_for_primary: node_status=$node_status"
-   case "$node_status" in
-       primary ) 
+   super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
+   for i in  1 2 3 4 5 6 7 8 9; do
+       case "$node_status" in
+           primary ) 
                   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
                   return $HANA_STATE_PRIMARY;;
-       syncmem | sync | async )
+           syncmem | sync | async )
                   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_SECONDARY"
                   return $HANA_STATE_SECONDARY;;
-       none )     # have seen that mode on second side BEFEORE we registered it as replica
-                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_DEFECT"
-                  return $HANA_STATE_DEFECT;;
-       * )
-		          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
-                  return $HANA_STATE_DEFECT;;
-   esac;
+           none )     # have seen that mode on second side BEFEORE we registered it as replica
+                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_STANDALONE"
+                  return $HANA_STATE_STANDALONE;;
+           * )
+	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                  dump=$( echo $node_status | hexdump -C );
+	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
+                  node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
+                  node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+                  super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
+                  # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+       esac;
+   done
    super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_DEFECT"
    return $HANA_STATE_DEFECT
 }
@@ -583,8 +592,12 @@ function sht_stop_clone() {
 	check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         hanaPrim="P"
-    else
+    elif [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
         hanaPrim="S"
+    elif [ $primary_status -eq $HANA_STATE_STANDALONE ]; then
+        hanaPrim="N"
+    else
+        hanaPrim="-"
     fi
     set_hana_attribute "${HOSTNAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]} 
     sht_stop; rc=$?
@@ -628,6 +641,10 @@ function sht_monitor_clone() {
         if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
             hanaPrim="S"
             super_ocf_log debug "DBG2: HANA IS SECONDARY"
+            sht_monitor; rc=$?
+        elif [ $primary_status -eq $HANA_STATE_STANDALONE  ]; then
+            hanaPrim="N"
+            super_ocf_log debug "DBG2: HANA IS STANDALONE"
             sht_monitor; rc=$?
         else
             hanaPrim="-"

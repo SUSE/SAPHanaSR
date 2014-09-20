@@ -45,7 +45,8 @@ timeB=$(date '+%s')
 
 HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
-HANA_STATE_DEFECT=2
+HANA_STATE_STANDALONE=2
+HANA_STATE_DEFECT=3
 
 SH=/bin/sh
 
@@ -747,15 +748,27 @@ function check_for_primary() {
     node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
-    case "$node_status" in
-        primary ) rc=$HANA_STATE_PRIMARY;;
-        syncmem | sync | async ) 
-                  rc=$HANA_STATE_SECONDARY;;
-        none )    # have seen that mode on second side BEFEORE we registered it as replica
-                  rc=$HANA_STATE_DEFECT;;
-        * )       super_ocf_log err "ACT: HDB Instance mode <$node_status> does not match primary,syncmem,sync or async."
-                  rc=$HANA_STATE_DEFECT;;
-    esac;
+    for i in  1 2 3 4 5 6 7 8 9; do
+       case "$node_status" in
+           primary ) 
+                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
+                  return $HANA_STATE_PRIMARY;;
+           syncmem | sync | async )
+                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_SECONDARY"
+                  return $HANA_STATE_SECONDARY;;
+           none )     # have seen that mode on second side BEFEORE we registered it as replica
+                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_STANDALONE"
+                  return $HANA_STATE_STANDALONE;;
+           * )
+	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                  dump=$( echo $node_status | hexdump -C );
+	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
+                  node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
+                  node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+                  super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
+                  # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+       esac;
+    done
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
 }
