@@ -132,7 +132,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.148.7.1</version>
+<version>0.148.7.2</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -1037,6 +1037,7 @@ function saphana_start_primary()
     #
     super_ocf_log debug "DBG: saphana_primary - check_for_primary reports HANA_STATE_PRIMARY"
     # 
+    lpa_init_lpt $HANA_STATE_PRIMARY
     lpa_check_lpt_status; lpa_dec=$?
     get_hana_landscape_status; lss=$?
     my_role=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_ROLES[@]})
@@ -1072,12 +1073,16 @@ function saphana_start_primary()
             case "$lss" in
                 2 | 3 | 4 ) # as landcape says we are up - just set the scores and return code
                     super_ocf_log info "LPA: landcape: UP, LPA: start ==> keep running"
+                    LPTloc=$(date '+%s')
+                    lpa_set_lpt $LPTloc
                     rc=$OCF_SUCCSESS
                     ;;
                 1 ) # landcape says we are down, lets start and adjust scores and return code
                     super_ocf_log info "LPA: landcape: DOWN, LPA: start ==> start instance"
                     saphana_start
                     rc=$?                    
+                    LPTloc=$(date '+%s')
+                    lpa_set_lpt $LPTloc
                     ;;
             esac
             scoring_crm_master "$my_role" "$my_sync"
@@ -1236,6 +1241,7 @@ function saphana_start_secondary()
     ####### LPA - end
     # 
     #
+    #             lpa_set_lpt  30
     # we would be slave (secondary)
     # we first need to check, if there are Master Nodes, because the Scecondary only starts
     # successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
@@ -1256,6 +1262,8 @@ function saphana_start_secondary()
                set_crm_master -INFINITY
                rc=$OCF_SUCCSESS
            fi
+       else
+               lpa_set_lpt  30
        fi
     else
        super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
@@ -1388,9 +1396,11 @@ function lpa_init_lpt() {
     LPTloc=$(lpa_get_lpt ${HOSTNAME}) || LPTloc=$(lpa_pull_lpt) || \
         if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
             # init primary
+            LPTloc=20
             lpa_push_lpt "20"; rc=$?
         elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
             # init secondary
+            LPTloc=10
             lpa_push_lpt "10"; rc=$?
         else
             rc=2                                   
@@ -1511,7 +1521,6 @@ function saphana_start_clone() {
                  saphana_start_primary; rc=$?
              else
                  saphana_start_secondary; rc=$?
-                 lpa_set_lpt  30
              fi
          fi
          super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
@@ -1556,8 +1565,8 @@ function saphana_stop_clone() {
 function saphana_monitor_primary()
 {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
-	local rc=$OCF_ERR_GENERIC
-	local promoted=0
+    local rc=$OCF_ERR_GENERIC
+    local promoted=0
     local init_attribute=0
     local LPTloc=-1
     local lparc=4
