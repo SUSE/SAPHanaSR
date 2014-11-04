@@ -132,7 +132,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.148.7.2</version>
+<version>0.148.7.3</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -822,9 +822,11 @@ function analyze_hana_sync_status()
         # UNKNOWN, ACTIVE, ERROR, INITIALIZING
         #
         if [ "${hana_sync_status}" == "ACTIVE" ]; then
+            # TODO PRIO1: REMOVE remoteNode dependency - set SOK
             set_hana_attribute "$remoteNode" "SOK" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
         else
             super_ocf_log warn "ACT: HANA SYNC STATUS is: ${hana_sync_status}"
+            # TODO PRIO1: REMOVE remoteNode dependency - set SFAIL
             set_hana_attribute "$remoteNode" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
         fi
         # first get a list of all secondary hosts, than a list of all secondary hosts, if the is ANY failure at this site
@@ -1460,6 +1462,7 @@ function lpa_check_lpt_status() {
             LPTloc=20                           # DEFAULT
         fi
     fi
+            # TODO PRIO1: REMOVE remoteNode dependency - lpa_get_lpt
     LPTrem=$(lpa_get_lpt $remoteNode); lparc=$?
     if [ $lparc -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
@@ -1662,6 +1665,7 @@ function saphana_monitor_primary()
                         # DONE: PRIO1: first check, if remote site is already (and still) in sync
                         # TODO: PRIO4: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
+            # TODO PRIO1: REMOVE remoteNode dependency - get_sync_status
                         remoteSync=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_SYNC_STATUS[@]})
                         case "$remoteSync" in
                             SOK )
