@@ -583,7 +583,7 @@ function sht_start_clone() {
 #
 # function: sht_stop_clone - stop a hana clone instance
 # params:   -
-# globals:  HOSTNAME(r), HANA_STATE_*, ATTR_NAME_*
+# globals:  NODENAME(r), HANA_STATE_*, ATTR_NAME_*
 # sht_stop_clone
 #
 function sht_stop_clone() {
@@ -599,7 +599,7 @@ function sht_stop_clone() {
     else
         hanaPrim="-"
     fi
-    set_hana_attribute "${HOSTNAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]} 
+    set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]} 
     sht_stop; rc=$?
     return $rc
 }
@@ -659,9 +659,9 @@ function sht_monitor_clone() {
         | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr 2>/dev/null )
     super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     if [ -n "$vName" ]; then
-       set_hana_attribute ${HOSTNAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
+       set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
     else
-       vName=$(get_hana_attribute ${HOSTNAME} ${ATTR_NAME_HANA_VHOST[@]})
+       vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
     fi
     #site=$(get_site_name)
     hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
@@ -672,10 +672,11 @@ function sht_monitor_clone() {
     # FH TODO PRIO1: TRY TO GET RID OF "ATTR_NAME_HANA_REMOTEHOST"
     hanaRemoteHost=$MAPPING
     if [ -n "$hanaRemoteHost" ]; then
-        set_hana_attribute ${HOSTNAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]} 
+        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]} 
     fi
-    set_hana_attribute ${HOSTNAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]} 
-    set_hana_attribute ${HOSTNAME} "$site" ${ATTR_NAME_HANA_SITE[@]} 
+    set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]} 
+    set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]} 
+    set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
     case "$hanaPrim" in
        P ) ;;
        S ) # only secondary may propargate its sync status
@@ -697,7 +698,7 @@ function sht_monitor_clone() {
 #
 # function: sht_notify - notify action
 # params:   -
-# globals:  OCF_*(r), ACTION(r), CLACT(r), HOSTNAME(r)
+# globals:  OCF_*(r), ACTION(r), CLACT(r), NODENAME(r)
 # sht_notify: Handle master scoring - to make sure a slave gets the next master
 #
 function sht_notify() {
@@ -720,6 +721,7 @@ InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
 SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-ra-act-dec-lpa}"
+NODENAME=$(crm_node -n)
 
 if [ $# -ne 1 ]
 then
