@@ -169,7 +169,7 @@ The resource agent uses the following four interfaces provided by SAP:
    Interface is SQL query into HANA (system replication table).  The hdbsql query will be replaced by a python script 
    "systemReplicationStatus.py" in SAP HANA SPS8 or 9.
    As long as we need to use hdbsql you need to setup secure store users for linux user root to be able to
-   access the SAP HANA database. You need to configure a secure store user key "SLEHALOC"/"RHELHALOC" which can connect the SAP
+   access the SAP HANA database. You need to configure a secure store user key "SAPHANA<SID>SR" which can connect the SAP
    HANA database: 
 
 5. saphostctrl
@@ -821,7 +821,7 @@ function analyze_hana_sync_status()
 #
 #####################################################################################################
 #
-    secUser=$(check_secstore_users SLEHALOC SAPHANASR RHELHALOC) ; chkusr=$?
+    secUser=$(check_secstore_users SAPHANA{$SID}SR SLEHALOC RHELHALOC) ; chkusr=$?
     if [ $chkusr -ne 0 ]; then
         super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
         rc=$OCF_ERR_CONFIGURED
@@ -1519,22 +1519,10 @@ function saphana_start_clone() {
     local sqlrc;
     local chkusr;
     # TODO: PRIO4: remove check_secstore_users later
-    check_secstore_users SLEHALOC; chkusr=$?
+    secUser=$(check_secstore_users SAPHANA${SID}SR SLEHALOC RHELHALOC) ; chkusr=$?
     if [ $chkusr -ne 0 ]; then
-         check_secstore_users RHELHALOC; chkusr=$?
-         if [ $chkusr -ne 0 ]; then
-              super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
-              rc=$OCF_ERR_CONFIGURED
-         else
-             set_hana_attribute ${NODENAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
-             check_for_primary; primary_status=$?
-             if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-                 saphana_start_primary; rc=$?
-             else
-                 saphana_start_secondary; rc=$?
-                 lpa_set_lpt  30
-             fi
-         fi
+        super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
+        rc=$OCF_ERR_CONFIGURED
     else
         set_hana_attribute ${NODENAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
         check_for_primary; primary_status=$?
