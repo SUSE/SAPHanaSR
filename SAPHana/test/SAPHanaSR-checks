@@ -1,0 +1,123 @@
+#!/usr/bin/perl
+#
+# SAPHanaSR-checks
+# Author: Fabian Herschel
+# (c) 2014 SUSE Linux GmbH, Nuremberg Germany 
+# GPL
+#
+use strict;
+
+my $SID;
+my $INO;
+my $DIR;
+my $version="0.1";
+
+my @FailedTests;
+my @PassedTests;
+
+sub init()
+{
+    #  Inst Info : HA3 - 14 - sles4sap22 - 740, patch 36, changelist 1444691
+    open (ListInstances, "-|", "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances") or die "$!";
+    while (<ListInstances>) {
+        if ( /^[^:]+:\s*(\w+)\s*-\s*(\w+)\s*-/ ) {
+           $SID=$1;
+           $INO=$2;
+           $DIR="/usr/sap/$SID/HDB$INO/exe";
+        }
+    }
+    close ListInstances;
+
+    $ENV{PATH} = "$ENV{PATH}:$DIR";
+    return 0;
+}
+
+sub checkUSERKEY($ $ $) 
+{
+    my $rc=1;
+    my $found=0;
+    my ( $cSID, $cINO, $cUKEY ) = @_;
+    open (ListKey, "-|", "hdbuserstore list $cUKEY");
+    while (<ListKey>) {
+        if (/^KEY\s+(\w+)$/) {
+            # KEY SLEHALOC
+            if ( $1 eq $cUKEY ) {
+               $found=1;
+            }
+            #print $1, $2;
+        } elsif (/ENV\s+:\s+(\w+):(\w+)/) {
+            if ( $1 ne "localhost" ) {
+               $rc=0; printf "%s is not assigned to localhost\n", $cUKEY;
+            }
+            if ( $2 != 30015 + $cINO * 100 ) {
+               $rc=0; printf "%s is not assigned to port %i\n", $cUKEY, 30015 + $cINO * 100;
+            }
+        }
+    }
+    close ListKeyM;
+    if ( $found == 0 ) {
+       $rc=0; printf "KEY %s not defined for user root\n", $cUKEY;
+    }
+    return $rc;
+}
+
+sub checkDBAccess($ $ $)
+{
+    my ( $cUKEY, $cTABLE, $cCOLUMN ) = @_;
+    my $rc=0;
+    open (SQL, "-|", "hdbsql -U $cUKEY 'select * from $cTABLE'");
+    while (<SQL>) {
+       if (/^$cCOLUMN/) {
+          $rc=1;
+       }
+    }
+    if ( $rc == 0 ) {
+        printf "SAMPLE SQL failed\n";
+    }
+    return $rc;
+}
+
+sub checkLinuxUser($)
+{
+    my ( $cUSER ) = @_;
+    my $rc=0;
+    if ( $ENV{USER} eq $cUSER ) {
+        $rc=1;
+    } 
+    return $rc;
+}
+    
+sub sayno() {
+    return 0;
+}
+
+sub sayyes {
+    return 1;
+}
+
+printf("SAPHana-checks %s\n", $version);
+init();
+
+checkLinuxUser("root") 
+and push(@PassedTests, "checkLinuxUser")
+or push(@FailedTests, "checkLinuxUser");
+
+checkUSERKEY($SID, $INO, "SLEHALOC") 
+and push(@PassedTests, "checkUSERKEY")
+or push(@FailedTests, "checkUSERKEY");
+
+checkDBAccess("SLEHALOC", "DUMMY", "DUMMY") 
+and push(@PassedTests, "checkDBAccess")
+or push(@FailedTests, "checkDBAccess");
+
+#sayyes() 
+#and push(@PassedTests, "XXXXXXXXY") 
+#or push(@FailedTests, "XXXXXXXXN");
+
+
+if ( @PassedTests != 0 ) {
+   printf "The following tests have passed: %s\n", join("," , @PassedTests);
+}
+if ( @FailedTests != 0 ) {
+   printf "The following tests have failed: %s\n", join("," , @FailedTests);
+}
