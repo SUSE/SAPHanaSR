@@ -123,7 +123,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.149.2</version>
+    <version>0.149.3</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
@@ -373,6 +373,7 @@ function sht_init() {
     # figure-out all needed values from system replication status with ONE call
     # we need: mode=primary|sync|syncmem|...; site name=<site>; mapping/<me>=<site>/<node> (multiple lines)
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
+       *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
        *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;    
        *cman*    ) nodelist=$(crm_node -l);; 
     esac
@@ -690,6 +691,7 @@ function sht_monitor_clone() {
        P ) ;;
        S ) # only secondary may propargate its sync status
         case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
+           *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
            *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;    
            *cman*    ) nodelist=$(crm_node -l);; 
         esac
