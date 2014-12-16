@@ -132,7 +132,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.149.2</version>
+<version>0.149.4</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -566,6 +566,7 @@ function saphana_init() {
     # Determine list of other cluster nodes and store in otherNodes variable
     otherNodes=()
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
+       *corosync* ) otherNodes=($(crm_node -l | awk '{ if ($2 != me) { print $2 }}' me=${NODENAME}));;
        *openais* ) otherNodes=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me=${NODENAME}));;
        *cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me=${NODENAME}));;
     esac
@@ -1342,10 +1343,12 @@ function lpa_set_lpt() {
 function lpa_pull_lpt() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=1
-    local lpt=-1
+    local lpt=""
     local readrest=0
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${NODENAME}
-    read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
+    if [ -f $lpa_file ]; then
+        read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
+    fi
     if [ -n "$lpt" ]; then
         rc=0
         echo $lpt
