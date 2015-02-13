@@ -4,7 +4,7 @@
 # (c) 2014 SUSE Linux Products GmbH
 # Author: Fabian Herschel
 # License: GPL v2+
-# Version: 0.6.2014.10.22.1
+# Version: 0.6.2015.02.13.1
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -40,7 +40,22 @@ sub init()
          $testcount=$1;
       }
     }
-    $msl="msl_SAPHana_SLE_HDB00";
+    $msl="msl_";
+    #$msl="msl_SAPHana_SLE_HDB00";
+#crm resource list
+# stonith_fscs98 (stonith:external/ipmi):        Started 
+# stonith_fscs99 (stonith:external/ipmi):        Started 
+# rsc_ip_SLE_HDB00       (ocf::heartbeat:IPaddr2):       Started 
+# Master/Slave Set: msl_SAPHana_SLE_HDB00 [rsc_SAPHana_SLE_HDB00]
+    open crmRList, "crm resource list |";
+    while (<crmRList>) {
+        #printf "%s", $_;
+        if (/^\s*Master.Slave Set:\s+(\S+)\s+/) {
+           printf "master-slave resource found: <%s> \n", $1;
+           $msl=$1;
+        }
+    }
+    close crmRList;
     close STATFILE;
     return 0;
 }
