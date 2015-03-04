@@ -829,7 +829,7 @@ function analyze_hana_sync_status()
         super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
         rc=$OCF_ERR_CONFIGURED
     fi
-    hana_sync_status=$(timeout 60 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state); sqlrc=$?
+    hana_sync_status=$(timeout 180 $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state); sqlrc=$?
     hana_sync_status=$(echo $hana_sync_status | dequote)
     super_ocf_log debug "DBG: hdbsql rc=$sqlrc hana_sync_status=\"$hana_sync_status\""
     if [ "$sqlrc" -eq 0 -a "$hana_sync_status" != "" ]; then
@@ -848,10 +848,10 @@ function analyze_hana_sync_status()
         #    TODO: PRIO9: for first we assume there is only ONE secondary site (like ROT)
         #    TODO: PRIO3: should we loop over all cluster nodes fetching their roles-attribute? To minimize sql-queries?
         #
-        all_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser $query_secondaries ); sqlrc=$?
+        all_secondary_hosts=$(timeout 180 hdbsql -a -x -U $secUser $query_secondaries ); sqlrc=$?
         all_secondary_hosts=$(echo $all_secondary_hosts | dequote);
         if [ "$sqlrc" -eq 0 ]; then
-            all_broken_secondary_hosts=$(timeout 60 hdbsql -a -x -U $secUser $query_failed_secondaries); sqlrc=$?
+            all_broken_secondary_hosts=$(timeout 180 hdbsql -a -x -U $secUser $query_failed_secondaries); sqlrc=$?
             all_broken_secondary_hosts=$(echo $all_broken_secondary_hosts | dequote);
             if  [ "$sqlrc" -eq 0 ]; then                 
                  if [ -n "$all_broken_secondary_hosts" ]; then
@@ -871,9 +871,9 @@ function analyze_hana_sync_status()
             fi
         fi                  
     else
-        # return codes 19: license error -> set SFAIL!
         case "$sqlrc" in
             19 ) 
+                # return codes 19: license error -> set SFAIL!
                 # DONE: PRIO1: We should NOT set SFAIL, if HDB is exactly broken now
                 #       When HDB breaks during monitor this could prevent a prositive remote failover
                 super_ocf_log warn "ACT: Was not able to fetch HANA SYNC STATUS - set sync status to SFAIL for ALL OTHER cluster hosts"
