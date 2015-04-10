@@ -1,0 +1,576 @@
+#!/usr/bin/perl
+#
+# 
+# (c) 2014 SUSE Linux Products GmbH
+# Author: Fabian Herschel
+# License: Check if we publish that under GPL v2+
+# Version: 0.11.2014.11.11.1
+#
+##################################################################
+
+use POSIX;
+use strict;
+use Sys::Syslog;
+use Sys::Hostname;
+use File::Path;
+use Switch;
+
+
+my %Name;
+my %Host;
+my $host = hostname();
+
+my $varlib='/var/lib/SAPHanaTD';
+my $testfile='SAPHanaTD.status';
+my $testcount=0;
+my $first_test=1;
+
+sub init() 
+{
+    return 0;
+}
+
+#
+################ BEGIN CUT - MOVE THAT TO AN PERL-LIBRARY LATER
+#
+
+sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
+ my $a = shift;
+ my $b = shift;
+ return $a > $b ? $a : $b;
+}
+
+sub mysyslog ( $$$ ) {
+   my ($prio, $form, @param) = ( @_ );
+   printf "$form\n", @param;
+   syslog $prio, $form, @param;
+
+
+}
+
+sub get_nodes_online() 
+{
+    my $rc=0;
+    my $match="Ok:\s+([0-9])\s+nodes online";
+    my $match="Ok:\s+([0-9]+)\s+nodes? online";
+    my $match="Ok: ([0-9]+) ";
+    open crm, "crm_mon -s |";
+    while (<crm>) {
+        if (/$match/) {
+           $rc=$1
+        }
+    }
+    close crm;
+    return $rc;
+}
+
+sub get_node_status($)
+{
+    # typically returns online, standby or offline
+    my $result="offline";
+    my $node=shift;
+    open crm, "crm_mon -1 |";
+    #- case one offline/standby and one online
+    # Node fscs99: OFFLINE (standby)
+    # Online: [ fscs98 ]
+    #- case both standby
+    # Node fscs99: standby
+    # Node fscs98: standby
+    #- case one standby one online
+    # Node fscs99: standby
+    # Online: [ fscs98 ]
+    #- case both online
+    # Online: [ fscs98 fscs99 ]
+    while (<crm>) {
+        if ( /^Online:.*\s$node\s/ ) {
+           #printf("O: %s\n", $_);
+           $result="online";
+        } elsif ( /^Node\s+$node:\s+(\S+)/  ) {
+           #printf("N: %s: %s\n", $_, $1);
+           $result=tolower($1);
+
+        }
+    }
+    close crm;
+    return $result;
+}
+
+#
+# works only, if ONE SAPinstance (here HANA) is installed on the cluster
+#
+sub get_sid_and_InstNr()
+{
+    my $sid=""; my $Inr="";
+    open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
+    while (<ListInstances>) {
+       # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+       chomp;
+       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-\s+([0-9][0-9])/ ) {
+          $sid=tolower("$1");
+          $Inr=$2;
+       }
+    }
+    close ListInstances;
+    return ( $sid, $Inr );
+}
+
+my $table_title = "Host \\ Attr";
+sub OLDget_hana_attributes($)
+{
+    my $sid = shift;
+    open CIB, "cibadmin -Ql |";
+    while (<CIB>) {
+       chomp;
+       if ( $_ =~ /nvpair\s+id="status-([a-zA-Z0-9]+)-\w+"\s+name="(\w+_${sid}_\w+)"\s+value="([^"]+)"/ ) {
+           my ($host, $name, $value) = ( $1, $2, $3 );
+           #
+           # handle the hosts name and table-title
+           #
+           $Host{$host}->{$name}=${value};
+           if ( defined ($Name{_hosts}->{_length})) {
+              $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
+           } else {
+              $Name{_hosts}->{_length} = length($host );
+           }
+           $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
+           #
+           # now handle the attributes name and value
+           #
+           $Name{$name}->{$host}=${value};
+           if ( defined ($Name{$name}->{_length})) {
+              $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
+           } else {
+              $Name{$name}->{_length} = length($value );
+           }
+           if ( $name =~ /hana_${sid}_(.*)/ ) {
+              $Name{$name}->{_title} =  $1;
+           } else {
+              $Name{$name}->{_title} = $name; 
+           }
+           $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
+       }
+    }
+    close CIB;
+    return 0;
+}
+
+################
+sub get_hana_attributes($)
+{
+    my $sid = shift;
+   undef %Name;
+   undef %Host;
+open CIB, "cibadmin -Ql |";
+while (<CIB>) {
+   chomp;
+   my ($host, $name, $value);
+   my $found=0;
+   if ( $_ =~ /nvpair.*name="(\w+_${sid}_\w+)"/ ) {
+      $name=$1;
+      # find attribute in forever and reboot store :)
+      if ( $_ =~ /id="(status|nodes)-([a-zA-Z0-9]+)-/ ) {
+         $host=$2;
+      }
+      if ( $_ =~ /value="([^"]+)"/ ) {
+         $value=$1;
+         $found=1;
+      }
+   }
+   if ( $found == 1 ) {
+       #
+       # handle the hosts name and table-title
+       #
+       $Host{$host}->{$name}=${value};
+       if ( defined ($Name{_hosts}->{_length})) {
+          $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
+       } else {
+          $Name{_hosts}->{_length} = length($host );
+       }
+       $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
+       #
+       # now handle the attributes name and value
+       #
+       $Name{$name}->{$host}=${value};
+       if ( defined ($Name{$name}->{_length})) {
+          $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
+       } else {
+          $Name{$name}->{_length} = length($value );
+       }
+       if ( $name =~ /hana_${sid}_(.*)/ ) {
+          $Name{$name}->{_title} =  $1;
+       } else {
+          $Name{$name}->{_title} = $name;
+       }
+       $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
+       # printf "%-8s %-20s %-30s\n", $1, $2, $3;
+   }
+}
+close CIB;
+    return 0;
+}
+
+################
+
+sub get_hana_sync_state($)
+{
+    my $sid=shift;
+    my $result="";
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_sync_state"}}) ) {
+        if ( $Name{"hana_${sid}_sync_state"}->{$h} =~ /(S.*)/ ) {
+           $result=$1;
+        }
+    }
+    return $result;
+}
+
+sub get_number_primary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $rc=0;
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
+           $rc++;
+        }
+    }
+    return $rc;
+}
+
+sub check_node_status($$$)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $h=shift;
+    if ( $Name{"hana_${sid}_roles"}->{$h} =~ /^[$lss]:.:/ ) {
+       return 1;
+    }
+    return 0;
+}
+
+sub check_node_mode($$$)
+{
+    my $sid=shift;
+    my $mode=shift;
+    my $h=shift;
+    if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[0-9]:$mode:/ ) {
+       return 1;
+    }
+    return 0;
+}
+
+sub get_number_secondary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $rc=0;
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
+           $rc++;
+        }
+    }
+    return $rc;
+}
+
+sub get_host_primary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $result="";
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
+           $result=$h;
+        }
+    }
+    return $result;
+}
+
+sub get_host_secondary($ $)
+{
+    my $sid=shift;
+    my $lss=shift;
+    my $result="";
+    my $h;
+    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
+        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
+           $result=$h;
+        }
+    }
+    return $result;
+}
+
+sub check_all_ok($)
+{
+    my $sid=shift;
+    my $rc=0;
+    my $failed="";
+    my $result;
+    $result=get_nodes_online;
+    if ( $result != 2 ) {
+         $rc++;  
+         $failed .= " #N=$result"; 
+    }
+    $result=get_hana_sync_state($sid);
+    if ( $result ne "SOK" ) {
+         $rc++;  
+         $failed .= " sync=$result ";
+    }
+    $result=get_number_primary($sid, "34");
+    if ( $result != 1 ) {
+         $rc++;  
+         $failed .= " #P=$result ";
+    }
+    $result=get_number_secondary($sid, "34");
+    if ( $result != 1 ) {
+         $rc++;  
+         $failed .= " #S=$result ";
+    }
+    return ($rc, $failed);
+}
+
+sub host_attr2string()
+{
+    my $string;
+    my ($AKey, $HKey, $len, $line_len, $hclen);
+    $hclen=$Name{_hosts}->{_length};
+    $line_len=$hclen+1;
+    $string .= sprintf "%-$hclen.${hclen}s ", "$table_title";
+print " P:1";
+    foreach $AKey (sort keys %Name) {
+print " P:2 ($AKey)";
+      if ($AKey ne "_hosts") {
+         $len = $Name{$AKey}->{_length};
+         $line_len=$line_len+$len+1;
+         $string .= sprintf "%-$len.${len}s ", $Name{$AKey}->{_title};
+       }
+    }
+print " P:3";
+        $string .= sprintf "\n";
+        $string .= sprintf "%s\n", "-" x $line_len ;
+        foreach $HKey (sort keys %Host) {
+print " P:4";
+           $string .= sprintf "%-$hclen.${hclen}s ", $HKey;
+           foreach $AKey (sort keys %Name) {
+           if ($AKey ne "_hosts") {
+               $len = $Name{$AKey}->{_length};
+               $string .= sprintf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
+            }
+        }
+print " P:5";
+           $string .= sprintf "\n";
+        }
+print " P:6";
+        return $string;
+}
+
+#
+################ END CUT - MOVE THAT TO AN PERL-LIBRARY LATER
+#
+
+sub  print_page($$$$$$$$$$$$$$$$$$$$$$$)
+{
+  my ($sid, $sid_color, $node1stat, $node1, $node2stat, $node2, $syncstat, $syncdir, $crm_out, $crm_col, $crm_errors, $attr_out, $attr_col, $attr_errors, $score_out, $score_col, $score_errors, $log_out, $log_col, $log_errors,
+     $ftd_out, $ftd_col, $ftd_errors);
+  $sid=shift(); $sid_color=shift();
+  $node1stat=shift(); $node1=shift(); 
+  $node2stat=shift(); $node2=shift(); 
+  $syncstat=shift(); $syncdir=shift();
+  $crm_out=shift(); $crm_col=shift(); $crm_errors=shift(); 
+  $attr_out=shift(); $attr_col=shift(); $attr_errors=shift();
+  $score_out=shift(); $score_col=shift(); $score_errors=shift();
+  $log_out=shift(); $log_col=shift(); $log_errors=shift();
+  $ftd_out=shift(); $ftd_col=shift(); $ftd_errors=shift();
+  # in the page layout $score_col is ignored right now
+  my $mydate=`date`; # TODO: do it with perl ;-)
+  my $myPage = <<EOF;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>SAPHanaSR status</title>
+<meta http-equiv="refresh" content="10; url=." />
+<meta charset="utf-8"/>
+</head>
+<body class="">
+<table cellpadding=5>
+  <tr><td valign="top" bgcolor="$sid_color"><h2>$sid</h2></td>
+      <td valign="top"><b>SAPHanaSR-monitor $mydate</b>
+          <table cellpadding=1>
+              <tr><td valign="top"><img width="100%" height="100%" src="final_icons/server_${node1stat}.png"/></td>
+                  <td><img width="100%" height="100%" src="final_icons/arrow_${syncdir}_${syncstat}.png"/></td>
+                  <td valign="top"><img width="100%" height="100%" src="final_icons/server_${node2stat}.png"/></td>
+              </tr>
+              <tr><td valign="top" align="center"><b>$node1</b></td>
+                  <td valign="top" align="center"><b>$sid</b></td>
+                  <td valign="top" align="center"><b>$node2</b></td>
+              <tr>
+          </table>
+      </td>
+      <td valign="top" width="5%"><img width="100%" height="100%" src="suse_logo_w-tag_color.jpg"/></td></tr>
+  <tr><td valign="top" bgcolor="$crm_col"><h2>Crm</h2></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$crm_out</pre></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$crm_errors</pre></td>
+  </tr>
+  <tr><td valign="top" bgcolor="$attr_col" rowspan="2"><h2>Attr</h2></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$attr_out</pre></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$attr_errors</pre></td>
+  </tr>
+  <tr><td bgcolor="#B9B9B9"><pre>$score_out</pre></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre></pre></td>
+  </tr>
+  <tr><td valign="top" bgcolor="$log_col"><h2>Log</h2></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$log_out</pre></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$log_errors</pre></td>
+  </tr>
+  <tr><td valign="top" bgcolor="#B9B9B9"><h2>TD</h2></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre>$ftd_out</pre></td>
+      <td valign="top" bgcolor="#B9B9B9"><pre></pre></td>
+  </tr>
+</table>
+</body>
+</html>
+EOF
+open HTML, ">/srv/www/hawk/public/herschel/index.html.new";
+print HTML $myPage;
+close HTML;
+system ("mv /srv/www/hawk/public/herschel/index.html.new /srv/www/hawk/public/herschel/index.html ");
+}
+
+
+
+my $ident = "SAPHanaSR-mon";
+my $logopt = "pid";
+my $facility = "LOCAL0";
+my $priority = "info";
+
+my $green="#7AC142";
+my $yellow="#fde944";
+my $red="#BB0000";
+my $gray="#B9B9B9";
+
+openlog $ident, $logopt, $facility; 
+my $sid="";
+my $INr="";
+    
+( $sid, $INr ) = get_sid_and_InstNr();
+
+init();
+mysyslog $priority, "%s", "Monitor startup";
+while ( 1==1 ) {
+    my $message;
+    my $phost;
+    my $shost;
+    my $laststate="";
+    #
+    get_hana_attributes($sid);
+    my $crm_out=`crm_mon -r1 -D`;
+    my $attr_out=host_attr2string();
+    my $score_out=`ptest -Ls | grep -i promo`;
+    my $log_out=`grep 'SAPHana.*INFO: RA' /var/log/messages | tail -20`; # TODO: Do we need to optimize the runtime of this command?
+    my $ftd_out=`grep 'fhTD' /var/log/messages | tail -10`;
+    my $ftd_col=$gray;
+    my $crm_col=$green;
+    my $attr_col=$green;
+    my $score_col=$green;
+    my $log_col=$green;
+    my $complete_col=$green;
+
+    #
+    #  for the grafic output
+    #
+    my @node_list;
+    open CRM_NODES, "crm_node -l |";
+    while (<CRM_NODES>) {
+       /^[0-9]+\W+(\w+)\W/;
+       push (@node_list, $1)
+    }
+    close CRM_NODES;
+    @node_list = ( sort (@node_list ));
+
+
+    my $sync_col="green";
+    my ( $first_node_name, $second_node_name ) = @node_list;
+    my %nodeStatus;
+    #unset %nodeStatus;
+
+    my $thenode;
+    foreach $thenode ( @node_list ) {
+        $nodeStatus{$thenode}="grey";
+        if ( check_node_status($sid, "34" , $thenode) ) { $nodeStatus{$thenode}="green"; }
+        if ( check_node_status($sid, "2" , $thenode) ) { $nodeStatus{$thenode}="yellow"; }
+        if ( check_node_status($sid, "1" , $thenode) ) { $nodeStatus{$thenode}="red"; }
+    }
+    if ( get_hana_sync_state($sid) ne "SOK" ) { $sync_col="red"; } 
+    my $sync_direction="none";
+    if ( check_node_mode( $sid, "P" , $node_list[0]) && check_node_mode( $sid, "S" , $node_list[1]) ) {
+    	$sync_direction="right";
+    } elsif ( check_node_mode( $sid, "S" , $node_list[0]) && check_node_mode( $sid, "P" , $node_list[1]) ) {
+	    $sync_direction="left";
+    } else  {
+        $sync_direction="none";
+        $sync_col="grey";
+    }
+
+    printf "first node: %s \n", $first_node_name;
+    printf "second node: %s \n", $second_node_name;
+    my $first_node_col="green";
+    my $second_node_col="green";
+
+    #
+    # crm checks
+    #
+    my $crm_errors="";
+    if ( get_nodes_online() != 2 ) { $crm_col=$yellow; $crm_errors .= " C#n\n";}
+
+    # attr checks
+    my $attr_errors="";
+    if ( get_number_primary($sid, "1234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A#p\n"; }
+    if ( get_number_primary($sid, "234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A-P\n"; }
+    if ( get_number_secondary($sid, "1234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A-s\n";}
+    if ( get_number_secondary($sid, "234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A-S\n";}
+    if ( get_number_primary($sid, "234") > 1 ) { $attr_col=$red; $attr_errors .= " A-PP\n";}
+    if ( get_hana_sync_state($sid) ne "SOK" ) { $attr_col=$yellow; $attr_errors .= " A-SFAIL\n"; } 
+
+    printf "\n";
+    
+    printf "%-16s %-16s %-16s\n", $nodeStatus{$node_list[0]}, "$sync_direction : $sync_col", $nodeStatus{$node_list[1]};
+    printf "%-16s %-16s %-16s\n", $node_list[0], $sid, $node_list[1];
+
+    printf "\n";
+    # log checks
+    my $log_errors="";
+
+    if ( ( $attr_col eq $yellow ) || ( $crm_col eq $yellow ) || ( $log_col eq $yellow ) || ( $attr_col eq $yellow ) || ( $score_col eq $yellow ) ) { $complete_col=$yellow; }
+    if ( ( $attr_col eq $red ) || ( $crm_col eq $red ) || ( $log_col eq $red ) || ( $attr_col eq $red ) || ( $score_col eq $red ) ) { $complete_col=$red; }
+    print_page($sid, $complete_col,
+               $nodeStatus{$node_list[0]}, $node_list[0],
+               $nodeStatus{$node_list[1]}, $node_list[1],
+               $sync_col, $sync_direction,
+               $crm_out, $crm_col, $crm_errors,
+               $attr_out, $attr_col, $attr_errors,
+               $score_out, $attr_col, $attr_errors,
+               $log_out, $log_col, $log_errors,
+               $ftd_out, $ftd_col, ""
+             );
+    #
+    $phost=get_host_primary($sid, "1234");
+    $shost=get_host_secondary($sid, "1234");
+    my ($checkOK, $failures ) = check_all_ok($sid);
+    if ( $checkOK == 0 ) {
+        $message="All checks passed - primary=$phost secondary=$shost";
+        mysyslog $priority, "%s", $message;
+    } else {
+        if ( $checkOK == 1 ) {
+		$message="$checkOK check failed ($failures) - primary=$phost secondary=$shost";
+        } else {
+		$message="$checkOK checks failed ($failures) - primary=$phost secondary=$shost";
+        }
+        mysyslog $priority, "%s", $message;
+    }
+    sleep 10;
+}
+  
+closelog;
+#
