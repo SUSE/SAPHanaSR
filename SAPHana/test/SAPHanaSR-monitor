@@ -4,7 +4,7 @@
 # (c) 2014 SUSE Linux Products GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.11.2014.11.11.1
+# Version: 0.12.2015.04.31.1
 #
 ##################################################################
 
@@ -302,6 +302,44 @@ sub get_host_secondary($ $)
     return $result;
 }
 
+my $check_lpa_msg="";
+my $check_lpa_col="";
+
+sub check_lpa_status($$$)
+{
+    my $sid=shift;
+    my $node1=shift;
+    my $node2=shift;
+    my $lpaGAP="7200"; # TODO: Value must be fetched from the cluster
+
+    my $lpa_node1=%{$Name{"lpa_sle_lpt"}}->{$node1};
+    my $lpa_node2=%{$Name{"lpa_sle_lpt"}}->{$node2};
+
+    my $lpa_delta=abs($lpa_node1 - $lpa_node2);
+    my $lpa_wait=($lpaGAP - $lpa_delta);
+
+    if ( (! defined $lpa_node1) || (! defined $lpa_node2)) {
+       $check_lpa_msg= "LPA GAP - WAIT because LPA status of one node is missing";
+       $check_lpa_col="red";
+    } elsif (($lpa_node1<1000) && ($lpa_node2<1000) && ($lpa_node1 != $lpa_node2)) {
+       $check_lpa_msg= "Both LPAs in 'special' number range";
+       $check_lpa_col="yellow";
+    } elsif (($lpa_node1<1000) && ($lpa_node2<1000) && ($lpa_node1 == $lpa_node2)) {
+       $check_lpa_msg= "Collision!! Both LPAs in 'special' number range";
+       $check_lpa_col="red";
+    } elsif (($lpa_node1>1000) && ($lpa_node2>1000) && ($lpa_delta < $lpaGAP)) {
+       $check_lpa_msg= "Collision!! LPA GAP - WAIT $lpa_wait seconds";
+       $check_lpa_col="red";
+    } elsif (($lpa_node1>1000) && ($lpa_node2>1000) && ($lpa_delta >= $lpaGAP)) {
+       $check_lpa_msg= "Collision!! LPA GAP PASSED - Check, if AUTOMATIC REGISTRATION is active or register crashed primary manually";
+       $check_lpa_col="yellow";
+    } else {
+       $check_lpa_msg= "LPA: GREEN";
+       $check_lpa_col="green";
+    }
+    return $check_lpa_col;
+}
+
 sub check_all_ok($)
 {
     my $sid=shift;
@@ -338,20 +376,20 @@ sub host_attr2string()
     $hclen=$Name{_hosts}->{_length};
     $line_len=$hclen+1;
     $string .= sprintf "%-$hclen.${hclen}s ", "$table_title";
-print " P:1";
+#print " P:1";
     foreach $AKey (sort keys %Name) {
-print " P:2 ($AKey)";
+#print " P:2 ($AKey)";
       if ($AKey ne "_hosts") {
          $len = $Name{$AKey}->{_length};
          $line_len=$line_len+$len+1;
          $string .= sprintf "%-$len.${len}s ", $Name{$AKey}->{_title};
        }
     }
-print " P:3";
+#print " P:3";
         $string .= sprintf "\n";
         $string .= sprintf "%s\n", "-" x $line_len ;
         foreach $HKey (sort keys %Host) {
-print " P:4";
+#print " P:4";
            $string .= sprintf "%-$hclen.${hclen}s ", $HKey;
            foreach $AKey (sort keys %Name) {
            if ($AKey ne "_hosts") {
@@ -359,10 +397,10 @@ print " P:4";
                $string .= sprintf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
             }
         }
-print " P:5";
+#print " P:5";
            $string .= sprintf "\n";
         }
-print " P:6";
+#print " P:6";
         return $string;
 }
 
@@ -370,13 +408,14 @@ print " P:6";
 ################ END CUT - MOVE THAT TO AN PERL-LIBRARY LATER
 #
 
-sub  print_page($$$$$$$$$$$$$$$$$$$$$$$)
+sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$)
 {
-  my ($sid, $sid_color, $node1stat, $node1, $node2stat, $node2, $syncstat, $syncdir, $crm_out, $crm_col, $crm_errors, $attr_out, $attr_col, $attr_errors, $score_out, $score_col, $score_errors, $log_out, $log_col, $log_errors,
+  my ($format, $sid, $sid_color, $hana1stat, $node1, $hana2stat, $node2, $syncstat, $syncdir, $crm_out, $crm_col, $crm_errors, $attr_out, $attr_col, $attr_errors, $score_out, $score_col, $score_errors, $log_out, $log_col, $log_errors,
      $ftd_out, $ftd_col, $ftd_errors);
+  $format=shift();
   $sid=shift(); $sid_color=shift();
-  $node1stat=shift(); $node1=shift(); 
-  $node2stat=shift(); $node2=shift(); 
+  $hana1stat=shift(); $node1=shift(); 
+  $hana2stat=shift(); $node2=shift(); 
   $syncstat=shift(); $syncdir=shift();
   $crm_out=shift(); $crm_col=shift(); $crm_errors=shift(); 
   $attr_out=shift(); $attr_col=shift(); $attr_errors=shift();
@@ -384,7 +423,38 @@ sub  print_page($$$$$$$$$$$$$$$$$$$$$$$)
   $log_out=shift(); $log_col=shift(); $log_errors=shift();
   $ftd_out=shift(); $ftd_col=shift(); $ftd_errors=shift();
   # in the page layout $score_col is ignored right now
+  # TODO: Check id we add more and more parameters to the print_page or if we will use an hash as parameter or 
+  #       id we (recover) more values here inside of the function like for the lpa values:
+    my $lpa_node1=%{$Name{"lpa_sle_lpt"}}->{$node1};
+    my $lpa_node2=%{$Name{"lpa_sle_lpt"}}->{$node2};
+
   my $mydate=`date`; # TODO: do it with perl ;-)
+  chomp($crm_errors);
+  chomp($attr_errors);
+  chomp($log_errors);
+
+  if ($format eq "txt") {
+      my $syncArrow="??";
+      my $SID=uc($sid);
+      if ( $syncdir eq "right" ) { $syncArrow = "=>"; }
+      if ( $syncdir eq "left" ) { $syncArrow = "<="; }
+      my $myPage = <<EOF;  
+OVERALL:   $SID: $sid_color                   $mydate
+SR:        $syncstat $node1 $syncArrow $node2
+
+Cluster:   $crm_col ($crm_errors)
+HANA1:     $node1 ${hana1stat}
+HANA2:     $node2 ${hana2stat}
+
+SAPHanaSR: $attr_col ($attr_errors)
+LPA:       $check_lpa_col ($check_lpa_msg)
+LPA:       $node1 $lpa_node1
+LPA:       $node2 $lpa_node2
+
+Syslog:    $log_col ($log_errors)
+EOF
+    printf( "%s\n", $myPage);
+  } elsif ($format eq "html") {
   my $myPage = <<EOF;
 <!DOCTYPE html>
 <html lang="en">
@@ -398,9 +468,9 @@ sub  print_page($$$$$$$$$$$$$$$$$$$$$$$)
   <tr><td valign="top" bgcolor="$sid_color"><h2>$sid</h2></td>
       <td valign="top"><b>SAPHanaSR-monitor $mydate</b>
           <table cellpadding=1>
-              <tr><td valign="top"><img width="100%" height="100%" src="final_icons/server_${node1stat}.png"/></td>
+              <tr><td valign="top"><img width="100%" height="100%" src="final_icons/server_${hana1stat}.png"/></td>
                   <td><img width="100%" height="100%" src="final_icons/arrow_${syncdir}_${syncstat}.png"/></td>
-                  <td valign="top"><img width="100%" height="100%" src="final_icons/server_${node2stat}.png"/></td>
+                  <td valign="top"><img width="100%" height="100%" src="final_icons/server_${hana2stat}.png"/></td>
               </tr>
               <tr><td valign="top" align="center"><b>$node1</b></td>
                   <td valign="top" align="center"><b>$sid</b></td>
@@ -436,6 +506,7 @@ open HTML, ">/srv/www/hawk/public/herschel/index.html.new";
 print HTML $myPage;
 close HTML;
 system ("mv /srv/www/hawk/public/herschel/index.html.new /srv/www/hawk/public/herschel/index.html ");
+  } # end html
 }
 
 
@@ -445,10 +516,11 @@ my $logopt = "pid";
 my $facility = "LOCAL0";
 my $priority = "info";
 
-my $green="#7AC142";
-my $yellow="#fde944";
-my $red="#BB0000";
-my $gray="#B9B9B9";
+my %Colors;
+$Colors{"green"}="#7AC142";
+$Colors{"yellow"}="#fde944";
+$Colors{"red"}="#BB0000";
+$Colors{"gray"}="#B9B9B9";
 
 openlog $ident, $logopt, $facility; 
 my $sid="";
@@ -458,7 +530,8 @@ my $INr="";
 
 init();
 mysyslog $priority, "%s", "Monitor startup";
-while ( 1==1 ) {
+#while ( 1==1 ) {
+{
     my $message;
     my $phost;
     my $shost;
@@ -470,12 +543,12 @@ while ( 1==1 ) {
     my $score_out=`ptest -Ls | grep -i promo`;
     my $log_out=`grep 'SAPHana.*INFO: RA' /var/log/messages | tail -20`; # TODO: Do we need to optimize the runtime of this command?
     my $ftd_out=`grep 'fhTD' /var/log/messages | tail -10`;
-    my $ftd_col=$gray;
-    my $crm_col=$green;
-    my $attr_col=$green;
-    my $score_col=$green;
-    my $log_col=$green;
-    my $complete_col=$green;
+    my $ftd_col="gray";
+    my $crm_col="green";
+    my $attr_col="green";
+    my $score_col="green";
+    my $log_col="green";
+    my $complete_col="green";
 
     #
     #  for the grafic output
@@ -483,8 +556,9 @@ while ( 1==1 ) {
     my @node_list;
     open CRM_NODES, "crm_node -l |";
     while (<CRM_NODES>) {
-       /^[0-9]+\W+(\w+)\W/;
-       push (@node_list, $1)
+       if (/^[0-9]+\W+(\w+)\W/) {
+       push (@node_list, $1);
+       }
     }
     close CRM_NODES;
     @node_list = ( sort (@node_list ));
@@ -492,15 +566,15 @@ while ( 1==1 ) {
 
     my $sync_col="green";
     my ( $first_node_name, $second_node_name ) = @node_list;
-    my %nodeStatus;
-    #unset %nodeStatus;
+    my %hanaStatus;
+    #unset %hanaStatus;
 
     my $thenode;
     foreach $thenode ( @node_list ) {
-        $nodeStatus{$thenode}="grey";
-        if ( check_node_status($sid, "34" , $thenode) ) { $nodeStatus{$thenode}="green"; }
-        if ( check_node_status($sid, "2" , $thenode) ) { $nodeStatus{$thenode}="yellow"; }
-        if ( check_node_status($sid, "1" , $thenode) ) { $nodeStatus{$thenode}="red"; }
+        $hanaStatus{$thenode}="grey";
+        if ( check_node_status($sid, "34" , $thenode) ) { $hanaStatus{$thenode}="green"; }
+        if ( check_node_status($sid, "2" , $thenode) ) { $hanaStatus{$thenode}="yellow"; }
+        if ( check_node_status($sid, "1" , $thenode) ) { $hanaStatus{$thenode}="red"; }
     }
     if ( get_hana_sync_state($sid) ne "SOK" ) { $sync_col="red"; } 
     my $sync_direction="none";
@@ -513,8 +587,8 @@ while ( 1==1 ) {
         $sync_col="grey";
     }
 
-    printf "first node: %s \n", $first_node_name;
-    printf "second node: %s \n", $second_node_name;
+    #printf "first node: %s \n", $first_node_name;
+    #printf "second node: %s \n", $second_node_name;
     my $first_node_col="green";
     my $second_node_col="green";
 
@@ -522,31 +596,40 @@ while ( 1==1 ) {
     # crm checks
     #
     my $crm_errors="";
-    if ( get_nodes_online() != 2 ) { $crm_col=$yellow; $crm_errors .= " C#n\n";}
+    if ( get_nodes_online() != 2 ) { $crm_col="yellow"; $crm_errors .= " C#n\n";}
 
     # attr checks
     my $attr_errors="";
-    if ( get_number_primary($sid, "1234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A#p\n"; }
-    if ( get_number_primary($sid, "234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A-P\n"; }
-    if ( get_number_secondary($sid, "1234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A-s\n";}
-    if ( get_number_secondary($sid, "234") != 1 ) { $attr_col=$yellow; $attr_errors .= " A-S\n";}
-    if ( get_number_primary($sid, "234") > 1 ) { $attr_col=$red; $attr_errors .= " A-PP\n";}
-    if ( get_hana_sync_state($sid) ne "SOK" ) { $attr_col=$yellow; $attr_errors .= " A-SFAIL\n"; } 
+    if ( get_number_primary($sid, "1234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A#p"; }
+    if ( get_number_primary($sid, "234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A-P"; }
+    if ( get_number_secondary($sid, "1234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A-s";}
+    if ( get_number_secondary($sid, "234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A-S";}
+    if ( get_number_primary($sid, "234") > 1 ) { $attr_col="red"; $attr_errors .= " A-PP";}
+    if ( get_hana_sync_state($sid) ne "SOK" ) { $attr_col="yellow"; $attr_errors .= " A-SFAIL"; } 
 
-    printf "\n";
+    #printf "\n";
     
-    printf "%-16s %-16s %-16s\n", $nodeStatus{$node_list[0]}, "$sync_direction : $sync_col", $nodeStatus{$node_list[1]};
-    printf "%-16s %-16s %-16s\n", $node_list[0], $sid, $node_list[1];
+    #printf "%-16s %-16s %-16s\n", $hanaStatus{$node_list[0]}, "$sync_direction : $sync_col", $hanaStatus{$node_list[1]};
+    #printf "%-16s %-16s %-16s\n", $node_list[0], $sid, $node_list[1];
 
-    printf "\n";
+    #printf "\n";
     # log checks
     my $log_errors="";
+    my $check_lpa_status_col;
 
-    if ( ( $attr_col eq $yellow ) || ( $crm_col eq $yellow ) || ( $log_col eq $yellow ) || ( $attr_col eq $yellow ) || ( $score_col eq $yellow ) ) { $complete_col=$yellow; }
-    if ( ( $attr_col eq $red ) || ( $crm_col eq $red ) || ( $log_col eq $red ) || ( $attr_col eq $red ) || ( $score_col eq $red ) ) { $complete_col=$red; }
-    print_page($sid, $complete_col,
-               $nodeStatus{$node_list[0]}, $node_list[0],
-               $nodeStatus{$node_list[1]}, $node_list[1],
+    $check_lpa_status_col=check_lpa_status($sid, $node_list[0], $node_list[1]);
+
+    if ( ( $attr_col eq "yellow" ) || ( $crm_col eq "yellow" ) || 
+         ( $log_col eq "yellow" ) || ( $attr_col eq "yellow" ) || 
+         ( $score_col eq "yellow" ) || ( $check_lpa_status_col eq "yellow") ) 
+       { $complete_col="yellow"; }
+    if ( ( $attr_col eq "red" ) || ( $crm_col eq "red" ) || 
+         ( $log_col eq "red" ) || ( $attr_col eq "red" ) || 
+         ( $score_col eq "red" ) || ( $check_lpa_status_col eq "red")) 
+       { $complete_col="red"; }
+    print_page("txt",$sid, $complete_col,
+               $hanaStatus{$node_list[0]}, $node_list[0],
+               $hanaStatus{$node_list[1]}, $node_list[1],
                $sync_col, $sync_direction,
                $crm_out, $crm_col, $crm_errors,
                $attr_out, $attr_col, $attr_errors,
@@ -569,7 +652,7 @@ while ( 1==1 ) {
         }
         mysyslog $priority, "%s", $message;
     }
-    sleep 10;
+#    sleep 10;
 }
   
 closelog;
