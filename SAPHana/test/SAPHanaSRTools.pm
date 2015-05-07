@@ -26,9 +26,14 @@ use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 
     # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string $newAttributeModel get_lpa_by_host get_site_by_host);
+    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string $newAttributeModel get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
+
+sub set_new_attribute_model()
+{
+    $newAttributeModel=1;
+}
 
 sub max { 
  # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
@@ -204,6 +209,7 @@ while (<CIB>) {
          $host=$2;
          if ( $_ =~ /value="([^"]+)"/ ) {
              $value=$1;
+#printf "insert $sid HOST $host $name $value\n";
              insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
          }
       } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
@@ -214,6 +220,7 @@ while (<CIB>) {
          }
          if ( $_ =~ /value="([^"]+)"/ ) {
              $value=$1;
+#printf "insert $sid SITE $site $name $value\n";
              insertAttribute($sid, \%Site, \%SName, $site, $name, $value);
          }
       } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
@@ -224,6 +231,7 @@ while (<CIB>) {
          }
          if ( $_ =~ /value="([^"]+)"/ ) {
              $value=$1;
+#printf "insert $sid GLOB global $name $value\n";
              insertAttribute($sid, \%Global, \%GName, "global", $name, $value);
          }
       }
@@ -281,8 +289,15 @@ sub check_node_status($$$)
     my $sid=shift;
     my $lss=shift;
     my $h=shift;
-    if ( $HName{"roles"}->{$h} =~ /^[$lss]:.:/ ) {
-       return 1;
+    if ( $newAttributeModel == 1 ) {    
+        my $site1=${$HName{"site"}}{$h};
+        if ( ${$SName{"lss"}}{$site1} =~ /^[$lss]/ ) {
+            return 1
+        }
+    } else {
+        if ( $HName{"roles"}->{$h} =~ /^[$lss]:.:/ ) {
+           return 1;
+        }
     }
     return 0;
 }
@@ -292,8 +307,15 @@ sub check_node_mode($$$)
     my $sid=shift;
     my $mode=shift;
     my $h=shift;
-    if ( $HName{"roles"}->{$h} =~ /[0-9]:$mode:/ ) {
-       return 1;
+    if ( $newAttributeModel == 1 ) {    
+        my $site1=${$HName{"site"}}{$h};
+        if ( ${$SName{"srr"}}{$site1} =~ /^$srr/ ) {
+            return 1
+        }
+    } else {
+        if ( $HName{"roles"}->{$h} =~ /[0-9]:$mode:/ ) {
+           return 1;
+        }
     }
     return 0;
 }
@@ -384,7 +406,12 @@ sub get_lpa_by_host($$)
     my $sid=shift;
     my $h = shift;
 # print "get_site_by_host($sid, $h)";
-    $result = ${$HName{"lpa_${sid}_lpt"}}{$h};
+    if ( $newAttributeModel == 1 ) {
+        my $site1=${$HName{"site"}}{$h};
+        $result = ${$SName{"lpt"}}{$site1};
+    } else {
+        $result = ${$HName{"lpa_${sid}_lpt"}}{$h};
+    }
     return $result;
 }
 
@@ -398,8 +425,20 @@ sub check_lpa_status($$$)
     my $node2=shift;
     my $lpaGAP="7200"; # TODO: Value must be fetched from the cluster
 
-    my $lpa_node1=${$HName{"lpa_${sid}_lpt"}}{$node1};
-    my $lpa_node2=${$HName{"lpa_${sid}_lpt"}}{$node2};
+    my $lpa_node1;
+    my $lpa_node2;
+    if ( $newAttributeModel == 1 ) {
+       my $site1=${$HName{"site"}}{$node1};
+       my $site2=${$HName{"site"}}{$node2};
+#printf "check_lpa_status: site1=$site1 site2=$site2\n";
+       $lpa_node1=${$SName{"lpt"}}{$site1};
+       $lpa_node2=${$SName{"lpt"}}{$site2};
+    } else {
+       $lpa_node1=${$HName{"lpa_${sid}_lpt"}}{$node1};
+       $lpa_node2=${$HName{"lpa_${sid}_lpt"}}{$node2};
+    }
+
+#printf "check_lpa_status: TEST lpa_node1=$lpa_node1 lpa_node2=$lpa_node2\n";
 
     my $lpa_delta=abs($lpa_node1 - $lpa_node2);
     my $lpa_wait=($lpaGAP - $lpa_delta);
@@ -426,14 +465,15 @@ sub check_lpa_status($$$)
     return ( $check_lpa_col, $check_lpa_msg);
 }
 
-sub check_all_ok($)
+sub check_all_ok($$)
 {
     my $sid=shift;
+    my $ClusterNodes=shift;
     my $rc=0;
     my $failed="";
     my $result;
     $result=get_nodes_online;
-    if ( $result != 2 ) {
+    if ( $result != $ClusterNodes ) {
          $rc++;  
          $failed .= " #N=$result"; 
     }
@@ -484,6 +524,55 @@ sub host_attr2string()
         return $string;
 }
 
+sub print_attr_host()
+{
+    my ($HKey, $AKey);
+	printf "%-22s", "Attribute \\ Host";
+	foreach $HKey (sort keys %Host) {
+	   printf "%-16s ", $HKey;
+	}
+	printf "\n";
+
+	printf "%s\n", "-" x 120 ;
+
+	foreach $AKey (sort keys %HName) {
+	   printf "%-22s", $AKey;
+	   foreach $HKey (sort keys %Host) {
+		   printf "%-16.16s ", $Host{$HKey} -> {$AKey};
+		}
+
+	   printf "\n";
+	}
+	return 0;
+}
+
+sub print_host_attr()
+{
+    my ($AKey, $HKey, $len, $line_len, $hclen);
+    $hclen=$HName{_hosts}->{_length};
+    $line_len=$hclen+1;
+	printf "%-$hclen.${hclen}s ", "$table_title";
+	foreach $AKey (sort keys %HName) {
+       if ($AKey ne "_hosts") {
+           $len = $HName{$AKey}->{_length};
+           $line_len=$line_len+$len+1;
+           printf "%-$len.${len}s ", $HName{$AKey}->{_title};
+       }
+	}
+	printf "\n";
+	printf "%s\n", "-" x $line_len ;
+	foreach $HKey (sort keys %Host) {
+	   printf "%-$hclen.${hclen}s ", $HKey;
+	   foreach $AKey (sort keys %HName) {
+           if ($AKey ne "_hosts") {
+               $len = $HName{$AKey}->{_length};
+               printf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
+            }
+        }
+	   printf "\n";
+	}
+	return 0;
+}
 #
 ################ END CUT - MOVE THAT TO AN PERL-LIBRARY LATER
 #
