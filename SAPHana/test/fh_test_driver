@@ -1,10 +1,11 @@
 #!/usr/bin/perl
 #
 # fh_test_driver
-# (c) 2014 SUSE Linux Products GmbH
+# (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
+# (c) 2015 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel
 # License: GPL v2+
-# Version: 0.6.2015.02.13.1
+# Version: 0.7.2015.05.07.1
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -19,6 +20,7 @@ use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use Switch;
+use SAPHanaSRTools;
 
 
 my %Name;
@@ -60,127 +62,6 @@ sub init()
     return 0;
 }
 
-
-sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
- my $a = shift;
- my $b = shift;
- return $a > $b ? $a : $b;
-}
-
-sub mysyslog ( $$$ ) {
-   my ($prio, $form, @param) = ( @_ );
-   printf "$form", @param;
-   syslog $prio, $form, @param;
-
-
-}
-
-sub get_nodes_online() 
-{
-    my $rc=0;
-    my $match="Ok:\s+([0-9])\s+nodes online";
-    my $match="Ok:\s+([0-9]+)\s+nodes? online";
-    my $match="Ok: ([0-9]+) ";
-    open crm, "crm_mon -s |";
-    while (<crm>) {
-        if (/$match/) {
-           $rc=$1
-        }
-    }
-    close crm;
-    return $rc;
-}
-
-sub get_node_status($)
-{
-    # typically returns online, standby or offline
-    my $result="offline";
-    my $node=shift;
-    open crm, "crm_mon -1 |";
-    #- case one offline/standby and one online
-    # Node fscs99: OFFLINE (standby)
-    # Online: [ fscs98 ]
-    #- case both standby
-    # Node fscs99: standby
-    # Node fscs98: standby
-    #- case one standby one online
-    # Node fscs99: standby
-    # Online: [ fscs98 ]
-    #- case both online
-    # Online: [ fscs98 fscs99 ]
-    while (<crm>) {
-        if ( /^Online:.*\s$node\s/ ) {
-           #printf("O: %s\n", $_);
-           $result="online";
-        } elsif ( /^Node\s+$node:\s+(\S+)/  ) {
-           #printf("N: %s: %s\n", $_, $1);
-           $result=tolower($1);
-
-        }
-    }
-    close crm;
-    return $result;
-}
-
-#
-# works only, if ONE SAPinstance (here HANA) is installed on the cluster
-#
-sub get_sid_and_InstNr()
-{
-    my $sid=""; my $Inr="";
-    open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
-    while (<ListInstances>) {
-       # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-       chomp;
-       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-\s+([0-9][0-9])/ ) {
-          $sid=tolower("$1");
-          $Inr=$2;
-       }
-    }
-    close ListInstances;
-    return ( $sid, $Inr );
-}
-
-sub get_hana_attributes($)
-{
-    my $sid = shift;
-    my $table_title = "Host \\ Attr";
-    open CIB, "cibadmin -Ql |";
-    while (<CIB>) {
-       chomp;
-       if ( $_ =~ /nvpair\s+id="status-([a-zA-Z0-9]+)-\w+"\s+name="(\w+_${sid}_\w+)"\s+value="([^"]+)"/ ) {
-           my ($host, $name, $value) = ( $1, $2, $3 );
-           #
-           # handle the hosts name and table-title
-           #
-           $Host{$host}->{$name}=${value};
-           if ( defined ($Name{_hosts}->{_length})) {
-              $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
-           } else {
-              $Name{_hosts}->{_length} = length($host );
-           }
-           $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
-           #
-           # now handle the attributes name and value
-           #
-           $Name{$name}->{$host}=${value};
-           if ( defined ($Name{$name}->{_length})) {
-              $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
-           } else {
-              $Name{$name}->{_length} = length($value );
-           }
-           if ( $name =~ /hana_${sid}_(.*)/ ) {
-              $Name{$name}->{_title} =  $1;
-           } else {
-              $Name{$name}->{_title} = $name; 
-           }
-           $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
-       }
-    }
-    close CIB;
-    return 0;
-}
-
 sub get_hana_sync_state($)
 {
     my $sid=shift;
@@ -208,76 +89,6 @@ sub get_number_primary($ $)
     return $rc;
 }
 
-sub get_number_secondary($ $)
-{
-    my $sid=shift;
-    my $lss=shift;
-    my $rc=0;
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
-           $rc++;
-        }
-    }
-    return $rc;
-}
-
-sub get_host_primary($ $)
-{
-    my $sid=shift;
-    my $lss=shift;
-    my $result="";
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
-           $result=$h;
-        }
-    }
-    return $result;
-}
-
-sub get_host_secondary($ $)
-{
-    my $sid=shift;
-    my $lss=shift;
-    my $result="";
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
-           $result=$h;
-        }
-    }
-    return $result;
-}
-
-sub check_all_ok($)
-{
-    my $sid=shift;
-    my $rc=0;
-    my $failed="";
-    my $result;
-    $result=get_nodes_online;
-    if ( $result != 2 ) {
-         $rc++;  
-         $failed .= " #N=$result"; 
-    }
-    $result=get_hana_sync_state($sid);
-    if ( $result ne "SOK" ) {
-         $rc++;  
-         $failed .= " sync=$result ";
-    }
-    $result=get_number_primary($sid, "34");
-    if ( $result != 1 ) {
-         $rc++;  
-         $failed .= " #P=$result ";
-    }
-    $result=get_number_secondary($sid, "34");
-    if ( $result != 1 ) {
-         $rc++;  
-         $failed .= " #S=$result ";
-    }
-    return ($rc, $failed);
-}
 
 my $ident = "fhTD";
 my $logopt = "pid";

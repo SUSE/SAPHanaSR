@@ -1,12 +1,18 @@
 #!/usr/bin/perl
 #
 # SAPHanaSR-checks
+# (c) 2015 SUSE Linux Products GmbH, Nuremberg Germany 
+# (c) 2015 SUSE Linux GmbH, Nuremberg Germany 
 # Author: Fabian Herschel
-# (c) 2014,2015 SUSE Linux GmbH, Nuremberg Germany 
-# GPL
+# License: GPL v2 
+# Version: 0.5.2015.05.07.1
 #
+##################################################################
+
+use POSIX;
 use strict;
 use Getopt::Long;
+use SAPHanaSRTools;
 
 my $SID;
 my $INO;
@@ -26,35 +32,22 @@ sub init()
 	                      "dir=s" => \$DIR,
 		 );
     if ( ! defined ($SID) || ! defined ($INO)) {
-        open (ListInstances, "-|", "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances") 
-           and push(@PassedTests, "checkFoundSAPHostControl")
-           or push(@FailedTests, "checkFoundSAPHostControl");
-        while (<ListInstances>) {
-            $hostcontrolanswer++;
-# ListInstances
-# NW:  
-# Inst Info : NA3 - 00 - sapna3as - 742, patch 28, changelist 1540128
-# HANA:
-# Inst Info : HA3 - 03 - se01group3 - 740, patch 36, changelist 1444691
-#
-            if ( /^[^:]+:\s*(\w+)\s*-\s*(\w+)\s*-/ ) {
-               my $foundSID=$1;
-               my $foundINO=$2;
-               if ( $foundSID ne "DAA" ) {
-                  $SID=$foundSID;
-                  $INO=$foundINO;
-	              $hanacount++;
-                  $DIR="/usr/sap/$SID/HDB$INO/exe";
-               }
-            }
+        my $sid=""; my $noDAACount = 0; my $gotAnswer = 0;
+        ( $sid, $INO, $noDAACount, $gotAnswer ) = get_sid_and_InstNr;
+        # printf "ListInstances: GOT %s\n", join(",", ( $sid, $INO, $noDAACount, $gotAnswer ));
+        if ( $sid eq "" ) {
+           push(@FailedTests, "checkFoundSAPHostControl");
+        } else {
+           push(@PassedTests, "checkFoundSAPHostControl");
+           $SID=toupper($sid);
+           $DIR="/usr/sap/$SID/HDB$INO/exe";
         }
-        close ListInstances;
-        if ( $hostcontrolanswer == 0 ) {
+        if ( $gotAnswer == 0 ) {
            push(@FailedTests, "checkConnectSAPHostControl");
         } else {
            push(@PassedTests, "checkConnectSAPHostControl");
         }
-        if ( $hanacount == 1 ) {
+        if ( $noDAACount == 1 ) {
            push(@PassedTests, "checkAutodetectSAP");
         } else {
            push(@FailedTests, "checkAutodetectSAP");
