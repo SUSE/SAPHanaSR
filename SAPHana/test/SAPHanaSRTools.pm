@@ -26,7 +26,7 @@ use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 
     # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string $newAttributeModel get_lpa_by_host, get_site_by_host);
+    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string $newAttributeModel get_lpa_by_host get_site_by_host);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
 
@@ -462,7 +462,7 @@ sub host_attr2string()
     $hclen=$HName{_hosts}->{_length};
     $line_len=$hclen+1;
     $string .= sprintf "%-$hclen.${hclen}s ", "$table_title";
-    foreach $AKey (sort keys %Name) {
+    foreach $AKey (sort keys %HName) {
       if ($AKey ne "_hosts") {
          $len = $HName{$AKey}->{_length};
          $line_len=$line_len+$len+1;
@@ -473,7 +473,7 @@ sub host_attr2string()
         $string .= sprintf "%s\n", "-" x $line_len ;
         foreach $HKey (sort keys %Host) {
            $string .= sprintf "%-$hclen.${hclen}s ", $HKey;
-           foreach $AKey (sort keys %Name) {
+           foreach $AKey (sort keys %HName) {
            if ($AKey ne "_hosts") {
                $len = $HName{$AKey}->{_length};
                $string .= sprintf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
