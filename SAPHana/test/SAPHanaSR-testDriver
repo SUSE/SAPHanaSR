@@ -20,20 +20,51 @@ use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use Switch;
+use Getopt::Long;
 use SAPHanaSRTools;
 
+###################################
+## this part is not for scale out and currently NOT zero-config
+
+$newAttributeModel=0;
+
+my $ClusterNodes=2;
+my $ClusterPrimaries=1;
+my $ClusterSecondaries=1;
 
 my %Name;
-my %Host;
 my $host = hostname();
+my %Host;
+my %Site;
+my %Global;
+my %HName;
+my %SName;
+my %GName;
 
 my $varlib='/var/lib/SAPHanaTD';
 my $testfile='SAPHanaTD.status';
 my $testcount=0;
+my $testCase=0;
 my $msl;
 my $first_test=1;
+my $sid;
+my $ino;
+my $testCase;
 
-sub init() 
+	my $result = GetOptions ("sid=s" => \$sid,
+	                      "ino=s" => \$ino,
+	                      "nodes=s" => \$ClusterNodes,
+	                      "case=s" => \$testCase,
+		 );
+
+
+    my $message;
+    my $phost;
+    my $shost;
+    my $sSite="";
+    my $pSite="";
+
+sub init()
 {
     mkpath($varlib, { mode => 0700, });
     open(STATFILE, "<", "$varlib/$testfile");
@@ -45,9 +76,9 @@ sub init()
     $msl="msl_";
     #$msl="msl_SAPHana_SLE_HDB00";
 #crm resource list
-# stonith_fscs98 (stonith:external/ipmi):        Started 
-# stonith_fscs99 (stonith:external/ipmi):        Started 
-# rsc_ip_SLE_HDB00       (ocf::heartbeat:IPaddr2):       Started 
+# stonith_fscs98 (stonith:external/ipmi):        Started
+# stonith_fscs99 (stonith:external/ipmi):        Started
+# rsc_ip_SLE_HDB00       (ocf::heartbeat:IPaddr2):       Started
 # Master/Slave Set: msl_SAPHana_SLE_HDB00 [rsc_SAPHana_SLE_HDB00]
     open crmRList, "crm resource list |";
     while (<crmRList>) {
@@ -62,34 +93,6 @@ sub init()
     return 0;
 }
 
-sub get_hana_sync_state($)
-{
-    my $sid=shift;
-    my $result="";
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_sync_state"}}) ) {
-        if ( $Name{"hana_${sid}_sync_state"}->{$h} =~ /(S.*)/ ) {
-           $result=$1;
-        }
-    }
-    return $result;
-}
-
-sub get_number_primary($ $)
-{
-    my $sid=shift;
-    my $lss=shift;
-    my $rc=0;
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
-           $rc++;
-        }
-    }
-    return $rc;
-}
-
-
 my $ident = "fhTD";
 my $logopt = "pid";
 my $facility = "LOCAL0";
@@ -98,77 +101,52 @@ my $priority = "info";
 openlog $ident, $logopt, $facility;       # don't forget this
 my $sid="";
 my $INr="";
-    
+
 ( $sid, $INr ) = get_sid_and_InstNr();
 
-#if (get_nodes_online(2)) {
-#    printf "Both online\n";
-#}
-#if (get_nodes_online(1)) {
-#    printf "One  online\n";
-#}
-#
-#printf "status=%s\n",get_node_status("fscs99");
-#
-#printf "sync=%s\n", get_hana_sync_state($sid);
-#printf "ok_prims=%s\n", get_number_primary($sid, "34");
-#printf "ok_secs=%s\n", get_number_secondary($sid, "34");
-#printf "warn_prims=%s\n", get_number_primary($sid, "2");
 
-
-# TODO: For all tests we need to define the pre-requisite, the test action and the expected-test-result
-#       Like: STOP_HANA_PRIMARY  :  ALL_OK :   TAKEOVER + ALL_OK (after some time ;-)
-#             STOP_HANA_SECONDARY : ALL_OK :   NOTAKEOVER + ALL_OK (after some time ;-)
-#             STANDBY_NODE_PRIMARY : ALL_OK :  TAKEOVER + ALL_OK, lost secondary, one node standby
-#             ONLINE_NODE : ALL_OK, lost secondary, node standby : NOTAKEOVER + ALL_OK
-#             STANDBY_NODE_SECONDARY: ALL_OK : NOTAKEOVER + ALL_OK, lost secondary, node standby
-#             KILL_DEAMON_PRIMARY : ALL_OK ....
-#             KILL_DAEMON_SECONDARY : ALL_OK ...
-#             KILL_DAEMON_BOTH :
-#             STANDBY_NODE_BOTH :
-#             ONLINE_NODE_BOTH :
-#             FENCE_NODE_PRIMARY :
-#             FENCE_NODE_SECONDARY :
-#             STOP_CLUSTER_PRIMARY :
-#             START_CLUSTER :
-#             STOP_CLUSTER_SECONDARY :
-#             BREAK_SYNC :
-#             REPAIR_SYNC :
-#             UNMANAGE_RESOURCE :
-#             MANAGE_RESOURCE : 
-#     Either we use tests like the above - defined one per line - or we use complete test modules which tests a 
-#     failere, messures the reaction (immediate not-ALL_OK) than doing a "anti-dot-action" and checking if ALL_OK
-#     comes back and than to run the next test module.
-#     A test module would be:
-#             STOP_HANA_PRIMARY + WAIT + CHECK
-#             STANDBY_NODE_PRIMARY + WAIT + ONLINE_NODE + WAIT + CHECK
-#             FENCE_NODE_PRIMARY + WAIT + START_CLUSTER + WAIT + CHECK
-#     For all FENCE, CLUSTER, BOOT ACTIONS we need to run either without cluster interaction (as fallback) and we need to
-#     run exactly on one node per time only (maybe we use DC)
-#             
-
-sub run_test_stop_hana( $ $ $ ) 
+sub run_test_stop_hana( $ $ $ )
 {
     my $sid=shift;
     my $theHost=shift;
     my $testNr=shift;
     my $rc=0;
        my $SID=toupper($sid);
-    mysyslog $priority, "%s", "Try to stop HDB at $theHost test=$testNr";
+    mysyslog $priority, "%s", "TEST Try to stop HDB at $theHost test=$testNr";
     if ( $theHost eq $host ) {
        # local
-	    mysyslog $priority, "%s", "su - ${sid}adm -c \"HDB stop\" test=$testNr";
+	    mysyslog $priority, "%s", "TEST su - ${sid}adm -c \"HDB stop\" test=$testNr";
        system("su - ${sid}adm -c \"HDB stop\"");
     } else {
-            mysyslog $priority, "%s", "ssh ${sid}adm\@$theHost HDB stop test=$testNr";
+            mysyslog $priority, "%s", "TEST ssh ${sid}adm\@$theHost HDB stop test=$testNr";
        # remote
        system("ssh ${sid}adm\@$theHost \"/usr/sap/$SID/HDB$INr/HDB stop\"");
     }
-    mysyslog $priority, "%s", "Stopped HDB at $theHost test=$testNr";
+    mysyslog $priority, "%s", "TEST Stopped HDB at $theHost test=$testNr";
     return $rc;
 }
 
-sub run_test_kill_hana( $ $ $ $ ) 
+sub run_test_stop_hana_system( $ $ $ )
+{
+    my $sid=shift;
+    my $theHost=shift;
+    my $testNr=shift;
+    my $rc=0;
+       my $SID=toupper($sid);
+    mysyslog $priority, "%s", "TEST Try to stop HANA SYSTEM at $theHost test=$testNr\n";
+    if ( $theHost eq $host ) {
+       # local
+	    mysyslog $priority, "%s", "TEST su - ${sid}adm -c \"sapcontrol -nr $INr -function StopSystem\" test=$testNr";
+       system("su - ${sid}adm -c \"sapcontrol -nr $INr -function StopSystem\"");
+    } else {
+            mysyslog $priority, "%s", "TEST ssh ${sid}adm\@$theHost sapcontrol -nr $INr -function StopSystem test=$testNr\n";
+       # remote
+       system("ssh ${sid}adm\@$theHost \"/usr/sap/$SID/HDB$INr/exe/sapcontrol -nr $INr -function StopSystem\"");
+    }
+    mysyslog $priority, "%s", "TEST Stopped HDB at $theHost test=$testNr";
+}
+
+sub run_test_kill_hana( $ $ $ $ )
 {
     my $sid=shift;
     my $theHost=shift;
@@ -176,17 +154,17 @@ sub run_test_kill_hana( $ $ $ $ )
     my $signal=shift;
     my $rc=0;
        my $SID=toupper($sid);
-    mysyslog $priority, "%s", "Try to kill-$signal HDB at $theHost test=$testNr";
+    mysyslog $priority, "%s", "TEST Try to kill-$signal HDB at $theHost test=$testNr";
     if ( $theHost eq $host ) {
        # local
-	    mysyslog $priority, "%s", "su - ${sid}adm -c \"HDB kill-$signal\" test=$testNr";
+	    mysyslog $priority, "%s", "TEST su - ${sid}adm -c \"HDB kill-$signal\" test=$testNr";
        system("su - ${sid}adm -c \"HDB kill-$signal\"");
     } else {
        # remote
-            mysyslog $priority, "%s", "ssh ${sid}adm\@$theHost bash -lc \"HDB kill-$signal\" test=$testNr";
+            mysyslog $priority, "%s", "TEST ssh ${sid}adm\@$theHost bash -lc \"HDB kill-$signal\" test=$testNr";
        system("ssh ${sid}adm\@$theHost \"/usr/sap/$SID/HDB$INr/HDB kill-$signal\"");
     }
-    mysyslog $priority, "%s", "Killed HDB at $theHost test=$testNr";
+    mysyslog $priority, "%s", "TEST Killed HDB at $theHost test=$testNr";
     return $rc;
 }
 
@@ -231,78 +209,99 @@ sub run_test_stop_masterslave( $ $ )
     return 0;
 }
 
+sub run_testCase($)
+{
+    use Switch;
+    my $testCase=shift;
+    switch ($testcount % 10) {
+        case [0,4] {
+                           mysyslog $priority, "%s", "Testcase: Stop primary SAP Hana instance. test=$testcount";
+                           run_test_stop_hana($sid, $phost, $testcount);
+                         } # maybe add max wished test time till good again?
+        case [2,6] {
+                           mysyslog $priority, "%s", "Testcase: Kill-11 primary SAP Hana instance. test=$testcount";
+                           run_test_kill_hana($sid, $phost, $testcount, 11);
+                         }
+        case [5] {
+                           mysyslog $priority, "%s", "Testcase: Stop secondary SAP Hana instance. test=$testcount";
+                           run_test_stop_hana($sid, $shost, $testcount);
+                         }
+        case [3,7] {
+                           mysyslog $priority, "%s", "Testcase: Kill-11 secondary SAP Hana instance. test=$testcount";
+                           run_test_kill_hana($sid, $shost, $testcount, 11);
+                         }
+        case  [1] {
+                           mysyslog $priority, "%s", "Testcase: standby node with secondary SAP Hana instance. test=$testcount";
+                           run_test_standby_node($sid, $shost, $testcount);
+                         }
+        case  [8] {
+                           mysyslog $priority, "%s", "Testcase: standby node with primary SAP Hana instance. test=$testcount";
+                           run_test_standby_node($sid, $phost, $testcount);
+                         }
+        case  [9] {
+                           mysyslog $priority, "%s", "Testcase: stop and start master/slave";
+                           run_test_stop_masterslave($msl, $testcount);
+                         }
+        else   { mysyslog $priority, "%s", "Uncovered remainder";}
+    }
+}
+
 init();
-mysyslog $priority, "fhTD: Tests running. Next TestNr=%i\n", $testcount;
+mysyslog $priority, "fhTD: Tests running. Next TestNr=%i", $testcount;
 my $goodloops=0;
 my $badloops=0;
+my $testActive=0;
 while ( 1==1 ) {
-    my $message;
-    my $phost;
-    my $shost;
-    my $laststate="";
     get_hana_attributes($sid);
     $phost=get_host_primary($sid, "1234");
     $shost=get_host_secondary($sid, "1234");
+    $pSite=get_site_by_host($sid, $phost);
+    $sSite=get_site_by_host($sid, $shost);
     my ($checkOK, $failures ) = check_all_ok($sid);
-    if ( $checkOK == 0 ) {
+    if ( ( $checkOK == 0 ) && ( $testActive==0 ) ) {
+        #
+        # OK back again after it failed
+        #
         $badloops=0;
         $goodloops++;
-        $message="All checks passed - primary=$phost secondary=$shost loop=$goodloops testnr=$testcount\n";
+        $message="All checks passed - primary=$phost ($pSite) secondary=$shost ($sSite) loop=$goodloops testnr=$testcount\n";
         mysyslog $priority, "%s", $message;
         if ( ( $goodloops >= 12 ) || ( $first_test == 1 )  ) {
             $testcount++;
             $first_test=0;
             # TODO: Later add other values for writing the status file (now only testnr)
+            $message="STATUS primary=$phost ($pSite) secondary=$shost ($sSite) testnr=$testcount\n";
+            mysyslog $priority, "%s", $message;
             open(STATFILE, ">", "$varlib/$testfile");
             printf STATFILE "testnr=%i\n", $testcount;
             close STATFILE;
-            switch ($testcount % 10) {
-                case [0,4] { 
-                                   mysyslog $priority, "%s", "Testcase: Stop primary SAP Hana instance. test=$testcount";
-                                   run_test_stop_hana($sid, $phost, $testcount); 
-                                 } # maybe add max wished test time till good again?  
-                case [2,6] { 
-                                   mysyslog $priority, "%s", "Testcase: Kill-11 primary SAP Hana instance. test=$testcount";
-                                   run_test_kill_hana($sid, $phost, $testcount, 11); 
-                                 }
-                case [5] { 
-                                   mysyslog $priority, "%s", "Testcase: Stop secondary SAP Hana instance. test=$testcount";
-                                   run_test_stop_hana($sid, $shost, $testcount); 
-                                 }
-                case [3,7] { 
-                                   mysyslog $priority, "%s", "Testcase: Kill-11 secondary SAP Hana instance. test=$testcount";
-                                   run_test_kill_hana($sid, $shost, $testcount, 11); 
-                                 } 
-                case  [1] {
-                                   mysyslog $priority, "%s", "Testcase: standby node with secondary SAP Hana instance. test=$testcount";
-                                   run_test_standby_node($sid, $shost, $testcount); 
-                                 }
-                case  [8] {
-                                   mysyslog $priority, "%s", "Testcase: standby node with primary SAP Hana instance. test=$testcount";
-                                   run_test_standby_node($sid, $phost, $testcount); 
-                                 }
-                case  [9] {
-                                   mysyslog $priority, "%s", "Testcase: stop and start master/slave";
-                                   run_test_stop_masterslave($msl, $testcount);
-                                 }
-                else   { mysyslog $priority, "%s", "Uncovered remainder";}
-            }
+            my $maxTestCase=10;
+            # $testCase=$testcount % $maxTestCase + 1 ;
+            #$testCase=1;
+            run_testCase($testCase);
+            $testActive=1;
             $goodloops=0;
         }
+    } elsif ( ( $checkOK == 0 ) && ( $testActive==1 ) ) {
+        #
+        # STILL OK after a test, so cluster did not already catched the problem
+        #
+        $goodloops++;
+        $message="Still all checks passed - primary=$phost ($pSite) secondary=$shost ($sSite) loop=$goodloops testnr=$testcount\n";
+        mysyslog $priority, "%s", $message;
     } else {
         $goodloops=0;
         $badloops++;
+        $testActive=0;
         if ( $checkOK == 1 ) {
-		$message="$checkOK check failed ($failures) - primary=$phost secondary=$shost loop=$badloops test=$testcount\n";
+		$message="$checkOK check failed ($failures) - primary=$phost ($pSite) secondary=$shost ($sSite) loop=$badloops test=$testcount\n";
         } else {
-		$message="$checkOK checks failed ($failures) - primary=$phost secondary=$shost loop=$badloops test=$testcount\n";
+		$message="$checkOK checks failed ($failures) - primary=$phost ($pSite) secondary=$shost ($sSite) loop=$badloops test=$testcount\n";
         }
         mysyslog $priority, "%s", $message;
     }
-    #printf "%s\n", $message;
-   
     sleep 10;
 }
-  
+
 #$oldmask = setlogmask $mask_priority;
 closelog;
