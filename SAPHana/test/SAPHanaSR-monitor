@@ -1,16 +1,16 @@
 #!/usr/bin/perl
 #
-# SAPHanaSR-monitor
+# 
 # (c) 2014 SUSE Linux Products GmbH, Nuremberg German
 # (c) 2015 SUSE Linux GmbH, Nuremberg German
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.14.2015.05.07.1
+# Version: 0.14.2015.05.07.2
 #
 ##################################################################
 
 use POSIX;
-#use strict;
+use strict;
 use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
@@ -18,6 +18,7 @@ use Switch;
 use Getopt::Long;
 use SAPHanaSRTools;
 
+$newAttributeModel=0;
 
 my %Name;
 my %Host;
@@ -52,10 +53,10 @@ sub init()
 
 
 
-sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$)
+sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$$)
 {
   my ($format, $sid, $sid_color, $hana1stat, $node1, $hana2stat, $node2, $syncstat, $syncdir, $crm_out, $crm_col, $crm_errors, $attr_out, $attr_col, $attr_errors, $score_out, $score_col, $score_errors, $log_out, $log_col, $log_errors,
-     $ftd_out, $ftd_col, $ftd_errors);
+     $ftd_out, $ftd_col, $ftd_errors, $check_lpa_col, $check_lpa_msg);
   $format=shift();
   $sid=shift(); $sid_color=shift();
   $hana1stat=shift(); $node1=shift(); 
@@ -66,11 +67,12 @@ sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$)
   $score_out=shift(); $score_col=shift(); $score_errors=shift();
   $log_out=shift(); $log_col=shift(); $log_errors=shift();
   $ftd_out=shift(); $ftd_col=shift(); $ftd_errors=shift();
+  $check_lpa_col=shift(); $check_lpa_msg=shift();
   # in the page layout $score_col is ignored right now
   # TODO: Check id we add more and more parameters to the print_page or if we will use an hash as parameter or 
   #       id we (recover) more values here inside of the function like for the lpa values:
-    my $lpa_node1=${$Name{"lpa_sle_lpt"}}{$node1};
-    my $lpa_node2=${$Name{"lpa_sle_lpt"}}{$node2};
+    my $lpa_node1=get_lpa_by_host($sid, $node1);
+    my $lpa_node2=get_lpa_by_host($sid, $node2);
 
   my $mydate=`date`; # TODO: do it with perl ;-)
   chomp($crm_errors);
@@ -259,8 +261,9 @@ sub processMonitor() {
     # log checks
     my $log_errors="";
     my $check_lpa_status_col;
+    my $check_lpa_msg;
 
-    $check_lpa_status_col=check_lpa_status($sid, $node_list[0], $node_list[1]);
+    ( $check_lpa_status_col, $check_lpa_msg)=check_lpa_status($sid, $node_list[0], $node_list[1]);
 
     if ( ( $attr_col eq "yellow" ) || ( $crm_col eq "yellow" ) || 
          ( $log_col eq "yellow" ) || ( $attr_col eq "yellow" ) || 
@@ -278,7 +281,7 @@ sub processMonitor() {
                $attr_out, $attr_col, $attr_errors,
                $score_out, $attr_col, $attr_errors,
                $log_out, $log_col, $log_errors,
-               $ftd_out, $ftd_col, ""
+               $ftd_out, $ftd_col, $check_lpa_status_col, $check_lpa_msg
              );
     #
     $phost=get_host_primary($sid, "1234");
