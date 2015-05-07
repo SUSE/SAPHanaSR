@@ -4,7 +4,7 @@
 # (c) 2014 SUSE Linux Products GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.12.2015.04.31.1
+# Version: 0.13.2015.05.07.3
 #
 ##################################################################
 
@@ -14,6 +14,7 @@ use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use Switch;
+use Getopt::Long;
 
 
 my %Name;
@@ -24,9 +25,22 @@ my $varlib='/var/lib/SAPHanaTD';
 my $testfile='SAPHanaTD.status';
 my $testcount=0;
 my $first_test=1;
+my $sid="";
+my $INr="";
+my $Format="html";
+my $Continuous="no";
+my $HtmlPage="/srv/www/hawk/public/herschel/index.html";
+my $Intervall=10;
 
 sub init() 
 {
+	my $result = GetOptions ("sid=s" => \$sid,
+	                      "ino=s" => \$INr,
+	                      "format=s" => \$Format,
+	                      "cont=s" => \$Continuous,
+                          "out=s" => \$HtmlPage,
+                          "intervall=s" => \$Intervall
+	);
     return 0;
 }
 
@@ -44,8 +58,6 @@ sub mysyslog ( $$$ ) {
    my ($prio, $form, @param) = ( @_ );
    printf "$form\n", @param;
    syslog $prio, $form, @param;
-
-
 }
 
 sub get_nodes_online() 
@@ -103,12 +115,19 @@ sub get_sid_and_InstNr()
     my $sid=""; my $Inr="";
     open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
     while (<ListInstances>) {
-       # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-       chomp;
-       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-\s+([0-9][0-9])/ ) {
-          $sid=tolower("$1");
-          $Inr=$2;
-       }
+        # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+        chomp;
+        if ( /^[^:]+:\s*(\w+)\s*-\s*(\w+)\s*-/ ) {
+            my $foundSID=$1;
+            my $foundINO=$2;
+            if ( $foundSID ne "DAA" ) {
+                $sid=tolower($foundSID);
+                $Inr=$foundINO;
+            }
+        }
+#       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-\s+([0-9][0-9])/ ) {
+#          $sid=tolower("$1");
+#          $Inr=$2;
     }
     close ListInstances;
     return ( $sid, $Inr );
@@ -312,8 +331,8 @@ sub check_lpa_status($$$)
     my $node2=shift;
     my $lpaGAP="7200"; # TODO: Value must be fetched from the cluster
 
-    my $lpa_node1=%{$Name{"lpa_sle_lpt"}}->{$node1};
-    my $lpa_node2=%{$Name{"lpa_sle_lpt"}}->{$node2};
+    my $lpa_node1=${$Name{"lpa_sle_lpt"}}{$node1};
+    my $lpa_node2=${$Name{"lpa_sle_lpt"}}{$node2};
 
     my $lpa_delta=abs($lpa_node1 - $lpa_node2);
     my $lpa_wait=($lpaGAP - $lpa_delta);
@@ -376,20 +395,16 @@ sub host_attr2string()
     $hclen=$Name{_hosts}->{_length};
     $line_len=$hclen+1;
     $string .= sprintf "%-$hclen.${hclen}s ", "$table_title";
-#print " P:1";
     foreach $AKey (sort keys %Name) {
-#print " P:2 ($AKey)";
       if ($AKey ne "_hosts") {
          $len = $Name{$AKey}->{_length};
          $line_len=$line_len+$len+1;
          $string .= sprintf "%-$len.${len}s ", $Name{$AKey}->{_title};
        }
     }
-#print " P:3";
         $string .= sprintf "\n";
         $string .= sprintf "%s\n", "-" x $line_len ;
         foreach $HKey (sort keys %Host) {
-#print " P:4";
            $string .= sprintf "%-$hclen.${hclen}s ", $HKey;
            foreach $AKey (sort keys %Name) {
            if ($AKey ne "_hosts") {
@@ -397,10 +412,8 @@ sub host_attr2string()
                $string .= sprintf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
             }
         }
-#print " P:5";
            $string .= sprintf "\n";
         }
-#print " P:6";
         return $string;
 }
 
@@ -425,8 +438,8 @@ sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$)
   # in the page layout $score_col is ignored right now
   # TODO: Check id we add more and more parameters to the print_page or if we will use an hash as parameter or 
   #       id we (recover) more values here inside of the function like for the lpa values:
-    my $lpa_node1=%{$Name{"lpa_sle_lpt"}}->{$node1};
-    my $lpa_node2=%{$Name{"lpa_sle_lpt"}}->{$node2};
+    my $lpa_node1=${$Name{"lpa_sle_lpt"}}{$node1};
+    my $lpa_node2=${$Name{"lpa_sle_lpt"}}{$node2};
 
   my $mydate=`date`; # TODO: do it with perl ;-)
   chomp($crm_errors);
@@ -502,10 +515,10 @@ EOF
 </body>
 </html>
 EOF
-open HTML, ">/srv/www/hawk/public/herschel/index.html.new";
+open HTML, ">$HtmlPage.new";
 print HTML $myPage;
 close HTML;
-system ("mv /srv/www/hawk/public/herschel/index.html.new /srv/www/hawk/public/herschel/index.html ");
+system ("mv $HtmlPage.new $HtmlPage");
   } # end html
 }
 
@@ -523,15 +536,13 @@ $Colors{"red"}="#BB0000";
 $Colors{"gray"}="#B9B9B9";
 
 openlog $ident, $logopt, $facility; 
-my $sid="";
-my $INr="";
     
 ( $sid, $INr ) = get_sid_and_InstNr();
 
 init();
 mysyslog $priority, "%s", "Monitor startup";
-#while ( 1==1 ) {
-{
+
+sub processMonitor() {
     my $message;
     my $phost;
     my $shost;
@@ -627,7 +638,7 @@ mysyslog $priority, "%s", "Monitor startup";
          ( $log_col eq "red" ) || ( $attr_col eq "red" ) || 
          ( $score_col eq "red" ) || ( $check_lpa_status_col eq "red")) 
        { $complete_col="red"; }
-    print_page("txt",$sid, $complete_col,
+    print_page($Format,$sid, $complete_col,
                $hanaStatus{$node_list[0]}, $node_list[0],
                $hanaStatus{$node_list[1]}, $node_list[1],
                $sync_col, $sync_direction,
@@ -652,8 +663,13 @@ mysyslog $priority, "%s", "Monitor startup";
         }
         mysyslog $priority, "%s", $message;
     }
-#    sleep 10;
 }
   
+processMonitor;
+while ( $Continuous eq "yes" ) {
+    sleep $Intervall;
+    processMonitor;
+}
+ 
 closelog;
 #
