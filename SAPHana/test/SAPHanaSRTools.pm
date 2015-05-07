@@ -5,7 +5,7 @@
 # (c) 2015 SUSE Linux GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.14.2015.05.07.1
+# Version: 0.14.2015.05.07.2
 #
 ##################################################################
 
@@ -20,12 +20,13 @@ use File::Path;
 use Switch;
 
 my $VERSION="1.0";
+my $newAttributeModel=0;
 
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 
     # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string);
+    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string $newAttributeModel get_lpa_by_host);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
 
@@ -39,7 +40,7 @@ sub max {
 sub mysyslog ( $$$ ) {
    my ($prio, $form, @param) = ( @_ );
    printf "$form\n", @param;
-#   syslog $prio, $form, @param;
+   syslog $prio, $form, @param;
 }
 
 sub get_nodes_online 
@@ -131,83 +132,103 @@ sub OLDget_hana_attributes($)
            # handle the hosts name and table-title
            #
            $Host{$host}->{$name}=${value};
-           if ( defined ($Name{_hosts}->{_length})) {
-              $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
+           if ( defined ($HName{_hosts}->{_length})) {
+              $HName{_hosts}->{_length} = max($HName{_hosts}->{_length}, length($host ));
            } else {
-              $Name{_hosts}->{_length} = length($host );
+              $HName{_hosts}->{_length} = length($host );
            }
-           $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
+           $HName{_hosts}->{_length} = max($HName{_hosts}->{_length}, length( $table_title));
            #
            # now handle the attributes name and value
            #
-           $Name{$name}->{$host}=${value};
-           if ( defined ($Name{$name}->{_length})) {
-              $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
+           $HName{$name}->{$host}=${value};
+           if ( defined ($HName{$name}->{_length})) {
+              $HName{$name}->{_length} = max($HName{$name}->{_length}, length($value ));
            } else {
-              $Name{$name}->{_length} = length($value );
+              $HName{$name}->{_length} = length($value );
            }
            if ( $name =~ /hana_${sid}_(.*)/ ) {
-              $Name{$name}->{_title} =  $1;
+              $HName{$name}->{_title} =  $1;
            } else {
-              $Name{$name}->{_title} = $name; 
+              $HName{$name}->{_title} = $name; 
            }
-           $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
+           $HName{$name}->{_length} = max($HName{$name}->{_length}, length( $HName{$name}->{_title}));
        }
     }
     close CIB;
     return 0;
 }
 
+sub insertAttribute($$$$$$) { 
+    my ($sid, $refHash, $refN, $object, $attribute, $value) = @_;
+    my $table_titleH="";
+    if ( $attribute =~ /hana_${sid}_(.*)/ ) {
+       $attribute =  $1;
+    }
+       #
+       # handle the hosts name and table-title
+       #
+       $$refHash{$object}->{$attribute}=${value};
+       if ( defined ($$refN{_hosts}->{_length})) {
+          $$refN{_hosts}->{_length} = max($$refN{_hosts}->{_length}, length($object ));
+       } else {
+          $$refN{_hosts}->{_length} = length($object );
+       }
+       $$refN{_hosts}->{_length} = max($$refN{_hosts}->{_length}, length( $table_titleH));
+       #
+       # now handle the attributes name and value
+       #
+       $$refN{$attribute}->{$object}=${value};
+    #   $$refN{$attribute}->{$object}=${value};
+       if ( defined ($$refN{$attribute}->{_length})) {
+          $$refN{$attribute}->{_length} = max($$refN{$attribute}->{_length}, length($value ));
+       } else {
+          $$refN{$attribute}->{_length} = length($value );
+       }
+       $$refN{$attribute}->{_title} = $attribute; 
+       $$refN{$attribute}->{_length} = max($$refN{$attribute}->{_length}, length( $$refN{$attribute}->{_title}));
+       # printf "%-8s %-20s %-30s\n", $1, $2, $3;
+}
 ################
 sub get_hana_attributes($)
 {
     my $sid = shift;
-   undef %Name;
-   undef %Host;
 open CIB, "cibadmin -Ql |";
 while (<CIB>) {
    chomp;
-   my ($host, $name, $value);
-   my $found=0;
-   if ( $_ =~ /nvpair.*name="(\w+_${sid}_\w+)"/ ) {
+   my ($host, $name, $site, $value);
+   if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
       $name=$1;
-      # find attribute in forever and reboot store :)
-      if ( $_ =~ /id="(status|nodes)-([a-zA-Z0-9]+)-/ ) {
+      if ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ ) {
+         # found attribute in nodes forever and reboot store
          $host=$2;
-      }
-      if ( $_ =~ /value="([^"]+)"/ ) {
-         $value=$1;
-         $found=1;
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
+         }
+      } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
+         # found a site attribute
+         $site=$1;
+         if ( $name =~ /[a-zA-Z0-9\_\-]+_site_([a-zA-Z0-9\-]+)/ ) {
+            $name = $1;
+         }
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             insertAttribute($sid, \%Site, \%SName, $site, $name, $value);
+         }
+      } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
+         # found a global attribute
+         $host="GLOBAL";
+         if ( $name =~ /([a-zA-Z0-9\_\-]+)_glob_([a-zA-Z0-9\_\-]+)/ ) {
+            $name = $2;
+         }
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             insertAttribute($sid, \%Global, \%GName, "global", $name, $value);
+         }
       }
    }
-   if ( $found == 1 ) {
-       #
-       # handle the hosts name and table-title
-       #
-       $Host{$host}->{$name}=${value};
-       if ( defined ($Name{_hosts}->{_length})) {
-          $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length($host ));
-       } else {
-          $Name{_hosts}->{_length} = length($host );
-       }
-       $Name{_hosts}->{_length} = max($Name{_hosts}->{_length}, length( $table_title));
-       #
-       # now handle the attributes name and value
-       #
-       $Name{$name}->{$host}=${value};
-       if ( defined ($Name{$name}->{_length})) {
-          $Name{$name}->{_length} = max($Name{$name}->{_length}, length($value ));
-       } else {
-          $Name{$name}->{_length} = length($value );
-       }
-       if ( $name =~ /hana_${sid}_(.*)/ ) {
-          $Name{$name}->{_title} =  $1;
-       } else {
-          $Name{$name}->{_title} = $name;
-       }
-       $Name{$name}->{_length} = max($Name{$name}->{_length}, length( $Name{$name}->{_title}));
-       # printf "%-8s %-20s %-30s\n", $1, $2, $3;
-   }
+
 }
 close CIB;
     return 0;
@@ -219,10 +240,14 @@ sub get_hana_sync_state($)
 {
     my $sid=shift;
     my $result="";
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_sync_state"}}) ) {
-        if ( $Name{"hana_${sid}_sync_state"}->{$h} =~ /(S.*)/ ) {
-           $result=$1;
+    if ( $newAttributeModel == 1 ) {    
+        $result = $GName{sync_state}->{"global"};
+    } else  {
+        my $h;
+        foreach $h ( keys(%{$HName{sync_state}}) ) {
+            if ( $HName{sync_state}->{$h} =~ /(S.*)/ ) {
+               $result=$1;
+            }
         }
     }
     return $result;
@@ -233,10 +258,19 @@ sub get_number_primary($ $)
     my $sid=shift;
     my $lss=shift;
     my $rc=0;
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
-           $rc++;
+    if ( $newAttributeModel == 1 ) {    
+        my $s;
+        foreach $s ( keys(%{$SName{"srr"}}) ) {
+            if ( ( $SName{"srr"}->{$s} =~ /P/ ) && ( $SName{"lss"}->{$s} =~ /[$lss]/ )) {
+               $rc++;
+            }
+        }
+    } else  {
+        my $h;
+        foreach $h ( keys(%{$HName{"roles"}}) ) {
+            if ( $HName{"roles"}->{$h} =~ /[$lss]:P:/ ) {
+               $rc++;
+            }
         }
     }
     return $rc;
@@ -247,7 +281,7 @@ sub check_node_status($$$)
     my $sid=shift;
     my $lss=shift;
     my $h=shift;
-    if ( $Name{"hana_${sid}_roles"}->{$h} =~ /^[$lss]:.:/ ) {
+    if ( $HName{"roles"}->{$h} =~ /^[$lss]:.:/ ) {
        return 1;
     }
     return 0;
@@ -258,7 +292,7 @@ sub check_node_mode($$$)
     my $sid=shift;
     my $mode=shift;
     my $h=shift;
-    if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[0-9]:$mode:/ ) {
+    if ( $HName{"roles"}->{$h} =~ /[0-9]:$mode:/ ) {
        return 1;
     }
     return 0;
@@ -269,10 +303,19 @@ sub get_number_secondary($ $)
     my $sid=shift;
     my $lss=shift;
     my $rc=0;
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
-           $rc++;
+    if ( $newAttributeModel == 1 ) {    
+        my $s;
+        foreach $s ( keys(%{$SName{"srr"}}) ) {
+            if ( ( $SName{"srr"}->{$s} =~ /S/ ) && ( $SName{"lss"}->{$s} =~ /[$lss]/ )) {
+               $rc++;
+            }
+        }
+    } else {
+        my $h;
+        foreach $h ( keys(%{$HName{"roles"}}) ) {
+            if ( $HName{"roles"}->{$h} =~ /[$lss]:S:/ ) {
+               $rc++;
+            }
         }
     }
     return $rc;
@@ -283,10 +326,19 @@ sub get_host_primary($ $)
     my $sid=shift;
     my $lss=shift;
     my $result="";
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:P:/ ) {
-           $result=$h;
+    if ( $newAttributeModel == 1 ) {    
+        my $s;
+        foreach $s ( keys(%{$SName{"srr"}}) ) {
+            if ( ( $SName{"srr"}->{$s} =~ /P/ ) && ( $SName{"lss"}->{$s} =~ /[$lss]/ )) {
+               $result=$SName{"mns"}->{$s};
+            }
+        }
+    } else {
+        my $h;
+        foreach $h ( keys(%{$HName{"roles"}}) ) {
+            if ( $HName{"roles"}->{$h} =~ /[$lss]:P:/ ) {
+               $result=$h;
+            }
         }
     }
     return $result;
@@ -297,12 +349,42 @@ sub get_host_secondary($ $)
     my $sid=shift;
     my $lss=shift;
     my $result="";
-    my $h;
-    foreach $h ( keys(%{$Name{"hana_${sid}_roles"}}) ) {
-        if ( $Name{"hana_${sid}_roles"}->{$h} =~ /[$lss]:S:/ ) {
-           $result=$h;
+    if ( $newAttributeModel == 1 ) {    
+        my $s;
+        foreach $s ( keys(%{$SName{"srr"}}) ) {
+            if ( ( $SName{"srr"}->{$s} =~ /S/ ) && ( $SName{"lss"}->{$s} =~ /[$lss]/ )) {
+               $result=$SName{"mns"}->{$s};
+            }
+        }
+    } else {
+        my $h;
+        foreach $h ( keys(%{$HName{"roles"}}) ) {
+            if ( $HName{"roles"}->{$h} =~ /[$lss]:S:/ ) {
+               $result=$h;
+            }
         }
     }
+    return $result;
+}
+
+sub get_site_by_host($ $)
+{
+    my $result="";
+    my $sid=shift;
+    my $h = shift;
+# print "get_site_by_host($sid, $h)";
+    $result = $HName{"site"}->{$h};
+    $result = $Host{$h}->{"site"};
+    return $result;
+}
+
+sub get_lpa_by_host($$)
+{
+    my $result="";
+    my $sid=shift;
+    my $h = shift;
+# print "get_site_by_host($sid, $h)";
+    $result = ${$HName{"lpa_${sid}_lpt"}}{$h};
     return $result;
 }
 
@@ -316,8 +398,8 @@ sub check_lpa_status($$$)
     my $node2=shift;
     my $lpaGAP="7200"; # TODO: Value must be fetched from the cluster
 
-    my $lpa_node1=${$Name{"lpa_sle_lpt"}}{$node1};
-    my $lpa_node2=${$Name{"lpa_sle_lpt"}}{$node2};
+    my $lpa_node1=${$HName{"lpa_${sid}_lpt"}}{$node1};
+    my $lpa_node2=${$HName{"lpa_${sid}_lpt"}}{$node2};
 
     my $lpa_delta=abs($lpa_node1 - $lpa_node2);
     my $lpa_wait=($lpaGAP - $lpa_delta);
@@ -341,7 +423,7 @@ sub check_lpa_status($$$)
        $check_lpa_msg= "LPA: GREEN";
        $check_lpa_col="green";
     }
-    return $check_lpa_col;
+    return ( $check_lpa_col, $check_lpa_msg);
 }
 
 sub check_all_ok($)
@@ -377,14 +459,14 @@ sub host_attr2string()
 {
     my $string;
     my ($AKey, $HKey, $len, $line_len, $hclen);
-    $hclen=$Name{_hosts}->{_length};
+    $hclen=$HName{_hosts}->{_length};
     $line_len=$hclen+1;
     $string .= sprintf "%-$hclen.${hclen}s ", "$table_title";
     foreach $AKey (sort keys %Name) {
       if ($AKey ne "_hosts") {
-         $len = $Name{$AKey}->{_length};
+         $len = $HName{$AKey}->{_length};
          $line_len=$line_len+$len+1;
-         $string .= sprintf "%-$len.${len}s ", $Name{$AKey}->{_title};
+         $string .= sprintf "%-$len.${len}s ", $HName{$AKey}->{_title};
        }
     }
         $string .= sprintf "\n";
@@ -393,7 +475,7 @@ sub host_attr2string()
            $string .= sprintf "%-$hclen.${hclen}s ", $HKey;
            foreach $AKey (sort keys %Name) {
            if ($AKey ne "_hosts") {
-               $len = $Name{$AKey}->{_length};
+               $len = $HName{$AKey}->{_length};
                $string .= sprintf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
             }
         }
