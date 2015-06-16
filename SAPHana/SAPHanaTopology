@@ -205,7 +205,13 @@ function get_hana_attribute()
     local attr_node=$1
     local attr_name=$2
     local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
-    crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q; rc=$?
+    local attr_val=""
+    attr_val=$(crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q); rc=$?
+    if [ $debug_attributes -eq 1 ]; then
+        dstr=$(date)
+        echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q --> $attr_val" >> /var/log/fhATTRIBUTE
+    fi
+    echo "$attr_val"
     if [ $rc -ne 0 ]; then
            super_ocf_log debug "DBG: ATTRIBUTE-FAILURE: crm_attribute -N $attr_node -G -n "$attr_name" -l $attr_store -q"
     fi
@@ -230,6 +236,10 @@ function set_hana_attribute()
     attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store); get_rc=$?
     if [ "$attr_old" != "$attr_value" ]; then
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
+        if [ $debug_attributes -eq 1 ]; then
+            dstr=$(date)
+            echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> /var/log/fhATTRIBUTE
+        fi
         crm_attribute -N $attr_node -v "$attr_value" -n "$attr_name" -l $attr_store; rc=$?
         if [ $rc -ne 0 ]; then
            super_ocf_log debug "DBG: ATTRIBUTE-FAILURE: crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store"
@@ -381,14 +391,19 @@ function sht_init() {
     super_ocf_log debug "DBG2: hdbANSWER=\$\(su - ${sidadm} -c \"hdbnsutil -sr_state --sapcontrol=1\"\)"
     site=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
     srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+    if [ $debug_attributes -eq 1 ]; then
+        dstr=$(date)
+        echo "$dstr: SAPHanaTopology: srmode=$srmode" >> /var/log/fhATTRIBUTE
+    fi
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 ~ "mapping" && $3 !~ site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
     #
     # filter all non-cluster mappings
     #
+# TODO: PRIO2: Benötigen erst noch das Mapping zurück vom cluster knoten zum hanaHost (vhost)
     hanaRemoteHost=$(for n1 in $nodelist; do for n2 in $MAPPING; do if [ "$n1" == "$n2" ]; then echo $n1; fi; done; done )
-        super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
-        super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
 }  
@@ -701,6 +716,19 @@ function sht_monitor_clone() {
         done
           ;;
     esac
+    if [ $testcodeHang -eq 1 ]; then
+        #
+        # TODO:  PRIO1 REMOVE THIS TESTCODE
+        # TESTCODE SAP BCC 301939-2015 - BEGIN
+        if [ -e "/tmp/hatest" ]; then
+            time2sleep=`cat /tmp/hatest`
+            echo 0 > /tmp/hatest
+            super_ocf_log info "ACT: Let ra hang for $time2sleep seconds as requested by admin in file /tmp/hatest"
+            sleep $time2sleep
+            rm -f /tmp/hatest
+        fi
+        # TESTCODE SAP BCC 301939-2015 - END
+    fi
     #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
