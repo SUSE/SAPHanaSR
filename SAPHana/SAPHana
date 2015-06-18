@@ -132,7 +132,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.149.4</version>
+<version>0.149.6</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -162,7 +162,7 @@ The resource agent uses the following four interfaces provided by SAP:
 
 3. hdbnsutil
    The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
-   (primary/secondary) of a SAP HANA database instance. A second task of the interface is the posibility to run a
+   (primary/secondary) of a SAP HANA database instance. A second task of the interface is the possibility to run a
    system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
 
 4. hdbsql / systemReplicationStatus
@@ -356,8 +356,14 @@ function get_hana_attribute()
     local attr_node=$1
     local attr_name=$2
     local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
-    local attr_default=${4:-}
-    crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default"; rc=$?
+    local attr_default=${5:-}
+    local attr_val=""
+    attr_val=$(crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default"); rc=$?
+    if [ $debug_attributes -eq 1 ]; then
+        dstr=$(date)
+        echo "$dstr: SAPHana: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q --> $attr_val" >> /var/log/fhATTRIBUTE
+    fi
+    echo "$attr_val"
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
 }
@@ -381,6 +387,10 @@ function set_hana_attribute()
     if [ "$attr_old" != "$attr_value" ]; then
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store; rc=$?
+        if [ $debug_attributes -eq 1 ]; then
+            dstr=$(date)
+            echo "$dstr: SAPHana: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> /var/log/fhATTRIBUTE
+        fi
     else
         super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_node} still be ${attr_value}"
         rc=0
@@ -448,7 +458,7 @@ scoring_crm_master()
     local roles="$1"
     local sync="$2"
     local skip=0
-    local myScore=-1
+    local myScore=""
     for scan in "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}"; do
         if [ $skip -eq 0 ]; then
             read rolePatt syncPatt score <<< $scan
@@ -461,7 +471,10 @@ scoring_crm_master()
         fi
     done
     super_ocf_log debug "DBG: scoring_crm_master adjust score $myScore"
-    set_crm_master $myScore
+    # TODO: PRIO1: DO Not Score, If we did not found our role/sync at this moment - bsc#919925
+    if [ -n "$myScore" ]; then
+        set_crm_master $myScore
+    fi
 }
 
 #
@@ -1068,6 +1081,27 @@ function saphana_start_primary()
     case "$lpa_dec" in
         0 ) # LPA says start-up
             lpa_advice="start"
+            # TODO: PRIO1: We need to do a special handling for remote being a 234-Secondary in SR Status SOK
+            # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover ) 
+            #   then lpa_advice="wait"
+            remoteRole=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_ROLES[@]})
+            remoteSync=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+            super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
+            if ocf_is_true "${PreferSiteTakeover}"; then
+                remoteStatus="$remoteRole:$remoteSync"
+                case "$remoteStatus" in
+		    [234]:S:*:SOK | [234]:S:*:PRIM )
+		        lpa_advice="wait"
+                        # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
+                        super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
+                    ;;
+                    * )
+                        super_ocf_log info "DEC: saphana_primary - remoteStatus is: $remoteStatus"
+                        ;;
+                esac
+            else
+                super_ocf_log info "DEC: saphana_primary - PreferSiteTakeover set to false"
+            fi
             ;;
         1)  # LPA says register!
             lpa_advice="register"
@@ -1075,7 +1109,7 @@ function saphana_start_primary()
         2)  # LPA says wait for second LPT
             lpa_advice="wait"
             ;;
-        3 | 4 ) # LPA says something is completely wrong - FAIL resource
+        3 | 4 ) # LPA says something is completely wrong - FAIL resource # TODO: PRIO1: RC3 for waiting remote side to report lss
             lpa_advice="fail"
             ;;
         * ) # LPA failed with an unkonown status - FAIL resource
@@ -1453,7 +1487,8 @@ function lpa_init_lpt() {
 #               LPTlocal > LPTremore ===> rc=0 (start) 
 #               LPTRemote > LPTlocal ===> rc=1 (register)
 #            Stalemate in all other cases ==> STALEMATE-HANDLING ===> rc=2 (wait)
-#    LPTRemote is not initialized (0)
+#    LPTRemote is not initialized or node not kown in cluster (crm_mon -l) (0)
+#    TODO: PRIO1: Need to introduce a return-code 3 for remote sides lpa not ready
 #        THEN:
 #            WAIT ==> like STALEMATE-HANDLING ===> rc=2 (wait)
 #    
@@ -1625,7 +1660,6 @@ function saphana_monitor_primary()
                     else
                        super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
                     fi
-
                     return $OCF_SUCCESS
                 fi                             
                 promoted=0;
@@ -1853,11 +1887,11 @@ function saphana_monitor_secondary()
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
                 "SFAIL" ) # This is currently NOT a possible node to promote
-                    super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as posible takeover node"
+                    super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
                     set_crm_master -INFINITY
                     ;;
                 "*" )     # Unknown sync status
-                    super_ocf_log info "DEC: secondary with sync status UKNOWN/UNDEFINED ==> EXCLUDE as posible takeover node"
+                    super_ocf_log info "DEC: secondary with sync status UKNOWN/UNDEFINED ==> EXCLUDE as possible takeover node"
                     set_crm_master -INFINITY
                     ;;
             esac
@@ -1889,10 +1923,12 @@ function saphana_monitor_clone() {
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
     local init_attribute=0
+    local lpaRc=0
+    local mRc=0
+    local myMaster=-1
 
     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
     my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
-    lpa_check_lpt_status  # TODO: PRIO3 : remove that line later - its only to call lpa_check_lpt_status much more often for checking
 
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG: PROBE ONLY"
@@ -1904,6 +1940,16 @@ function saphana_monitor_clone() {
 	# 
 	check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+        # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
+        # TODO: PRIO1: Maybe we need a lpa-check here to
+        if ocf_is_probe; then
+            myMaster=$(get_crm_master); mRc=$?
+            if [ $mRc -ne 0 ]; then
+               set_crm_master 5
+            elif [ $myMaster -eq -1 ]; then
+               set_crm_master 5
+            fi
+        fi
         saphana_monitor_primary; rc=$?
     else
         if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
