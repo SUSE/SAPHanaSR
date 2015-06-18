@@ -14,6 +14,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
+#               (c) 2015 SUSE Linux GmbH
 #
 # An example usage: 
 #      See usage() function below for more details...
@@ -123,7 +124,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.149.4</version>
+    <version>0.149.5</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
@@ -387,6 +388,7 @@ function sht_init() {
        *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;    
        *cman*    ) nodelist=$(crm_node -l);; 
     esac
+    #### SAP-CALL
     hdbANSWER=$(su - ${sidadm} -c "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
     super_ocf_log debug "DBG2: hdbANSWER=\$\(su - ${sidadm} -c \"hdbnsutil -sr_state --sapcontrol=1\"\)"
     site=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
@@ -400,8 +402,16 @@ function sht_init() {
     #
     # filter all non-cluster mappings
     #
-# TODO: PRIO2: Benötigen erst noch das Mapping zurück vom cluster knoten zum hanaHost (vhost)
-    hanaRemoteHost=$(for n1 in $nodelist; do for n2 in $MAPPING; do if [ "$n1" == "$n2" ]; then echo $n1; fi; done; done )
+    # DONE: PRIO2: Need mapping between HANA HOSTS not cluster NODES
+    local hanaVHost
+    hanaRemoteHost=$(for n1 in $nodelist; do
+          hanaVHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+          for n2 in $MAPPING; do
+             if [ "$hanaVHost" == "$n2" ]; then
+                echo $hanaVHost;
+             fi;
+          done;
+      done )
     super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
@@ -437,6 +447,7 @@ function check_for_primary() {
 	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
                   dump=$( echo $node_status | hexdump -C );
 	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
+                  #### SAP-CALL
                   node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
                   node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                   super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
@@ -455,6 +466,7 @@ function check_for_primary() {
 #
 function start_saphostagent()
 {
+    ### SAP-CALL
     if [ -x "${HOSTEXEC_PATH}" ]; then
         ${HOSTEXEC_PATH} pf=${HOSTEXEC_PROFILE_PATH}
     fi
@@ -468,9 +480,10 @@ function start_saphostagent()
 #
 function stop_saphostagent()
 {
-        if [ -x "${HOSTEXEC_PATH}" ]; then
-                ${HOSTEXEC_PATH} -stop
-        fi
+    ### SAP-CALL
+    if [ -x "${HOSTEXEC_PATH}" ]; then
+        ${HOSTEXEC_PATH} -stop
+    fi
 }
 
 #
@@ -601,7 +614,7 @@ function sht_validate() {
 #
 function sht_start_clone() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
-       local rc=$OCF_NOT_RUNNING
+    local rc=$OCF_NOT_RUNNING
     sht_start; rc=$?
     return $rc
 }
@@ -681,27 +694,30 @@ function sht_monitor_clone() {
     # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, NR is work#6, vHost is word#8
+    #### SAP-CALL
     vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
         | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr 2>/dev/null )
-    super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
+    # super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     if [ -n "$vName" ]; then
        set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
     else
        vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
     fi
     #site=$(get_site_name)
+    #### SAP-CALL
     hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
     #if [ -z "$MAPPING" ]; then
     #   super_ocf_log info "ACT: Did not find remote Host at this moment"
     #fi
-    # FH TODO PRIO1: TRY TO GET RID OF "ATTR_NAME_HANA_REMOTEHOST"
+    # FH TODO PRIO3: TRY TO GET RID OF "ATTR_NAME_HANA_REMOTEHOST"
     if [ -n "$hanaRemoteHost" ]; then
         set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]} 
     fi
     set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]} 
-    set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]} 
-    set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
+    if [ -n "$site" ]; then
+        set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
+    fi
     case "$hanaPrim" in
        P ) ;;
        S ) # only secondary may propargate its sync status
@@ -716,20 +732,6 @@ function sht_monitor_clone() {
         done
           ;;
     esac
-    if [ $testcodeHang -eq 1 ]; then
-        #
-        # TODO:  PRIO1 REMOVE THIS TESTCODE
-        # TESTCODE SAP BCC 301939-2015 - BEGIN
-        if [ -e "/tmp/hatest" ]; then
-            time2sleep=`cat /tmp/hatest`
-            echo 0 > /tmp/hatest
-            super_ocf_log info "ACT: Let ra hang for $time2sleep seconds as requested by admin in file /tmp/hatest"
-            sleep $time2sleep
-            rm -f /tmp/hatest
-        fi
-        # TESTCODE SAP BCC 301939-2015 - END
-    fi
-    #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
 }
