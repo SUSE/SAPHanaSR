@@ -5,7 +5,7 @@
 # (c) 2015 SUSE Linux GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.14.2015.05.07.2
+# Version: 0.15.2015.06.10.1
 #
 ##################################################################
 
@@ -26,13 +26,18 @@ use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 
     # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string $newAttributeModel get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model);
+    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
 
 sub set_new_attribute_model()
 {
     $newAttributeModel=1;
+}
+
+sub get_new_attribute_model()
+{
+    return $newAttributeModel;
 }
 
 sub max { 
@@ -44,7 +49,6 @@ sub max {
 
 sub mysyslog ( $$$ ) {
    my ($prio, $form, @param) = ( @_ );
-   printf "$form\n", @param;
    syslog $prio, $form, @param;
 }
 
@@ -284,6 +288,43 @@ sub get_number_primary($ $)
     return $rc;
 }
 
+sub get_number_HANA_standby($$)
+{
+    my $sid=shift;
+    my $site=shift;
+    my $standby=0;
+    if ( $newAttributeModel == 1 ) {
+        my $h;
+        foreach $h ( keys(%{$HName{"roles"}}) ) {
+            my $hSite=$HName{"site"}->{$h};
+            if ( $hSite eq $site ) {
+                my $role=$HName{"roles"}->{$h};
+                if ( $role =~ /:standby/ ) {
+                    $standby++;
+                }
+            }
+        }
+    }
+    return $standby;
+}
+
+sub get_HANA_nodes($$)
+{
+    my $sid=shift;
+    my $site=shift;
+    my @nodes;
+    if ( $newAttributeModel == 1 ) {
+        my $h;
+        foreach $h ( keys(%{$HName{"site"}}) ) {
+            my $hSite=$HName{"site"}->{$h};
+            if ( $hSite eq $site ) {
+                push (@nodes, $h);
+            }
+        } 
+    }
+    return @nodes;
+}
+
 sub check_node_status($$$)
 {
     my $sid=shift;
@@ -439,7 +480,6 @@ sub check_lpa_status($$$)
     }
 
 #printf "check_lpa_status: TEST lpa_node1=$lpa_node1 lpa_node2=$lpa_node2\n";
-
     my $lpa_delta=abs($lpa_node1 - $lpa_node2);
     my $lpa_wait=($lpaGAP - $lpa_delta);
 
@@ -478,6 +518,7 @@ sub check_all_ok($$)
          $failed .= " #N=$result"; 
     }
     $result=get_hana_sync_state($sid);
+#printf "get_hana_sync_state($sid): %s\n", get_hana_sync_state($sid);
     if ( $result ne "SOK" ) {
          $rc++;  
          $failed .= " sync=$result ";
