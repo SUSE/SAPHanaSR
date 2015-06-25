@@ -8,7 +8,7 @@
 ##############################################################################
 #
 # SAPHana
-# Author:       Fabian Herschel, November 2015
+# Author:       Fabian Herschel, June 2015
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2015 SUSE Linux GmbH
