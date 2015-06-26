@@ -16,7 +16,7 @@
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
 #               (c) 2015 SUSE Linux GmbH
 #
-# An example usage: 
+# An example usage:
 #      See usage() function below for more details...
 #
 # OCF instance parameters:
@@ -41,7 +41,6 @@ HANA_STATE_STANDALONE=2
 HANA_STATE_DEFECT=3
 
 debug_attributes=0
-
 SH=/bin/sh
 
 #
@@ -57,7 +56,7 @@ function super_ocf_log() {
     local shf="${SAPHanaFilter:-all}"
     #ocf_log "info" "super_ocf_log: f:$shf l:$level m:$message"
     # message levels: (dbg)|info|warn|err|error
-    # 
+    #
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC
     case "$level" in
         dbg | debug | warn | err | error ) skip=0
@@ -65,7 +64,7 @@ function super_ocf_log() {
         info )
         case "$shf" in
             all) skip=0
-            ;;          
+            ;;
             none )
                 skip=1
                 ;;
@@ -74,13 +73,13 @@ function super_ocf_log() {
                 mtype=${mtype#fh}
                 echo "$shf"|  grep -iq ${mtype}; search=$?
                 if [ $search -eq 0 ]; then
-                     skip=0  
+                     skip=0
                 else
                     skip=1
                 fi
             ;;
         esac
-        ;;    
+        ;;
     esac
     if [ $skip -eq 0 ]; then
         ocf_log "$level" "$message"
@@ -126,15 +125,15 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.149.6</version>
+    <version>0.149.7</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
         In addition it starts and monitors the local saphostagent.
 
-1. Interface to monitor a HANA system: landscapeHostConfiguration.py 
+1. Interface to monitor a HANA system: landscapeHostConfiguration.py
 landscapeHostConfiguration.py has some detailed output about HANA system status
-and node roles. For our monitor the overall status is relevant. This overall 
+and node roles. For our monitor the overall status is relevant. This overall
 status is reported by the returncode of the script:
 0: Internal Fatal
 1: ERROR
@@ -150,7 +149,7 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
    system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
 
 3. saphostctrl
-   The interface saphostctrl uses the function ListInstances to figure out the virtual host name of the 
+   The interface saphostctrl uses the function ListInstances to figure out the virtual host name of the
    SAP HANA instance. This is the hostname used during the HANA installation.
     </longdesc>
 <parameters>
@@ -172,13 +171,8 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
         <content type="string" default="" />
     </parameter>
     <parameter name="SAPHanaFilter" unique="0" required="0">
-        <shortdesc lang="en">Define type of SAPHanaTopology RA messages to be printed</shortdesc>
-        <longdesc lang="en">Define type of SAPHanaTopology RA messages to be printed. 
-Define SAPHana resource agent messages to be printed.
-        This parameter should only be set if requested by support. The default is sufficient for normal operation.
-        Values: ra-act-lpa-dec-flow
-        You could specify any combination of the above values like "ra-act-flow"
-        </longdesc>
+        <shortdesc lang="en">OUTDATED</shortdesc>
+        <longdesc lang="en">OUTDATED</longdesc>
         <content type="string" default="" />
     </parameter>
 </parameters>
@@ -197,7 +191,7 @@ return $rc
 }
 
 #
-# function: get_hana_attribute 
+# function: get_hana_attribute
 # params:   NODE ATTR [STORE]
 # globals:  -
 #
@@ -208,16 +202,19 @@ function get_hana_attribute()
     local attr_node=$1
     local attr_name=$2
     local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
-    local attr_val=""
-    attr_val=$(crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q); rc=$?
-    if [ $debug_attributes -eq 1 ]; then
-        dstr=$(date)
-        echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q --> $attr_val" >> /var/log/fhATTRIBUTE
-    fi
-    echo "$attr_val"
-    if [ $rc -ne 0 ]; then
-           super_ocf_log debug "DBG: ATTRIBUTE-FAILURE: crm_attribute -N $attr_node -G -n "$attr_name" -l $attr_store -q"
-    fi
+    local attr_default=${4:-}
+    local dstr
+    dstr=$(date)
+    case "$attr_store" in
+        reboot | forever )
+            echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> /var/log/fhATTRIBUTE
+            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>/var/log/fhATTRIBUTE; rc=$?
+            ;;
+        props )
+            echo "$dstr: SAPHanaTopology: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> /var/log/fhATTRIBUTE
+            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>/var/log/fhATTRIBUTE; rc=$?
+            ;;
+    esac
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
 }
@@ -234,19 +231,24 @@ function set_hana_attribute()
     local attr_value=$2
     local attr_name=$3
     local attr_store=${4:-reboot} # DONE: PRIO5 get this (optional) from parameter
+    local attr_default=${5:-}
     local rc=1
-    local attr_old
-    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store); get_rc=$?
+    local attr_old=""
+    local dstr
+    dstr=$(date)
+    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store $attr_default); get_rc=$?
     if [ "$attr_old" != "$attr_value" ]; then
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
-        if [ $debug_attributes -eq 1 ]; then
-            dstr=$(date)
-            echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> /var/log/fhATTRIBUTE
-        fi
-        crm_attribute -N $attr_node -v "$attr_value" -n "$attr_name" -l $attr_store; rc=$?
-        if [ $rc -ne 0 ]; then
-           super_ocf_log debug "DBG: ATTRIBUTE-FAILURE: crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store"
-        fi
+        case "$attr_store" in
+            reboot | forever )
+                echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> /var/log/fhATTRIBUTE
+                crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store 2>>/var/log/fhATTRIBUTE; rc=$?
+                ;;
+            props )
+                echo "$dstr: SAPHanaTopology: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> /var/log/fhATTRIBUTE
+                crm_attribute -v $attr_value -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>/var/log/fhATTRIBUTE; rc=$?
+                ;;
+        esac
     else
         super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_node} still be ${attr_value}"
         rc=0
@@ -299,7 +301,7 @@ function is_clone() {
        #
        # yes it is a clone config - check, if its configured well
        #
-        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] ; then 
+        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] ; then
                 super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1)"
                 exit $OCF_ERR_CONFIGURED
         fi
@@ -314,8 +316,8 @@ function is_clone() {
 #
 # function: sht_init - initialize variables for the resource agent
 # params:   -
-# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), 
-# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w) 
+# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
+# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w)
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
 # sht_init : Define global variables with default values, if optional parameters are not set
@@ -327,6 +329,8 @@ function sht_init() {
     local myInstanceName=""
     local rc=$OCF_SUCCESS
     local hdbANSWER=""
+    local siteID
+    local siteNAME
     HOSTEXECNAME=saphostexec
     USRSAP=/usr/sap
     SAPSERVICE_PATH=${USRSAP}/sapservices
@@ -340,10 +344,9 @@ function sht_init() {
     super_ocf_log debug "DBG2: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
-    SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-ra-act-dec-lpa}"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG3: OCF: $ocf_env"
-    ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")   # SOK, SFAIL, UNKNOWN?
+    ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UKNOWN?, DEMOTED, PROMOTED
     ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
@@ -352,8 +355,14 @@ function sht_init() {
     ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
-
+    #
+    # new "central" attributes
+    #
+    ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     # optional OCF parameters, we try to guess which directories are correct
+
+    SAPHanaFilter=$(get_hana_attribute "X" ${ATTR_NAME_HANA_FILTER[@]})
+
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
@@ -387,18 +396,31 @@ function sht_init() {
     # we need: mode=primary|sync|syncmem|...; site name=<site>; mapping/<me>=<site>/<node> (multiple lines)
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
        *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
-       *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;    
-       *cman*    ) nodelist=$(crm_node -l);; 
+       *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;
+       *cman*    ) nodelist=$(crm_node -l);;
     esac
     #### SAP-CALL
-    hdbANSWER=$(su - ${sidadm} -c "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
-    super_ocf_log debug "DBG2: hdbANSWER=\$\(su - ${sidadm} -c \"hdbnsutil -sr_state --sapcontrol=1\"\)"
-    site=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
+    # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
+    for i in  1 2 3 4 5 6 7 8 9; do
+        hdbANSWER=$(su - ${sidadm} -c "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
+        super_ocf_log debug "DBG2: hdbANSWER=\$\(su - ${sidadm} -c \"hdbnsutil -sr_state --sapcontrol=1\"\)"
+        srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+        case "$srmode" in
+            primary | syncmem | sync | async | none )
+              # we can leave the loop as we already got a result
+              break
+              ;;
+            * )
+              # lets pause a bit to give hdbnsutil a chance to answer next time
+              sleep 2
+              ;;
+        esac
+    done
+    # TODO PRIO3: Implement a file lookup, if we did not get a result
+    siteID=$(echo "$hdbANSWER" | awk -F= '/site id/ {print $2}')
+    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
+    site=$siteNAME
     srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
-    if [ $debug_attributes -eq 1 ]; then
-        dstr=$(date)
-        echo "$dstr: SAPHanaTopology: srmode=$srmode" >> /var/log/fhATTRIBUTE
-    fi
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 ~ "mapping" && $3 !~ site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
     #
@@ -413,12 +435,12 @@ function sht_init() {
                 echo $hanaVHost;
              fi;
           done;
-      done )
+          done )
     super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
-}  
+}
 
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
@@ -428,32 +450,30 @@ function sht_init() {
 function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
-   # DONE: Change stderr location!!
-   #sidadm=lnxadm
-   #node_status=$(check_for_primary_single) 
-   node_status=$srmode
-   super_ocf_log debug "DBG2: check_for_primary: node_status=$node_status"
-   super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
-   for i in  1 2 3 4 5 6 7 8 9; do
-       case "$node_status" in
-           primary ) 
+    node_status=$srmode
+    super_ocf_log debug "DBG2: check_for_primary: node_status=$node_status"
+    super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
+    for i in  1 2 3 4 5 6 7 8 9; do
+        case "$node_status" in
+           primary )
                   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
                   return $HANA_STATE_PRIMARY;;
            syncmem | sync | async )
                   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_SECONDARY"
                   return $HANA_STATE_SECONDARY;;
-           none )     # have seen that mode on second side BEFEORE we registered it as replica
+           none ) # have seen that mode on second side BEFEORE we registered it as replica
                   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_STANDALONE"
                   return $HANA_STATE_STANDALONE;;
            * )
-	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
-                  dump=$( echo $node_status | hexdump -C );
-	          super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
-                  #### SAP-CALL
-                  node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
-                  node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-                  super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
-                  # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+              # TODO: PRIO1: Should we set SFAIL?
+              # TODO: PRIO2: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+              dump=$( echo $node_status | hexdump -C );
+              super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP: <$dump>"
+              #### SAP-CALL
+              node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
+              node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+              super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
+              # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
    done
    super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_DEFECT"
@@ -464,7 +484,7 @@ function check_for_primary() {
 #
 # function: start_saphostagent
 # params:   -
-# globals:  
+# globals:  HOSTEXEC_PATH(r), HOSTEXEC_PROFILE_PATH(r)
 #
 function start_saphostagent()
 {
@@ -478,7 +498,7 @@ function start_saphostagent()
 #
 # function: stop_saphostagent
 # params:   -
-# globals: 
+# globals: HOSTEXEC_PATH(r)
 #
 function stop_saphostagent()
 {
@@ -496,6 +516,8 @@ function stop_saphostagent()
 function check_saphostagent()
 {
     local rc=1
+    # TODO: PRIO3: should the path been removed like "saphostexec" instead of "/usr/sap/hostctrl/exe/saphostexec"
+    #       or should we use ${HOSTEXEC_PATH} instead?
     pgrep -f /usr/sap/hostctrl/exe/saphostexec; rc=$?
     return $rc
 }
@@ -509,15 +531,16 @@ function check_saphostagent()
 # sht_start : Start the SAP HANA instance
 #
 function sht_start() {
-  
   super_ocf_log info "FLOW $FUNCNAME ($*)"
 
   local rc=$OCF_NOT_RUNNING
   local output=""
-  local loopcount=0  
+  local loopcount=0
 
-  mkdir -p /var/lib/SAPHana
-  touch /var/lib/SAPHana/SAPTopologyON
+  # TODO: PRIO3: move the string "$HA_RSCTMP/SAPHana/SAPTopologyON" to a variable
+  # TODO: PRIO3: move the file to the clusters tmp directory?
+  mkdir -p $HA_RSCTMP/SAPHana
+  touch $HA_RSCTMP/SAPHana/SAPTopologyON
   if ! check_saphostagent; then
      start_saphostagent
   fi
@@ -532,16 +555,16 @@ function sht_start() {
 # function: sht_stop - stop a hana instance
 # params:   -
 # globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
-# sht_stop: Stop the SAP instance
+# sht_stop: Stop the SAP HANA Topology Resource
 #
 function sht_stop() {
   super_ocf_log info "FLOW $FUNCNAME ($*)"
   local output=""
   local rc=0
 
-  rm /var/lib/SAPHana/SAPTopologyON
+  rm $HA_RSCTMP/SAPHana/SAPTopologyON
   rc=$OCF_SUCCESS
-  
+
   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
   return $rc
 }
@@ -557,13 +580,13 @@ function sht_monitor() {
   super_ocf_log info "FLOW $FUNCNAME ($*)"
   local rc=0
 
-  if [ -f /var/lib/SAPHana/SAPTopologyON ]; then
+  if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON ]; then
      rc=$OCF_SUCCESS
   else
      rc=$OCF_NOT_RUNNING
   fi
 
-  super_ocf_log info "FLOW $FUNCNAME rc=$rc" 
+  super_ocf_log info "FLOW $FUNCNAME rc=$rc"
   return $rc
 }
 
@@ -575,37 +598,37 @@ function sht_monitor() {
 # sht_status: Lightweight check of SAP instance only with OS tools
 #
 function sht_status() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
-  local rc=0
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    local rc=0
 
-  sht_monitor; rc=$?
-  return $rc
+    sht_monitor; rc=$?
+    return $rc
 }
 
 
 #
 # function: sht_validate - validation of (some) variables/parameters
 # params:   -
-# globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), 
-# sht_validate: Check the symantic of the input parameters 
+# globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r),
+# sht_validate: Check the symantic of the input parameters
 #
 function sht_validate() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
-  local rc=$OCF_SUCCESS
-  if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
-  then
-    super_ocf_log err "ACT: Parsing instance profile name: '$SID' is not a valid SID!"
-    rc=$OCF_ERR_ARGS
-  fi
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    local rc=$OCF_SUCCESS
+    if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
+    then
+        super_ocf_log err "ACT: Parsing instance profile name: '$SID' is not a valid SID!"
+        rc=$OCF_ERR_ARGS
+    fi
 
-  if [ $(echo "$InstanceNr" | grep -c '^[0-9][0-9]$') -ne 1 ]
-  then
-    super_ocf_log err "ACT: Parsing instance profile name: '$InstanceNr' is not a valid instance number!"
-    rc=$OCF_ERR_ARGS
-  fi
+    if [ $(echo "$InstanceNr" | grep -c '^[0-9][0-9]$') -ne 1 ]
+    then
+        super_ocf_log err "ACT: Parsing instance profile name: '$InstanceNr' is not a valid instance number!"
+        rc=$OCF_ERR_ARGS
+    fi
 
-  super_ocf_log info "FLOW $FUNCNAME rc=$rc"
-  return $rc
+    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    return $rc
 }
 
 #
@@ -661,15 +684,15 @@ function sht_monitor_clone() {
 
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG2: PROBE ONLY"
+        sht_monitor; rc=$?
 	else
 		super_ocf_log debug "DBG2: REGULAR MONITOR"
         if ! check_saphostagent; then
              start_saphostagent
         fi
-	fi
 	#
 	# First check, if we are PRIMARY or SECONDARY
-	# 
+	#
     super_ocf_log debug "DBG2: HANA SID $SID"
     super_ocf_log debug "DBG2: HANA InstanceName $InstanceName"
     super_ocf_log debug "DBG2: HANA InstanceNr $InstanceNr"
@@ -721,8 +744,8 @@ function sht_monitor_clone() {
         set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
     fi
     case "$hanaPrim" in
-       P ) ;;
-       S ) # only secondary may propargate its sync status
+        P ) ;;
+        S ) # only secondary may propargate its sync status
         case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
            *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
            *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;    
@@ -732,8 +755,10 @@ function sht_monitor_clone() {
         for n in ${nodelist}; do
            set_hana_attribute ${n} "$srmode" ${ATTR_NAME_HANA_SRMODE[@]}
         done
-          ;;
+        ;;
     esac
+    #
+    fi # end ocf_is_NOT_probe
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
 }
@@ -752,7 +777,7 @@ function sht_notify() {
 }
 
 #
-# function: main - main function to operate 
+# function: main - main function to operate
 # params:   ACTION
 # globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), DIR_EXECUTABLE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
 #
@@ -763,7 +788,7 @@ sidadm=""
 InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
-SAPHanaFilter="${OCF_RESKEY_SAPHanaFilter:-ra-act-dec-lpa}"
+SAPHanaFilter="ra-act-dec-lpa"
 NODENAME=$(crm_node -n)
 
 if [ $# -ne 1 ]
@@ -785,11 +810,11 @@ case "$ACTION" in
                     exit $OCF_SUCCESS;;
     notify)         sht_notify
                     exit $OCF_SUCCESS;;
-    admin-setup)   admin-setup
-                                 exit $OCF_SUCCESS;;  
+    admin-setup)    admin-setup
+                    exit $OCF_SUCCESS;;
     *);;
 esac
-sht_init 
+sht_init
 
 if ! ocf_is_root
 then
@@ -810,7 +835,6 @@ then
     exit $OCF_ERR_ARGS
 fi
 
-
 if is_clone
 then
     CLACT=_clone
@@ -830,12 +854,12 @@ case "$ACTION" in
         sht_$ACTION$CLACT
         ra_rc=$?
         ;;
-    validate-all) 
+    validate-all)
         sht_validate
         ra_rc=$?
         ;;
-    *)  # seams to be a unknown request 
-        sht_methods 
+    *)  # seams to be a unknown request
+        sht_methods
         ra_rc=$OCF_ERR_UNIMPLEMENTED
         ;;
 esac
