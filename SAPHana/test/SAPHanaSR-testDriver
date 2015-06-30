@@ -5,7 +5,7 @@
 # (c) 2015 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel
 # License: GPL v2+
-# Version: 0.11.2015.06.26.1
+# Version: 0.14.2015.06.29.1
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -21,6 +21,7 @@ use Sys::Hostname;
 use File::Path;
 #use Switch;
 use Getopt::Long;
+use lib '/usr/share/SAPHanaSR/tests';
 use SAPHanaSRTools;
 
 ###################################
@@ -42,7 +43,7 @@ my $varlib='/var/lib/SAPHanaTD';
 my $testfile='SAPHanaTD.status';
 my $testcount=0;
 my $testCase="all";
-my @testCaseSet = ("ksi2","kpi11","ksi11","kpi9","ksi9","ssi","spi","ssns","spns","rms","sps","sss");
+my @testCaseSet = ("cmp","ksi2","kpi11","ksi11","kpi9","ksi9","ssi","spi","ssns","spns","rms","sps","sss");
 my $standbyHanas=0;
 my $msl;
 my $first_test=1;
@@ -51,6 +52,7 @@ my $ino;
 my @primaryHanaList;
 my @secondaryHanaList;
 my $testName="";
+my %testCaseCount;
 
 my $result = GetOptions ("sid=s" => \$sid,
 	                      "ino=s" => \$ino,
@@ -207,70 +209,112 @@ sub run_test_stop_masterslave( $ $ )
     return 0;
 }
 
+sub run_test_cluster_maintenance_procedure( $ )
+{
+    my $testNr=shift;
+    # crm node maintenance fscs98; crm node maintenance fscs99; 
+    # for clN in fscs99 fscs98; do ssh $clN "hostname; rcopenais stop"; done; 
+    # sleep 60; 
+    # for clN in fscs98 fscs99; do ssh $clN "hostname; rcopenais start"; done; 
+    # sleep 60; 
+    # crm node ready fscs99; crm node ready fscs98
+    local $message;
+    $message="TEST Nodes: " + join (",", get_node_list());
+    mysyslog $priority, "%s", $message; 
+    return 0;
+}
+
 sub run_testCase($)
 {
     use Switch;
     my $testCase=shift;
+    my $tc=0;
+    my $message;
+    if ( defined $testCaseCount{$testCase} ) {
+       $testCaseCount{$testCase}++;
+    } else {
+       $testCaseCount{$testCase}=1;
+    }
+    $tc=$testCaseCount{$testCase};
     if (( $testCase == 1 ) || ( $testCase eq "kpi2" )) {
-            $testName = "Kill primary instances";
-            mysyslog $priority, "%s", "Testcase $testCase: Kill-2 primary SAP Hana instance. testnr=$testcount";
+            $testName = "Kill-2 primary instances";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_kill_hana($sid, $phost, $testcount, 2);
     } elsif (( $testCase == 2 ) || ( $testCase eq "ksi2" )) {
-            $testName = "Kill secondary instances";
-            mysyslog $priority, "%s", "Testcase $testCase: Kill-2 secondary SAP Hana instance. testnr=$testcount";
+            $testName = "Kill-2 secondary instances";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_kill_hana($sid, $shost, $testcount, 2);
     } elsif (( $testCase == 3 ) || ( $testCase eq "kpi11" )) {
-            $testName = "Kill secondary instances";
-            mysyslog $priority, "%s", "Testcase $testCase: Kill-11 primary SAP Hana instance. testnr=$testcount";
+            $testName = "Kill-11 primary instances";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_kill_hana($sid, $phost, $testcount, 11);
     } elsif (( $testCase == 4 ) || ( $testCase eq "ksi11" )) {
-            $testName = "Kill secondary instances";
-            mysyslog $priority, "%s", "Testcase $testCase: Kill-11 secondary SAP Hana instance. testnr=$testcount";
+            $testName = "Kill-11 secondary instances";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_kill_hana($sid, $shost, $testcount, 11);
     } elsif (( $testCase == 5 ) || ( $testCase eq "kpi9" )) {
-            $testName = "Kill secondary instances";
-            mysyslog $priority, "%s", "Testcase $testCase: Kill-9 primary SAP Hana instance. testnr=$testcount";
+            $testName = "Kill-9 primary instances";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_kill_hana($sid, $phost, $testcount, 9);
     } elsif (( $testCase == 6 ) || ( $testCase eq "ksi9" )) {
-            $testName = "Kill secondary instances";
-            mysyslog $priority, "%s", "Testcase $testCase: Kill-9 secondary SAP Hana instance. testnr=$testcount";
+            $testName = "Kill-9 secondary instances";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_kill_hana($sid, $shost, $testcount, 9);
     } elsif (( $testCase == 7 ) || ( $testCase eq "ssi" )) {
             $testName = "Stop secondary instance";
-            mysyslog $priority, "%s", "Testcase $testCase: Stop secondary SAP Hana instance. testnr=$testcount";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_stop_hana($sid, $shost, $testcount);
             $testActive=0;
     } elsif (( $testCase == 8 ) || ( $testCase eq "spi" )) {
             $testName = "Stop primary instance";
-            mysyslog $priority, "%s", "Testcase $testCase: Stop primary SAP Hana instance. testnr=$testcount";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_stop_hana($sid, $phost, $testcount);
             $testActive=0;
     } elsif (( $testCase == 9 ) || ( $testCase eq "ssns" )) {
             $testName = "Set secondary node standby";
-            mysyslog $priority, "%s", "Testcase $testCase: standby node with secondary SAP Hana instance. testnr=$testcount";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_standby_node($sid, $shost, $testcount);
             $testActive=0;
     } elsif (( $testCase == 10 ) || ( $testCase eq "spns" )) {
             $testName = "Set primary node standby";
-            mysyslog $priority, "%s", "Testcase $testCase: standby node with primary SAP Hana instance. testnr=$testcount";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_standby_node($sid, $phost, $testcount);
             $testActive=0;
     } elsif (( $testCase == 11 ) || ( $testCase eq "rms" )) {
             $testName = "Restart master/slave";
-            mysyslog $priority, "%s", "Testcase $testCase: stop and start master/slave";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_stop_masterslave($msl, $testcount);
     } elsif (( $testCase == 12 ) || ( $testCase eq "sps" )) {
             $testName = "Stop primary system";
-            mysyslog $priority, "%s", "Testcase $testCase: Primary: StopSystem. testnr=$testcount";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_stop_hana_system($sid, $phost, $testcount);
     } elsif (( $testCase == 13 ) || ( $testCase eq "sss" )) {
             $testName = "Stop secondary system";
-            mysyslog $priority, "%s", "Testcase $testCase: Secondary: StopSystem. testnr=$testcount";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
             run_test_stop_hana_system($sid, $shost, $testcount);
+    } elsif (( $testCase == 14 ) || ( $testCase eq "cmp" )) {
+            $testName = "Cluster maintenance procedure";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
+            run_test_cluster_maintenance_procedure($sid, $shost, $testcount);
     } else   {
             $testName = "NOP";
             $testActive=0;
-            mysyslog $priority, "%s", "Uncovered test case number";
+            $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
+            mysyslog $priority, "%s", $message;
     }
 }
 
