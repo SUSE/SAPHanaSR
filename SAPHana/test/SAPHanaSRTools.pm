@@ -5,7 +5,7 @@
 # (c) 2015 SUSE Linux GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.15.2015.06.10.1
+# Version: 0.16.2015.06.29.1
 #
 ##################################################################
 
@@ -26,7 +26,7 @@ use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 
     # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes);
+    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
 
@@ -97,6 +97,20 @@ sub get_node_status($)
     }
     close crm;
     return $result;
+}
+
+sub get_node_list()
+{
+    # crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}'
+    my @nodes;
+    open crm, "crm_node -l |";
+    while (<crm>) {
+        if ( /\S+\s+(\S+)\s+member$/ ) {
+            push (@nodes, $1);
+        }
+    }
+    close crm;
+    return @nodes;
 }
 
 #
