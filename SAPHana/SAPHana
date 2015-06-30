@@ -145,7 +145,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.149.11</version>
+<version>0.149.12</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -517,7 +517,7 @@ function get_crm_master()
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w), 
-# globals:  sr_name(w), remoteHost(w), otherNodes(w)
+# globals:  sr_name(w), remoteHost(w), otherNodes(w), rem_SR_name(w)
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
 # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w)
@@ -635,8 +635,12 @@ function saphana_init() {
     #  ATTR_NAME_HANA_SITE
     sr_name=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SITE[@]});
     sr_mode=$(get_hana_attribute "${NODENAME}" ${ATTR_NAME_HANA_SRMODE[@]})
+
     if [ -z "$sr_mode" ]; then
         sr_mode="sync"
+    fi
+    if [ -n "$remoteNode" ]; then
+        rem_SR_name=$(get_hana_attribute ${remoteNode} ${ATTR_NAME_HANA_SITE[@]});
     fi
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
@@ -849,9 +853,13 @@ function check_for_primary() {
 function analyze_hana_sync_statusSRS()
 {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
-    local rc=-1 srRc=0 all_nodes_other_side="" local n=""
-    FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py" 2>/dev/null); srRc=$?
-    super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py -> $srRc"
+    local rc=-1 srRc=0 all_nodes_other_side="" n="" siteParam=""
+    if [ -n "$rem_SR_name" ]; then
+       siteParam="--site=$rem_SR_name"
+    fi
+    FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
+    super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
+    super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
     #
     # TODO: PRIO2: Here we might also need to filter additional sites (if multi tier should be supported)
     #              And is the check for return code capable for chains?
