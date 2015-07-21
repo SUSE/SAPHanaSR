@@ -2,7 +2,7 @@
 # spec file for package SAPHanaSR
 #
 # Copyright (c) 2013-2014 SUSE LINUX Products GmbH, Nuernberg, Germany.
-# Copyright (c) 2014 SUSE LINUX GmbH, Nuernberg, Germany.
+# Copyright (c) 2014-2015 SUSE LINUX GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -21,8 +21,8 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.149
-Release:        0.<RELEASE7>
+Version:        0.151
+Release:        0.<RELEASE1>
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
 Source0:        SAPHana
