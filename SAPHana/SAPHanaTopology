@@ -125,7 +125,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>0.151.1</version>
+    <version>0.151.2</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
@@ -402,8 +402,11 @@ function sht_init() {
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
     for i in  1 2 3 4 5 6 7 8 9; do
+        # TODO: get rid of the su:
+        # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
+        # TODO: Limit the runtime of hdbnsutil. Use getParameter.py if we get no answer
         hdbANSWER=$(su - ${sidadm} -c "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
-        super_ocf_log debug "DBG2: hdbANSWER=\$\(su - ${sidadm} -c \"hdbnsutil -sr_state --sapcontrol=1\"\)"
+        super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
         srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
         case "$srmode" in
             primary | syncmem | sync | async | none )
@@ -421,7 +424,7 @@ function sht_init() {
     siteNAME=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
     site=$siteNAME
     srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
-    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 ~ "mapping" && $3 !~ site { print $4 }' site=$site)
+    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
     #
     # filter all non-cluster mappings
@@ -470,6 +473,10 @@ function check_for_primary() {
               dump=$( echo $node_status | hexdump -C );
               super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP: <$dump>"
               #### SAP-CALL
+        # TODO: get rid of the su:
+        # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
+        # TODO: Limit the runtime of hdbnsutil. If we fail use getParameter as fallback:
+        #SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh getParameter.py --key=global.ini/system_replication/mode --sapcontrol=1 
               node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
               node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
               super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
@@ -730,6 +737,9 @@ function sht_monitor_clone() {
     fi
     #site=$(get_site_name)
     #### SAP-CALL
+        # TODO: get rid of the su:
+        # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py -sr_state --sapcontrol=1  
+        # TODO: Limit the runtime of landscapeHostConfiguration.py
     hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
     #if [ -z "$MAPPING" ]; then

@@ -809,6 +809,10 @@ function cleanup_instance() {
 function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=$HANA_STATE_DEFECT
+    # TODO: Get rid of the su by using a new interface:
+    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1 
+    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+    # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
     node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
@@ -829,6 +833,10 @@ function check_for_primary() {
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
                dump=$( echo $node_status | hexdump -C );
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
+    # TODO: Get rid of the su by using a new interface:
+    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1 
+    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+    # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
                node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
                node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
@@ -857,6 +865,10 @@ function analyze_hana_sync_statusSRS()
     if [ -n "$rem_SR_name" ]; then
        siteParam="--site=$rem_SR_name"
     fi
+    # TODO: Get rid of the su by using a new interface:
+    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh systemReplicationStatus.py $siteParam 
+    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+    # TODO: Limit the runtime of systemReplicationStatus.py
     FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
     super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
@@ -992,6 +1004,10 @@ function get_hana_landscape_status()
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
     #
+    # TODO: Get rid of the su by using a new interface:
+    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py
+    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+    # TODO: Limit the runtime of landscapeHostConfiguration.py 
     su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
     return $rc;
 }
@@ -1017,6 +1033,10 @@ function register_hana_secondary()
        super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
        #
        #
+    # TODO: Get rid of the su by using a new interface:
+    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_register ...
+    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+    # TODO: Limit the runtime of hdbnsutil -sr_register ????
        su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
        # backup_global_and_nameserver
     else
@@ -2180,6 +2200,10 @@ function saphana_promote_clone() {
                 # lpa_set_lpt 20 $remoteNode
                 lpa_set_lpt $LPTloc
                 lpa_push_lpt $LPTloc
+    # TODO: Get rid of the su by using a new interface:
+    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_takeover ...
+    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+    # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
                 su - $sidadm -c "hdbnsutil -sr_takeover"
                 #
                 # now gain check, if we are primary NOW
