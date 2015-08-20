@@ -145,7 +145,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.151.1</version>
+<version>0.151.3</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -1238,7 +1238,7 @@ function saphana_start_primary()
                 2 | 3 | 4 ) # as landcape says we are up - just set the scores and return code
                     super_ocf_log info "LPA: landcape: UP, LPA: start ==> keep running"
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc
+                    lpa_set_lpt $LPTloc $NODENAME
                     rc=$OCF_SUCCESS
                     ;;
                 1 ) # landcape says we are down, lets start and adjust scores and return code
@@ -1246,7 +1246,7 @@ function saphana_start_primary()
                     saphana_start
                     rc=$?
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc
+                    lpa_set_lpt $LPTloc $NODENAME
                     ;;
             esac
             scoring_crm_master "$my_role" "$my_sync"
@@ -1270,11 +1270,11 @@ function saphana_start_primary()
                         if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
                             super_ocf_log info "ACT: Register successful"
                             lpa_push_lpt 10
-                            lpa_set_lpt  10
+                            lpa_set_lpt  10 $NODENAME
                             set_crm_master  0
                             saphana_start_secondary
                             rc=$?
-                            lpa_set_lpt  10
+                            lpa_set_lpt  10 $NODENAME
                         else
                             super_ocf_log err "ACT: Register failed"
                             rc=$OCF_NOT_RUNNING
@@ -1398,7 +1398,7 @@ function saphana_start_secondary()
     ####### LPA - begin
     #
     lpa_push_lpt 10
-    lpa_set_lpt  10
+    lpa_set_lpt  10 $NODENAME
     #
     ####### LPA - end
     #
@@ -1424,7 +1424,7 @@ function saphana_start_secondary()
                rc=$OCF_SUCCESS
            fi
        else
-           lpa_set_lpt  10
+           lpa_set_lpt  10 $NODENAME
        fi
     else
        super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
@@ -1531,13 +1531,17 @@ function lpa_set_lpt() {
     local crm_rc=1
     local lpt=$1
     local clpt=-1
-    local node=${2:-${NODENAME}}
+    local node=$2
     set_hana_attribute ${node} "$lpt" ${LPA_ATTR[@]}; crm_rc=$?
-    clpt=$(lpa_get_lpt $NODENAME)
-    if [ "$lpt" != "$clpt" ]; then
-        rc=2
+    if [ -n "$node" ]; then
+        clpt=$(lpa_get_lpt $NODENAME)
+        if [ "$lpt" != "$clpt" ]; then
+            rc=2
+        else
+            rc=0
+        fi
     else
-        rc=0
+        super_ocf_log info "DEC: lpa_set_lpt ignore to change value for empty node name"
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
@@ -1628,7 +1632,7 @@ function lpa_init_lpt() {
         else
             rc=2
         fi
-    lpa_set_lpt $LPTloc
+    lpa_set_lpt $LPTloc $NODENAME
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
 }
@@ -1686,7 +1690,7 @@ function lpa_check_lpt_status() {
         if [ -z "$LPTloc" -o "$LPTloc" -eq -1 -o "$lparc" -ne 0 ]; then
             # last option - try to initialize as PRIMARY
             lpa_push_lpt 20
-            lpa_set_lpt  20
+            lpa_set_lpt  20 $NODENAME
             LPTloc=20                           # DEFAULT
         fi
     fi
@@ -1762,7 +1766,7 @@ function saphana_start_clone() {
         if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
             saphana_start_primary; rc=$?
         else
-            lpa_set_lpt  10
+            lpa_set_lpt  10 $NODENAME
             saphana_start_secondary; rc=$?
         fi
     fi
@@ -1783,7 +1787,7 @@ function saphana_stop_clone() {
     set_hana_attribute ${NODENAME} "UNDEFINED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
     check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
-        lpa_set_lpt  10
+        lpa_set_lpt  10 $NODENAME
     fi
     saphana_stop; rc=$?
     return $rc
@@ -1833,7 +1837,7 @@ function saphana_monitor_primary()
                     # seems admin already decided that for us? -> we are running - set DEMOTED
                     promoted=0;
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc
+                    lpa_set_lpt $LPTloc $NODENAME
                 fi
                 lpa_check_lpt_status; lparc=$?
                 # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
@@ -1901,7 +1905,7 @@ function saphana_monitor_primary()
                                  super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
                                  set_crm_master 5
                                  if check_for_primary_master; then
-                                     lpa_set_lpt 20
+                                     lpa_set_lpt 20 $NODENAME
                                  fi
                                  ;;
                             SFAIL )
@@ -1936,7 +1940,7 @@ function saphana_monitor_primary()
                 rc=$OCF_SUCCESS
             else
                 LPTloc=$(date '+%s')
-                lpa_set_lpt $LPTloc
+                lpa_set_lpt $LPTloc $NODENAME
                 lpa_push_lpt $LPTloc
                 if [ "$promoted" -eq 1 ]; then
                     set_hana_attribute "$NODENAME" "PRIM" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
@@ -1970,7 +1974,7 @@ function saphana_monitor_primary()
                            lpa_check_lpt_status; again_lpa_rc=$?
                            if [ $again_lpa_rc -eq 2 ]; then
                               super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa stalemate ==> local restart"                            
-                              lpa_set_lpt 10
+                              lpa_set_lpt 10 $NODENAME
                               lpa_push_lpt 10
                               rc=$OCF_NOT_RUNNING
                            fi
@@ -2013,7 +2017,7 @@ function saphana_monitor_secondary()
     # OK, we are running as HANA SECONDARY
     #
     if ! lpa_get_lpt ${NODENAME}; then
-        lpa_set_lpt  10
+        lpa_set_lpt  10 $NODENAME
         lpa_push_lpt 10
     fi
     promote_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_CLONE_STATE[@]})
@@ -2062,16 +2066,16 @@ function saphana_monitor_secondary()
         0 ) # FATAL
             # DONE: PRIO1: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
-            lpa_set_lpt  10
+            lpa_set_lpt  10 $NODENAME
             rc=$OCF_ERR_GENERIC
             ;;
         1 ) # ERROR
-            lpa_set_lpt  10
+            lpa_set_lpt  10 $NODENAME
             rc=$OCF_NOT_RUNNING
             ;;
         2 | 3 | 4 ) # WARN INFO OK
             rc=$OCF_SUCCESS
-            lpa_set_lpt  30
+            lpa_set_lpt  30 $NODENAME
             sync_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
             super_ocf_log debug "DBG: sync_attr=$sync_attr"
             case "$sync_attr" in
@@ -2198,7 +2202,7 @@ function saphana_promote_clone() {
                 super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
                 LPTloc=$(date '+%s')
                 # lpa_set_lpt 20 $remoteNode
-                lpa_set_lpt $LPTloc
+                lpa_set_lpt $LPTloc $NODENAME
                 lpa_push_lpt $LPTloc
     # TODO: Get rid of the su by using a new interface:
     # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_takeover ...
