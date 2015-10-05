@@ -35,6 +35,7 @@
 #######################################################################
 #
 # Initialization:
+SAPHanaTopologyVersion="0.152.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -145,7 +146,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>0.151.3</version>
+<version>$SAPHanaTopologyVersion</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -1754,21 +1755,13 @@ function saphana_start_clone() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
 	local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local sqlrc;
-    local chkusr;
-    # TODO: PRIO4: remove check_secstore_users later
-    secUser=$(check_secstore_users SAPHANA${SID}SR SLEHALOC RHELHALOC) ; chkusr=$?
-    if [ $chkusr -ne 0 ]; then
-        super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
-        rc=$OCF_ERR_CONFIGURED
+    set_hana_attribute ${NODENAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+    check_for_primary; primary_status=$?
+    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+        saphana_start_primary; rc=$?
     else
-        set_hana_attribute ${NODENAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
-        check_for_primary; primary_status=$?
-        if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-            saphana_start_primary; rc=$?
-        else
-            lpa_set_lpt  10 $NODENAME
-            saphana_start_secondary; rc=$?
-        fi
+        lpa_set_lpt  10 $NODENAME
+        saphana_start_secondary; rc=$?
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
@@ -2334,8 +2327,7 @@ else
 fi
 
 # What kind of method was invoked?
-THE_VERSION=$(saphana_meta_data | grep '<version')
-super_ocf_log info "RA ==== begin action $ACTION$CLACT ($THE_VERSION) ===="
+super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
 ra_rc=$OCF_ERR_UNIMPLEMENTED
 case "$ACTION" in
     start|stop|monitor|promote|demote) # Standard controling actions
@@ -2358,5 +2350,5 @@ esac
 timeE=$(date '+%s')
 (( timeR = timeE - timeB ))
 #super_ocf_log info "RA ==== SAPHanaFilter=$SAPHanaFilter"
-super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($THE_VERSION) (${timeR}s)===="
+super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
 exit ${ra_rc}
