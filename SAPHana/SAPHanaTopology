@@ -315,12 +315,69 @@ function is_clone() {
 }
 
 #
+# function: HANA_CALL
+# params:   timeout-in-seconds cmd-line
+# globals:  sid(r), SID(r), InstanceName(r)
+#
+function HANA_CALL()
+{
+    #
+    # TODO: PRIO 5: remove 'su - ${sidadm} later, when SAP HANA resoled issue with 
+    #       root-user-called hdbnsutil -sr_state (which creates root-owned shared memory file in /var/lib/hdb/SID/shmgrp)
+    # TODO: PRIO 5: Maybe make "su" optional by a parameter
+    local timeOut=0
+    local onTimeOut=""
+    local rc=0
+    local use_su=1 # Default to be changed later (see TODO above)
+    local pre_cmd=""
+    local pre_script=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --timeout ) timeOut=$2; shift;;
+            --use-su  ) use_su=1;;
+            --on-timeout ) onTimeOut="$2"; shift;;
+        esac
+        shift
+    done
+    
+    if [ $use_su -eq 1 ]; then
+        pre_cmd="su - ${sid}adm -c"
+        pre_script="true"
+    else 
+        # as root user we need the library path to the SAP kernel to be able to call sapcontrol
+        # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
+        if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
+        then
+            MY_LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+        fi
+        pre_cmd="bash -c"
+        pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
+    fi
+    case $timeout in 
+        0 | inf )
+                  $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $*"; rc=$?
+                  ;;
+        *       )
+                  timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $*"; rc=$?
+                  #
+                  # on timeout ...
+                  #
+                  if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
+                      $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut";
+                  fi
+                  ;;
+    esac
+    return $rc;
+}
+
+#
 # function: sht_init - initialize variables for the resource agent
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
 # globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w)
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
+# globals:  NODENAME(w)
 # sht_init : Define global variables with default values, if optional parameters are not set
 #
 #
@@ -338,6 +395,7 @@ function sht_init() {
     SAPHOSTCTRL_PATH=${USRSAP}/hostctrl/exe
     HOSTEXEC_PATH=${SAPHOSTCTRL_PATH}/${HOSTEXECNAME}
     HOSTEXEC_PROFILE_PATH=${SAPHOSTCTRL_PATH}/host_profile
+    NODENAME=$(crm_node -n)
     SID=$OCF_RESKEY_SID
     InstanceNr=$OCF_RESKEY_InstanceNumber
     myInstanceName="${SID}_HDB${InstanceNr}"
@@ -383,13 +441,6 @@ function sht_init() {
         DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
     fi
 
-    # as root user we need the library path to the SAP kernel to be able to call sapcontrol
-    # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
-    if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
-    then
-        LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-        export LD_LIBRARY_PATH
-    fi
 
     PATH=${PATH}:${DIR_EXECUTABLE}
     #
@@ -402,11 +453,13 @@ function sht_init() {
     esac
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
-    for i in  1 2 3 4 5 6 7 8 9; do
+    for i in  1 2 3; do
         # TODO: get rid of the su:
         # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
-        # TODO: Limit the runtime of hdbnsutil. Use getParameter.py if we get no answer
-        hdbANSWER=$(su - ${sidadm} -c "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
+        # DONE: Limit the runtime of hdbnsutil. 
+        # TODO: Use getParameter.py if we get no answer
+        # SAP_CALL
+        hdbANSWER=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
         super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
         srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
         case "$srmode" in
@@ -419,6 +472,7 @@ function sht_init() {
               sleep 2
               ;;
         esac
+        sleep 20
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
     siteID=$(echo "$hdbANSWER" | awk -F= '/site id/ {print $2}')
@@ -474,11 +528,14 @@ function check_for_primary() {
               dump=$( echo $node_status | hexdump -C );
               super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP: <$dump>"
               #### SAP-CALL
-        # TODO: get rid of the su:
-        # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
-        # TODO: Limit the runtime of hdbnsutil. If we fail use getParameter as fallback:
-        #SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh getParameter.py --key=global.ini/system_replication/mode --sapcontrol=1 
-              node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
+              # TODO: get rid of the su:
+              # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
+              # DONE: Limit the runtime of hdbnsutil. 
+              # TODO: If we fail use getParameter as fallback:
+              #SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh getParameter.py --key=global.ini/system_replication/mode --sapcontrol=1 
+              # SAP_CALL
+              # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
+              node_full_status=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state" 2>/dev/null )
               node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
               super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
               # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
@@ -741,7 +798,9 @@ function sht_monitor_clone() {
         # TODO: get rid of the su:
         # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py -sr_state --sapcontrol=1  
         # TODO: Limit the runtime of landscapeHostConfiguration.py
-    hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
+    # SAP_CALL
+    #hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
+    hanaANSWER=$(HANA_CALL --timeout 60 "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
     #if [ -z "$MAPPING" ]; then
     #   super_ocf_log info "ACT: Did not find remote Host at this moment"
@@ -800,7 +859,6 @@ InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
 SAPHanaFilter="ra-act-dec-lpa"
-NODENAME=$(crm_node -n)
 
 if [ $# -ne 1 ]
 then
