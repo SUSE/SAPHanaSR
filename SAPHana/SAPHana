@@ -29,13 +29,13 @@
 #   OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
-#   OCF_RESKEY_SAPHanaFilter    (optional, should only be set if been told by support or for debugging purposes)
+#   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
 #
 #
 #######################################################################
 #
 # Initialization:
-SAPHanaTopologyVersion="0.152.1"
+SAPHanaVersion="0.152.2"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -146,7 +146,7 @@ function saphana_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana">
-<version>$SAPHanaTopologyVersion</version>
+<version>$SAPHanaVersion</version>
 
 <shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -630,6 +630,11 @@ function saphana_init() {
     ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
+    #
+    # new "central" attributes
+    #
+    ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
+    SAPHanaFilter=$(get_hana_attribute "X" ${ATTR_NAME_HANA_FILTER[@]})
     #
     # TODO: PRIO4: Table for non-preferred-site-takeover
     #
@@ -2406,7 +2411,7 @@ else
 fi
 
 # What kind of method was invoked?
-super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
+super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaVersion) ===="
 ra_rc=$OCF_ERR_UNIMPLEMENTED
 case "$ACTION" in
     start|stop|monitor|promote|demote) # Standard controling actions
@@ -2429,5 +2434,5 @@ esac
 timeE=$(date '+%s')
 (( timeR = timeE - timeB ))
 #super_ocf_log info "RA ==== SAPHanaFilter=$SAPHanaFilter"
-super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
+super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaVersion) (${timeR}s)===="
 exit ${ra_rc}
