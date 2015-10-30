@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.2"
+SAPHanaVersion="0.152.3"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -1298,13 +1298,16 @@ function saphana_start_primary()
         1)  # LPA says register!
             lpa_advice="register"
             ;;
-        2)  # LPA says wait for second LPT
+        2)  # LPA says wait for older LPA to expire
             lpa_advice="wait"
             ;;
-        3 | 4 ) # LPA says something is completely wrong - FAIL resource # TODO: PRIO1: RC3 for waiting remote side to report lss
+        3) # LPA says to wait for remote LPA to be reported/announced
+            lpa_advice="wait"
+            ;;
+        4) # LPA says something is completely wrong - FAIL resource # TODO: PRIO1: RC3 for waiting remote side to report lss
             lpa_advice="fail"
             ;;
-        * ) # LPA failed with an unkonown status - FAIL resource
+        *) # LPA failed with an unkonown status - FAIL resource
             lpa_advice="fail"
             ;;
     esac
@@ -1384,11 +1387,20 @@ function saphana_start_primary()
                     rc=$OCF_ERR_GENERIC
                     ;;
                 1 ) # we are down, so we should wait --> followup in next monitor
-                    super_ocf_log info "LPA: landcape: DOWN, LPA: wait ==> keep waiting"
-                    # TODO: PRIO3: Check, if WAITING is correct here
-                    set_hana_attribute ${NODENAME} "WAITING4LPA" ${ATTR_NAME_HANA_CLONE_STATE[@]}
-                    set_crm_master -9000
-                    rc=$OCF_SUCCESS
+                    # DONE: PRIO3: Check, if WAITING is correct here
+                    if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                        super_ocf_log info "LPA: landcape: DOWN, LPA: wait ==> keep waiting"
+                        super_ocf_log info "RA: landcape: DOWN, LPA: wait ==> keep waiting"
+                        set_hana_attribute ${NODENAME} "WAITING4LPA" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+                        set_crm_master -9000
+                        rc=$OCF_SUCCESS
+                    else
+                        super_ocf_log info "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
+                        super_ocf_log info "RA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
+                        set_hana_attribute ${NODENAME} "WAITING4REG" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+                        set_crm_master -9000
+                        rc=$OCF_NOT_RUNNING
+                    fi
                     ;;
             esac
             ;;
@@ -1730,9 +1742,10 @@ function lpa_init_lpt() {
 #
 # Returncodes:
 #    0: start
-#    1: register than start
-#    2: wait4gab
-#    3: wait4other
+#    1: register    (then start)
+#    2: wait4gab    (WAIT4LPA - Older LPA needs to expire)
+#    3: wait4other  (WAIT4LPA - Remote LPA needs to be announced)
+#    4: lpa internal error
 #
 # Initializing (if NO local LPT-file):
 #    SECONDARY sets to 10
@@ -1757,7 +1770,7 @@ function lpa_init_lpt() {
 #
 function lpa_check_lpt_status() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
-    local rc=0
+    local rc=4
     local LPTloc=-1
     local LPTrem=-1
     local LPTMark=1000
@@ -1779,12 +1792,12 @@ function lpa_check_lpt_status() {
             LPTloc=20                           # DEFAULT
         fi
     fi
-            # TODO PRIO1: REMOVE remoteNode dependency - lpa_get_lpt
+    # TODO PRIO1: REMOVE remoteNode dependency - lpa_get_lpt
     LPTrem=$(lpa_get_lpt $remoteNode); lparc=$?
     if [ $lparc -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
         super_ocf_log debug "DBG: LPA: LPTloc=$LPTloc, LPTrem undefined ==> WAIT"
-        rc=2
+        rc=3
     else
         super_ocf_log debug "DBG: LPA: LPTloc ($LPTloc) LPTrem ($LPTrem) delta ($delta)"
         if [ $LPTloc -lt $LPTMark -a $LPTrem -lt $LPTMark ]; then
@@ -1917,23 +1930,39 @@ function saphana_monitor_primary()
                     lpa_set_lpt $LPTloc $NODENAME
                 fi
                 lpa_check_lpt_status; lparc=$?
-                # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
-                if [ $lparc -lt 2 ]; then
-                    # lpa - no need to wait any longer - lets try a new start
-                    saphana_start_clone
-                    rc=$?
-                    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
-                    return $rc
-                else
-                    lpa_init_lpt $HANA_STATE_PRIMARY
-                    # still waiting for second site to report lpa-lpt
-                    if ocf_is_true "$AUTOMATED_REGISTER" ; then
-                       super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
-                    else
-                       super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
-                    fi
-                    return $OCF_SUCCESS
-                fi
+                # DONE: PRIO1: Need to differ lpa_check_lpt_status return codes
+                case "$lparc" in 
+                   0 | 1 ) 
+                        # lpa - no need to wait any longer - lets try a new start
+                        saphana_start_clone
+                        rc=$?
+                        super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+                        return $rc
+                        ;;
+                    2 ) 
+                        lpa_init_lpt $HANA_STATE_PRIMARY
+                        # still waiting for second site to expire
+                        if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                           super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+                        else
+                           super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
+                           super_ocf_log info "LPA: You need to manually sr_register the older primary"
+                        fi
+                        return $OCF_SUCCESS
+                    ;;
+                    3 )
+                        lpa_init_lpt $HANA_STATE_PRIMARY
+                        # still waiting for second site to report lpa-lpt
+                        super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+                        return $OCF_SUCCESS
+                    ;;
+                    4 )
+                        # lpa internal error
+                        # TODO PRIO3: Impplement special handling for this issue - should we fail the ressource?
+                        super_ocf_log info "LPA: LPA reports an internal error"
+                        return $OCF_SUCCESS
+                    ;;
+                esac
                 promoted=0;
                 ;;
             UNDEFINED )
