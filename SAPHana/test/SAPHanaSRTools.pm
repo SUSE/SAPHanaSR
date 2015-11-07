@@ -21,18 +21,24 @@ use Switch;
 
 my $VERSION="1.0";
 my $newAttributeModel=0;
+my $cibFile="";
 
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 
     # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list);
+    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list set_cibFile);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
 
 sub set_new_attribute_model()
 {
     $newAttributeModel=1;
+}
+
+sub set_cibFile($)
+{
+    $cibFile=shift();
 }
 
 sub get_new_attribute_model()
@@ -58,6 +64,7 @@ sub get_nodes_online
     my $match="Ok:\s+([0-9])\s+nodes online";
     my $match="Ok:\s+([0-9]+)\s+nodes? online";
     my $match="Ok: ([0-9]+) ";
+    # TODO: What, if cibFile must be used ...
     open crm, "crm_mon -s |";
     while (<crm>) {
         if (/$match/) {
@@ -216,7 +223,11 @@ sub insertAttribute($$$$$$) {
 sub get_hana_attributes($)
 {
     my $sid = shift;
+if ( $cibFile eq "" ) {
 open CIB, "cibadmin -Ql |";
+} else  {
+   open CIB, "<$cibFile";
+}
 while (<CIB>) {
    chomp;
    my ($host, $name, $site, $value);
@@ -227,7 +238,7 @@ while (<CIB>) {
          $host=$2;
          if ( $_ =~ /value="([^"]+)"/ ) {
              $value=$1;
-#printf "insert $sid HOST $host $name $value\n";
+             # printf "insert $sid HOST $host $name $value\n";
              insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
          }
       } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
@@ -270,6 +281,7 @@ sub get_hana_sync_state($)
         $result = $GName{sync_state}->{"global"};
     } else  {
         my $h;
+printf "### FH02 ###\n";
         foreach $h ( keys(%{$HName{sync_state}}) ) {
             if ( $HName{sync_state}->{$h} =~ /(S.*)/ ) {
                $result=$1;
@@ -601,7 +613,7 @@ sub print_attr_host()
 	return 0;
 }
 
-sub print_host_attr()
+sub OLD_print_host_attr()
 {
     my ($AKey, $HKey, $len, $line_len, $hclen);
     $hclen=$HName{_hosts}->{_length};
@@ -627,6 +639,76 @@ sub print_host_attr()
 	   printf "\n";
 	}
 	return 0;
+}
+
+sub print_host_attr($$$$)
+{
+    my ($refH, $refN, $title, $sort) = @_;
+    my ($AKey, $HKey, $len, $line_len, $hclen);
+    $hclen=$$refN{_hosts}->{_length};
+    $line_len=$hclen+1;
+    printf "%-$hclen.${hclen}s ", "$title";
+    #
+    # headline
+    #
+    foreach $AKey (sort keys %$refN) {
+        if ($AKey ne "_hosts") {
+            $len = $$refN{$AKey}->{_length};
+            $line_len=$line_len+$len+1;
+            
+            if ( $AKey eq $sort ) {
+               printf "*%-$len.${len}s ", $$refN{$AKey}->{_title};
+            } else {
+               printf "%-$len.${len}s ", "$$refN{$AKey}->{_title}";
+            }
+        }
+    }
+    printf "\n";
+    printf "%s\n", "-" x $line_len ;
+    #
+    # object / name / value lines
+    #
+    if ( $sort eq "" ) {
+        foreach $HKey (sort keys %$refH) {
+            printf "%-$hclen.${hclen}s ", $HKey;
+            foreach $AKey (sort keys %$refN) {
+                if ($AKey ne "_hosts") {
+                    $len = $$refN{$AKey}->{_length};
+                    printf "%-$len.${len}s ", $$refH{$HKey} -> {$AKey};
+                }
+            }
+            printf "\n";
+        }    
+    } else {
+       # try to sort by site (other attrs to follow)
+       # first try to get a ordered list of attribute values assigned host names
+       my $sortV;
+       my %GroupedHosts;
+       foreach $HKey (sort keys %$refH) {
+           $sortV = $$refH{$HKey} -> {$sort};
+           push(@{$GroupedHosts{$sortV}}, $HKey);
+           #printf "TST: <%s>\n", $sortV;
+       }
+       # not ready so far only print the grouped hosts
+       foreach $sortV (sort keys %GroupedHosts) {
+           #my $StrHosts;
+           #$StrHosts=join(":", @{$GroupedHosts{$sortV}});
+           my $Host;
+           foreach $Host (@{$GroupedHosts{$sortV}}) {
+               printf "%-$hclen.${hclen}s ", $Host;
+               foreach $AKey (sort keys %$refN) {
+                if ($AKey ne "_hosts") {
+                    $len = $$refN{$AKey}->{_length};
+                    printf "%-$len.${len}s ", $$refH{$Host} -> {$AKey};
+                }
+            }
+            printf "\n";
+           }
+           #printf "TST: <%s> -> <%s>\n", $sortV, $StrHosts;
+       }
+    }
+    printf "\n";
+    return 0;
 }
 #
 ################ END CUT - MOVE THAT TO AN PERL-LIBRARY LATER

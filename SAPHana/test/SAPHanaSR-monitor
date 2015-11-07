@@ -5,7 +5,7 @@
 # (c) 2015 SUSE Linux GmbH, Nuremberg German
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.14.2015.05.07.2
+my $Version="0.15.2015.11.06.1";
 #
 ##################################################################
 
@@ -25,7 +25,7 @@ use SAPHanaSRTools;
 my $ClusterNodes=2;
 my $ClusterPrimaries=1;
 my $ClusterSecondaries=1;
-my %Name;
+#my %Name;
 my %Host;
 my $host = hostname();
 
@@ -34,22 +34,27 @@ my $testfile='SAPHanaTD.status';
 my $testcount=0;
 my $first_test=1;
 my $sid="";
-my $INr="";
-my $Format="html";
+my $ino="";
+my $Format="txt";
 my $Continuous="no";
 my $HtmlPage="/srv/www/hawk/public/herschel/index.html";
 my $Intervall=10;
+my $cibFile="";
 
 sub init() 
 {
 	my $result = GetOptions ("sid=s" => \$sid,
-	                      "ino=s" => \$INr,
+	                      "ino=s" => \$ino,
 	                      "format=s" => \$Format,
 	                      "cont=s" => \$Continuous,
                           "out=s" => \$HtmlPage,
+	                      "cib=s" => \$cibFile,
                           "intervall=s" => \$Intervall,
                           "nodes=s" => \$ClusterNodes,
 	);
+    if ( $cibFile ) {
+       set_cibFile($cibFile);
+    }
     return 0;
 }
 
@@ -176,9 +181,8 @@ $Colors{"gray"}="#B9B9B9";
 
 openlog $ident, $logopt, $facility; 
     
-( $sid, $INr ) = get_sid_and_InstNr();
+#( $sid, $ino ) = get_sid_and_InstNr();
 
-init();
 mysyslog $priority, "%s", "Monitor startup";
 
 sub processMonitor() {
@@ -204,13 +208,26 @@ sub processMonitor() {
     #  for the grafic output
     #
     my @node_list;
-    open CRM_NODES, "crm_node -l |";
-    while (<CRM_NODES>) {
-       if (/^[0-9]+\W+(\w+)\W/) {
-       push (@node_list, $1);
-       }
+    if ( $cibFile eq "" ) {
+        open CRM_NODES, "crm_node -l |";
+        while (<CRM_NODES>) {
+           if (/^[0-9]+\W+(\w+)\W/) {
+           push (@node_list, $1);
+           }
+        }
+        close CRM_NODES;
+    } else {
+        # TODO: For the "cold" cib case we need to check standby, maintenance and online status 
+        open CIB, "<$cibFile";
+        while (<CIB>) {
+           # <node id="gdepfhb2" uname="gdepfhb2">
+           if ( /<node .*uname="([^"]+)"/ ) {
+              push (@node_list, $1);
+           }
+        }
+        close CIB;
     }
-    close CRM_NODES;
+
     @node_list = ( sort (@node_list ));
 
 
@@ -305,10 +322,14 @@ sub processMonitor() {
     }
 }
   
-processMonitor;
+init();
+if ( ( $sid eq "" )  && ( $ino eq "" )) { 
+    ( $sid, $ino ) = get_sid_and_InstNr();
+}
+processMonitor();
 while ( $Continuous eq "yes" ) {
     sleep $Intervall;
-    processMonitor;
+    processMonitor();
 }
  
 closelog;
