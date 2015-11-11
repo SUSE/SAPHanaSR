@@ -28,7 +28,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.2.1"
+SAPHanaVersion="0.152.3.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -330,12 +330,15 @@ function HANA_CALL()
     local rc=0
     local use_su=1 # Default to be changed later (see TODO above)
     local pre_cmd=""
+    local cmd=""
     local pre_script=""
+    local output=""
     while [ $# -gt 0 ]; do
         case "$1" in
             --timeout ) timeOut=$2; shift;;
             --use-su  ) use_su=1;;
             --on-timeout ) onTimeOut="$2"; shift;;
+            --cmd ) shift; cmd="$*"; break;;
         esac
         shift
     done
@@ -355,10 +358,10 @@ function HANA_CALL()
     fi
     case $timeout in 
         0 | inf )
-                  $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $*"; rc=$?
+                  output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
         *       )
-                  timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $*"; rc=$?
+                  output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   #
                   # on timeout ...
                   #
@@ -367,6 +370,7 @@ function HANA_CALL()
                   fi
                   ;;
     esac
+    echo "$output"
     return $rc;
 }
 
@@ -540,6 +544,7 @@ function check_for_primary() {
               super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
               # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
+       sleep 2
    done
    super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_DEFECT"
    return $HANA_STATE_DEFECT
@@ -718,7 +723,7 @@ function sht_start_clone() {
 function sht_stop_clone() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
-	check_for_primary; primary_status=$?
+    check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         hanaPrim="P"
     elif [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
@@ -800,7 +805,7 @@ function sht_monitor_clone() {
         # TODO: Limit the runtime of landscapeHostConfiguration.py
     # SAP_CALL
     #hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
-    hanaANSWER=$(HANA_CALL --timeout 60 "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
+    hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
     #if [ -z "$MAPPING" ]; then
     #   super_ocf_log info "ACT: Did not find remote Host at this moment"
