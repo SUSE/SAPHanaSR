@@ -457,15 +457,26 @@ function sht_init() {
     esac
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
-    for i in  1 2 3; do
+    for i in  1 2 3 X; do # X as "fallback-method"
         # TODO: get rid of the su:
         # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
         # DONE: Limit the runtime of hdbnsutil. 
         # TODO: Use getParameter.py if we get no answer
         # SAP_CALL
-        hdbANSWER=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
-        super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
-        srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+        #hdbANSWER=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
+        #super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
+        #srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+        if [ $i = "X" ]; then
+            local gpKeys=""
+            gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
+            hdbANSWER=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+            srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+            super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
+        else
+            hdbANSWER=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
+            super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
+            srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+        fi
         case "$srmode" in
             primary | syncmem | sync | async | none )
               # we can leave the loop as we already got a result
@@ -476,11 +487,10 @@ function sht_init() {
               sleep 2
               ;;
         esac
-        sleep 20
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    siteID=$(echo "$hdbANSWER" | awk -F= '/site id/ {print $2}')
-    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
+    siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
+    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     site=$siteNAME
     srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
@@ -515,7 +525,7 @@ function check_for_primary() {
     node_status=$srmode
     super_ocf_log debug "DBG2: check_for_primary: node_status=$node_status"
     super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
-    for i in  1 2 3 4 5 6 7 8 9; do
+    for i in  X 1 2 3 X ; do # X for 'fall_back' using global.ini
         case "$node_status" in
            primary )
                   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
@@ -535,12 +545,22 @@ function check_for_primary() {
               # TODO: get rid of the su:
               # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
               # DONE: Limit the runtime of hdbnsutil. 
-              # TODO: If we fail use getParameter as fallback:
+              # DONE: If we fail use getParameter as fallback:
               #SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh getParameter.py --key=global.ini/system_replication/mode --sapcontrol=1 
               # SAP_CALL
               # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
-              node_full_status=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state" 2>/dev/null )
-              node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+              #node_full_status=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state" 2>/dev/null )
+              #node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+              if [ $i = "X" ]; then             
+                    local gpKeys=""
+		    gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
+		    node_full_status=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                    node_status=$(echo "$node_full_status" | awk -F= '$1=="^mode" {print $2}')
+                    super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - node_status=$node_status"
+              else
+                  node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
+                  node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+              fi
               super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
               # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
