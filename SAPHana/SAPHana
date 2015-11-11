@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.3"
+SAPHanaVersion="0.152.3.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -530,12 +530,15 @@ function HANA_CALL()
     local rc=0
     local use_su=1 # Default to be changed later (see TODO above)
     local pre_cmd=""
+    local cmd=""
     local pre_script=""
+    local output=""
     while [ $# -gt 0 ]; do
         case "$1" in
             --timeout ) timeOut=$2; shift;;
             --use-su  ) use_su=1;;
             --on-timeout ) onTimeOut="$2"; shift;;
+            --cmd ) shift; cmd="$*"; break;;
         esac
         shift
     done
@@ -555,10 +558,10 @@ function HANA_CALL()
     fi
     case $timeout in 
         0 | inf )
-                  $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $*"; rc=$?
+                  output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
         *       )
-                  timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $*"; rc=$?
+                  output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   #
                   # on timeout ...
                   #
@@ -567,6 +570,7 @@ function HANA_CALL()
                   fi
                   ;;
     esac
+    echo "$output"
     return $rc;
 }
 
@@ -879,7 +883,7 @@ function check_for_primary() {
     # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
     # SAP_CALL
     # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
-    node_full_status=$(HANA_CALL --timeout 60 hdbnsutil -sr_state 2>/dev/null )
+    node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
     node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
     super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
     # TODO: PRIO2: Maybe we need to use a fallback interface when hdbnsitil does not answer properly -> lookup in config files?
@@ -910,7 +914,7 @@ function check_for_primary() {
                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
-       sleep 20
+       sleep 2
     done
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
@@ -940,7 +944,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: Limit the runtime of systemReplicationStatus.py
     # SAP_CALL
     # FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
-    FULL_SR_STATUS=$(HANA_CALL --timeout 60 systemReplicationStatus.py 2>/dev/null); srRc=$?
+    FULL_SR_STATUS=$(HANA_CALL --timeout 60 --cmd "systemReplicationStatus.py" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
     super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
     #
@@ -1081,12 +1085,12 @@ function get_hana_landscape_status()
     # TODO: Limit the runtime of landscapeHostConfiguration.py 
     # SAP_CALL
     # su - $sidadm -c "python $DIR_EXECUTABLE/python_support/landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
-    HANA_CALL --timeout 60 landscapeHostConfiguration.py 1>/dev/null 2>/dev/null; rc=$?
+    HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
     if [ $rc -eq 124 ]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ? 
         # landscape timeout
         sleep 20
-        HANA_CALL --timeout 60 landscapeHostConfiguration.py 1>/dev/null 2>/dev/null; rc=$?
+        HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
         if [ $rc -eq 124 ]; then
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
@@ -1122,7 +1126,7 @@ function register_hana_secondary()
     # TODO: Limit the runtime of hdbnsutil -sr_register ????
     # SAP_CALL
     #   su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
-       HANA_CALL --timeout inf --use-su "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+       HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
        # backup_global_and_nameserver
     else
        super_ocf_log info "ACT: SAPHANA DROP REGISTER because AUTOMATED_REGISTER is set to FALSE"
@@ -2315,7 +2319,7 @@ function saphana_promote_clone() {
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
     # SAP_CALL
-                HANA_CALL --timeout inf --use-su "hdbnsutil -sr_takeover"
+                HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"
                 #
                 # now gain check, if we are primary NOW
                 #
