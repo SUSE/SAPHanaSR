@@ -218,9 +218,33 @@ sub run_test_cluster_maintenance_procedure( $ )
     # for clN in fscs98 fscs99; do ssh $clN "hostname; rcopenais start"; done; 
     # sleep 60; 
     # crm node ready fscs99; crm node ready fscs98
-    local $message;
-    $message="TEST Nodes: " + join (",", get_node_list());
-    mysyslog $priority, "%s", $message; 
+    my $message;
+    my @nodes = get_node_list();
+    my $node;
+    $message="TEST Nodes for maintenance: " . join(",", @nodes);
+    mysyslog $priority, "%s", $message;
+    mysyslog $priority, "TEST Set MAINTENANCE on all nodes","";
+    for $node ( @nodes ) {
+        mysyslog $priority, "TEST Set MAINTENANCE on %s","$node";
+        system ("crm node maintenance $node");
+    }
+    sleep (10);
+    mysyslog $priority, "TEST Stopping cluster on all nodes","";
+    for $node ( @nodes ) {
+        system("ssh $node \"/usr/sbin/rcopenais stop\"");
+    }
+    sleep (60);
+    mysyslog $priority, "TEST Starting cluster on all nodes","";
+    for $node ( reverse(@nodes) ) {
+        system("ssh $node \"/usr/sbin/rcopenais start\"");
+    }
+    sleep (60);
+    mysyslog $priority, "TEST Set READY on all nodes","";
+    for $node ( @nodes ) {
+        mysyslog $priority, "TEST Set READY on %s","$node";
+        system ("crm node ready $node");
+    }
+    sleep (10);
     return 0;
 }
 
@@ -309,7 +333,8 @@ sub run_testCase($)
             $testName = "Cluster maintenance procedure";
             $message="Run testcase $testCase - primary=$phost ($pSite) secondary=$shost ($sSite) test='$testName' count=$tc testnr=$testcount";
             mysyslog $priority, "%s", $message;
-            run_test_cluster_maintenance_procedure($sid, $shost, $testcount);
+            run_test_cluster_maintenance_procedure($testcount);
+            $testActive=0;
     } else   {
             $testName = "NOP";
             $testActive=0;
