@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.151
+Version:        0.152.beta
 Release:        0.<RELEASE1>
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -36,6 +36,9 @@ Source7:        90-SAPHanaSR.xml
 Source8:        ocf_suse_SAPHana.7
 Source9:        ocf_suse_SAPHanaTopology.7
 Source10:       SAPHanaSRTools.pm
+Source11:       SAPHanaSR-monitor
+Source12:       SAPHanaSR-showAttr
+Source13:       SAPHanaSR-testDriver
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
@@ -80,6 +83,9 @@ cp %{S:7} .
 cp %{S:8} .
 cp %{S:9} .
 cp %{S:10} .
+cp %{S:11} .
+cp %{S:12} .
+cp %{S:13} .
 gzip ocf_suse_SAPHana.7
 gzip ocf_suse_SAPHanaTopology.7
 
@@ -87,6 +93,7 @@ gzip ocf_suse_SAPHanaTopology.7
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
 
 %install
+mkdir -p %{buildroot}/usr/sbin
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/tests
@@ -99,6 +106,9 @@ install -m 0444 LICENSE         %{buildroot}/%{_docdir}/%{name}
 install -m 0444 README          %{buildroot}/%{_docdir}/%{name}
 install -m 0444 SAPHanaSR-Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
 install -m 0555 show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
+install -m 0555 SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
+install -m 0555 SAPHanaSR-monitor %{buildroot}/usr/sbin
+install -m 0555 SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0444 SAPHanaSRTools.pm %{buildroot}/usr/share/%{name}/tests
 install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
 install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
@@ -123,6 +133,8 @@ install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/README
 %doc %{_docdir}/%{name}/LICENSE
+/usr/sbin/SAPHanaSR-monitor
+/usr/sbin/SAPHanaSR-showAttr
 
 %files doc
 %defattr(-,root,root)
