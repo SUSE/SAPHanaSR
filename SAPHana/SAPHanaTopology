@@ -28,7 +28,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.4.1"
+SAPHanaVersion="0.152.4.2"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -472,13 +472,13 @@ function sht_init() {
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
                 hdbANSWER=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 hdbANSWER=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
                 super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
-                srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 ;;
         esac 
         case "$srmode" in
