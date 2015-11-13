@@ -1,38 +1,200 @@
 #!/usr/bin/perl
 #
-# get_all_lnx_attributes
-# (c) 2014 SUSE Linux Products GmbH, Nuremberg Germany 
-# (c) 2015 SUSE Linux GmbH, Nuremberg Germany 
+# 
+# (c) 2014 SUSE Linux Products GmbH, Nuremberg German
+# (c) 2015 SUSE Linux GmbH, Nuremberg German
 # Author: Fabian Herschel
 # License: GPL v2 
-# Version: 0.6.2015.05.07.1
+my $Version="0.7.2015.11.11.1";
 #
 ##################################################################
 
 use POSIX;
 use strict;
+use Sys::Syslog;
+use Sys::Hostname;
+use File::Path;
+use Switch;
 use Getopt::Long;
-
 use lib '/usr/share/SAPHanaSR/tests';
 use SAPHanaSRTools;
 
-my $SID;
+###################################
+## this part is not for scale out and currently NOT zero-config
+
+my $ClusterNodes=2;
+my $ClusterPrimaries=1;
+my $ClusterSecondaries=1;
+my %Name;
+my %Host;
+my $host = hostname();
+
+my $varlib='/var/lib/SAPHanaTD';
+my $testfile='SAPHanaTD.status';
+my $testcount=0;
+my $first_test=1;
 my $sid="";
-my $table_title = "Host \\ Attr";
+my $ino="";
+my $sortBy="";
+my $table_titleH = "Host";
+#my %Name;
+my %Host;
+my %Site;
+my %Global;
+my %HName;
+my %SName;
+my %GName;
+my $help;
+my $version;
+my $cibFile="";
 
 sub init()
 {
-	my $result = GetOptions ("sid=s" => \$SID,
+	my $result = GetOptions ("sid=s" => \$sid,
+	                      "ino=s" => \$ino,
+	                      "sort=s" => \$sortBy,
+	                      "cib=s" => \$cibFile,
+                          "version" => \$version,
+                          "help" => \$help,
 		 );
-    if ( ! defined ($SID) ) {
-       ($sid)=get_sid_and_InstNr();
-    } else {
-       $sid=tolower($SID)
-    }
+   return 0;
 }
 
 init();
-get_hana_attributes($sid);
 
+if ( $help ) {
+   printf "SAPHanaSR-showAttr [--sid=<SID>] [--ino=<InstNr>] [--sort=<SortBy>] [--cib=<OfflineCibFile>]\n";
+   printf "";
+
+   exit 0;
+}
+if ( $version ) {
+   printf "%s\n", $Version;
+   exit 0;
+}
+
+if ( $cibFile ne "" ) {
+   printf "Using cib file %s\n", $cibFile;
+}
+
+sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
+ my $a = shift;
+ my $b = shift;
+ return $a > $b ? $a : $b;
+}
+
+#sub print_attr_host()
+#{
+#    my ($HKey, $AKey);
+#	printf "%-22s", "Attribute \\ Host";
+#	foreach $HKey (sort keys %Host) {
+#	   printf "%-16s ", $HKey;
+#	}
+#	printf "\n";
+#
+#	printf "%s\n", "-" x 120 ;
+#
+#	foreach $AKey (sort keys %Name) {
+#	   printf "%-22s", $AKey;
+#	   foreach $HKey (sort keys %Host) {
+#		   printf "%-16.16s ", $Host{$HKey} -> {$AKey};
+#		}
+#
+#	   printf "\n";
+#	}
+#	return 0;
+#}
+
+open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
+while (<ListInstances>) {
+   # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+   chomp;
+   if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-/ ) {
+      $sid=tolower("$1");
+   }
+}
+close ListInstances;
+
+sub insertAttribute($$$$$) { 
+    my ($refHash, $refN, $object, $attribute, $value) = @_;
+    my $table_titleH="";
+    if ( $attribute =~ /hana_${sid}_(.*)/ ) {
+       $attribute =  $1;
+    }
+       #
+       # handle the hosts name and table-title
+       #
+       $$refHash{$object}->{$attribute}=${value};
+       if ( defined ($$refN{_hosts}->{_length})) {
+          $$refN{_hosts}->{_length} = max($$refN{_hosts}->{_length}, length($object ));
+       } else {
+          $$refN{_hosts}->{_length} = length($object );
+       }
+       $$refN{_hosts}->{_length} = max($$refN{_hosts}->{_length}, length( $table_titleH));
+       #
+       # now handle the attributes name and value
+       #
+       $$refN{$attribute}->{$object}=${value};
+       $$refN{$attribute}->{$object}=${value};
+       if ( defined ($$refN{$attribute}->{_length})) {
+          $$refN{$attribute}->{_length} = max($$refN{$attribute}->{_length}, length($value ));
+       } else {
+          $$refN{$attribute}->{_length} = length($value );
+       }
+       $$refN{$attribute}->{_title} = $attribute; 
+       $$refN{$attribute}->{_length} = max($$refN{$attribute}->{_length}, length( $$refN{$attribute}->{_title}));
+       # printf "%-8s %-20s %-30s\n", $1, $2, $3;
+}
+
+if ( $cibFile eq "" ) {
+    open CIB, "cibadmin -Ql |" or die "CIB could not be read from cluster";
+} else {
+    open CIB, "<$cibFile" or die "CIB file $cibFile not found or not able to read it";
+}
+while (<CIB>) {
+   chomp;
+   my ($host, $name, $site, $value);
+   if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
+      $name=$1;
+      if ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ ) {
+         # found attribute in nodes forever and reboot store
+         $host=$2;
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             # printf("HOST-ATTR: name=%s value=%s\n", $name, $value);
+             insertAttribute(\%Host, \%HName, $host, $name, $value);
+         }
+      } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
+         # found a site attribute
+         $site=$1;
+         if ( $name =~ /[a-zA-Z0-9\_\-]+_site_([a-zA-Z0-9\-]+)/ ) {
+            $name = $1;
+         }
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             insertAttribute(\%Site, \%SName, $site, $name, $value);
+         }
+      } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
+         # found a global attribute
+         $host="GLOBAL";
+         if ( $name =~ /([a-zA-Z0-9\_\-]+)_glob_([a-zA-Z0-9\_\-]+)/ ) {
+            $name = $2;
+         }
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             insertAttribute(\%Global, \%GName, "global", $name, $value);
+         }
+      }
+   }
+}
+close CIB;
+
+if ( ( $sid eq "" )  && ( $ino eq "" )) { 
+    ( $sid, $ino ) = get_sid_and_InstNr();
+}
+get_hana_attributes($sid);
 #print_attr_host;
-print_host_attr;
+#print_host_attr(\%Global, \%GName, "Global", "");
+#print_host_attr(\%Site,   \%SName, "Sites",  "");
+#print_host_attr(\%Host,   \%HName, "Hosts",  "site");
+print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy);
