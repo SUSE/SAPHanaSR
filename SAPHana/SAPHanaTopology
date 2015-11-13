@@ -378,7 +378,7 @@ function HANA_CALL()
 # function: sht_init - initialize variables for the resource agent
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
-# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w), remoteHost(w)
+# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w) 
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
 # globals:  NODENAME(w)
@@ -393,6 +393,7 @@ function sht_init() {
     local hdbANSWER=""
     local siteID
     local siteNAME
+    local chkMethod=""
     HOSTEXECNAME=saphostexec
     USRSAP=/usr/sap
     SAPSERVICE_PATH=${USRSAP}/sapservices
@@ -457,7 +458,7 @@ function sht_init() {
     esac
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
-    for i in  1 2 3 X; do # X as "fallback-method"
+    for chkMethod in  gP hU hU hU ; do 
         # TODO: get rid of the su:
         # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
         # DONE: Limit the runtime of hdbnsutil. 
@@ -466,17 +467,20 @@ function sht_init() {
         #hdbANSWER=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
         #super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
         #srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
-        if [ $i = "X" ]; then
-            local gpKeys=""
-            gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
-            hdbANSWER=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-            srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
-            super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
-        else
-            hdbANSWER=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
-            super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
-            srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
-        fi
+        case "$chkMethod" in
+            gP ) # call getParameter (gP)
+                local gpKeys=""
+                gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
+                hdbANSWER=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+                super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
+                ;;
+            hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
+                hdbANSWER=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
+                super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
+                srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+                ;;
+        esac 
         case "$srmode" in
             primary | syncmem | sync | async | none )
               # we can leave the loop as we already got a result
@@ -495,21 +499,38 @@ function sht_init() {
     srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
-    #
-    # filter all non-cluster mappings
-    #
-    # DONE: PRIO2: Need mapping between HANA HOSTS not cluster NODES
-    local hanaVHost
-    hanaRemoteHost=$(for n1 in $nodelist; do
-          hanaVHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
-          for n2 in $MAPPING; do
-             if [ "$hanaVHost" == "$n2" ]; then
-                echo $hanaVHost;
-             fi;
-          done;
-          done )
-    super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
-    super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    if [ -n "$MAPPING" ]; then 
+        # we have a mapping from HANA, lets use it
+        #
+        # filter all non-cluster mappings
+        #
+        local hanaVHost=""
+        local n1=""
+        hanaRemoteHost=""
+        for n1 in $nodelist; do
+              hanaVHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+              for n2 in $MAPPING; do
+                 if [ "$hanaVHost" == "$n2" ]; then
+                    hanaRemoteHost="$hanaVHost"
+                 fi;
+              done;
+        done 
+        super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+        super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    else 
+        # HANA DID NOT TOLD THE MAPPING, LETS TRY TO USE THE SITE ATTRIBUTES
+        local n1=""
+        local hanaSite=""
+        for n1 in $nodelist; do
+            # TODO: PRIO9 - For multi tier with more than 2 chain/star members IN the cluster we might need to be 
+            #       able to catch more than one reoteHost
+            if [ "$NODENAME" != "$n1" ]; then
+                hanaSite=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_SITE[@]})
+                hanaRemoteHost="$n1"
+            fi
+        done
+        super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"
+    fi
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
 }
@@ -518,56 +539,29 @@ function sht_init() {
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
 # globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r), HANA_STATE_STANDALONE(r)
+#           srmode(r)
 #
 function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
-    node_status=$srmode
-    super_ocf_log debug "DBG2: check_for_primary: node_status=$node_status"
-    super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
-    for i in  X 1 2 3 X ; do # X for 'fall_back' using global.ini
-        case "$node_status" in
-           primary )
-                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
-                  return $HANA_STATE_PRIMARY;;
-           syncmem | sync | async )
-                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_SECONDARY"
-                  return $HANA_STATE_SECONDARY;;
-           none ) # have seen that mode on second side BEFEORE we registered it as replica
-                  super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_STANDALONE"
-                  return $HANA_STATE_STANDALONE;;
-           * )
-              # TODO: PRIO1: Should we set SFAIL?
-              # TODO: PRIO2: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
-              dump=$( echo $node_status | hexdump -C );
-              super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP: <$dump>"
-              #### SAP-CALL
-              # TODO: get rid of the su:
-              # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
-              # DONE: Limit the runtime of hdbnsutil. 
-              # DONE: If we fail use getParameter as fallback:
-              #SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh getParameter.py --key=global.ini/system_replication/mode --sapcontrol=1 
-              # SAP_CALL
-              # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
-              #node_full_status=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state" 2>/dev/null )
-              #node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-              if [ $i = "X" ]; then             
-                    local gpKeys=""
-		    gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
-		    node_full_status=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                    node_status=$(echo "$node_full_status" | awk -F= '$1=="^mode" {print $2}')
-                    super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - node_status=$node_status"
-              else
-                  node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
-                  node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-              fi
-              super_ocf_log info "DEC: check_for_primary: loop=$i: node_status=$node_status"
-              # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
-       esac;
-       sleep 2
-   done
-   super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_DEFECT"
-   return $HANA_STATE_DEFECT
+    super_ocf_log debug "DBG: check_for_primary: srmode=$srmode"
+    case "$srmode" in
+       primary )
+              super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
+              rc=$HANA_STATE_PRIMARY;;
+       syncmem | sync | async )
+              super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_SECONDARY"
+              rc=$HANA_STATE_SECONDARY;;
+       none ) # have seen that mode on second side BEFEORE we registered it as replica
+              super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_STANDALONE"
+              rc=$HANA_STATE_STANDALONE;;
+       * )
+          dump=$( echo $srmode | hexdump -C );
+          super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
+          rc=$HANA_STATE_DEFECT
+   esac;
+   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+   return $rc
 }
 
 
