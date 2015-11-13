@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.3.1"
+SAPHanaVersion="0.152.4.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -748,17 +748,6 @@ function saphana_init() {
     fi
     PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
-    #############################
-    # TODO: PRIO9: To be able to call landscapeHostConfig.py without su (so as root)
-    # TODO: PRIO9: Research for environment script .htacces or something like that
-    #export SAPSYSTEMNAME=ZLF
-    #export DIR_INSTANCE=/usr/sap/ZLF/HDB02
-    #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DIR_INSTANCE/exe:$DIR_INSTANCE/exe/Python/lib
-    #export PYTHONPATH=$DIR_INSTANCE/$HOST:$DIR_INSTANCE/exe/python_support:$DIR_INSTANCE/exe
-    #export PYTHONHOME=$DIR_INSTANCE/exe/Python
-    #export SAP_RETRIEVAL_PATH=$DIR_INSTANCE/$HOST
-    #export DIR_EXECUTABLE=$DIR_INSTANCE/exe
-    #############################
     return $OCF_SUCCESS
 }
 
@@ -883,42 +872,44 @@ function check_for_primary() {
     # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
     # SAP_CALL
     # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
-    node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
-    node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-    super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
-    # TODO: PRIO2: Maybe we need to use a fallback interface when hdbnsitil does not answer properly -> lookup in config files?
+    # TODO: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
     #              This might also solve some problems when we could not figure-out the ilocal or remote site name
-    for i in  X 1 2 3 X; do # X for 'fall_back' using global.ini
+    local chkMethod=""
+    for chkMethod in  gP hU hU hU gP; do 
+       case "$chkMethod" in
+           gP )
+                local gpKeys=""
+                gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
+                node_full_status=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                node_status=$(echo "$node_full_status" | awk -F= '$1=="^mode" {print $2}')
+                super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
+                ;;
+           hU | * )
+                node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
+                node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+                super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
+                ;; 
+       esac
        case "$node_status" in
            primary )
-               super_ocf_log info "FLOW: $FUNCNAME rc=HANA_STATE_PRIMARY"
-               return $HANA_STATE_PRIMARY;;
+               rc=$HANA_STATE_PRIMARY
+               break;;
            syncmem | sync | async )
-               super_ocf_log info "FLOW: $FUNCNAME rc=HANA_STATE_SECONDARY"
-               return $HANA_STATE_SECONDARY;;
+               rc=$HANA_STATE_SECONDARY
+               break;;
            none ) # have seen that mode on second side BEFEORE we registered it as replica
-               super_ocf_log info "FLOW: $FUNCNAME rc=HANA_STATE_STANDALONE"
-               return $HANA_STATE_STANDALONE;;
+               rc=$HANA_STATE_STANDALONE
+               break;;
            * )
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
                dump=$( echo $node_status | hexdump -C );
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
-    # TODO: Get rid of the su by using a new interface:
-    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1 
-    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
-    # SAP_CALL
+               # TODO: Get rid of the su by using a new interface:
+               # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1 
+               # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+               # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
+               # SAP_CALL
                # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
-               if [ "$i" = "X" ]; then
-                    local gpKeys=""
-                    gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
-                    node_full_status=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                    node_status=$(echo "$node_full_status" | awk -F= '$1=="^mode" {print $2}')
-                    super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - node_status=$node_status"
-               else
-		       node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
-		       node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
-               fi
                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
