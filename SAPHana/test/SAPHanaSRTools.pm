@@ -281,7 +281,6 @@ sub get_hana_sync_state($)
         $result = $GName{sync_state}->{"global"};
     } else  {
         my $h;
-printf "### FH02 ###\n";
         foreach $h ( keys(%{$HName{sync_state}}) ) {
             if ( $HName{sync_state}->{$h} =~ /(S.*)/ ) {
                $result=$1;
