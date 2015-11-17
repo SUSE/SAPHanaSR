@@ -34,8 +34,8 @@
 #
 #######################################################################
 #
-2 Initialization:
-SAPHanaVersion="0.152.4.2"
+# Initialization:
+SAPHanaVersion="0.152.5.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -566,7 +566,8 @@ function HANA_CALL()
                   # on timeout ...
                   #
                   if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
-                      $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut";
+                      local second_output=""
+                      second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
                   fi
                   ;;
     esac
@@ -738,13 +739,6 @@ function saphana_init() {
         # TODO: PRIO4: Check, if it makes sense to implement an additional last fall-back: get the SAPSTARTPROFILE from /usr/sap/sapservices
         #
         SAPSTARTPROFILE="$(ls -1 $DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_*})"
-    fi
-    # as root user we need the library path to the SAP kernel to be able to call sapcontrol
-    # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
-    if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
-    then
-        LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-        export LD_LIBRARY_PATH
     fi
     PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
