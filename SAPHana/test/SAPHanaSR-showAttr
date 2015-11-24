@@ -14,7 +14,6 @@ use strict;
 use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
-use Switch;
 use Getopt::Long;
 use lib '/usr/share/SAPHanaSR/tests';
 use SAPHanaSRTools;
@@ -105,15 +104,15 @@ sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
 #	return 0;
 #}
 
-open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
-while (<ListInstances>) {
-   # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-   chomp;
-   if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-/ ) {
-      $sid=tolower("$1");
-   }
-}
-close ListInstances;
+#open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
+#while (<ListInstances>) {
+#   # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+#   chomp;
+#   if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-/ ) {
+#      $sid=tolower("$1");
+#   }
+#}
+#close ListInstances;
 
 sub insertAttribute($$$$$) { 
     my ($refHash, $refN, $object, $attribute, $value) = @_;
@@ -154,6 +153,9 @@ if ( $cibFile eq "" ) {
 while (<CIB>) {
    chomp;
    my ($host, $name, $site, $value);
+   if ( $_ =~ /cib-last-written="([^"]*)"/ ) {
+      printf "CIB-time: %s\n", $1;
+   }
    if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
       $name=$1;
       if ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ ) {

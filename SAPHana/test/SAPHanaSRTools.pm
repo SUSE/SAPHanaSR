@@ -17,7 +17,6 @@ use POSIX;
 use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
-use Switch;
 
 my $VERSION="1.0";
 my $newAttributeModel=0;
