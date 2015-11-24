@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.6.1"
+SAPHanaVersion="0.152.7.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -556,7 +556,7 @@ function HANA_CALL()
         pre_cmd="bash -c"
         pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
     fi
-    case $timeout in 
+    case $timeOut in 
         0 | inf )
                   output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
@@ -583,7 +583,7 @@ function HANA_CALL()
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
 # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w)
-# globals:  NODENAME(w)
+# globals:  NODENAME(w), hdbver(w)
 # saphana_init : Define global variables with default values, if optional parameters are not set
 #
 function saphana_init() {
@@ -635,6 +635,7 @@ function saphana_init() {
     ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
+    ATTR_NAME_HANA_OPERATION_MODE=("hana_${sid}_om" "forever")
     #
     # new "central" attributes
     #
@@ -1103,14 +1104,23 @@ function register_hana_secondary()
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=2;
     local remoteInstance="";
+    local newParameter=0
     remoteInstance=$InstanceNr
+    
+    ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
+    hdbver=${ges_ver%.*.*}
+
+    case "$hdbver" in 
+        1.00.110 )
+                   newParameter=1
+                   ;;
+    esac
     if ocf_is_true ${AUTOMATED_REGISTER}; then
        #
        #
        #
        #
        #
-       super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
        #
        #
     # TODO: Get rid of the su by using a new interface:
@@ -1119,7 +1129,15 @@ function register_hana_secondary()
     # TODO: Limit the runtime of hdbnsutil -sr_register ????
     # SAP_CALL
     #   su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
-       HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+       if [ $newParameter -eq 1 ]; then
+           local hanaOM=""
+           hanaOM=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_OPERATION_MODE[@]})
+           super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode --operationMode=$hanaOM --name=$sr_name"
+           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode --operationMode=$hanaOM --name=$sr_name"; rc=$?
+       else
+           super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+       fi
        # backup_global_and_nameserver
     else
        super_ocf_log info "ACT: SAPHANA DROP REGISTER because AUTOMATED_REGISTER is set to FALSE"
@@ -1428,14 +1446,16 @@ check_for_primary_master()
         for ch in ${otherNodes[@]}; do
             if [ $rc -eq 1 ]; then
                 ch_role=$(get_hana_attribute ${ch} ${ATTR_NAME_HANA_ROLES[@]})
-# TODO: PRIO3: check if [0-9], [234] or [34] is correct
-# TODO: PRIO4: Do we need different checks like "any-primary-master" or "running-primary-master" ?
-#                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
-#                grep '[34]:P:[^:]*:master:' <<< $ch_role && rc=0
-#               Match "Running+Available Primary" Master -> Match field 1: 3/4, 2: P, 4: master 
+                # TODO: PRIO3: check if [0-9], [234] or [34] is correct
+                # TODO: PRIO4: Do we need different checks like "any-primary-master" or "running-primary-master" ?
+                #                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
+                #                grep '[34]:P:[^:]*:master:' <<< $ch_role && rc=0
+                #               Match "Running+Available Primary" Master -> Match field 1: 3/4, 2: P, 4: master 
+                super_ocf_log debug "DBG: check_for_primary_master (3) ch_role=$ch_role"
                 awk -F: 'BEGIN { rc=1 } 
                          $1 ~ "[34]" && $2 ="P" && $4="master" { rc=0 } 
                          END { exit rc }' <<< $ch_role  ; rc=$? 
+                super_ocf_log debug "DBG: check_for_primary_master (4) rc=$rc"
             fi
         done
     fi 
@@ -2180,6 +2200,12 @@ function saphana_monitor_secondary()
             rc=$OCF_SUCCESS
             lpa_set_lpt  30 $NODENAME
             sync_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+            local hanaOM=""
+            local hanaOut1=""
+            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
+            hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+            hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
+            set_hana_attribute ${NODENAME} "$hanaOM" ${ATTR_NAME_HANA_OPERATION_MODE[@]}
             super_ocf_log debug "DBG: sync_attr=$sync_attr"
             case "$sync_attr" in
                 "SOK"   ) # This is a possible node to promote, when primary is missing
