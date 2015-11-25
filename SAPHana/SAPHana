@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.7.1"
+SAPHanaVersion="0.152.9.1"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -289,6 +289,56 @@ function saphana_methods() {
 function dequote()
 {
     local rc=0; tr -d '"'; return $rc
+}
+
+#
+# function: ver_le: compare two HANA version strings for less equal
+#
+function ver_le {
+    [  "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+}
+
+#
+# function: ver_le: compare two HANA version strings for less than
+#
+function ver_lt {
+    [ "$1" != "$2" ] && ver_le "$1" "$2" || return 1
+}
+
+
+#
+# function: ver_le: compare two HANA version strings for greater equal
+#
+function ver_ge {
+    [  "$1" = "$(echo -e "$1\n$2" | sort -V | tail -n1)" ]
+    # alternatively:
+    # ! ver_lt $1 $2
+}
+
+#
+# function: ver_le: compare two HANA version strings for greater than
+#
+function ver_gt {
+    [ "$1" != "$2" ] && ver_ge $1 $2 || return 1
+}
+
+#
+# function: version: cpmpare two HANA version strings
+#
+function version() {
+    if [ $# -eq 3 ]; then
+        case "$2" in
+            LE | le | "<=" ) ver_le $1 $3;;
+            LT | lt | "<" ) ver_lt $1 $3;;
+            GE | ge | ">=" ) ver_ge $1 $3;;
+            GT | gt | ">" ) ver_gt $1 $3;;
+            * ) return 1;
+        esac
+    elif [ $# -ge 5 ]; then
+        version $1 $2 $3 && shift 2 && version $*
+    else 
+        return 1;
+    fi
 }
 
 #
@@ -1110,30 +1160,25 @@ function register_hana_secondary()
     ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
     hdbver=${ges_ver%.*.*}
 
-    case "$hdbver" in 
-        1.00.110 )
-                   newParameter=1
-                   ;;
-    esac
+    if version "$hdbver" ">=" "1.00.110"; then
+        newParameter=1
+    fi
+
     if ocf_is_true ${AUTOMATED_REGISTER}; then
-       #
-       #
-       #
-       #
-       #
-       #
-       #
-    # TODO: Get rid of the su by using a new interface:
-    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_register ...
-    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # TODO: Limit the runtime of hdbnsutil -sr_register ????
-    # SAP_CALL
-    #   su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+       # TODO: Get rid of the su by using a new interface:
+       # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_register ...
+       # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+       # TODO: Limit the runtime of hdbnsutil -sr_register ????
+       # SAP_CALL
+       #   su - $sidadm -c "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
        if [ $newParameter -eq 1 ]; then
            local hanaOM=""
            hanaOM=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_OPERATION_MODE[@]})
-           super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode --operationMode=$hanaOM --name=$sr_name"
-           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode --operationMode=$hanaOM --name=$sr_name"; rc=$?
+           if [ -n "$hanaOM" ]; then
+               hanaOM="--operationMode=$hanaOM"
+           fi
+           super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"
+           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"; rc=$?
        else
            super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
