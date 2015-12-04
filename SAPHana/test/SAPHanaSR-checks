@@ -112,6 +112,21 @@ sub checkDBAccess($ $ $)
     return $rc;
 }
 
+sub getHanaVersion($)
+{
+    my ( $sid ) = @_;
+    my $hanaVer="";
+    $sid = lc($sid);
+    open (VER, "-|", "su - ${sid}adm -c 'HDB version'");
+    while (<VER>) {
+        if (/version:\s+(\S)+\s*$/) {
+             $hanaVer=$1;
+        }
+    }
+    close VER;
+    return $hanaVer;
+}
+
 sub checkLinuxUser($)
 {
     my ( $cUSER ) = @_;
@@ -133,6 +148,7 @@ sub sayyes {
 printf("SAPHana-checks %s\n", $version);
 init();
 printf "Checking for system %s(%s) directory %s\n"  , $SID, $INO, $DIR;
+printf "Detected SAP HANA version: %s\n", getHanaVersion($SID);
 
 checkLinuxUser("root") 
 and push(@PassedTests, "checkRoot")
