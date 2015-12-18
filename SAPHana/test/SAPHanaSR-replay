@@ -1,16 +1,33 @@
-
-
-#cDir=~/tmp/bz-951636/pcmk-Tue-20-Oct-2015/mn600d5a002/pengine; 
-cDir="/home/fabian/tmp/bug-Ilya/hawk-2015-11-20T12:10:53+00:00-2015-11-20T13:10:53+00:00/dhcp24/pengine"
-sid="sle"
-mkdir -p $cDir/tmp
-ls $cDir
-for cibBZ2 in $cDir/*.bz2; do 
+#!/bin/bash
+#
+##########################################################################
+#
+# SAPHanaSR-replay
+#
+# Author:       Fabian Herschel, November 2015
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2015      SUSE Linux GmbH
+#
+##########################################################################
+#
+# Syntax: 
+# SAPHanaSR-replay <sid> <path-to-pengine-archive>
+#
+# SAPHanaSR-replay HA1   ~/customerXX/pcmk-Wed-18-Nov-2015/node01/pengine
+#
+##########################################################################
+#
+sid=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+cibDir="$2"
+mkdir -p $cibDir/tmp
+ls -tr $cibDir
+for cibBZ2 in $cibDir/*.bz2; do 
    cib=${cibBZ2%.bz2}; 
+   shortCIB=${cib##*/}
    echo "cib: $cib"; 
-   cp $cibBZ2 $cDir/tmp/ACIB.bz2 ; 
-   bzip2 -d $cDir/tmp/ACIB.bz2; 
-#   ./SAPHanaSR-monitor  --cib=$cDir/tmp/ACIB --sid=cp1; 
-   ./SAPHanaSR-showAttr --cib=$cDir/tmp/ACIB --sid=$sid; 
-   rm $cDir/tmp/ACIB ;    
+   bzip2 -c $cibBZ2 > $cibDir/tmp/$shortCIB; 
+   #SAPHanaSR-monitor  --cib=$cibDir/tmp/$shortCIB --sid=cp1; 
+   SAPHanaSR-showAttr --cib=$cibDir/tmp/$shortCIB --sid=$sid; 
+   rm $cibDir/tmp/$shortCIB ;    
 done 
