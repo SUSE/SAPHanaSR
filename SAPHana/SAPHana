@@ -2,7 +2,7 @@
 #
 # SAPHana
 #
-# Description:  Manages two single SAP HANA Instance in System Replication
+# Description:  Manages two SAP HANA Databases in System Replication
 #               Planned: do also manage scale-up scenarios
 #               currently the SAPHana is dependent of the analysis of
 #               SAPHanaTopology
@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.10"
+SAPHanaVersion="0.152.12"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -148,13 +148,12 @@ function saphana_meta_data() {
 <resource-agent name="SAPHana">
 <version>$SAPHanaVersion</version>
 
-<shortdesc lang="en">Manages two SAP HANA instances in system replication (SR).</shortdesc>
+<shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
-The SAPHanaSR resource agent manages two SAP Hana instances (databases) which are configured
-in system replication. This first version is limited to the scale-up scenario. Scale-Out is
-not supported in this version.
+The SAPHanaSR resource agent manages two SAP HANA database systems which are configured
+in system replication. SAPHana supports Scale-Up scenarios.
 
-Managing the two SAP HANA instances means that the resource agent controls the start/stop of the
+Managing the two SAP HANA database systems means that the resource agent controls the start/stop of the
 instances. In addition the resource agent is able to monitor the SAP HANA databases to check their
 availability on landscape host configuration level. For this monitoring the resource agent relies on interfaces
 provided by SAP. A third task of the resource agent is to also check the synchronisation status
@@ -206,9 +205,10 @@ The resource agent uses the following four interfaces provided by SAP:
         <longdesc lang="en">Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default="yes"
         no: Do prefer restart locally
         yes: Do prefer takever to remote site
+        never: Do never run a sr_takeover (promote) at the secondary side. THIS VALUE IS CURRENTLY NOT SUPPORTED.
         </longdesc>
         <shortdesc lang="en">Local or site recover preferred?</shortdesc>
-        <content type="boolean" default="yes" />
+        <content type="string" default="yes" />
     </parameter>
     <parameter name="AUTOMATED_REGISTER"  unique="0" required="0">
         <shortdesc lang="en">Define, if a former primary should automatically be registered.</shortdesc>
@@ -221,7 +221,7 @@ The resource agent uses the following four interfaces provided by SAP:
         <shortdesc lang="en">Time difference needed between to primary time stamps, if a dual-primary situation occurs</shortdesc>
         <longdesc lang="en">Time difference needed between to primary time stamps,
         if a dual-primary situation occurs. If the time difference is
-        less than the time gap, then the cluster hold one or both instances in a "WAITING" status. This is to give an admin
+        less than the time gap, then the cluster holds one or both instances in a "WAITING" status. This is to give an admin
         a chance to react on a failover. A failed former primary will be registered after the time difference is passed. After
         this registration to the new primary all data will be overwritten by the system replication.
         </longdesc>
@@ -511,9 +511,9 @@ function set_crm_master()
 }
 
 #
-# function: scoring_crm_master - score instance due to role ans sync match (table SCORING_TABLE_PREFERRED_SITE_TAKEOVER)
+# function: scoring_crm_master - score instance due to role ans sync match (table SCORING_TABLE)
 # params:   NODE_ROLES NODE_SYNC_STATUS
-# globals:  SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@],
+# globals:  SCORING_TABLE[@],
 #
 scoring_crm_master()
 {
@@ -522,7 +522,7 @@ scoring_crm_master()
     local sync="$2"
     local skip=0
     local myScore=""
-    for scan in "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}"; do
+    for scan in "${SCORING_TABLE[@]}"; do
         if [ $skip -eq 0 ]; then
             read rolePatt syncPatt score <<< $scan
             if grep "$rolePatt" <<< "$roles"; then
@@ -581,7 +581,7 @@ function HANA_CALL()
         esac
         shift
     done
-    
+
     if [ $use_su -eq 1 ]; then
         pre_cmd="su - ${sid}adm -c"
         pre_script="true"
@@ -618,7 +618,7 @@ function HANA_CALL()
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w), 
-# globals:  sr_name(w), remoteHost(w), otherNodes(w), rem_SR_name(w)
+# globals:  sr_name(w), remoteHost(w), otherNodes(w), remSR_name(w)
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
 # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w)
@@ -639,6 +639,7 @@ function saphana_init() {
     InstanceNr=$OCF_RESKEY_InstanceNumber
     SIDInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
+    export SAPSYSTEMNAME=$SID
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
@@ -711,6 +712,27 @@ function saphana_init() {
        "[0-9]*:S:[^:]*:-      .*    0"
        ".*                    .*   -1"
     )
+    SCORING_TABLE_PREFERRED_NEVER=(
+       "[234]*:P:[^:]*:master .*     150"
+       "[015-9]*:P:[^:]*:master .*    90"
+       "[0-9]*:P:[^:]*:slave  .*      60"
+       "[0-9]*:P:[^:]*:\?     .*       0"
+       "[0-9]*:P:[^:]*:-      .*       0"
+       "[0-9]*:S:[^:]*:.*     .*     -INFINITY"
+       ".*                    .*     -INFINITY"
+    )
+    if ocf_is_true $PreferSiteTakeover; then
+        SCORING_TABLE=("${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}")
+    else
+        case "$PreferSiteTakeover" in
+            never|NEVER|Never )
+                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_NEVER[@]}")
+                ;;
+            * )
+                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_LOCAL_RESTART[@]}")
+                ;;
+        esac
+    fi
     #
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     super_ocf_log debug "DBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
@@ -749,7 +771,7 @@ function saphana_init() {
         sr_mode="sync"
     fi
     if [ -n "$remoteNode" ]; then
-        rem_SR_name=$(get_hana_attribute ${remoteNode} ${ATTR_NAME_HANA_SITE[@]});
+        remSR_name=$(get_hana_attribute ${remoteNode} ${ATTR_NAME_HANA_SITE[@]});
     fi
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
@@ -968,8 +990,8 @@ function analyze_hana_sync_statusSRS()
 {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=-1 srRc=0 all_nodes_other_side="" n="" siteParam=""
-    if [ -n "$rem_SR_name" ]; then
-       siteParam="--site=$rem_SR_name"
+    if [ -n "$remSR_name" ]; then
+       siteParam="--site=$remSR_name"
     fi
     # TODO: Get rid of the su by using a new interface:
     # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh systemReplicationStatus.py $siteParam 
@@ -978,8 +1000,8 @@ function analyze_hana_sync_statusSRS()
     # SAP_CALL
     # FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     FULL_SR_STATUS=$(HANA_CALL --timeout 60 --cmd "systemReplicationStatus.py" 2>/dev/null); srRc=$?
-    super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
-    super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$rem_SR_name')-> $srRc"
+    super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
+    super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     #
     # TODO: PRIO2: Here we might also need to filter additional sites (if multi tier should be supported)
     #              And is the check for return code capable for chains?
@@ -1010,7 +1032,7 @@ function analyze_hana_sync_statusSRS()
           # ok we should be careful and set secondary to SFAIL
           super_ocf_log info "FLOW $FUNCNAME SFAIL"
           set_hana_attribute "$remoteNode" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
-          super_ocf_log info "ACT site=$sr_name, seting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
+          super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
           # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
           lpa_set_lpt 10 "$remoteNode"
           rc=1
@@ -1018,7 +1040,7 @@ function analyze_hana_sync_statusSRS()
     else
        super_ocf_log info "FLOW $FUNCNAME SFAIL"
        set_hana_attribute "$remoteNode" "SFAIL" ${ATTR_NAME_HANA_SYNC_STATUS[@]}
-       super_ocf_log info "ACT site=$sr_name, seting SFAIL for secondary (2) - srRc=$srRc"
+       super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (2) - srRc=$srRc"
        # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
        lpa_set_lpt 10 "$remoteNode"
        rc=1;
