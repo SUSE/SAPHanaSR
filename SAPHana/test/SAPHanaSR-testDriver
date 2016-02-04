@@ -3,9 +3,9 @@
 # SAPHanaSR-testDriver
 # (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
 # (c) 2015 SUSE Linux GmbH, Nuremberg, Germany
-# Author: Fabian Herschel
+# Author: Fabian Herschel <fabian.herschel@suse.com> 
 # License: GPL v2+
-# Version: 0.14.2015.06.29.1
+my $Version="0.15.2016.02.04.3";
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -47,14 +47,14 @@ my $standbyHanas=0;
 my $msl;
 my $first_test=1;
 my $sid;
+my @sids;
 my $ino;
 my @primaryHanaList;
 my @secondaryHanaList;
 my $testName="";
 my %testCaseCount;
 
-my $result = GetOptions ("sid=s" => \$sid,
-	                      "ino=s" => \$ino,
+my $result = GetOptions ("sid=s" => \@sids,
 	                      "nodes=s" => \$ClusterNodes,
 	                      "case=s" => \$testCase,
 	 );
@@ -116,7 +116,11 @@ openlog $ident, $logopt, $facility;       # don't forget this
 my $sid="";
 my $INr="";
 
-( $sid, $INr ) = get_sid_and_InstNr();
+if ( 0 == @sids ) {
+    my $sid_ino_list;
+    ( $sid_ino_list ) = get_sid_and_InstNr();
+    @sids = split(",", $sid_ino_list);
+}
 
 
 sub run_test_stop_hana( $ $ $ )
@@ -346,6 +350,7 @@ mysyslog $priority, "fhTD: Tests running. Next TestNr=%i", $testcount;
 my $goodloops=0;
 my $badloops=0;
 while ( 1==1 ) {
+    ($sid, $INr) = split(":", $sids[0]);
     get_hana_attributes($sid);
     $phost=get_host_primary($sid, "1234");
     $shost=get_host_secondary($sid, "1234");

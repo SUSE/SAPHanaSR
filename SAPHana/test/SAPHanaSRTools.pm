@@ -125,6 +125,7 @@ sub get_node_list()
 sub get_sid_and_InstNr()
 {
     my $sid=""; my $Inr=""; my $noDAACount = 0; my $gotAnswer = 0;
+    my @sid_ino;
     open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
     while (<ListInstances>) {
         # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
@@ -137,6 +138,7 @@ sub get_sid_and_InstNr()
                 $noDAACount++;
                 $sid=tolower($foundSID);
                 $Inr=$foundINO;
+                push @sid_ino, "$sid:$Inr";
             }
         }
 #       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-\s+([0-9][0-9])/ ) {
@@ -145,7 +147,8 @@ sub get_sid_and_InstNr()
     }
     close ListInstances;
     #printf (" get_sid_and_InstNr: return (%s)\n", join(",", ( $sid, $Inr, $noDAACount, $gotAnswer )));
-    return ( $sid, $Inr, $noDAACount, $gotAnswer );
+    $sid=join(",", @sid_ino);
+    return ( $sid, $noDAACount, $gotAnswer );
 }
 
 my $table_title = "Host \\ Attr";

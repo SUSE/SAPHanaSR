@@ -1,14 +1,13 @@
 #!/usr/bin/perl
 #
-# 
-# (c) 2014 SUSE Linux Products GmbH, Nuremberg German
-# (c) 2015 SUSE Linux GmbH, Nuremberg German
-# Author: Fabian Herschel
-# License: Check if we publish that under GPL v2+
-my $Version="0.16.2015.11.24.1";
+# SAPHanaSR-monitor
+# (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
+# (c) 2015 SUSE Linux GmbH, Nuremberg, Germany
+# Author: Fabian Herschel <fabian.herschel@suse.com>
+# License: GPL v2+
+my $Version="0.17.2016.02.04.4";
 #
 ##################################################################
-
 use POSIX;
 use strict;
 use Sys::Syslog;
@@ -33,6 +32,7 @@ my $testfile='SAPHanaTD.status';
 my $testcount=0;
 my $first_test=1;
 my $sid="";
+my @sids=();
 my $ino="";
 my $Format="txt";
 my $Continuous="no";
@@ -41,10 +41,9 @@ my $Intervall=10;
 my $cibFile="";
 my $help=0;
 
-sub init() 
+sub init()
 {
-	my $result = GetOptions ("sid=s" => \$sid,
-	                      "ino=s" => \$ino,
+	my $result = GetOptions ("sid=s" => \@sids,
 	                      "format=s" => \$Format,
 	                      "cont=s" => \$Continuous,
                           "out=s" => \$HtmlPage,
@@ -54,7 +53,7 @@ sub init()
                           "help" => \$help,
 	);
     if ( $help )  {
-        printf "SAPHanaSR-monitor [--sid=<sid> --ino=<instNr>] [--format=(txt|html)] [--cont=(yes|no)] [--out=<file>] [--intervall=<time>] [--nodes=<nodeNr>] [--help]\n";
+        printf "SAPHanaSR-monitor {[--sid=<sid[:instNr]>]} [--format=(txt|html)] [--cont=(yes|no)] [--out=<file>] [--intervall=<time>] [--nodes=<nodeNr>] [--help]\n";
         exit 0;
     }
     if ( $cibFile ) {
@@ -188,12 +187,14 @@ openlog $ident, $logopt, $facility;
 
 mysyslog $priority, "%s", "Monitor startup";
 
-sub processMonitor() {
+sub processMonitor($) {
+    my $sid = shift();
     my $message;
     my $phost;
     my $shost;
     my $laststate="";
     #
+    %Host=();
     get_hana_attributes($sid);
     my $crm_out=`crm_mon -r1 -D`;
     my $attr_out=host_attr2string();
@@ -326,13 +327,21 @@ sub processMonitor() {
 }
   
 init();
-if ( ( $sid eq "" )  && ( $ino eq "" )) { 
-    ( $sid, $ino ) = get_sid_and_InstNr();
+if ( 0 == @sids ) {
+    my $sid_ino_list;
+    ( $sid_ino_list ) = get_sid_and_InstNr();
+    @sids = split(",", $sid_ino_list);
 }
-processMonitor();
+foreach $sid ( @sids ) {
+    ( $sid, $ino ) = split(":", $sid);
+    processMonitor($sid);
+}
 while ( $Continuous eq "yes" ) {
     sleep $Intervall;
-    processMonitor();
+    foreach $sid ( @sids ) {
+        ( $sid, $ino ) = split(":", $sid);
+        processMonitor($sid);
+    }
 }
  
 closelog;
