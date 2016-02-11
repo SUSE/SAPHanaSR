@@ -5,7 +5,7 @@
 # (c) 2015 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com> 
 # License: GPL v2+
-my $Version="0.15.2016.02.04.3";
+my $Version="0.16.2016.02.05.1";
 #
 ##################################################################
 # THIS PROGRAM IS NOT INTENDED TO RUN IN PRODUCTIVE ENVIRONMENTS
@@ -42,7 +42,8 @@ my $varlib='/var/lib/SAPHanaTD';
 my $testfile='SAPHanaTD.status';
 my $testcount=0;
 my $testCase="all";
-my @testCaseSet = ("cmp","ksi2","kpi11","ksi11","kpi9","ksi9","ssi","spi","ssns","spns","rms","sps","sss");
+my @testCaseSetALL = ("cmp","ksi2","kpi11","ksi11","kpi9","ksi9","ssi","spi","ssns","spns","rms","sps","sss");
+my @testCaseSet = @testCaseSetALL;
 my $standbyHanas=0;
 my $msl;
 my $first_test=1;
@@ -53,11 +54,19 @@ my @primaryHanaList;
 my @secondaryHanaList;
 my $testName="";
 my %testCaseCount;
+my $help=0;
 
 my $result = GetOptions ("sid=s" => \@sids,
 	                      "nodes=s" => \$ClusterNodes,
 	                      "case=s" => \$testCase,
+                          "help" =>  \$help,
 	 );
+
+if ( $help ) {
+   printf("SAPHanaSR-testDriver [--help] [--sid=<sid[:instNr]>] [--nodes=<number of nodes>] [--case=<list of test cases>]\n");
+   printf("  valid test cases are: all,%s\n", join (",", @testCaseSetALL));
+   exit 0;
+}
 
 if ( $testCase ne "all" ) {
        @testCaseSet = split("," , $testCase);
