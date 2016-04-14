@@ -5,7 +5,7 @@
 # (c) 2015-2016 SUSE Linux GmbH, Nuremberg Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com>
 # License: GPL v2+
-my $Version="0.17.2016.02.04.4";
+my $Version="0.18.2016.02.16.1";
 #
 ##################################################################
 use POSIX;
@@ -80,37 +80,6 @@ sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  return $a > $b ? $a : $b;
 }
 
-sub insertAttribute($$$$$) { 
-    my ($refHash, $refN, $object, $attribute, $value) = @_;
-    my $table_titleH="";
-    if ( $attribute =~ /hana_${sid}_(.*)/ ) {
-       $attribute =  $1;
-    }
-       #
-       # handle the hosts name and table-title
-       #
-       $$refHash{$object}->{$attribute}=${value};
-       if ( defined ($$refN{_hosts}->{_length})) {
-          $$refN{_hosts}->{_length} = max($$refN{_hosts}->{_length}, length($object ));
-       } else {
-          $$refN{_hosts}->{_length} = length($object );
-       }
-       $$refN{_hosts}->{_length} = max($$refN{_hosts}->{_length}, length( $table_titleH));
-       #
-       # now handle the attributes name and value
-       #
-       $$refN{$attribute}->{$object}=${value};
-       $$refN{$attribute}->{$object}=${value};
-       if ( defined ($$refN{$attribute}->{_length})) {
-          $$refN{$attribute}->{_length} = max($$refN{$attribute}->{_length}, length($value ));
-       } else {
-          $$refN{$attribute}->{_length} = length($value );
-       }
-       $$refN{$attribute}->{_title} = $attribute; 
-       $$refN{$attribute}->{_length} = max($$refN{$attribute}->{_length}, length( $$refN{$attribute}->{_title}));
-       # printf "%-8s %-20s %-30s\n", $1, $2, $3;
-}
-
 sub read_cib($) {
     my $sid = shift();
     if ( $cibFile eq "" ) {
@@ -126,7 +95,7 @@ sub read_cib($) {
           printf "CIB-time: %s\n", $1;
        }
        if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
-           insertAttribute(\%Host, \%HName, $1, "node_status", $2);
+           insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
        }
        if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
           $name=$1;
@@ -135,7 +104,7 @@ sub read_cib($) {
              $host=$2;
              if ( $_ =~ /value="([^"]+)"/ ) {
                  $value=$1;
-                 insertAttribute(\%Host, \%HName, $host, $name, $value);
+                 insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
              }
           } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
              # found a site attribute
@@ -145,7 +114,7 @@ sub read_cib($) {
              }
              if ( $_ =~ /value="([^"]+)"/ ) {
                  $value=$1;
-                 insertAttribute(\%Site, \%SName, $site, $name, $value);
+                 insertAttribute($sid, \%Site, \%SName, $site, $name, $value);
              }
           } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
              # found a global attribute
@@ -155,7 +124,7 @@ sub read_cib($) {
              }
              if ( $_ =~ /value="([^"]+)"/ ) {
                  $value=$1;
-                 insertAttribute(\%Global, \%GName, "global", $name, $value);
+                 insertAttribute($sid, \%Global, \%GName, "global", $name, $value);
              }
           }
        }
@@ -173,9 +142,6 @@ if ( 0 == @sids ) {
 foreach $sid (@sids) {
     ( $sid, $ino ) = split(":", $sid);
     $sid=tolower("$sid");
-    if ( ( $sid eq "" )  && ( $ino eq "" )) { 
-        ( $sid, $ino ) = get_sid_and_InstNr();
-    }
     %Host=();
     %HName=();
     read_cib($sid);
