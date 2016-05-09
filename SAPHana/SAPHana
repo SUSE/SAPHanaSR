@@ -44,6 +44,12 @@ timeB=$(date '+%s')
 #
 #######################################################################
 #
+log_attributes=false
+if ocf_is_true "$log_attributes"; then
+    log_attr_file="/var/log/fhATTRIBUTES"
+else
+    log_attr_file="/dev/null"
+fi
 
 HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
@@ -412,12 +418,16 @@ function get_hana_attribute()
     dstr=$(date)
     case "$attr_store" in
         reboot | forever )
-            echo "$dstr: SAPHana: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> /var/log/fhATTRIBUTE
-            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>/var/log/fhATTRIBUTE; rc=$?
+            if ocf_is_true "$log_attributes"; then
+                echo "$dstr: SAPHana: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
+            fi
+            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
         props )
-            echo "$dstr: SAPHana: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> /var/log/fhATTRIBUTE
-            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>/var/log/fhATTRIBUTE; rc=$?
+            if ocf_is_true "$log_attributes"; then
+                echo "$dstr: SAPHana: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> $log_attr_file
+            fi
+            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
     esac
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
@@ -445,12 +455,16 @@ function set_hana_attribute()
         dstr=$(date)
         case "$attr_store" in
             reboot | forever )
-                echo "$dstr: SAPHana: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> /var/log/fhATTRIBUTE
-                crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store 2>>/var/log/fhATTRIBUTE; rc=$?
+                if ocf_is_true "$log_attributes"; then
+                    echo "$dstr: SAPHana: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> $log_attr_file
+                fi
+                crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
                 ;;
             props )
-                echo "$dstr: SAPHana: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> /var/log/fhATTRIBUTE
-                crm_attribute -v $attr_value -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>/var/log/fhATTRIBUTE; rc=$?
+                if ocf_is_true "$log_attributes"; then
+                    echo "$dstr: SAPHana: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> $log_attr_file
+                fi
+                crm_attribute -v $attr_value -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>$log_attr_file; rc=$?
                 ;;
         esac
     else
@@ -500,6 +514,10 @@ function set_crm_master()
     # DONE: PRIO2: Only adjust master if value is really different (try to check that)
     oldscore=$(${HA_SBIN_DIR}/crm_master -G -q -l reboot)
     if [ "$oldscore" != "$score" ]; then
+       dstr=$(date)
+            if ocf_is_true "$log_attributes"; then
+       echo "$dstr: SAPHanaController: crm_master -v $score -l reboot " >> $log_attr_file
+       fi
        super_ocf_log debug "DBG: SET crm master: $score (old: $oldscore)"
        ${HA_SBIN_DIR}/crm_master -v $score -l reboot; rc=$?
     else
@@ -2387,7 +2405,7 @@ function saphana_promote_clone() {
   else
      if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
         #
-        # we are SECONDARY/SLAVE and need to takepover ...
+        # we are SECONDARY/SLAVE and need to takeover ...  promote on the replica (secondary) side...
         # promote on the replica side...
         #
         hana_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
