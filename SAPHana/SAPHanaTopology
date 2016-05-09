@@ -28,13 +28,20 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.12"
+SAPHanaVersion="0.152.15"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
 
 #######################################################################
+#
+log_attributes=false
+if ocf_is_true "$log_attributes"; then
+    log_attr_file="/var/log/fhATTRIBUTES"
+else
+    log_attr_file="/dev/null"
+fi
 
 HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
@@ -208,12 +215,12 @@ function get_hana_attribute()
     dstr=$(date)
     case "$attr_store" in
         reboot | forever )
-            echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> /var/log/fhATTRIBUTE
-            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>/var/log/fhATTRIBUTE; rc=$?
+            echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
+            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
         props )
-            echo "$dstr: SAPHanaTopology: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> /var/log/fhATTRIBUTE
-            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>/var/log/fhATTRIBUTE; rc=$?
+            echo "$dstr: SAPHanaTopology: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> $log_attr_file
+            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
     esac
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
