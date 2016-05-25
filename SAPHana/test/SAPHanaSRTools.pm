@@ -225,6 +225,7 @@ sub insertAttribute($$$$$$) {
 sub get_hana_attributes($)
 {
     my $sid = shift;
+    my $SID = uc($sid);
 if ( $cibFile eq "" ) {
 open CIB, "cibadmin -Ql |";
 } else  {
@@ -265,9 +266,23 @@ while (<CIB>) {
 #printf "insert $sid GLOB global $name $value\n";
              insertAttribute($sid, \%Global, \%GName, "global", $name, $value);
          }
+   } elsif ( $_ =~ /nvpair.*name="master.([a-zA-Z0-9\_\-]+_${SID}_([a-zA-Z0-9\-\_]+))"/ ) {
+       printf("DBG:%s\n",  $_);
+       # lines with master scores:
+       # <nvpair id="status-suse05-master-rsc_SAPHanaCon_HA1_HDB10" name="master-rsc_SAPHanaCon_HA1_HDB10" value="150"/>
+        $name="score";
+        if ( $_ =~ /id=.status-([a-zA-Z0-9\_\-]+)-master/ ) {
+         # found attribute in nodes forever and reboot store
+         $host=$1;
+         if ( $_ =~ /value="([^"]+)"/ ) {
+             $value=$1;
+             # printf "insert $sid HOST $host $name $value\n";
+             insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
+         }
       }
    }
 
+  }
 }
 close CIB;
     return 0;
