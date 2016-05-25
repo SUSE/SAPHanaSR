@@ -947,12 +947,8 @@ function cleanup_instance() {
 function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=$HANA_STATE_DEFECT
-    # TODO: PRIO 3: Get rid of the su by using a new interface:
-    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1 
     # TODO: PRIO 3: Check beginning from which SPS does SAP support HDBSettings.sh?
     # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
-    # SAP_CALL
-    # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
     # TODO: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
     #              This might also solve some problems when we could not figure-out the ilocal or remote site name
     local chkMethod=""
@@ -966,6 +962,7 @@ function check_for_primary() {
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
            hU | * )
+                # TODO: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 node_full_status=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state" 2>/dev/null )
                 node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
@@ -985,12 +982,8 @@ function check_for_primary() {
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
                dump=$( echo $node_status | hexdump -C );
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
-               # TODO: Get rid of the su by using a new interface:
-               # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1 
-               # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
                # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
                # SAP_CALL
-               # node_full_status=$(su - ${sidadm} -c "hdbnsutil -sr_state" 2>/dev/null )
                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;

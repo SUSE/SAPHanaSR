@@ -467,12 +467,9 @@ function sht_init() {
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
     for chkMethod in  hU hU hU gP ; do 
-        # TODO: get rid of the su:
-        # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_state --sapcontrol=1  
         # DONE: Limit the runtime of hdbnsutil. 
         # TODO: Use getParameter.py if we get no answer
         # SAP_CALL
-        #hdbANSWER=$(HANA_CALL --timeout 60 "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
         #super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
         #srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
         case "$chkMethod" in
@@ -484,6 +481,7 @@ function sht_init() {
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
+                # TODO: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 hdbANSWER=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
                 super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
@@ -822,9 +820,6 @@ function sht_monitor_clone() {
     fi
     #site=$(get_site_name)
     #### SAP-CALL
-        # TODO: get rid of the su:
-        # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py -sr_state --sapcontrol=1  
-        # TODO: Limit the runtime of landscapeHostConfiguration.py
     # SAP_CALL
     #hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
     hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
