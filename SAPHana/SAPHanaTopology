@@ -464,6 +464,22 @@ function sht_init() {
        *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;
        *cman*    ) nodelist=$(crm_node -l);;
     esac
+    #
+    # get HANA version
+    #
+    local ges_ver
+    ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
+    hdbver=${ges_ver%.*.*}
+    #
+    # since rev 111.00 we should use a new hdbnsutil option to get the -sr_state
+    # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
+    #
+    hdbState="hdbnsutil -sr_state"
+    hdbMap="hdbnsutil -sr_state"
+    if version "$hdbver" ">=" "1.00.111"; then
+        hdbState="hdbnsutil -sr_stateConfiguration"
+        hdbMap="hdbnsutil -sr_stateHostMapping"
+    fi
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
     for chkMethod in  hU hU hU gP ; do
@@ -543,19 +559,6 @@ function sht_init() {
             fi
         done
         super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"
-    fi
-    local ges_ver
-    ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
-    hdbver=${ges_ver%.*.*}
-    #
-    # since rev 111.00 we should use a new hdbnsutil option to get the -sr_state
-    # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
-    #
-    hdbState="hdbnsutil -sr_state"
-    hdbMap="hdbnsutil -sr_state"
-    if version "$hdbver" ">=" "1.00.111"; then
-        hdbState="hdbnsutil -sr_stateConfiguration"
-        hdbMap="hdbnsutil -sr_stateHostMapping"
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
