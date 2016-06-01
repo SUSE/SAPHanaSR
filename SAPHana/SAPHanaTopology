@@ -28,7 +28,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.15"
+SAPHanaVersion="0.152.16"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -329,7 +329,7 @@ function is_clone() {
 function HANA_CALL()
 {
     #
-    # TODO: PRIO 5: remove 'su - ${sidadm} later, when SAP HANA resoled issue with 
+    # TODO: PRIO 5: remove 'su - ${sidadm} later, when SAP HANA resoled issue with
     #       root-user-called hdbnsutil -sr_state (which creates root-owned shared memory file in /var/lib/hdb/SID/shmgrp)
     # TODO: PRIO 5: Maybe make "su" optional by a parameter
     local timeOut=0
@@ -349,11 +349,11 @@ function HANA_CALL()
         esac
         shift
     done
-    
+
     if [ $use_su -eq 1 ]; then
         pre_cmd="su - ${sid}adm -c"
         pre_script="true"
-    else 
+    else
         # as root user we need the library path to the SAP kernel to be able to call sapcontrol
         # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
         if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
@@ -363,7 +363,7 @@ function HANA_CALL()
         pre_cmd="bash -c"
         pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
     fi
-    case $timeout in 
+    case $timeout in
         0 | inf )
                   output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
@@ -386,10 +386,10 @@ function HANA_CALL()
 # function: sht_init - initialize variables for the resource agent
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
-# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w) 
+# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w)
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
-# globals:  NODENAME(w)
+# globals:  NODENAME(w), hdbver(w)
 # sht_init : Define global variables with default values, if optional parameters are not set
 #
 #
@@ -466,8 +466,8 @@ function sht_init() {
     esac
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
-    for chkMethod in  hU hU hU gP ; do 
-        # DONE: Limit the runtime of hdbnsutil. 
+    for chkMethod in  hU hU hU gP ; do
+        # DONE: Limit the runtime of hdbnsutil.
         # TODO: Use getParameter.py if we get no answer
         # SAP_CALL
         #super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
@@ -481,12 +481,12 @@ function sht_init() {
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
-                # TODO: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
-                hdbANSWER=$(HANA_CALL --timeout 60 --cmd "hdbnsutil -sr_state --sapcontrol=1" 2>/dev/null)
+                # DONE: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
+                hdbANSWER=$(HANA_CALL --timeout 60 --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
                 super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 ;;
-        esac 
+        esac
         case "$srmode" in
             primary | syncmem | sync | async | none )
               # we can leave the loop as we already got a result
@@ -503,9 +503,15 @@ function sht_init() {
     siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     site=$siteNAME
     srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+    #
+    # for rev >= 111 we use the new mapping query
+    #
+    if version "$hdbver" ">=" "1.00.111"; then
+        hdbANSWER=$(HANA_CALL --timeout 60 --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
+    fi
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
-    if [ -n "$MAPPING" ]; then 
+    if [ -n "$MAPPING" ]; then
         # we have a mapping from HANA, lets use it
         #
         # filter all non-cluster mappings
@@ -520,22 +526,36 @@ function sht_init() {
                     hanaRemoteHost="$hanaVHost"
                  fi;
               done;
-        done 
+        done
         super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
         super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
-    else 
+    else
         # HANA DID NOT TOLD THE MAPPING, LETS TRY TO USE THE SITE ATTRIBUTES
         local n1=""
         local hanaSite=""
         for n1 in $nodelist; do
-            # TODO: PRIO9 - For multi tier with more than 2 chain/star members IN the cluster we might need to be 
-            #       able to catch more than one reoteHost
+            # TODO: PRIO9 - For multi tier with more than 2 chain/star members IN the cluster we might need to be
+            #       able to catch more than one remoteHost
+            #       currently having more than 2 HANA in a chain/star members IN the cluster is not allowed, the third must be external
             if [ "$NODENAME" != "$n1" ]; then
                 hanaSite=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_SITE[@]})
                 hanaRemoteHost="$n1"
             fi
         done
         super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"
+    fi
+    local ges_ver
+    ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
+    hdbver=${ges_ver%.*.*}
+    #
+    # since rev 111.00 we should use a new hdbnsutil option to get the -sr_state
+    # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
+    #
+    hdbState="hdbnsutil -sr_state"
+    hdbMap="hdbnsutil -sr_state"
+    if version "$hdbver" ">=" "1.00.111"; then
+        hdbState="hdbnsutil -sr_stateConfiguration"
+        hdbMap="hdbnsutil -sr_stateHostMapping"
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
@@ -753,7 +773,7 @@ function sht_stop_clone() {
     else
         hanaPrim="-"
     fi
-    set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]} 
+    set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]}
     sht_stop; rc=$?
     return $rc
 }
@@ -814,24 +834,43 @@ function sht_monitor_clone() {
         | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr 2>/dev/null )
     # super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     if [ -n "$vName" ]; then
-       set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]} 
+       set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]}
     else
        vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
     fi
     #site=$(get_site_name)
     #### SAP-CALL
     # SAP_CALL
-    #hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
-    hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?" 
-    hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
+    #hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+    #
+    # since rev 09x SAP has added the --sapcontrol option for the landscapeHostConfiguration interface
+    # we begin to use --sapcontrol with rev 100
+    # since rev 120 we need to use the --sapcontrol, because SAP changed the tool output
+    #
+    if version "$hdbver" ">=" "1.00.100"; then
+        hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+        # TODO: PRIO9: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
+        hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+            awk -F= '$1 == "nameServerConfigRole"    {f1=$2}
+                     $1 == "nameServerActualRole"    {f2=$2}
+                     $1 == "indexServerConfigRole"   {f3=$2}
+                     $1 == "indexServerActualRole"   {f4=$2}
+                     END { printf "%s:%s:%s:%s\n", f1, f2, f3,f4 }')
+    else
+        #
+        # old code for backward compatability
+        #
+        hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+        hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
+    fi
     #if [ -z "$MAPPING" ]; then
     #   super_ocf_log info "ACT: Did not find remote Host at this moment"
     #fi
     # FH TODO PRIO3: TRY TO GET RID OF "ATTR_NAME_HANA_REMOTEHOST"
     if [ -n "$hanaRemoteHost" ]; then
-        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]} 
+        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
     fi
-    set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]} 
+    set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
     if [ -n "$site" ]; then
         set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
     fi
@@ -840,8 +879,8 @@ function sht_monitor_clone() {
         S ) # only secondary may propargate its sync status
         case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
            *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
-           *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;    
-           *cman*    ) nodelist=$(crm_node -l);; 
+           *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;
+           *cman*    ) nodelist=$(crm_node -l);;
         esac
 
         for n in ${nodelist}; do
