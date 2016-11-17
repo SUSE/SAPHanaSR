@@ -28,7 +28,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.17"
+SAPHanaVersion="0.152.18"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -602,7 +602,18 @@ function sht_init() {
             #       currently having more than 2 HANA in a chain/star members IN the cluster is not allowed, the third must be external
             if [ "$NODENAME" != "$n1" ]; then
                 hanaSite=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_SITE[@]})
-                hanaRemoteHost="$n1"
+                #
+                # only, if a hanaSite is found use that node - this allows majority makers
+                #
+                if [ -n "$hanaSite" ]; then
+                    hanaRemoteHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+                    #
+                    # only if vhost is NOT set use the nodename instead
+                    #
+                    if [ -z "$hanaRemoteHost" ]; then
+                   hanaRemoteHost="$n1"
+                    fi
+                fi
             fi
         done
         super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"

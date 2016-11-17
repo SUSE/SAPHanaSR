@@ -5,7 +5,7 @@
 # (c) 2015-2016 SUSE Linux GmbH, Nuremberg Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com>
 # License: GPL v2+
-my $Version="0.18.2016.02.16.1";
+my $Version="0.19.2016.06.17.1";
 #
 ##################################################################
 use POSIX;
@@ -82,6 +82,7 @@ sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
 
 sub read_cib($) {
     my $sid = shift();
+    my %id2uname;
     if ( $cibFile eq "" ) {
         printf "Open live cib\n";
         open CIB, "cibadmin -Ql |" or die "CIB could not be read from cluster";
@@ -94,14 +95,37 @@ sub read_cib($) {
        if ( $_ =~ /cib-last-written="([^"]*)"/ ) {
           printf "CIB-time: %s\n", $1;
        }
-       if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
-           insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
+       if ( $_ =~ /<node / ) {
+          # catch a node definition line
+          my $nodeID="";
+          my $nodeUNAME="";
+          if ( $_ =~ /id="([^"]+)"/ ) {
+              $nodeID=$1;
+          }
+          if ( $_ =~ /uname="([^"].+)"/ ) {
+              $nodeUNAME=$1;
+          }
+          if (($nodeID ne "") && ($nodeUNAME ne "")) {
+             $id2uname{$nodeID}=$nodeUNAME;
+            # printf STDERR "%s -> %s\n", $nodeID, $id2uname{$nodeID};
+          }
+       } 
+       #if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
+       if ( $_ =~ /node_state.*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
+           my $node_status=$1;
+           if ( $_ =~ /node_state.*uname="([a-zA-Z0-9\-\_]+)"/ ) {
+               my $name=$1;
+              insertAttribute($sid, \%Host, \%HName, $name, "node_status", $node_status);
+           }
        }
        if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
           $name=$1;
           if ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ ) {
              # found attribute in nodes forever and reboot store
              $host=$2;
+             if (defined $id2uname{$host}) {
+                 $host = $id2uname{$host}
+             }
              if ( $_ =~ /value="([^"]+)"/ ) {
                  $value=$1;
                  insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
