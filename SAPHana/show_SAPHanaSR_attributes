@@ -2,41 +2,30 @@
 #
 # SAPHanaSR-showAttr
 # (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
-# (c) 2015-2016 SUSE Linux GmbH, Nuremberg Germany
+# (c) 2015-2016 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com>
 # License: GPL v2+
-my $Version="0.18.2016.02.16.1";
+my $Version="0.21.2016.11.04.1";
 #
 ##################################################################
+#
 use POSIX;
 use strict;
 use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use Getopt::Long;
-use lib '/usr/share/SAPHanaSR/tests';
+use lib '/usr/lib/SAPHanaSR';
+#use lib '.';
 use SAPHanaSRTools;
 
-###################################
-## this part is not for scale out and currently NOT zero-config
-
-my $ClusterNodes=2;
-my $ClusterPrimaries=1;
-my $ClusterSecondaries=1;
-my %Name;
-my %Host;
-my $host = hostname();
-
-my $varlib='/var/lib/SAPHanaTD';
-my $testfile='SAPHanaTD.status';
-my $testcount=0;
-my $first_test=1;
+my $host = hostname();    # TODO: to be removed after removing OLDread_cib
 my $sid="";
 my @sids;
 my $ino="";
 my $sortBy="";
 my $table_titleH = "Host";
-#my %Name;
+my %Name;
 my %Host;
 my %Site;
 my %Global;
@@ -72,6 +61,7 @@ if ( $version ) {
 
 if ( $cibFile ne "" ) {
    printf "Using cib file %s\n", $cibFile;
+   set_cibFile($cibFile);
 }
 
 sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
@@ -80,75 +70,23 @@ sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  return $a > $b ? $a : $b;
 }
 
-sub read_cib($) {
-    my $sid = shift();
-    if ( $cibFile eq "" ) {
-        printf "Open live cib\n";
-        open CIB, "cibadmin -Ql |" or die "CIB could not be read from cluster";
-    } else {
-        open CIB, "<$cibFile" or die "CIB file $cibFile not found or not able to read it";
-    }
-    while (<CIB>) {
-       chomp;
-       my ($host, $name, $site, $value);
-       if ( $_ =~ /cib-last-written="([^"]*)"/ ) {
-          printf "CIB-time: %s\n", $1;
-       }
-       if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
-           insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
-       }
-       if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
-          $name=$1;
-          if ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ ) {
-             # found attribute in nodes forever and reboot store
-             $host=$2;
-             if ( $_ =~ /value="([^"]+)"/ ) {
-                 $value=$1;
-                 insertAttribute($sid, \%Host, \%HName, $host, $name, $value);
-             }
-          } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
-             # found a site attribute
-             $site=$1;
-             if ( $name =~ /[a-zA-Z0-9\_\-]+_site_([a-zA-Z0-9\-]+)/ ) {
-                $name = $1;
-             }
-             if ( $_ =~ /value="([^"]+)"/ ) {
-                 $value=$1;
-                 insertAttribute($sid, \%Site, \%SName, $site, $name, $value);
-             }
-          } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
-             # found a global attribute
-             $host="GLOBAL";
-             if ( $name =~ /([a-zA-Z0-9\_\-]+)_glob_([a-zA-Z0-9\_\-]+)/ ) {
-                $name = $2;
-             }
-             if ( $_ =~ /value="([^"]+)"/ ) {
-                 $value=$1;
-                 insertAttribute($sid, \%Global, \%GName, "global", $name, $value);
-             }
-          }
-       }
-    }
-    close CIB;
-}
-
 if ( 0 == @sids ) {
     my $sid_ino_list;
        ( $sid_ino_list ) = get_sid_and_InstNr();
        @sids = split(",", $sid_ino_list);
-
 }
 
 foreach $sid (@sids) {
     ( $sid, $ino ) = split(":", $sid);
     $sid=tolower("$sid");
-    %Host=();
-    %HName=();
-    read_cib($sid);
-    get_hana_attributes($sid);
+    %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=();
+    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName);
+    #read_cib($sid);
     if ( keys(%Host) == 0 ) {
         printf "No attributes found for SID=%s\n", $sid;
     } else {
+	    if (keys(%Global) > 0 ) {print_host_attr(\%Global, \%GName, "Global", "");}
+	    if (keys(%Site) > 0 ) {print_host_attr(\%Site,   \%SName, "Sites",  "");}
         print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy);
     }
 }

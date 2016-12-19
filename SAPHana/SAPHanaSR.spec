@@ -2,7 +2,7 @@
 # spec file for package SAPHanaSR
 #
 # Copyright (c) 2013-2014 SUSE LINUX Products GmbH, Nuernberg, Germany.
-# Copyright (c) 2014-2015 SUSE LINUX GmbH, Nuernberg, Germany.
+# Copyright (c) 2014-2016 SUSE LINUX GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.152.18
+Version:        0.152.19
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 #Release:      1
@@ -39,6 +39,8 @@ Source10:       SAPHanaSRTools.pm
 Source11:       SAPHanaSR-monitor
 Source12:       SAPHanaSR-showAttr
 Source13:       SAPHanaSR-testDriver
+Source14:       SAPHanaSR-monitor.8
+Source15:       SAPHanaSR-showAttr.8
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
@@ -86,8 +88,12 @@ cp %{S:10} .
 cp %{S:11} .
 cp %{S:12} .
 cp %{S:13} .
+cp %{S:14} .
+cp %{S:15} .
 gzip ocf_suse_SAPHana.7
 gzip ocf_suse_SAPHanaTopology.7
+gzip SAPHanaSR-showAttr.8
+gzip SAPHanaSR-monitor.8
 
 %clean
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
@@ -114,6 +120,8 @@ install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/template
 install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
 install -m 0444 ocf_suse_SAPHana.7.gz %{buildroot}/usr/share/man/man7
 install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
+install -m 0444 SAPHanaSR-showAttr.8.gz %{buildroot}/usr/share/man/man8
+install -m 0444 SAPHanaSR-monitor.8.gz %{buildroot}/usr/share/man/man8
 
 %files
 %defattr(-,root,root)
@@ -141,5 +149,7 @@ install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
 %doc /usr/share/man/man7/ocf_suse_SAPHana.7.gz
 %doc /usr/share/man/man7/ocf_suse_SAPHanaTopology.7.gz
+%doc /usr/share/man/man8/SAPHanaSR-showAttr.8.gz
+%doc /usr/share/man/man8/SAPHanaSR-monitor.8.gz
 
 %changelog

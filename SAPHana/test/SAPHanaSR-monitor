@@ -2,10 +2,10 @@
 #
 # SAPHanaSR-monitor
 # (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
-# (c) 2015 SUSE Linux GmbH, Nuremberg, Germany
+# (c) 2015-2016 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com>
 # License: GPL v2+
-my $Version="0.17.2016.02.04.4";
+my $Version="0.21.2016.11.04.1";
 #
 ##################################################################
 use POSIX;
@@ -14,7 +14,7 @@ use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use Getopt::Long;
-use lib '/usr/share/SAPHanaSR/tests';
+use lib '/usr/lib/SAPHanaSR';
 use SAPHanaSRTools;
 
 ###################################
@@ -26,6 +26,7 @@ my $ClusterSecondaries=1;
 #my %Name;
 my %Host;
 my $host = hostname();
+my $sortBy="";
 
 my $varlib='/var/lib/SAPHanaTD';
 my $testfile='SAPHanaTD.status';
@@ -124,12 +125,13 @@ EOF
 </head>
 <body class="">
 <table cellpadding=5>
+  <!-- ################## AREA SID-STATUS ################# -->
   <tr><td valign="top" bgcolor="$sid_color"><h2>$sid</h2></td>
       <td valign="top"><b>SAPHanaSR-monitor $mydate</b>
           <table cellpadding=1>
-              <tr><td valign="top"><img width="100%" height="100%" src="final_icons/server_${hana1stat}.png"/></td>
+              <tr><td valign="top"><a href="../1"><img width="100%" height="100%" src="final_icons/server_${hana1stat}.png"/></a></td>
                   <td><img width="100%" height="100%" src="final_icons/arrow_${syncdir}_${syncstat}.png"/></td>
-                  <td valign="top"><img width="100%" height="100%" src="final_icons/server_${hana2stat}.png"/></td>
+                  <td valign="top"><a href="../2"><img width="100%" height="100%" src="final_icons/server_${hana2stat}.png"/></a></td>
               </tr>
               <tr><td valign="top" align="center"><b>$node1</b></td>
                   <td valign="top" align="center"><b>$sid</b></td>
@@ -137,25 +139,31 @@ EOF
               <tr>
           </table>
       </td>
-      <td valign="top" width="5%"><img width="100%" height="100%" src="suse_logo_w-tag_color.jpg"/></td></tr>
-  <tr><td valign="top" bgcolor="$crm_col"><h2>Crm</h2></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$crm_out</pre></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$crm_errors</pre></td>
+      <td valign="top" align="right"><a href="https://www.suse.com/de-de/products/sles-for-sap/resource-library/sap-best-practices.html"><img width="45%" height="45%" src="suse_logo_w-tag_color.jpg"/></a></td>
   </tr>
+  <!-- ################## AREA CRM ################# -->
+  <tr><td valign="top" bgcolor="$crm_col" rowspan="2"><h2>Crm</h2></td>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$crm_out</pre></td>
+  </tr>
+  <tr>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$crm_errors</pre></td>
+  </tr>
+  <!-- ################## AREA ATTR ################# -->
   <tr><td valign="top" bgcolor="$attr_col" rowspan="2"><h2>Attr</h2></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$attr_out</pre></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$attr_errors</pre></td>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$attr_out</pre></td>
   </tr>
-  <tr><td bgcolor="#B9B9B9"><pre>$score_out</pre></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre></pre></td>
+  <tr><td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$attr_errors</pre></td>
   </tr>
-  <tr><td valign="top" bgcolor="$log_col"><h2>Log</h2></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$log_out</pre></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$log_errors</pre></td>
+  <!-- ################## AREA LOG ################## --> 
+  <tr><td valign="top" bgcolor="$log_col" rowspan="2"><h2>Log</h2></td>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$log_out</pre></td>
   </tr>
+  <tr>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$log_errors</pre></td>
+  </tr>
+  <!-- ################## AREA TD ################## -->
   <tr><td valign="top" bgcolor="#B9B9B9"><h2>TD</h2></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre>$ftd_out</pre></td>
-      <td valign="top" bgcolor="#B9B9B9"><pre></pre></td>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$ftd_out</pre></td>
   </tr>
 </table>
 </body>
@@ -194,13 +202,29 @@ sub processMonitor($) {
     my $shost;
     my $laststate="";
     #
+    my %Global;
+    my %GName;
+    my %HName;
+    my %Site;
+    my %SName;
     %Host=();
-    get_hana_attributes($sid);
-    my $crm_out=`crm_mon -r1 -D`;
-    my $attr_out=host_attr2string();
-    my $score_out=`crm_simulate -Ls | grep -i promo`;
-    my $log_out=`grep 'SAPHana.*INFO: RA' /var/log/messages | tail -20`; # TODO: Do we need to optimize the runtime of this command?
-    my $ftd_out=`grep 'fhTD' /var/log/messages | tail -10`;
+    %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=();
+    set_HName(\%HName);  
+    # set_Host(\%Host);
+    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName);
+    # get_hana_attributes($sid);
+# we do not need the crm_mon status in the monitor any more
+    my $crm_out="";
+#    my $crm_out=`crm_mon -r1 -D`;
+    my $attr_out=host_attr2string(\%Host, \%HName, "title", $sortBy);
+ #   my $score_out=`crm_simulate -Ls | grep -i promo`;
+    my $score_out="";
+    my $log_out="";
+    my $ftd_out="";
+    if ( $cibFile eq "" ) {
+        $log_out=`grep 'SAPHana.*INFO: RA' /var/log/messages | tail -20`; # TODO: Do we need to optimize the runtime of this command?
+        $ftd_out=`grep 'fhTD' /var/log/messages | tail -10`;
+    }
     my $ftd_col="gray";
     my $crm_col="green";
     my $attr_col="green";
@@ -212,27 +236,7 @@ sub processMonitor($) {
     #  for the grafic output
     #
     my @node_list;
-    if ( $cibFile eq "" ) {
-        open CRM_NODES, "crm_node -l |";
-        while (<CRM_NODES>) {
-           if (/^[0-9]+\W+(\w+)\W/) {
-           push (@node_list, $1);
-           }
-        }
-        close CRM_NODES;
-    } else {
-        # TODO: For the "cold" cib case we need to check standby, maintenance and online status 
-        open CIB, "<$cibFile";
-        while (<CIB>) {
-           # <node id="gdepfhb2" uname="gdepfhb2">
-           if ( /<node .*uname="([^"]+)"/ ) {
-              push (@node_list, $1);
-           }
-        }
-        close CIB;
-    }
-
-    @node_list = ( sort (@node_list ));
+    @node_list = ( sort ( get_node_list() ));
 
 
     my $sync_col="green";
