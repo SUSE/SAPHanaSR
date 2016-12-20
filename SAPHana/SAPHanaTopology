@@ -28,7 +28,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.18"
+SAPHanaVersion="0.152.19"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -474,6 +474,7 @@ function sht_init() {
     ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
+    ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
     #
     # new "central" attributes
     #
@@ -856,6 +857,11 @@ function sht_monitor_clone() {
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG2: PROBE ONLY"
         sht_monitor; rc=$?
+        local hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
+            | awk -F':' '$1=="  version" {print $2}; ' | tr -d '[:space:]')
+        if [[ -n $hana_version ]]; then
+            set_hana_attribute "${NODENAME}" "$hana_version" ${ATTR_NAME_HANA_VERSION[@]}
+        fi
 	else
 		super_ocf_log debug "DBG2: REGULAR MONITOR"
         if ! check_saphostagent; then
@@ -889,10 +895,10 @@ function sht_monitor_clone() {
     fi
     # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-    # We rely on the following format: SID is word#4, NR is work#6, vHost is word#8
+    # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
     #### SAP-CALL
     vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-        | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr 2>/dev/null )
+        | awk '$4 == SID && $6 == SYSNR { print $8 }' SID=$SID SYSNR=$InstanceNr 2>/dev/null )
     # super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     if [ -n "$vName" ]; then
        set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]}
