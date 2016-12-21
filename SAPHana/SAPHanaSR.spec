@@ -39,6 +39,9 @@ Source10:       SAPHanaSRTools.pm
 Source11:       SAPHanaSR-monitor
 Source12:       SAPHanaSR-showAttr
 Source13:       SAPHanaSR-testDriver
+Source14:       SAPHanaSR.7
+Source15:       SAPHanaSR-showAttr.8
+Source16:       SAPHanaSR-monitor.8
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
@@ -86,8 +89,14 @@ cp %{S:10} .
 cp %{S:11} .
 cp %{S:12} .
 cp %{S:13} .
+cp %{S:14} .
+cp %{S:15} .
+cp %{S:16} .
 gzip ocf_suse_SAPHana.7
 gzip ocf_suse_SAPHanaTopology.7
+gzip SAPHanaSR-monitor.8
+gzip SAPHanaSR-showAttr.8
+gzip SAPHanaSR.7
 
 %clean
 test "$RPM_BUILD_ROOT" != "/" && rm -rf $RPM_BUILD_ROOT
@@ -99,6 +108,7 @@ mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/tests
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}/usr/share/man/man7
+mkdir -p %{buildroot}/usr/share/man/man8
 mkdir -p %{buildroot}/srv/www/hawk/config/wizard/templates
 mkdir -p %{buildroot}/srv/www/hawk/config/wizard/workflows
 install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
@@ -144,5 +154,8 @@ install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
 %doc /usr/share/man/man7/ocf_suse_SAPHana.7.gz
 %doc /usr/share/man/man7/ocf_suse_SAPHanaTopology.7.gz
+%doc /usr/share/man/man7/SAPHanaSR.7.gz
+%doc /usr/share/man/man8/SAPHanaSR-monitor.8.gz
+%doc /usr/share/man/man8/SAPHanaSR-showAttr.8.gz
 
 %changelog

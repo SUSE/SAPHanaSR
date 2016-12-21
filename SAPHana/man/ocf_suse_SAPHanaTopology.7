@@ -1,71 +1,85 @@
-.\" Version: 0.148.1
+.\" Version: 0.162.3
 .\"
-.TH ocf_suse_SAPHanaTopology 7 "04 Jun 2014" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaTopology 7 "26 Oct 2016" "" "OCF resource agents"
 .\"
 .SH NAME
-SAPHanaTopology \- Helps to manage two single SAP HANA databases with system replication.
+SAPHanaTopology \- Helps to manage two SAP HANA databases with system replication.
+.PP
 .\"
 .SH SYNOPSYS
-.br
 \fBSAPHanaTopology\fP [start | stop | status | monitor | meta\-data | validate\-all | methods | usage ]
+.PP
 .\"
 .SH DESCRIPTION
+SAPHanaTopology is a resource agent (RA) that analyzes the SAP HANA topology
+and "sends" all findings via the node status attributes to all nodes in the
+cluster. These attributes are taken by the SAPHanaController RA to control the
+SAP HANA databases. In addition it starts and monitors the local saphostagent.
+.PP
+The resource agent uses the following interfaces provided by SAP:
+.PP
+1. \fBlandscapeHostConfiguration.py\fP
 .br
-\fBSAPHanaTopology\fP is a resource agent (RA) that analyzes the SAP HANA topology
-and "sends" all findings via the node status attributes to all nodes in the cluster.
-These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
-In addition it starts and monitors the local saphostagent.
-
-1. Interface to monitor a HANA system: landscapeHostConfiguration.py 
-   landscapeHostConfiguration.py has some detailed output about HANA system status
-   and node roles. For our monitor the overall status is relevant. This overall 
-   status is reported by the returncode of the script:
-   0: Internal Fatal 1: ERROR 2: WARNING 3: INFO (maybe a switch of the resource running) 4: OK
-   The SAPHanaTopology resource agent will interpret returncodes 1 as NOT-RUNNING
-   (or 1 failure) and returncodes 2+3+4 as RUNNING.
-   SAPHanaTopology scans the output table of landscapeHostConfiguration.py to identify
-   the roles of the cluster node. Roles means configured and current role of the
-   nameserver as well as the indexserver.
-
-2. Interface is hdbnsutil
-   The interface hdbnsutil is used to check the "topology" of the system replication
-   as well as the current configuration (primary/secondary) of a SAP HANA database
-   instance. A second task of the interface is the posibility to run a system
-   replication takeover (sr_takeover) or to register a former primary to a newer one
-   (sr_register).
-
-3. saphostctrl
-   The interface saphostctrl uses the function ListInstances to figure out the
-   virtual host name of the SAP HANA instance. This is the hostname used during
-   the HANA installation.
+landscapeHostConfiguration.py has some detailed output about HANA system
+status and node roles. For our monitor the overall status is relevant. This
+overall status is reported by the returncode of the script:
+0: Internal Fatal 1: ERROR 2: WARNING 3: INFO (maybe a switch of the resource
+running) 4: OK
+.br
+The SAPHanaTopology resource agent will interpret returncodes 1 as
+NOT-RUNNING (or 1 failure) and returncodes 2+3+4 as RUNNING.
+SAPHanaTopology scans the output table of landscapeHostConfiguration.py to
+identify the roles of the cluster node. Roles means configured and current
+role of the nameserver as well as the indexserver.
 .PP
-Please see also the LIMITATIONS section below.
+2. \fBhdbnsutil\fP
+.br
+The interface hdbnsutil is used to check the "topology" of the system
+replication as well as the current configuration (primary/secondary) of a
+SAP HANA database. A second task of the interface is the posibility to run
+a system replication take-over (sr_takeover) or to register a former primary
+to a newer one (sr_register). In scale-out setups, hdbnsutil sometimes
+might take some time. SAPHanaTopology uses only task one. SAPHanaController 
+or SAPHana are using all three tasks.
 .PP
-Please notice that the method to "send" the findings via the node status attributes might
-change in a next version, so please do not think about those attributes as an "API". Also
-do not adjust those automatical set node attributes manulally in normal operation. Names
-and semantic of the attributes can change in next versions.
+3. \fBsaphostctrl\fP
+.br
+The interface saphostctrl uses the function ListInstances to figure out the
+virtual host name of the SAP HANA instance. This is typically the hostname used 
+during the HANA installation.
+.PP
+Please notice that the method to "send" the findings via the node status
+attributes might change in a next version. So please do not think about those
+attributes as an "API". Also do not adjust those automatically set node
+attributes manulally in normal operation. Names and semantics of the attributes
+can change in next versions.
+.PP
+Please see also the REQUIREMENTS section below.
+.PP
 .\"
 .SH SUPPORTED PARAMETERS
-.br
 This resource agent supports the following parameters:
 .PP
 \fBSID\fR
 .RS 4
 SAP System Identifier. Has to be same on both instances.
+Example "SID=SLE".
 .RE
 .PP
 \fBInstanceNumber\fR
 .RS 4
 Number of the SAP HANA database.
 For system replication also Instance Number+1 is blocked.
+Example "InstanceNumber=00".
 .RE
 .PP
-\fBSAPHanaFilter\fR
+.\"
+.SH SUPPORTED PROPERTIES
+\fBhana_${sid}_glob_filter\fR
 .RS 4
-Outdated parameter. Please not use this parameter any longer. One of the next
-updates will drop it completely. This resource agent parameter has been replaced
-by the cluster property 'hana_${sid}_glob_filter'.
+Global cluster property \fBhana_${sid}_glob_filter\fR .
+This property should only be set if requested by support engineers.
+The default is sufficient for normal operation.
 .RE
 .PP
 .\"
@@ -80,7 +94,7 @@ Sets the status of the clone to "started".
 .PP
 \fBstop\fR
 .RS 4
-Sets the status of the clone to "stoped".
+Sets the status of the clone to "stopped".
 .RE
 .PP
 \fBstatus\fR
@@ -91,7 +105,7 @@ Suggested minimum timeout: 60\&.
 .PP
 \fBmonitor\fR
 .RS 4
-Analysises the nodes HANA roles and landscape status.
+Analyses the nodes HANA roles and landscape status.
 Suggested minimum timeout: 600\&.
 Suggested interval: 10\&.
 .RE
@@ -115,22 +129,18 @@ Suggested minimum timeout: 5\&.
 .PP
 .\"
 .SH RETURN CODES
-.br
 The return codes are defined by the OCF cluster framework.
 Please refer to the OCF definition on the website mentioned below.
 .PP
 .\"
 .SH EXAMPLES
+* This is an example configuration for a SAPHanaTopology resource for HANA scale-up.
 .br
-* Below is an example configuration for a SAPHanaToplogy resource.
-.RS 2 
 In addition, a SAPHana resource is needed to make this work.
 .RE
 .PP
 .RS 4
-primitive rsc_SAPHanaTopology_SLE_HDB00 ocf:suse:SAPHanaTopology \\
-.br
-operations $id="rsc_sap2_SLE_HDB00-operations" \\
+primitive rsc_SAPHanaTop_SLE_HDB00 ocf:suse:SAPHanaTopology \\
 .br
 op start interval="0" timeout="600" \\
 .br
@@ -138,54 +148,100 @@ op stop interval="0" timeout="600" \\
 .br
 op monitor interval="10" timeout="600" \\
 .br
-params SID="SLE" InstanceNumber="00" 
+params SID="SLE" InstanceNumber="00"
 .PP
-clone cln_SAPHanaTopology_SLE_HDB00 rsc_SAPHanaTopology_SLE_HDB00 \\
+clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
 .br
-notify="true" clone-max="2" clone-node-max="1"
+notify="true" interleave="true" clone-node-max="1"
 .RE
-.\" TODO: example grep messages
-.\" TODO: example cibadm host attributes
+.PP
+* Below is an example configuration for a SAPHanaTopology resource for HANA scale-out.
+.br
+The HANA consists of two sites with five nodes each. An additional cluster node
+is used as majority maker for split brain situations.
+In addition, a SAPHanaController resource is needed to make this work.
+.RE
+.PP
+.RS 4
+primitive rsc_SAPHanaTop_SLE_HDB00 ocf:suse:SAPHanaTopology \\
+.br
+op start interval="0" timeout="600" \\
+.br
+op stop interval="0" timeout="600" \\
+.br
+op monitor interval="10" timeout="600" \\
+.br
+params SID="SLE" InstanceNumber="00"
+.PP
+clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
+.br
+notify="true" interleave="true" clone-node-max="1"
+.PP
+location SAPHanaTop_not_on_majority_maker cln_SAPHanaTop_HAE_HDB00 -inf: vm-majority
+.PP
+order SAPHanaTop_first 1000: cln_SAPHanaTop_SLE_HDB00 msl_SAPHC_SLE_HDB00
+.RE
+.PP
 .\"
-.SH LIMITATIONS
-.br
-For the current version of the SAPHanaTopology / SAPHana resource agent software
-package the support is limited to the following scenarios and parameters:
-.br
-1. Two-node clusters with single-box to single-box system replication.
-.br
-2. Technical users and groups such as sidadm are defined locally in the Linux system.
-.br
-3. Time synchronization between the cluster nodes using NTP.
-.br
-4. There is no other SAP HANA system (like QA) on the replicating node which needs
-to be stopped during takeover.
-.br
-5. Only one system replication for the SAP HANA database.
-.br
-6. Both SAP HANA instances have the same SAP Identifier (SID) and Instance Number.
-.br
-7. Beside SAP HANA you need SAP hostagent to be installed on your system.
-.br
-8. Automated start of SAP HANA instances during system boot must be switched of.
-.br
-9. The current resource agent supports SAP HANA in System replication beginning
-with HANA version 1.0 SPS 7 patch level 70.
+.SH FILES
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHana
+    the resource agent for scale-up
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaController
+    the resource agent for scale-out
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaTopology
+    the topology resource agent itself
+.TP
+$HA_RSCTMP/SAPHana/SAPTopologyON.$SID
+    the RA's status file (subject to change)
+.TP
+/usr/sap/$SID/$InstanceName/exe
+    default path for DIR_EXECUTABLE
+.TP
+/usr/sap/$SID/SYS/profile
+    default path for DIR_PROFILE
+.\"
+.\" TODO: INSTANCE_PROFILE
+.\"
+.PP
+.SH REQUIREMENTS
+For the current version of the SAPHanaTopology resource agent that comes with
+the software package SAPHanaSR or SAPHanaSR-ScaleOut, the support is limited
+to the scenarios and parameters described in the respective manual page
+SAPHanaSR(7) or SAPHanaSR-ScaleOut(7).
+.PP
 .\"
 .SH SEE ALSO
+\fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBntp.conf\fP(5) , \fBstonith\fP(8)
 .br
-\fBocf_suse_SAPHana\fP(7) , \fBntp.conf\fP(5) ,
 https://www.suse.com/products/sles-for-sap/resource-library/sap-best-practices.html ,
-http://clusterlabs.org/doc/en-US/Pacemaker/1.1/html/Pacemaker_Explained/s-ocf-return-codes.html
+.br
+https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
+.br
+http://clusterlabs.org/doc/en-US/Pacemaker/1.1/html/Pacemaker_Explained/s-ocf-return-codes.html ,
+.br
+http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution ,
+.br
+http://scn.sap.com/docs/DOC-60334 ,
+.br
+http://scn.sap.com/docs/DOC-65899
+.PP
 .\"
 .SH AUTHORS
-.br
 F.Herschel, L.Pinne.
+.PP
 .\"
 .SH COPYRIGHT
 (c) 2014 SUSE Linux Products GmbH, Germany.
 .br
-SAPHana comes with ABSOLUTELY NO WARRANTY.
+(c) 2015-2016 SUSE Linux GmbH, Germany.
+.br
+SAPHanaTopology comes with ABSOLUTELY NO WARRANTY.
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

@@ -1,0 +1,261 @@
+.\" Version: 0.152.19
+.\"
+.TH SAPHanaSR 7 "21 Dec 2016" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR \- Tools for automating SAP HANA system replication in scale-up setups.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+\fBOverview\fR
+.PP
+The SAPHanaSR package provides resource agents (RA) and tools for setting
+up and managing automation of SAP HANA system replication (SR) in scale-up setups.
+.pp
+System replication will help to replicate the database data from one site to
+another site in order to compensate for database failures. With this mode of
+operation, internal SAP HANA high-availability (HA) mechanisms and the Linux
+cluster have to work together.
+.PP
+The SAPHana RA performs the actual check of the SAP HANA
+database instances and is configured as a master/slave resource.
+Managing the two SAP HANA instances means that the resource agent controls
+the start/stop of the instances. In addition the resource agent is able to
+monitor the SAP HANA databases on landscape host configuration level.
+For this monitoring the resource agent relies on interfaces provided by SAP.
+As long as the HANA landscape status is not "ERROR" the Linux cluster will not
+act. The main purpose of the Linux cluster is to handle the take-over to the
+other site. Only if the HANA landscape status indicates that HANA can not recover
+from the failure and the replication is in sync, then Linux will act.
+.PP
+An important task of the resource agent is to check the synchronisation status
+of the two SAP HANA databases. If the synchronisation is not "SOK", then the
+cluster avoids to failover to the secondary side, if the primary fails. This is
+to improve the data consistency.
+.PP
+Note: To automate SAP HANA SR in scale-out setups, please use the package
+SAPHanaSR-ScaleOut.
+.PP
+\fBScenarios\fR
+.PP
+.\" TODO
+In order to illustrate the meaning of the above overview, some important
+situations are described below. This is not a complete description of all
+situations. 
+.PP
+1. \fBSite take-over after primary has failed\fR
+.br
+This is the basic use case for HANA SR automation. 
+.br
+1. site_A is primary, site_B is secondary - they are in sync.
+.br
+2. site_A crashes.
+.br
+3. site_B does the take-over and runs now as new primary. The Linux cluster
+always makes sure the node at site_B is shut off before any other action is
+initiated.
+.PP
+2. \fBPrevention against dual-primary\fR
+.br
+A primary absolutely must never be started, if the cluster does not know
+anything about the other site.
+On initial cluster start, the cluster needs to detect a valid HANA system
+replication setup, including system replication status (SOK) and last primary
+timestamp (LPT). This is neccessary to ensure data integrity.
+.PP
+The rational behind this is shown in the following scenario:
+.br
+1. site_A is primary, site_B is secondary - they are in sync.
+.br
+2. site_A crashes (remember the HANA ist still marked primary).
+.br
+3. site_B does the take-over and runs now as new primary.
+.br
+4. DATA GETS CHANGED ON NODE2 BY PRODUCTION
+.br
+5. The admin also stops the cluster on site_B (we have two HANAs both
+   internally marked down and primary now).
+.br
+6. What, if the admin would now restart the cluster on site_A?
+.br
+6.1 site_A would take its own CIB after waiting for the initial fencing
+    time for site_B.
+.br
+6.2 It would "see" its own (cold) primary and the fact that there was a
+    secondary.
+.br
+6.3 It would start the HANA from point of time of step 1.->2. (the crash),
+    so all data changed inbetween would be lost.
+.br
+This is why the Linux cluster needs to enforce a restart inhibit.
+.PP
+There are two options to get back both, SAP HANA SR and the Linux cluster,
+into a fully functional state:
+.br
+a) the admin starts both nodes again
+.br
+b) In the situation where the site_B is still down, the admin starts the
+   primary on site_A manually.
+.br
+The Linux cluster will follow this administrative decision. In both cases the
+administrator should register and start a secondary as soon as posible. This
+avoids a full log partition with consequence of a DATABASE STUCK.
+.PP
+3. \fBAutomatic registration as secondary after site failure and takeover\fR
+.br
+The cluster can be configured to register a former primary database
+automatically as secondary. If this option is set, the resource agent 
+will register a former primary database as secondary during cluster/resource
+start.
+.PP
+4. \fBSite take-over not preferred over local re-start\fR
+.br
+SAPHanaSR-ScaleOut allows to configure, if you prefer to takeover to the
+secondary after the primary landscape fails. The alternative is to restart the
+primary landscape, if it fails and only to takeover when no local restart is
+possible anymore. This can be tuned by SAPHana(7) parameters.
+.br
+The current implementation only allows to takeover in case the landscape status
+reports 1 (ERROR). The cluster will not takeover, when the SAP HANA still
+tries to repair a local failure.
+.\" see \fBPREFER_SITE_TAKEOVER\fR
+.PP
+\fBImplementation\fR
+.PP
+The two HANA database systems (primary and secondary site) are managed by the
+same single Linux cluster. The number of nodes in that single Linux cluster
+usually is two.
+.PP
+The HANA consists of two sites with one node each.
+.br
+Note: A third site can be added, with another system replication (aka replication
+chaining). This will be tolerated by the cluster. Nevertheless, this additional
+pieces are not managed by the cluster. E.g. if the direction of system replication
+between the two cluster nodes changes, the third site must be disconnected before
+hand. So, such a replication chaining does not allow to use the AUTOMATED_REGISTER
+feature of SAPHanaSR.
+.PP
+A common STONITH mechanism is set up for all nodes accross all the sites.
+.PP
+Since the IP address of the primary HANA database system is managed by the
+cluster, only that single IP address is needed to access any nameserver
+candidate.
+.PP
+\fBBest Practice\fR
+.PP
+\fB*\fR Use two independent corosync rings, at least one of them on bonded network.
+Resulting in at least three physical links. Unicast is preferred. 
+.PP
+\fB*\fR Use Stonith Block Device (SBD), shared LUNs across all nodes on all
+sites. Of course, together with hardware watchdog.
+.PP
+\fB*\fR Align all timeouts in the Linux cluster with the timeouts of the underlying
+storage and multipathing.
+.PP
+\fB*\fR Check the installation of OS and Linux cluster on all nodes before doing
+any functional tests.
+.PP
+\fB*\fR Carefully define, perform, and document tests for all scenarios that should
+be covered. 
+.PP
+\fB*\fR Test HANA features without Linux cluster before doing the overall
+cluster tests.
+.PP
+\fB*\fR Test basic Linux cluster features without HANA before doing the overall
+cluster tests.
+.PP
+\fB*\fR Be patient. For detecting the overall HANA status, the Linux cluster needs
+a certain amount of time, depending on the HANA and the configured intervalls and
+timeouts.
+.PP
+\fB*\fR Before doing anything, always check for the Linux cluster's idle status,
+the HANA landscape status, and the HANA SR status.
+.PP
+.\"
+.SH REQUIREMENTS
+.PP
+For the current version of the package SAPHanaSR, the support is
+limited to the following scenarios and parameters:
+.PP
+1. HANA scale-up cluster with system replication. The two HANA database
+systems (primary and secondary site) are managed by one Linux cluster.
+The number of nodes in that single Linux cluster is two.
+Note: A three-node Linux cluster is possible, but not covered by current
+best practices.
+.PP
+2. Technical users and groups such as sidadm are defined locally in the
+Linux system.
+.PP
+3. Strict time synchronization between the cluster nodes, e.g. NTP.
+.PP
+4. For scale-up the following SAP HANA SR scenarios are supported with the
+SAPHanaSR package:
+.br
+	4.1 performance-optimized (memory preload on secondary)
+.br
+	4.2 cost-optimized (e.g. with QA on secondary)
+.br
+	4.3 multi-tier (replication chaining, third node connected to second one)
+.br
+	4.4 single-tenant or multi-tenant (MDC) for all of the above
+.br
+Note: Support for MCOS is currently under development. 
+.PP
+5. Only one system replication for the SAP HANA database.
+.PP
+6. Both SAP HANA database systems have the same SAP Identifier (SID)
+and Instance Number.
+.PP
+7. Besides SAP HANA you need SAP hostagent to be installed and started 
+on your system.
+.PP
+8. Automated start of SAP HANA database systems during system boot
+must be switched off.
+.PP
+9. For scale-up, the current resource agent supports SAP HANA in system
+replication beginning with HANA version 1.0 SPS 7 patch level 70.
+Recommended is SPS 11.
+.PP
+.\"
+.SH BUGS
+.\" TODO
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,  
+\fBntp.conf\fP(5) , \fBstonith\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) ,
+\fBcrm\fP(8) , \fBcorosync.conf\fP(5) , \fBcrm_no_quorum_policy\fP(7) ,
+\fBcs_precheck_for_hana\fP(8) , \fBcs_add_watchdog_to_initrd\fP(8)
+.br
+https://www.suse.com/products/sles-for-sap/resource-library/sap-best-practices.html ,
+.br
+https://www.suse.com/releasenotes/ ,
+.br
+https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
+.br
+https://susecon2016.smarteventscloud.com/connect/fileDownload/session/0A37C953416A1386F386C388EE6A9CCF/TUT90846.pdf ,
+.br
+http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution ,
+.br
+http://scn.sap.com/docs/DOC-60334 ,
+.br
+http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy
+.PP
+.SH AUTHORS
+.br
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2015-2016 SUSE Linux GmbH, Germany.
+.br
+The package SAPHanaSR comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
