@@ -21,6 +21,7 @@ Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
 Version:        0.152.19
+Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
 BuildArch:      noarch
@@ -86,8 +87,8 @@ mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/tests
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}/usr/lib/%{name}
-mkdir -p %{buildroot}/usr/share/man/man7
-mkdir -p %{buildroot}/usr/share/man/man8
+mkdir -p %{buildroot}%{_mandir}/man7
+mkdir -p %{buildroot}%{_mandir}/man8
 
 # resource agents
 install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
@@ -96,12 +97,12 @@ install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
 install -m 0444 doc/* %{buildroot}/%{_docdir}/%{name}
 
 # manual pages
-install -m 0444 man/*.7.gz %{buildroot}/usr/share/man/man7
-install -m 0444 man/*.8.gz %{buildroot}/usr/share/man/man8
+install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
+install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 # auxiliary Perl library and test scripts
 install -m 0555 test/show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
-install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
+#install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
 install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
@@ -158,11 +159,11 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %files doc
 %defattr(-,root,root)
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
-%doc /usr/share/man/man7/ocf_suse_SAPHana.7.gz
-%doc /usr/share/man/man7/ocf_suse_SAPHanaTopology.7.gz
-%doc /usr/share/man/man7/SAPHanaSR.7.gz
-%doc /usr/share/man/man8/SAPHanaSR-monitor.8.gz
-%doc /usr/share/man/man8/SAPHanaSR-showAttr.8.gz
+%doc %{_mandir}/man7/ocf_suse_SAPHana.7.gz
+%doc %{_mandir}/man7/ocf_suse_SAPHanaTopology.7.gz
+%doc %{_mandir}/man7/SAPHanaSR.7.gz
+%doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
+%doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
 
 
 %changelog
