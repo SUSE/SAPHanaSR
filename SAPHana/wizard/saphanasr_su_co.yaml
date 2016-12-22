@@ -1,0 +1,126 @@
+# encoding: utf-8
+# ------------------------------------------------------------------------------
+# Copyright (c) 2016 SUSE Linux GmbH, Nuernberg, Germany.
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of version 2 of the GNU General Public License as published by the
+# Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, contact SUSE Linux GmbH.
+#
+# ------------------------------------------------------------------------------
+#
+# Authors: Ilya Manyugin <ilya.manyugin@suse.com>
+# Summary:
+#   This script sets up Cost-Optimized System Replication for a two-node cluster.
+---
+- version: 2.2
+  name: saphanasr-su-co
+  category: SAP
+  shortdesc: SAP HANA SR Scale-Up Cost-Optimized
+  longdesc: |
+    SAP HANA System Replication, Scale-Up Cost-Optimized scenario.
+
+    Cost-optimized scenario allows to set up a synchronous system replication
+    between two nodes, A and B, within the same cluster, while a development
+    or quality assurance system is running on the node B, and the production database is shrunk.  
+  
+  include:
+    - script: saphanasr
+      name: production
+
+  parameters:
+    - name: System_ID
+      shortdesc: SAP System ID (Non-Productive)
+      longdesc: |
+        The SAP System ID of the non-productive HANA instance.
+        The System ID is a 3-character alphanumeric string starting with a letter.
+      required: true
+      type: string
+      example: "QAS"
+    - name: Instance
+      shortdesc: SAP Instance Number (Non-Productive)
+      longdesc: |
+        The SAP Instance Number of the production (replicated) HANA instance.
+        The Instance Number must be a two-digit number with leading zeros.
+      required: true
+      type: string
+      example: "99"
+    - name: Primary_Node
+      type: string
+      required: true
+      shortdesc: Name of the primary node
+      longdesc: |
+        Host name of the primary node, where the Non-Productive HANA instance should not run.
+        This parameter is required in order to set the location constraint of the non-productive
+        HANA instance.
+
+  actions:
+    - shortdesc: Verify HANA Parameters (Non-Productive)
+      nodes: local
+      root: false
+      call: |
+        #!/usr/bin/env python2
+        import sys, re, subprocess
+
+        alles_gut = True
+
+        def error(msg):
+          print >> sys.stderr, msg
+          global alles_gut
+          alles_gut = False
+
+        reserved_sids = ['ADD', 'ALL', 'AND', 'ANY', 'ASC', 'COM', 'DBA', 'END', 'EPS', 'FOR', 
+            'GID', 'IBM', 'INT', 'KEY', 'LOG', 'MON', 'NIX', 'NOT', 'OFF', 'OMS', 'RAW', 'ROW', 
+            'SAP', 'SET', 'SGA', 'SHG', 'SID', 'SQL', 'SYS', 'TMP', 'UID', 'USR', 'VAR']
+        
+        if '{{System_ID}}' == '{{production::System_ID}}':
+            error("System ID of the productive and non-productive instances collide.")
+
+        if not re.match('^[A-Z][A-Z0-9]{2}$', '{{System_ID}}'):
+            error("System ID must be a three-character string\n"
+            "consisting of capital letters and digits, starting with a letter.")
+        
+        if "{{System_ID}}" in reserved_sids:
+            error("System ID '{{System_ID}}' is reserved and cannot be used.")
+        
+        if not re.match('^\d{2}$', '{{Instance}}'):
+            error("Instance number has to be a two-digit number with leading zeros.")
+
+        try:
+            out = subprocess.check_output(['crm', 'node', 'list'])
+        except subprocess.CalledProcessError, e:
+            error("Could not get the node list.")
+            sys.exit(1)
+
+        node_list = re.findall('^(\w+)\(', out, re.MULTILINE)
+
+        if not "{{Primary_Node}}" in node_list:
+            error("Node {{Primary_Node}} was not found in the cluster.")
+
+        if not alles_gut:
+          sys.exit(1)
+
+
+    - include: production
+    - cib: |
+        primitive rsc_SAP_{{System_ID}}_HDB{{Instance}} ocf:heartbeat:SAPDatabase
+          params
+          DBTYPE="HDB"
+          SID="{{System_ID}}"
+          MONITOR_SERVICES="hdbindexserver|hdbnameserver"
+          op start interval="0" timeout="600"
+          op monitor interval="120" timeout="700"
+          op stop interval="0" timeout="300"
+          meta priority="100"
+
+        location loc_{{System_ID}}_never_suse01 rsc_SAP_{{System_ID}}_HDB{{Instance}} -inf: {{Primary_Node}}      
+          
+        colocation col_{{System_ID}}_never_with_PRDip -inf: rsc_SAP_{{System_ID}}_HDB{{Instance}}:Started rsc_ip_{{production:System_ID}}_HDB{{production:Instance}}
+          
+        order ord_{{System_ID}}_stop_before_{{production:System_ID}}_promote inf: rsc_SAP_{{System_ID}}_HDB{{Instance}}:stop msl_SAPHana_{{production:System_ID}}_HDB{{production:Instance}}:promote

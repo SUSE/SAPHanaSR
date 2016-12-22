@@ -1,0 +1,193 @@
+# encoding: utf-8
+# ------------------------------------------------------------------------------
+# Copyright (c) 2016 SUSE Linux GmbH, Nuernberg, Germany.
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of version 2 of the GNU General Public License as published by the
+# Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, contact SUSE Linux GmbH.
+#
+# ------------------------------------------------------------------------------
+#
+# Authors: Ilya Manyugin <ilya.manyugin@suse.com>
+# Summary:
+#   This script sets up System Replication for a two-node cluster.
+#   It is not exposed to the user, but instead included by other scripts.
+---
+- version: 2.2
+  name: saphanasr
+  category: Script
+  shortdesc: SAP HANA SR (HIDDEN)
+  longdesc: |
+    SAP HANA System Replication allows to set up a synchronous system
+    replication between two HANA nodes, A and B, within the same cluster.
+  
+  parameters:
+    - name: System_ID
+      shortdesc: SAP System ID
+      longdesc: |
+        A unique SAP System ID within the landscape. 
+        The SID is a 3-character alphanumeric string starting with a letter.
+      required: true
+      type: string
+      example: HDB
+    - name: Instance
+      shortdesc: SAP Instance Number
+      longdesc: |
+        A unique SAP Instance Number.
+        The Instance Number must be a two-digit number with leading zeros.
+      required: true
+      type: string
+      example: "00"
+    - name: IP
+      shortdesc: Virtual IP Address
+      longdesc: The Virtual IP Address assigned to HANA at the primary site.
+      required: true
+      type: ip_address
+    # advanced parameters
+    - name: netmask
+      shortdesc: CIDR netmask of the Virtual IP
+      longdesc: The network mask of the Virtual IP Address
+      type: integer
+      required: false
+      advanced: true
+      default: 24
+    - name: prefer_site_takeover
+      shortdesc: Local or site recover preferred?
+      longdesc: |
+        Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default="yes"
+        false: Do prefer restart locally
+        true: Do prefer takever to remote site
+      type: boolean
+      default: true
+      required: false
+      advanced: true
+    - name: automated_register
+      shortdesc: Register the former primary site automatically.
+      longdesc: |
+        The parameter defines, whether a former primary instance should be registered automatically 
+        by the resource agent during cluster/resource start, if  the DUPLICATE_PRIMARY_TIMEOUT is expired.
+      default: false
+      type: boolean
+      required: false
+      advanced: true
+    - name: duplicate_primary_timeout
+      required: false
+      type: integer
+      default: 7200
+      shortdesc: Time difference needed between two primary time stamps, if a dual-primary situation occurs
+      longdesc: |
+        Time difference needed between to primary time stamps,
+        if a dual-primary situation occurs. If the time difference is
+        less than the time gap, then the cluster holds one or both instances in a "WAITING" status. This is to give an admin
+        a chance to react on a failover. A failed former primary will be registered after the time difference is passed. After
+        this registration to the new primary all data will be overwritten by the system replication.
+      advanced: true
+    - name: dir_executable
+      required: false
+      type: string
+      default: ""
+      shortdesc: Path to sapstartsrv and sapcontrol executables.
+      longdesc: The absolute path to sapstartsrv and sapcontrol executables.
+      advanced: true
+    - name: dir_profile
+      required: false
+      type: string
+      default: ""
+      shortdesc: Path to the start profile
+      longdesc: |
+        The full qualified path where to find the SAP START profile. 
+        Specify this parameter, if you have changed the SAP profile directory location after 
+        the default SAP installation.
+      advanced: true
+    - name: instance_profile
+      required: false
+      type: string
+      default: ""
+      shortdesc: HANA instance profile name
+      longdesc: |
+        The name of the SAP HANA instance profile. Specify this parameter, if you have changed the
+        name of the SAP HANA instance profile after the default SAP installation. 
+        Normally you do not need to set this parameter.
+      advanced: true
+
+  actions:
+    - shortdesc: Verify HANA Parameters
+      nodes: local
+      root: false
+      call: |
+        #!/usr/bin/env python2
+        import sys, re, subprocess
+
+        alles_gut = True
+
+        def error(msg):
+          print >> sys.stderr, msg
+          global alles_gut
+          alles_gut = False
+
+        reserved_sids = ['ADD', 'ALL', 'AND', 'ANY', 'ASC', 'COM', 'DBA', 'END', 'EPS', 'FOR', 
+            'GID', 'IBM', 'INT', 'KEY', 'LOG', 'MON', 'NIX', 'NOT', 'OFF', 'OMS', 'RAW', 'ROW', 
+            'SAP', 'SET', 'SGA', 'SHG', 'SID', 'SQL', 'SYS', 'TMP', 'UID', 'USR', 'VAR']
+        
+        if not re.match('^[A-Z][A-Z0-9]{2}$', '{{System_ID}}'):
+            error("System ID must be a three-character string\n"
+            "consisting of capital letters and digits, starting with a letter.")
+        
+        if "{{System_ID}}" in reserved_sids:
+            error("System ID '{{System_ID}}' is reserved and cannot be used.")
+        
+        if not re.match('^\d{2}$', '{{Instance}}'):
+            error("Instance number has to be a two-digit number with leading zeros.")
+
+        if not alles_gut:
+          sys.exit(1)
+
+
+    - cib: |
+        primitive rsc_ip_{{System_ID}}_HDB{{Instance}} ocf:heartbeat:IPaddr2
+          params
+          ip="{{IP}}"
+          cidr_netmask={{netmask}}
+          nic=eth0
+          op start timeout=20 op stop timeout=20 op monitor interval=10 timeout=20
+        
+        primitive rsc_SAPHana_{{System_ID}}_HDB{{Instance}} ocf:suse:SAPHana
+          params
+          SID="{{System_ID}}"
+          InstanceNumber="{{Instance}}"
+          PREFER_SITE_TAKEOVER="{{prefer_site_takeover}}"
+          AUTOMATED_REGISTER="{{automated_register}}"
+          DUPLICATE_PRIMARY_TIMEOUT="{{duplicate_primary_timeout}}"
+          DIR_EXECUTABLE="{{dir_executable}}"
+          DIR_PROFILE="{{dir_profile}}"
+          INSTANCE_PROFILE="{{instance_profile}}"
+          op start interval="0" timeout="3600"
+          op stop interval="0" timeout="3600"
+          op promote interval="0" timeout="3600"
+          op monitor interval="60" role="Master" timeout="700"
+          op monitor interval="61" role="Slave" timeout="700"
+        
+        primitive rsc_SAPHanaTopology_{{System_ID}}_HDB{{Instance}} ocf:suse:SAPHanaTopology
+          params
+          SID="{{System_ID}}"
+          InstanceNumber="{{Instance}}"
+          op monitor interval="10" timeout="600"
+          op start interval="0" timeout="600"
+          op stop interval="0" timeout="300"
+        
+        ms msl_SAPHana_{{System_ID}}_HDB{{Instance}} rsc_SAPHana_{{System_ID}}_HDB{{Instance}}
+          meta clone-max="2" clone-node-max="1" interleave="true"
+
+        clone cln_SAPHanaTopology_{{System_ID}}_HDB{{Instance}} rsc_SAPHanaTopology_{{System_ID}}_HDB{{Instance}}
+          meta is-managed="true" clone-node-max="1" interleave="true"
+
+        colocation col_saphana_ip_{{System_ID}}_HDB{{Instance}} 2000: rsc_ip_{{System_ID}}_HDB{{Instance}}:Started msl_SAPHana_{{System_ID}}_HDB{{Instance}}:Master
+
+        order ord_SAPHana_{{System_ID}}_HDB{{Instance}} Optional: cln_SAPHanaTopology_{{System_ID}}_HDB{{Instance}} msl_SAPHana_{{System_ID}}_HDB{{Instance}}

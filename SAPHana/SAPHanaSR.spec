@@ -42,10 +42,21 @@ Source13:       SAPHanaSR-testDriver
 Source14:       SAPHanaSR.7
 Source15:       SAPHanaSR-showAttr.8
 Source16:       SAPHanaSR-monitor.8
+Source17:       saphanasr.yaml
+Source18:       saphanasr_su_po.yaml
+Source19:       saphanasr_su_co.yaml
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Requires:       pacemaker > 1.1.1
 Requires:       resource-agents
+
+%if 0%{?sle_version} >= 120100
+Requires:       crmsh
+Requires:       crmsh-scripts >= 2.2.0
+BuildRequires:  resource-agents
+BuildRequires:  crmsh
+BuildRequires:  crmsh-scripts
+%endif
 
 %package doc
 Summary:        Setup-Guide for SAPHanaSR
@@ -73,6 +84,10 @@ This sub package includes the Setup-Guide for getting SAP HANA system replicatio
 
 %prep
 %setup -n %{name} -c -T
+%if 0%{?sle_version} >= 120100
+%define crmscr_path /usr/share/crmsh/scripts/
+%endif
+
 
 %build
 cp %{S:0} .
@@ -92,6 +107,9 @@ cp %{S:13} .
 cp %{S:14} .
 cp %{S:15} .
 cp %{S:16} .
+cp %{S:17} .
+cp %{S:18} .
+cp %{S:19} .
 gzip ocf_suse_SAPHana.7
 gzip ocf_suse_SAPHanaTopology.7
 gzip SAPHanaSR-monitor.8
@@ -109,8 +127,6 @@ mkdir -p %{buildroot}/usr/share/%{name}/tests
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}/usr/share/man/man7
 mkdir -p %{buildroot}/usr/share/man/man8
-mkdir -p %{buildroot}/srv/www/hawk/config/wizard/templates
-mkdir -p %{buildroot}/srv/www/hawk/config/wizard/workflows
 install -m 0755 SAPHana         %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0755 SAPHanaTopology %{buildroot}/usr/lib/ocf/resource.d/suse
 install -m 0444 LICENSE         %{buildroot}/%{_docdir}/%{name}
@@ -121,10 +137,22 @@ install -m 0555 SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
 install -m 0555 SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0444 SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
-install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
-install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
 install -m 0444 ocf_suse_SAPHana.7.gz %{buildroot}/usr/share/man/man7
 install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
+install -m 0444 SAPHanaSR-monitor.8.gz %{buildroot}/usr/share/man/man8
+install -m 0444 SAPHanaSR-showAttr.8.gz %{buildroot}/usr/share/man/man8
+install -m 0444 SAPHanaSR.7.gz %{buildroot}/usr/share/man/man7
+# crm/hawk wizard files 
+%if 0%{?sle_version} >= 120100
+install -D -m 0644 saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
+install -D -m 0644 saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
+install -D -m 0644 saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
+%else
+mkdir -p %{buildroot}/srv/www/hawk/config/wizard/templates
+mkdir -p %{buildroot}/srv/www/hawk/config/wizard/workflows
+install -m 0444 SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
+install -m 0444 90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
+%endif
 
 %files
 %defattr(-,root,root)
@@ -134,13 +162,6 @@ install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
 /usr/lib/ocf/resource.d/suse/SAPHana
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
 /usr/share/%{name}
-%dir /srv/www/hawk
-%dir /srv/www/hawk/config
-%dir /srv/www/hawk/config/wizard
-%dir /srv/www/hawk/config/wizard/templates
-%dir /srv/www/hawk/config/wizard/workflows
-/srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
-/srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/README
 %doc %{_docdir}/%{name}/LICENSE
@@ -148,6 +169,22 @@ install -m 0444 ocf_suse_SAPHanaTopology.7.gz %{buildroot}/usr/share/man/man7
 /usr/lib/%{name}/SAPHanaSRTools.pm
 /usr/sbin/SAPHanaSR-monitor
 /usr/sbin/SAPHanaSR-showAttr
+%if 0%{?sle_version} >= 120100
+%dir %{crmscr_path}/saphanasr/
+%dir %{crmscr_path}/saphanasr-su-po/
+%dir %{crmscr_path}/saphanasr-su-co/
+%{crmscr_path}/saphanasr/main.yml
+%{crmscr_path}/saphanasr-su-po/main.yml
+%{crmscr_path}/saphanasr-su-co/main.yml
+%else
+%dir /srv/www/hawk
+%dir /srv/www/hawk/config
+%dir /srv/www/hawk/config/wizard
+%dir /srv/www/hawk/config/wizard/templates
+%dir /srv/www/hawk/config/wizard/workflows
+/srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
+/srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
+%endif
 
 %files doc
 %defattr(-,root,root)
