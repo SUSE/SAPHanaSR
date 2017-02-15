@@ -8,6 +8,8 @@ FILE_LIST = doc \
 	 		test \
 	 		wizard 
 
+TAR_EXTRAS = -X test/SAPHanaSR-testDriver
+
 PKG = SAPHanaSR
 SPECFILE = ${PKG}.spec
 VERSION = $(strip $(patsubst Version:,,$(shell grep '^Version:' $(SPECFILE))))
@@ -19,7 +21,7 @@ OBSTARG ?= "SLE_12_SP2"
 
 tarball:
 	@echo -e "\e[33mMaking ${PKG}-${VERSION}.tgz\e[0m"
-	tar zcf ${PKG}-${VERSION}.tgz ${FILE_LIST}
+	tar zcf ${PKG}-${VERSION}.tgz ${FILE_LIST} ${TAR_EXTRAS}
 	@echo -e "\e[32mDone\e[0m"
 
 .ONESHELL:

@@ -5,7 +5,7 @@
 # (c) 2015-2016 SUSE Linux GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.21.2016.11.04.1
+# Version: 0.22.2017.01.20.1
 #
 ##################################################################
 
@@ -86,7 +86,7 @@ sub get_nodes_online
     my $result="";
     my $h;
     foreach $h ( keys(%{$$refHName{node_state}}) ) {
-        if ( $$refHName{node_state}->{$h} eq "online" ) {
+        if ( get_node_status($h) eq "online" ) {
            $result++;
         }
     }
@@ -96,9 +96,18 @@ sub get_nodes_online
 sub get_node_status($)
 {
     # typically returns online, standby or offline
+    # since pacemaker ?? online/offile and standby (on/off) are 2 different attributes
     my $result="offline";
     my $node=shift;
-    $result=$$refHName{node_state}->{$node};
+    my $standby;
+    $result=$$refHName{"node_state"}->{$node};
+printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
+    if ( defined ($$refHName{"standby"}->{$node})) {
+       $standby = $$refHName{"standby"}->{$node};
+       if ( $standby eq "on" ) {
+           $result="standby";
+       }
+    }
     return $result;
 }
 
@@ -211,9 +220,27 @@ while (<CIB>) {
          # printf STDERR "%s -> %s\n", $nodeID, $id2uname{$nodeID};
       }
    } 
-   if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
-       insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
+   #
+   #  <nvpair id="nodes-1234567890-standby" name="standby" value="off"/>
+   #
+   if ( $_ =~ /id="nodes-(.+)-standby"/ ) {
+       my $host=$1;
+         if (defined $id2uname{$host}) {
+             $host = $id2uname{$host}
+         }
+       if ( $_ =~ /value="([a-zA-Z0-9\-\_]+)"/ ) {
+           my $value=$1;
+#printf "STANDBY <%s> VALUE <%s>\n", $host, $value;
+           insertAttribute($sid, $refHH, $refHN, $host, "standby", $value);
+       }
    }
+   #
+   #  <node_state id="1234567890" uname="node01" in_ccm="true" crmd="online" crm-debug-origin="do_update_resource" join="member" expected="member">
+   #
+   #if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
+   #    # insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
+   #    insertAttribute($sid, $refHH, $refHN, $1, "node_status", $2);
+   #}
    if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
       $name=$1;
       if ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ ) {
@@ -293,6 +320,29 @@ sub get_hana_sync_state($)
         foreach $h ( keys(%{$$refHName{sync_state}}) ) {
             if ( $$refHName{sync_state}->{$h} =~ /(S.*)/ ) {
                $result=$1;
+            }
+        }
+    }
+    return $result;
+}
+
+sub get_secondary_score($)
+{
+    my $result="-";
+    if ( $newAttributeModel == 1 ) {    
+        my $s;
+        foreach $s ( keys(%{$$refSName{"srr"}}) ) {
+# TODO
+            $result="-";
+            #if ( ( $$refSName{"srr"}->{$s} =~ /P/ ) && ( $$refSName{"lss"}->{$s} =~ /[$lss]/ )) {
+            #   $rc++;
+            #}
+        }
+    } else  {
+        my $h;
+        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+            if ( $$refHName{"roles"}->{$h} =~ /[0-9]:S:/ ) {
+                $result = $$refHName{"score"}->{$h};
             }
         }
     }
@@ -395,6 +445,22 @@ sub check_node_mode($$$)
     return 0;
 }
 
+sub get_cluster_status()
+{
+    my $h;
+    my $return="";
+    foreach $h ( keys(%{$$refHName{"node_state"}} )) {
+        my $cl_status;
+        if ( ($return eq "") && !($h =~ /^_/) ) {   # TODO: at the moment we filter all strings beginning with "_" maybe thats wrong -> _title, _length
+            $cl_status= qx(crmadmin -q -S $h 2>&1);
+            if ( !($cl_status =~ /S_NOT_DC/) && ($cl_status =~ /(S_[A-Za-z0-9_-]+)/ )) {
+                $return=$1;
+            }
+        }
+    }
+    return $return;
+}
+
 sub get_number_secondary($ $)
 {
     my $sid=shift;
@@ -433,7 +499,7 @@ sub get_host_primary($ $)
     } else {
         my $h;
         foreach $h ( keys(%{$$refHName{"roles"}}) ) {
-            if ( $HName{"roles"}->{$h} =~ /[$lss]:P:/ ) {
+            if ( $$refHName{"roles"}->{$h} =~ /[$lss]:P:/ ) {
                $result=$h;
             }
         }
@@ -471,7 +537,6 @@ sub get_site_by_host($ $)
     my $h = shift;
 # print "get_site_by_host($sid, $h)";
     $result = $$refHName{"site"}->{$h};
-    $result = $Host{$h}->{"site"};
     return $result;
 }
 
@@ -566,6 +631,16 @@ sub check_all_ok($$)
     if ( $result != 1 ) {
          $rc++;  
          $failed .= " #S=$result ";
+    }
+    $result=get_secondary_score($sid);
+    if ( $result ne "100" ) {
+         $rc++;
+         $failed .= " score=$result ";
+    }
+    $result=get_cluster_status();
+    if ( $result ne "S_IDLE" ) {
+         $rc++;
+         $failed .= " clstatus=$result ";
     }
     return ($rc, $failed);
 }
