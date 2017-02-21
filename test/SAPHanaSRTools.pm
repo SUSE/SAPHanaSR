@@ -2,7 +2,7 @@
 #
 # SAPHanaSRTools.pm
 # (c) 2014 SUSE Linux Products GmbH
-# (c) 2015-2016 SUSE Linux GmbH
+# (c) 2015-2017 SUSE Linux GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
 # Version: 0.22.2017.01.20.1
