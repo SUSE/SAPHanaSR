@@ -28,7 +28,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.20"
+SAPHanaVersion="0.152.21"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -888,9 +888,13 @@ function sht_monitor_clone() {
             super_ocf_log debug "DBG2: HANA IS STANDALONE"
             sht_monitor; rc=$?
         else
-            hanaPrim="-"
-            super_ocf_log warn "ACT: sht_monitor_clone: HANA_STATE_DEFECT"
-            rc=$OCF_ERR_CONFIGURED
+            # bsc#1027098 Do not mark HANA instance as failed, if "only" the HANA state could not be detected
+            hanaPrim=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]} | awk -F: '{ print $2}')
+            if [ "$hanaPrim" = "" ]; then
+                hanaPrim="-"
+            fi
+            super_ocf_log warn "ACT: sht_monitor_clone: HANA_STATE_DEFECT (primary/secondary state could not be detected at this point of time)"
+            sht_monitor; rc=$?
         fi
     fi
     # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
