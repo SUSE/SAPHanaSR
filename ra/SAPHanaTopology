@@ -703,24 +703,27 @@ function check_saphostagent()
 # sht_start : Start the SAP HANA instance
 #
 function sht_start() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
 
-  local rc=$OCF_NOT_RUNNING
-  local output=""
-  local loopcount=0
+    local rc=$OCF_NOT_RUNNING
+    local output=""
+    local loopcount=0
 
-  # TODO: PRIO3: move the string "$HA_RSCTMP/SAPHana/SAPTopologyON" to a variable
-  # TODO: PRIO3: move the file to the clusters tmp directory?
-  mkdir -p $HA_RSCTMP/SAPHana
-  touch $HA_RSCTMP/SAPHana/SAPTopologyON.${SID}
-  if ! check_saphostagent; then
-     start_saphostagent
-  fi
+    # TODO: PRIO3: move the string "$HA_RSCTMP/SAPHana/SAPTopologyON" to a variable
+    # TODO: PRIO3: move the file to the clusters tmp directory?
+    mkdir -p $HA_RSCTMP/SAPHana
+    if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON ]; then
+        rm $HA_RSCTMP/SAPHana/SAPTopologyON
+    fi
+    touch $HA_RSCTMP/SAPHana/SAPTopologyON.${SID}
+    if ! check_saphostagent; then
+        start_saphostagent
+    fi
 
-  rc=$OCF_SUCCESS
+    rc=$OCF_SUCCESS
 
-  super_ocf_log info "FLOW $FUNCNAME rc=$rc"
-  return $rc
+    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    return $rc
 }
 
 #
@@ -730,15 +733,17 @@ function sht_start() {
 # sht_stop: Stop the SAP HANA Topology Resource
 #
 function sht_stop() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
-  local output=""
-  local rc=0
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    local output=""
+    local rc=0
+    if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON ]; then
+        rm $HA_RSCTMP/SAPHana/SAPTopologyON
+    fi
+    rm $HA_RSCTMP/SAPHana/SAPTopologyON.${SID}
+    rc=$OCF_SUCCESS
 
-  rm $HA_RSCTMP/SAPHana/SAPTopologyON.${SID}
-  rc=$OCF_SUCCESS
-
-  super_ocf_log info "FLOW $FUNCNAME rc=$rc"
-  return $rc
+    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    return $rc
 }
 
 
@@ -749,17 +754,20 @@ function sht_stop() {
 # sht_monitor: Can the given SAP instance do anything useful?
 #
 function sht_monitor() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
-  local rc=0
-
-  if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON.${SID} ]; then
-     rc=$OCF_SUCCESS
-  else
-     rc=$OCF_NOT_RUNNING
-  fi
-
-  super_ocf_log info "FLOW $FUNCNAME rc=$rc"
-  return $rc
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    local rc=0
+    # check for old status file
+    if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON ]; then
+        rm $HA_RSCTMP/SAPHana/SAPTopologyON
+        touch $HA_RSCTMP/SAPHana/SAPTopologyON.${SID}
+    fi
+    if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON.${SID} ]; then
+        rc=$OCF_SUCCESS
+    else
+        rc=$OCF_NOT_RUNNING
+    fi
+    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    return $rc
 }
 
 
