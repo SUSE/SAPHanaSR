@@ -17,3 +17,5 @@ Additionally, it can commit the changes to the OBS, given that the `OBSPROJ` par
 
 Building the package locally is also possible via:
 ``make build OBSPROJ=~/dev/saphanasr_obs OBSTARG=SLE_12_SP2``
+
+Some important changes!
