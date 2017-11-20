@@ -28,8 +28,8 @@
 
     Cost-optimized scenario allows to set up a synchronous system replication
     between two nodes, A and B, within the same cluster, while a development
-    or quality assurance system is running on the node B, and the production database is shrunk.  
-  
+    or quality assurance system is running on the node B, and the production database is shrunk.
+
   include:
     - script: saphanasr
       name: production
@@ -65,45 +65,47 @@
       nodes: local
       root: false
       call: |
-        #!/usr/bin/env python2
-        import sys, re, subprocess
+        #!/usr/bin/env python
+        from __future__ import print_function, unicode_literals
+        import os, sys, re, subprocess
 
-        alles_gut = True
+        errors = False
 
-        def error(msg):
-          print >> sys.stderr, msg
-          global alles_gut
-          alles_gut = False
-
-        reserved_sids = ['ADD', 'ALL', 'AND', 'ANY', 'ASC', 'COM', 'DBA', 'END', 'EPS', 'FOR', 
-            'GID', 'IBM', 'INT', 'KEY', 'LOG', 'MON', 'NIX', 'NOT', 'OFF', 'OMS', 'RAW', 'ROW', 
+        reserved_sids = ['ADD', 'ALL', 'AND', 'ANY', 'ASC', 'COM', 'DBA', 'END', 'EPS', 'FOR',
+            'GID', 'IBM', 'INT', 'KEY', 'LOG', 'MON', 'NIX', 'NOT', 'OFF', 'OMS', 'RAW', 'ROW',
             'SAP', 'SET', 'SGA', 'SHG', 'SID', 'SQL', 'SYS', 'TMP', 'UID', 'USR', 'VAR']
-        
+
         if '{{System_ID}}' == '{{production::System_ID}}':
-            error("System ID of the productive and non-productive instances collide.")
+            print("System ID of the production and non-production instances collide.", file=sys.stderr)
+            errors = True
 
         if not re.match('^[A-Z][A-Z0-9]{2}$', '{{System_ID}}'):
-            error("System ID must be a three-character string\n"
-            "consisting of capital letters and digits, starting with a letter.")
-        
+            print("System ID must be a three-character string "
+            "consisting of capital letters and digits, starting with a letter.", file=sys.stderr)
+            errors = True
+
         if "{{System_ID}}" in reserved_sids:
-            error("System ID '{{System_ID}}' is reserved and cannot be used.")
-        
+            print("System ID '{{System_ID}}' is reserved and cannot be used.", file=sys.stderr)
+            errors = True
+
         if not re.match('^\d{2}$', '{{Instance}}'):
-            error("Instance number has to be a two-digit number with leading zeros.")
+            print("Instance number has to be a two-digit number with leading zeros.", file=sys.stderr)
+            errors = True
 
         try:
-            out = subprocess.check_output(['crm', 'node', 'list'])
-        except subprocess.CalledProcessError, e:
-            error("Could not get the node list.")
+            with open(os.devnull, 'w') as devnull:
+                out = subprocess.check_output(['crm', 'node', 'list'], stderr=devnull)
+        except subprocess.CalledProcessError as e:
+            print("Could not get cluster node list.", file=sys.stderr)
             sys.exit(1)
 
-        node_list = re.findall('^(\w+)\(', out, re.MULTILINE)
+        node_list = re.findall('^(\w+)\(', out.decode('utf-8'), re.MULTILINE)
 
         if not "{{Primary_Node}}" in node_list:
-            error("Node {{Primary_Node}} was not found in the cluster.")
+            print("Node '{{Primary_Node}}' was not found in the cluster.", file=sys.stderr)
+            errors = True
 
-        if not alles_gut:
+        if errors:
           sys.exit(1)
 
 
@@ -119,8 +121,8 @@
           op stop interval="0" timeout="300"
           meta priority="100"
 
-        location loc_{{System_ID}}_never_{{Primary_Node}} rsc_SAP_{{System_ID}}_HDB{{Instance}} -inf: {{Primary_Node}}      
-          
+        location loc_{{System_ID}}_never_{{Primary_Node}} rsc_SAP_{{System_ID}}_HDB{{Instance}} -inf: {{Primary_Node}}
+
         colocation col_{{System_ID}}_never_with_PRDip -inf: rsc_SAP_{{System_ID}}_HDB{{Instance}}:Started rsc_ip_{{production:System_ID}}_HDB{{production:Instance}}
-          
+
         order ord_{{System_ID}}_stop_before_{{production:System_ID}}_promote inf: rsc_SAP_{{System_ID}}_HDB{{Instance}}:stop msl_SAPHana_{{production:System_ID}}_HDB{{production:Instance}}:promote

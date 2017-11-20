@@ -23,16 +23,16 @@
 - version: 2.2
   name: saphanasr
   category: Script
-  shortdesc: SAP HANA SR (HIDDEN)
+  shortdesc: SAP HANA SR
   longdesc: |
     SAP HANA System Replication allows to set up a synchronous system
     replication between two HANA nodes, A and B, within the same cluster.
-  
+
   parameters:
     - name: System_ID
       shortdesc: SAP System ID
       longdesc: |
-        A unique SAP System ID within the landscape. 
+        A unique SAP System ID within the landscape.
         The SID is a 3-character alphanumeric string starting with a letter.
       required: true
       type: string
@@ -71,7 +71,7 @@
     - name: automated_register
       shortdesc: Register the former primary site automatically.
       longdesc: |
-        The parameter defines, whether a former primary instance should be registered automatically 
+        The parameter defines, whether a former primary instance should be registered automatically
         by the resource agent during cluster/resource start, if  the DUPLICATE_PRIMARY_TIMEOUT is expired.
       default: false
       type: boolean
@@ -102,8 +102,8 @@
       default: ""
       shortdesc: Path to the start profile
       longdesc: |
-        The full qualified path where to find the SAP START profile. 
-        Specify this parameter, if you have changed the SAP profile directory location after 
+        The full qualified path where to find the SAP START profile.
+        Specify this parameter, if you have changed the SAP profile directory location after
         the default SAP installation.
       advanced: true
     - name: instance_profile
@@ -113,7 +113,7 @@
       shortdesc: HANA instance profile name
       longdesc: |
         The name of the SAP HANA instance profile. Specify this parameter, if you have changed the
-        name of the SAP HANA instance profile after the default SAP installation. 
+        name of the SAP HANA instance profile after the default SAP installation.
         Normally you do not need to set this parameter.
       advanced: true
 
@@ -122,31 +122,30 @@
       nodes: local
       root: false
       call: |
-        #!/usr/bin/env python2
-        import sys, re, subprocess
+        #!/usr/bin/env python
+        from __future__ import print_function, unicode_literals
+        import sys, re
 
-        alles_gut = True
+        errors = False
 
-        def error(msg):
-          print >> sys.stderr, msg
-          global alles_gut
-          alles_gut = False
-
-        reserved_sids = ['ADD', 'ALL', 'AND', 'ANY', 'ASC', 'COM', 'DBA', 'END', 'EPS', 'FOR', 
-            'GID', 'IBM', 'INT', 'KEY', 'LOG', 'MON', 'NIX', 'NOT', 'OFF', 'OMS', 'RAW', 'ROW', 
+        reserved_sids = ['ADD', 'ALL', 'AND', 'ANY', 'ASC', 'COM', 'DBA', 'END', 'EPS', 'FOR',
+            'GID', 'IBM', 'INT', 'KEY', 'LOG', 'MON', 'NIX', 'NOT', 'OFF', 'OMS', 'RAW', 'ROW',
             'SAP', 'SET', 'SGA', 'SHG', 'SID', 'SQL', 'SYS', 'TMP', 'UID', 'USR', 'VAR']
-        
-        if not re.match('^[A-Z][A-Z0-9]{2}$', '{{System_ID}}'):
-            error("System ID must be a three-character string\n"
-            "consisting of capital letters and digits, starting with a letter.")
-        
-        if "{{System_ID}}" in reserved_sids:
-            error("System ID '{{System_ID}}' is reserved and cannot be used.")
-        
-        if not re.match('^\d{2}$', '{{Instance}}'):
-            error("Instance number has to be a two-digit number with leading zeros.")
 
-        if not alles_gut:
+        if not re.match('^[A-Z][A-Z0-9]{2}$', '{{System_ID}}'):
+            print("System ID must be a three-character string "
+            "consisting of capital letters and digits, starting with a letter.", file=sys.stderr)
+            errors = True
+
+        if "{{System_ID}}" in reserved_sids:
+            print("System ID '{{System_ID}}' is reserved and cannot be used.", file=sys.stderr)
+            errors = True
+
+        if not re.match('^\d{2}$', '{{Instance}}'):
+            print("Instance number has to be a two-digit number with leading zeros.", file=sys.stderr)
+            errors = True
+
+        if errors:
           sys.exit(1)
 
 
@@ -156,7 +155,7 @@
           ip="{{IP}}"
           cidr_netmask={{netmask}}
           op start timeout=20 op stop timeout=20 op monitor interval=10 timeout=20
-        
+
         primitive rsc_SAPHana_{{System_ID}}_HDB{{Instance}} ocf:suse:SAPHana
           params
           SID="{{System_ID}}"
@@ -172,7 +171,7 @@
           op promote interval="0" timeout="3600"
           op monitor interval="60" role="Master" timeout="700"
           op monitor interval="61" role="Slave" timeout="700"
-        
+
         primitive rsc_SAPHanaTopology_{{System_ID}}_HDB{{Instance}} ocf:suse:SAPHanaTopology
           params
           SID="{{System_ID}}"
@@ -180,7 +179,7 @@
           op monitor interval="10" timeout="600"
           op start interval="0" timeout="600"
           op stop interval="0" timeout="300"
-        
+
         ms msl_SAPHana_{{System_ID}}_HDB{{Instance}} rsc_SAPHana_{{System_ID}}_HDB{{Instance}}
           meta clone-max="2" clone-node-max="1" interleave="true"
 
