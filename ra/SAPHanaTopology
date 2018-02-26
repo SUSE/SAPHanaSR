@@ -419,12 +419,16 @@ function HANA_CALL()
                   #
                   # on timeout ...
                   #
+                  if [ $rc -eq 124 ]; then
+                      super_ocf_log warn "HANA_CALL timed out after $timeOut seconds running command '$cmd'"
+                  fi
                   if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
                       local second_output=""
                       second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
                   fi
                   ;;
     esac
+    super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
     return $rc;
 }
@@ -547,7 +551,6 @@ function sht_init() {
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 # DONE: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 hdbANSWER=$(HANA_CALL --timeout 60 --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 ;;
         esac
