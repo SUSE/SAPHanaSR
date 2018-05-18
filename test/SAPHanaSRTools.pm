@@ -140,13 +140,13 @@ sub get_sid_and_InstNr()
             my $foundINO=$2;
             if ( $foundSID ne "DAA" ) {
                 $noDAACount++;
-                $sid=tolower($foundSID);
+                $sid=lc($foundSID);
                 $Inr=$foundINO;
                 push @sid_ino, "$sid:$Inr";
             }
         }
 #       if ( $_ =~ /:\s+([A-Z][A-Z0-9][A-Z0-9])\s+-\s+([0-9][0-9])/ ) {
-#          $sid=tolower("$1");
+#          $sid=lc("$1");
 #          $Inr=$2;
     }
     close ListInstances;
