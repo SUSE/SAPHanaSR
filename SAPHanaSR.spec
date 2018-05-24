@@ -101,7 +101,6 @@ install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 # auxiliary Perl library and test scripts
-install -m 0555 test/show_SAPHanaSR_attributes %{buildroot}/usr/share/%{name}/tests
 #install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
 install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
