@@ -15,10 +15,10 @@ Please see also the REQUIREMENTS section below.
 .SH EXAMPLES
 .PP
 * Initiate an administrative takeover of the HANA primary from one node to the other one. 
-If the cluster should also register the former primary as secondary, AUTOMATED_REGISTER="true" is needed. Before the takeover will be initiated, the status of the Linux cluster and the HANA system replication have to be checked. The takeover should only be initiated as forced migration. After the takeover has been finished, the migration rule has to be deleted.
+If the cluster should also register the former primary as secondary, AUTOMATED_REGISTER="true" is needed. Before the takeover will be initiated, the status of the Linux cluster and the HANA system replication has to be checked. The takeover should only be initiated as forced migration. After takeover of the primary has been finished, the migration rule has to be deleted. If AUTOMATED_REGISTER="true" is set, finally the former primary will be registred as secondary, once the migration rule has been deleted.
 .PP
 .RS 2 
-# cs_clusterstate
+# cs_clusterstate -i
 .br
 # SAPHanaSR-showAttr
 .br
@@ -26,19 +26,19 @@ If the cluster should also register the former primary as secondary, AUTOMATED_R
 .br
 # crm resource migrate msl_SAPHana_SLE_HDB10 force
 .br
-# cs_clusterstate
+# cs_clusterstate -i
 .br
 # SAPHanaSR-showAttr
 .br
 # crm resource unmigrate msl_SAPHana_SLE_HDB10
+.br
+# SAPHanaSR-showAttr
 .RE
-.PP
-Note: The YaST module hana_updater does something similar.
 .PP
 * Manually start the HANA primary if only one node is available. This might be necessary in case the cluster could not detect the status of both nodes.
 .PP
 .RS 2
-1. Start the cluster.
+1. Start the cluster on both nodes.
 .br
 2. Wait and check for cluster is running, and in status idle.
 .br
@@ -48,31 +48,39 @@ Note: The YaST module hana_updater does something similar.
 .br
 5. In case the cluster does not promote the HANA to primary, instruct the cluster to migrate the IP adress to that node.
 .br
-6. Wait and check fro HANA gets promoted to primary by the cluster.
+6. Wait and check for HANA has been promoted to primary by the cluster.
 .br
 7. Remove the migration rule from the IP adress.
 .br
-8. You are done, for now.
+8. Check if cluster is in status idle.
 .br
-9. Please bring back the other node and register that HANA as soon as possible. If the HANA primary stays alone for too long, the log area will fill up.
+9. You are done, for now.
+.br
+10. Please bring back the other node and register that HANA as soon as possible. If the HANA primary stays alone for too long, the log area will fill up.
 .RE
 .PP
 .\"
 * Overview on maintenance procedure for HANA, the Linux cluster remains running.
 .PP
-.RS 2 
-1. set the Linux cluster into maintenance mode (crm configure property maintenance-mode=true)
+.RS 2
+1. Set the Linux cluster into maintenance mode (crm configure property maintenance-mode=true)
 .br
-2. perform the HANA maintenance, e.g. update to latest SPS
+2. Perform the HANA maintenance, e.g. update to latest SPS
 .br
-3. set the SAPHanaController master/slave resource to unmanaged (crm resource unmanage <resource>)
+3. Set the SAPHanaController master/slave resource to unmanaged (crm resource unmanage <resource>)
 .br
-4. set the Linux cluster back into ready mode (crm configure property maintenance-mode=false)
+4. Set the Linux cluster back into ready mode (crm configure property maintenance-mode=false)
 .br
-5. cleanup the SAPHanaController master/slave resource (crm resource cleanup <resource> node <node>)
+5. Cleanup the SAPHanaController master/slave resource (crm resource cleanup <resource> node <node>)
 .br
-6. set the SAPHanaController master/slave resource back to managed (crm resource manage <resource>)
+6. Set the SAPHanaController master/slave resource back to managed (crm resource manage <resource>)
+.br
+7. Check if everything looks fine (crm_mon -1r, cs_clusterstate -i,
+ SAPHanaSR-showAttr).
+.PP
 .RE
+Note: The YaST module hana_updater does something similar, combined with an
+administrative takeover.
 .PP
 .\"
 .SH FILES
@@ -95,7 +103,8 @@ In case of any problem, please use your favourite SAP support process to open a 
 .br
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBcs_clusterstate\fP(8) , \fBcrm\fP(8) ,
+\fBcs_clusterstate\fP(8) ,
+\fBcrm\fP(8) , \fBcrm_simulate\fP(8) , \fBcrm_mon\fP(8) ,
 .br
 https://www.suse.com/products/sles-for-sap/resource-library/sap-best-practices.html ,
 https://www.suse.com/media/presentation/TUT90846_towards_zero_downtime%20_how_to_maintain_sap_hana_system_replication_clusters.pdf
