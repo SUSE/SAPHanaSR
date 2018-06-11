@@ -29,7 +29,6 @@ BuildArch:      noarch
 Source0:        %{name}-%{version}.tgz
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-BuildArch:      noarch
 
 Requires:       pacemaker > 1.1.1
 Requires:       resource-agents
@@ -160,6 +159,7 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
 %doc %{_mandir}/man7/ocf_suse_SAPHana.7.gz
 %doc %{_mandir}/man7/ocf_suse_SAPHanaTopology.7.gz
+%doc %{_mandir}/man7/SAPHanaSR_maintenance_examples.7.gz
 %doc %{_mandir}/man7/SAPHanaSR.7.gz
 %doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
