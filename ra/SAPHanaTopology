@@ -36,6 +36,9 @@ timeB=$(date '+%s')
 
 #######################################################################
 #
+# Current Time
+NOW=$(date +%s)
+
 log_attributes=false
 if ocf_is_true "$log_attributes"; then
     log_attr_file="/var/log/fhATTRIBUTES"
@@ -410,27 +413,36 @@ function HANA_CALL()
         pre_cmd="bash -c"
         pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
     fi
+
     case $timeout in
         0 | inf )
                   output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
         *       )
-                  output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
-                  #
-                  # on timeout ...
-                  #
-                  if [ $rc -eq 124 ]; then
-                      super_ocf_log warn "HANA_CALL timed out after $timeOut seconds running command '$cmd'"
-                  fi
-                  if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
-                      local second_output=""
-                      second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
-                  fi
-                  ;;
+                 # In case of timeout, retries until the limit of Time configured for the RA Operation.
+                 # -5 seconds to return a treated failure before pcmk kill it.
+                 operation_timeout=$(( $NOW + ($OCF_RESKEY_CRM_meta_timeout/1000) -5 ))
+                 while [ $NOW -lt $operation_timeout ]; do
+                    output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+
+                    if [ $rc -eq 124 ]; then
+                      super_ocf_log warn "HANA_CALL timed out after $timeOut seconds running command '$cmd'. Retrying..."
+                    else
+                      # Successful execution. Return to the caller.
+                      super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
+                      echo "$output"
+                      return $rc;
+                    fi
+
+                    NOW=$(date +%s)
+                done
+			     ;;
     esac
-    super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
-    echo "$output"
-    return $rc;
+
+    # If this is executed, means that it is still timing out.
+    # Returns failure of the execution
+    super_ocf_log err "HANA_CALL Operation timeout after $OCF_RESKEY_CRM_meta_timeout seconds running command '$cmd'."
+    return $OCF_ERR_GENERIC
 }
 
 #
