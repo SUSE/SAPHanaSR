@@ -39,7 +39,7 @@ timeB=$(date '+%s')
 # Current Time
 NOW=$(date +%s)
 # Global Operation Timeout that will be used on HANA_CALL() retries
-OPERATION_TIMEOUT=$(( $NOW + ($OCF_RESKEY_CRM_meta_timeout/1000) -5 ))
+OPERATION_TIMEOUT=$(( $NOW + ($OCF_RESKEY_CRM_meta_timeout/1000)))
 
 log_attributes=false
 if ocf_is_true "$log_attributes"; then
@@ -422,7 +422,7 @@ function HANA_CALL()
                     ;;
         *       )
                     # In case of timeout, retries until the limit of Time configured for the RA Operation.
-                    # -5 seconds to return a treated failure before pcmk kill it.
+                    # If it does not return, pacemaker will kill it and try to recover as timeout.
                     while [ $NOW -lt $OPERATION_TIMEOUT ]; do
                         super_ocf_log debug "NOW: $NOW Operation Timeout: $OPERATION_TIMEOUT"
                         output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
@@ -441,10 +441,6 @@ function HANA_CALL()
                     ;;
     esac
 
-    # If this is executed, means that it is still timing out.
-    # Returns failure of the execution
-    super_ocf_log err "HANA_CALL Operation timeout after $OCF_RESKEY_CRM_meta_timeout seconds running command '$cmd'."
-    return $OCF_ERR_GENERIC
 }
 
 #
