@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.152.22
+Version:        0.152.23
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -47,10 +47,10 @@ Summary:        Setup Guide for SAPHanaSR
 Group:          Productivity/Clustering/HA
 
 %description
-The resource agents SAPHana and SAPHanaTopology are responsible for controlling 
+The resource agents SAPHana and SAPHanaTopology are responsible for controlling
 a SAP HANA Database which is running in system replication (SR) configuration.
 
-For SAP HANA Databases in System Replication only the described or referenced scenarios in 
+For SAP HANA Databases in System Replication only the described or referenced scenarios in
 the README file of this package are supported. For any scenario not matching the scenarios
 named or referenced in the README file please contact SUSE at SAP LinuxLab (sap-lab@suse.de).
 
@@ -64,7 +64,7 @@ Authors:
 
 
 %description doc
-This subpackage includes the Setup Guide and manual pages for getting 
+This subpackage includes the Setup Guide and manual pages for getting
 SAP HANA system replication under cluster control.
 
 
@@ -105,7 +105,7 @@ install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
-# crm/hawk wizard files 
+# crm/hawk wizard files
 %if 0%{?sle_version} >= 120100
 # SLES 12 SP1+ and HAWK2
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
