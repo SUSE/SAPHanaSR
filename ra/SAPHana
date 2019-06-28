@@ -621,7 +621,7 @@ function HANA_CALL()
                   output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
         *       )
-                  output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                  output=$(timeout --foreground -s 9 $timeOut $pre_cmd "$pre_script; timeout -s 9 $timeOut /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   #
                   # on timeout ...
                   #
@@ -1039,7 +1039,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: Limit the runtime of systemReplicationStatus.py
     # SAP_CALL
     # FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
-    FULL_SR_STATUS=$(HANA_CALL --timeout 60 --cmd "systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
+    FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     #
@@ -2312,6 +2312,9 @@ function saphana_monitor_secondary()
             hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
             hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
             set_hana_attribute ${NODENAME} "$hanaOM" ${ATTR_NAME_HANA_OPERATION_MODE[@]}
+            if [ -n "$remoteNode" ]; then
+                set_hana_attribute ${remoteNode} "$hanaOM" ${ATTR_NAME_HANA_OPERATION_MODE[@]} # also set attribute for remoteNode (bsc1082974)
+            fi
             super_ocf_log debug "DBG: sync_attr=$sync_attr"
             case "$sync_attr" in
                 "SOK"   ) # This is a possible node to promote, when primary is missing
