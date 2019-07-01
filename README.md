@@ -1,4 +1,4 @@
-# SAP HANA System Replication (Scale-Up) old fmherschel private repo - use SUSE/SAPHanaSR instead
+# SAP HANA System Replication (Scale-Up)
 
 ## File structure
 
