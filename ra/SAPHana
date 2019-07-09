@@ -1000,13 +1000,13 @@ function check_for_primary() {
            gP )
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
-                node_full_status=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 node_status=$(echo "$node_full_status" | awk -F= '$1=="mode" {print $2}')
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
            hU | * )
                 # DONE: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
-                node_full_status=$(HANA_CALL --timeout 60 --cmd "$hdbState" 2>/dev/null )
+                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState" 2>/dev/null )
                 node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
                 ;;
@@ -1199,12 +1199,12 @@ function get_hana_landscape_status()
     # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # DONE: Limit the runtime of landscapeHostConfiguration.py
-    HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+    HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
     if [ $rc -eq 124 ]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
         sleep 20
-        HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+        HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
         if [ $rc -eq 124 ]; then
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
