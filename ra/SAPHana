@@ -649,11 +649,27 @@ function HANA_CALL()
                       local second_output=""
                       second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
                   fi
-                  ;;
+                 ;;
     esac
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
     return $rc;
+}
+
+function get_SRHOOK()
+{
+    local -a ATTR my_sync
+    local get_sr_name="$1"
+    ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$get_sr_name"
+    my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
+    if [ -z "$my_sync" -o "$my_sync" = "SWAIT" ]; then
+        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
+    fi
+    if [ -z "$my_sync" ]; then   # be pesimistic, if we could not determine the SR attribute
+        my_sync="SFAIL"
+    fi
+    echo "$my_sync"
+    return 0
 }
 
 #
@@ -815,7 +831,7 @@ function saphana_init() {
         # TODO: PRIO5: catch rc!=0
     fi
     #  ATTR_NAME_HANA_SITE
-    sr_name=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SITE[@]});
+    sr_name=$(get_hana_attribute "${NODENAME}" ${ATTR_NAME_HANA_SITE[@]});
     sr_mode=$(get_hana_attribute "${NODENAME}" ${ATTR_NAME_HANA_SRMODE[@]})
 
     if [ -z "$sr_mode" ]; then
@@ -823,6 +839,16 @@ function saphana_init() {
     fi
     if [ -n "$remoteNode" ]; then
         remSR_name=$(get_hana_attribute ${remoteNode} ${ATTR_NAME_HANA_SITE[@]});
+    else 
+
+        for clN in "${otherNodes[@]}"; do
+            nodeSite=$(get_hana_attribute $clN "${ATTR_NAME_HANA_SITE[@]}")
+            if [ -n "$nodeSite" -a "$nodeSite" != "$sr_name" ]; then
+                remSite=$nodeSite
+                remSR_name=${remSite%%:*}
+                remSR_id=${remSite#*:}
+            fi
+        done
     fi
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
@@ -1285,6 +1311,8 @@ function saphana_start() {
     # DONE: ASK: PRIO5: For SCALE-OUT - do we need to use an other call like StartSystem? Or better to use the HDB command?
     #
     if [ $rc -eq $OCF_SUCCESS ]; then
+        ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
+        set_hana_attribute "X" "SWAIT" "${ATTR[@]}"
         output=$($SAPCONTROL -nr $InstanceNr -function Start)
         rc=$?
         super_ocf_log info "ACT: Starting SAPHANA Instance $SID-$InstanceName: $output"
@@ -1403,7 +1431,7 @@ function saphana_start_primary()
             # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
             #   then lpa_advice="wait"
             remoteRole=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_ROLES[@]})
-            remoteSync=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+            remoteSync=$(get_SRHOOK "$remSR_name")
             super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
             if ocf_is_true "${PreferSiteTakeover}"; then
                 remoteStatus="$remoteRole:$remoteSync"
@@ -1446,6 +1474,8 @@ function saphana_start_primary()
        lpa_advice="skip"
        rc=$OCF_ERR_GENERIC
     fi
+
+    my_sync=$(get_SRHOOK "$sr_name")
     case "$lpa_advice" in
         start )  # process a normal START
             case "$lss" in
@@ -2138,15 +2168,18 @@ function saphana_monitor_primary()
                         # TODO: PRIO4: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
             # TODO PRIO1: REMOVE remoteNode dependency - get_sync_status
-                        remoteSync=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                        remoteSync=$(get_SRHOOK "$remSR_name")
             # TODO HANDLING OF "NEVER"
                         case "$remoteSync" in
                             SOK | PRIM )
                                  super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
-                                 set_crm_master 5
                                  if check_for_primary_master; then
                                      lpa_set_lpt 20 $NODENAME
                                  fi
+                                 #
+                                 # DOWNSCORING CRM_MASTER TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NO TO RISK CANCELLATION OF THE MONITOR
+                                 #
+                                 set_crm_master 5
                                  ;;
                             SFAIL )
                                  super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync (SFAIL) ==> local restart preferred"
@@ -2160,7 +2193,7 @@ function saphana_monitor_primary()
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here"
                         my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
-                        my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                        my_sync=$(get_SRHOOK "$sr_name")
                         super_ocf_log info "SCORE: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)" 
                         scoring_crm_master "$my_role" "$my_sync"
                         rc=$OCF_FAILED_MASTER
@@ -2199,7 +2232,7 @@ function saphana_monitor_primary()
                         rc=$OCF_SUCCESS
                     fi
                 fi
-                my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                my_sync=$(get_SRHOOK "$sr_name")
                 my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
                 case "$my_role" in
                     [12]:P:*:master:*  ) # primary is down or may not anser hdbsql query so drop analyze_hana_sync_status
@@ -2325,7 +2358,7 @@ function saphana_monitor_secondary()
         2 | 3 | 4 ) # WARN INFO OK
             rc=$OCF_SUCCESS
             lpa_set_lpt  30 $NODENAME
-            sync_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+            sync_attr=$(get_SRHOOK "$sr_name")
             local hanaOM=""
             local hanaOut1=""
             # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
@@ -2342,7 +2375,7 @@ function saphana_monitor_secondary()
                 "SOK"   ) # This is a possible node to promote, when primary is missing
                     super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
                     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
-                    my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                    my_sync=$(get_SRHOOK "$sr_name")
                     super_ocf_log info "SCORE: saphana_monitor_secondary: scoring_crm_master($my_role,$my_sync)" 
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
@@ -2390,7 +2423,7 @@ function saphana_monitor_clone() {
     local myMaster=-1
 
     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
-    my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+    my_sync=$(get_SRHOOK "$sr_name")
 
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG: PROBE ONLY"
@@ -2459,7 +2492,7 @@ function saphana_promote_clone() {
         # we are SECONDARY/SLAVE and need to takeover ...  promote on the replica (secondary) side...
         # promote on the replica side...
         #
-        hana_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+        hana_sync=$(get_SRHOOK "$sr_name")
         case "$hana_sync" in
              SOK )
                 super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
