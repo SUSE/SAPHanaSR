@@ -106,7 +106,7 @@ class SAPHanaSR(HADRBase):
             myMSG = "### Ignoring bad SR status because of is_in_sync=True ###"
             self.tracer.info("SAPHanaSR (%s) 002" % (self.__class__.__name__))
         else:
-            myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mySite, mysid, mySRS)
+            myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
             rc = os.system(myCMD)
             myMSG = "CALLING CRM: <" + myCMD + "> rc=" + str(rc)
         self.tracer.info("SAPHanaSR %s.srConnectionChanged method called with Dict=%s ###\n" % (self.__class__.__name__, ParamDict))
