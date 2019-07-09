@@ -16,7 +16,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-#               (c) 2015-2017 SUSE Linux GmbH
+#               (c) 2015-2019 SUSE Linux GmbH
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -31,11 +31,17 @@
 #   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
 #   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
 #
+# HANA must support the following commands:
+#     hdbnsutil -sr_stateConfiguration (unsure, if this means >= SPS110, SPS111 or SPS10x)
+#     hdbnsutil -sr_takeover
+#     hdbnsutil -sr_register
+#     landscapeHostConfiguration.py
+#     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
+SAPHanaVersion="0.153.0"
 #
 # Initialization:
-SAPHanaVersion="0.152.23"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -55,6 +61,7 @@ HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
 HANA_STATE_STANDALONE=2
 HANA_STATE_DEFECT=3
+HANA_CALL_TIMEOUT=60
 
 debug_attributes=0
 
@@ -232,6 +239,15 @@ The resource agent uses the following four interfaces provided by SAP:
         this registration to the new primary all data will be overwritten by the system replication.
         </longdesc>
         <content type="string" default="7200" />
+    </parameter>
+    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
+        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
+        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
+          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
+          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          of your cluster resources.
+        </longdesc>
+        <content type="string" default="120" />
     </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
         <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
@@ -584,6 +600,7 @@ function HANA_CALL()
     #
     # TODO: PRIO 5: remove 'su - ${sidadm} later, when SAP HANA resoled issue with
     #       root-user-called hdbnsutil -sr_state (which creates root-owned shared memory file in /var/lib/hdb/SID/shmgrp)
+    #       would hdbnsutil -sr_stateConfiguration also create such a shared memory file?
     # TODO: PRIO 5: Maybe make "su" optional by a parameter
     local timeOut=0
     local onTimeOut=""
@@ -714,6 +731,10 @@ function saphana_init() {
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     SAPHanaFilter=$(get_hana_attribute "X" ${ATTR_NAME_HANA_FILTER[@]})
     #
+    # SITE based attributes
+    #
+    ATTR_NAME_HANA_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
+    #
     # TODO: PRIO4: Table for non-preferred-site-takeover
     #
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER=(
@@ -832,7 +853,7 @@ function saphana_init() {
         #
         SAPSTARTPROFILE="$(ls -1 $DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_*})"
     fi
-    PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
+    #PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
     local ges_ver
     ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
     hdbver=${ges_ver%.*.*}
@@ -1165,7 +1186,7 @@ function analyze_hana_sync_statusSQL()
 }
 
 #
-# function: get_hana_landscape_status - figure out hana ladscape status
+# function: get_hana_landscape_status - figure out hana landscape status
 # params:   -
 # globals:  sidadm(r), DIR_EXECUTABLE(r)
 #
@@ -1452,13 +1473,13 @@ function saphana_start_primary()
             case "$lss" in
                 2 | 3 | 4 ) # upps we are up - but shoudn't? - we could not register with started HDB
                     # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
-                    super_ocf_log info "LPA: landcape: UP, LPA: register ==> take down"
+                    super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
                     set_crm_master -inf
                     rc=$OCF_NOT_RUNNING
                     ;;
                 1 ) # lets try to register
                     # DONE: PRIO2: Like Action in start_secondary
-                    super_ocf_log info "LPA: landcape: DOWN, LPA: register ==> try to register"
+                    super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
                     super_ocf_log info "DEC: AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
                     set_crm_master  0
                     if wait_for_primary_master 1; then
@@ -2018,7 +2039,7 @@ function saphana_monitor_primary()
     #
     ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
     #
-    promote_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_CLONE_STATE[@]})
+    promote_attr=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     super_ocf_log debug "DBG: saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
@@ -2128,10 +2149,10 @@ function saphana_monitor_primary()
                                  fi
                                  ;;
                             SFAIL )
-                                 super_ocf_log info "DEC: PreferSiteTakeover selected BUT remoteHost is not in sync (SFAIL) ==> local restart preferred"
+                                 super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync (SFAIL) ==> local restart preferred"
                                  ;;
                             * )
-                                 super_ocf_log info "DEC: PreferSiteTakeover selected BUT remoteHost is not in sync ($remoteSync) ==> local restart preferred"
+                                 super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync ($remoteSync) ==> local restart preferred"
                                  ;;
                         esac
                     else
@@ -2151,6 +2172,7 @@ function saphana_monitor_primary()
                     #       Current decission: Do NOT adjust master score now as other
                     #       steps should already have done that
                     #
+                    super_ocf_log info "DEC: PRIMDEFECT (in DEMOTED status)"
                     rc=$OCF_NOT_RUNNING
                 fi
             fi
@@ -2243,12 +2265,12 @@ function saphana_monitor_secondary()
         lpa_set_lpt  10 $NODENAME
         lpa_push_lpt 10
     fi
-    promote_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_CLONE_STATE[@]})
+    promote_attr=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     super_ocf_log debug "DBG: saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
         #  DONE: PRIO3: do we need to inizialize also the DEMOTED attribute value?
-        set_hana_attribute ${NODENAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+        set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
         promoted=0;
     else
         case "$promote_attr" in
@@ -2416,7 +2438,7 @@ function saphana_promote_clone() {
   #
   # first check, if we WILL be PRIMARY (checking HANA status)
   #
-  set_hana_attribute ${NODENAME} "PROMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+  set_hana_attribute ${NODENAME} "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
   check_for_primary; primary_status=$?
   #
   if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
@@ -2486,7 +2508,7 @@ function saphana_promote_clone() {
 function saphana_demote_clone() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=$OCF_ERR_GENERIC;
-    set_hana_attribute ${NODENAME} "DEMOTED" ${ATTR_NAME_HANA_CLONE_STATE[@]}
+    set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     rc=$OCF_SUCCESS;
     super_ocf_log info "ACT: Demoted $SID-$InstanceName."
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
