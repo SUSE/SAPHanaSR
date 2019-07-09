@@ -132,6 +132,7 @@ function saphana_usage() {
     The 'notify'       operation always returns SUCCESS
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
+    The 'reload'       operation allows to adapt resource parameters
 
 EOF
     return $rc
@@ -283,6 +284,7 @@ The resource agent uses the following four interfaces provided by SAP:
     <action name="validate-all" timeout="5" />
     <action name="meta-data" timeout="5" />
     <action name="methods" timeout="5" />
+    <action name="reload" timeout="5" />
 </actions>
 </resource-agent>
 END
@@ -298,7 +300,7 @@ return $rc
 function saphana_methods() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0 m
-    for m in start stop status monitor promote demote notify validate-all methods meta-data usage; do
+    for m in start stop status monitor promote demote notify validate-all methods meta-data usage reload; do
         echo "$m"
     done
     return $rc
@@ -2645,6 +2647,9 @@ case "$ACTION" in
     lpa_check)
         lpa_check_lpt_status
         ra_rc=$?
+        ;;
+    reload)
+        ra_rc=$OCF_SUCCESS
         ;;
     *)  # seams to be a unknown request
         saphana_methods
