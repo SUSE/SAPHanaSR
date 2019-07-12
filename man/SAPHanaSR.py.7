@@ -1,0 +1,162 @@
+.\" Version: 0.162.3
+.\"
+.TH SAPHanaSR.py 7 "26 Oct 2019" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
+.PP
+.\"
+.\" .SH SYNOPSYS
+.\" \fBSAPHanaSR.py\fP
+.\" .PP
+.\"
+.SH DESCRIPTION
+SAPHanaSR.py can be used to provide a script for the SAP HANA srHook method
+srConnectionChanged().
+
+The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
+is called at important points of the host auto-failover and system replication 
+takeover process. These so called hooks can be used for arbitrary operations that
+need to be executed. The method srConnectionChanged() is called on the master
+nameserver as soon as one of the replicating services loses or establishes
+the system replication connection. This method is called only once.
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+The "HA/DR providers" API accepts the following parameters for the 
+ha_dr_provider_SAPHanaSR section:
+.TP
+\fBprovider = SAPHanaSR\fP
+.TP
+\fBpath = /usr/share/SAPHanaSR\fP
+.TP
+\fBexecution_order = 1\fP
+.PP
+The "HA/DR providers" API accepts the following parameter for the trace section
+(as of SAP HANA 1.x):
+.TP
+\fBha_dr_saphanasr = [ info | debug ]\fP
+.PP
+SAPHanaController recognizes the effecting system replication status via the 
+following cluster attribute:
+.TP
+\fBhana_${sid}_site_srHook_${site}\fP
+.PP
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.PP
+.\"
+.SH EXAMPLES
+.PP
+* Example for entry in sudo permissions /etc/sudoers
+.PP
+.RS 4
+# SAPHanaSR-ScaleUp needs for srHook
+.br
+ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_ha1_site_srHook_* 
+.RE
+.PP
+* Example for entry in SAP HANA global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+.br
+This file is needed at both sites. The HANA has to be stopped before the files
+can be edited.
+.PP
+.RS 4
+[ha_dr_provider_SAPHanaSR]
+.br
+provider = SAPHanaSR
+.br
+path = /usr/share/SAPHanaSR
+.br
+execution_order = 1
+.br
+[trace]
+.br
+ha_dr_saphanasr = info
+.RE
+.PP
+* Example for creating the optional SAPHanaSR python object file manually.
+.PP
+# mkdir -p /hana/shared/srhook
+.br
+# chown ha1adm.sapsys /hana/shared/srhook
+.br
+# su - ha1adm
+.br
+# cd /hana/shared/srhook
+.br
+# python -m py_compile /usr/share/SAPHanaSR/SAPHanaSR.py
+.br
+# ls -l SAPHanaSR.pyc
+.PP
+.\" TODO grep in HANA tracefile for srHook messages
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR/SAPHanaSR.py
+ the hook provider, delivered with the RPM
+.TP
+/hana/shared/srhook/SAPHanaSR.pyc
+ the hook provider, if pre-compiled for the particular HANA (optional)
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+ the on-disk representation of HANA global system configuration
+.TP
+/etc/sudoers
+ the sudo permissions configuration
+.\" TODO path to HANA trace file
+.PP
+.\"
+.SH REQUIREMENTS 
+1. SAP HANA starting with version 1.0 SPS 11 patch level 112.02.
+Older versions do not provide the srHook method srConnectionChanged().
+.PP
+2. The user ${sid}adm needs execution permission as user root for the command crm_attribute. 
+.PP
+3. The hook provider needs to be added to the HANA global configuration,
+in memory and on disk (in persistence).
+.PP
+4. If the hook provider should be pre-compiled, the particular Python version that comes with SAP HANA
+has to be used.
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython\fP(8) ,
+.br
+https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
+.br
+http://help.sap.com/saphelp_hanaplatform/helpdata/en/13/67c8fdefaa4808a7485b09815ae0f3/content.htm ,
+.br
+http://help.sap.com/saphelp_hanaplatform/helpdata/en/5d/f2e766549a405e95de4c5d7f2efc2d/content.htm ,
+.br
+http://help.sap.com/saphelp_hanaplatform/helpdata/en/12/00ab8ef0c54c54be2d0e7f5327f7ed/content.htm?frameset=/en/13/67c8fdefaa4808a7485b09815ae0f3/frameset.htm&current_toc=/en/00/0ca1e3486640ef8b884cdf1a050fbb/plain.htm&node_id=413 ,
+.br
+https://help.sap.com/saphelp_hanaplatform/helpdata/en/3f/1a6a7dc31049409e1a9f9108d73d51/content.htm
+.PP
+.\"
+.SH AUTHORS
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2015-2019 SUSE Linux GmbH, Germany.
+.br
+SAPHanaSR.py comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\" 
