@@ -6,6 +6,7 @@ FILE_LIST = doc \
 			man \
 			ra \
 	 		test \
+			srHook \
 	 		wizard 
 
 TAR_EXTRAS = -X test/SAPHanaSR-testDriver
