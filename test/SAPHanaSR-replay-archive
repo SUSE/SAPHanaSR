@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+##########################################################################
+#
+# SAPHanaSR-replay
+#
+# Author:       Fabian Herschel, November 2015
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2015      SUSE Linux GmbH
+#
+##########################################################################
+#
+# Syntax: 
+# SAPHanaSR-replay <path-to-pengine-archive> (tar.bz2)
+#
+# SAPHanaSR-replay archive-containing-some-pengine-directories
+#
+##########################################################################
+#
+#sid=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+archive="$1"
+mkdir -p ${archive}-tmp
+tar -xjf $archive -C ${archive}-tmp
+cd ${archive}-tmp
+#
+####################
+#
+# find pengine directories
+#
+pDirs=$(find . -type d -name pengine)
+
+#
+####################
+#
+# find all pengine inputs sorted by time
+#
+pFiles=$(find $pDirs -name '*input*')
+pFilesSorted=$(ls -tr $pFiles)
+
+#
+####################
+#
+# find all cib.txt files
+#
+cFiles=$(find . -type f -name cib.txt)
+
+#
+####################
+#
+# find all SIDs mentioned in the cib.txt
+#
+sids=$(
+for cF in $cFiles; do
+    while read line 
+    do
+        if [[ $line =~ :suse:SAPHanaTopology ]] ; then
+           if [[ $line =~ SID=(...) ]]; then
+               echo "${BASH_REMATCH[1]}"
+           fi
+        fi
+    done < $cF
+done | sort -u | tr '[:upper:]' '[:lower:]' )
+
+# a="params SID=ABC BLA"; if [[ $a =~ SID=(...) ]]; then echo found; echo "${BASH_REMATCH[@]}"; fi
+
+#
+####################
+#
+mkdir -p ${archive}-tmp/tmp
+
+
+for sid in $sids; do
+
+    echo "================ replay for sid $sid ==============="
+
+    #sid=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+
+    for cibBZ2 in $pFilesSorted; do 
+       cib=${cibBZ2%.bz2}; 
+       shortCIB=${cib##*/}
+       echo "cib: $cib"; 
+       bunzip2 -c $cibBZ2 > ${archive}-tmp/tmp/$shortCIB; 
+       /usr/bin/SAPHanaSR-showAttr --cib=${archive}-tmp/tmp/$shortCIB --sid=$sid; 
+       rm ${archive}-tmp/tmp/$shortCIB ;    
+    done 
+
+done
