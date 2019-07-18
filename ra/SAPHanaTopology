@@ -944,17 +944,18 @@ function sht_monitor_clone() {
     # we begin to use --sapcontrol with rev 100
     # since rev 120 we need to use the --sapcontrol, because SAP changed the tool output
     #
+    setRole=true
     if version "$hdbver" ">=" "1.00.100"; then
         hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
         # retry command, if a timeout occured
         if [ "$hanalrc" -ge 124 ]; then
-                super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
-                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
-                # if the second try again run into a timeout, leave the function without setting the attributes and return $OCF_ERR_GENERIC
-                if [ "$hanalrc" -ge 124 ]; then
-                        super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
-                        return $OCF_ERR_GENERIC
-                fi
+            super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+            # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
+            if [ "$hanalrc" -ge 124 ]; then
+                super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
+                setRole=false
+            fi
         fi
 
         # TODO: PRIO9: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
@@ -971,13 +972,13 @@ function sht_monitor_clone() {
         hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
         # retry command, if a timeout occured
         if [ "$hanalrc" -ge 124 ]; then
-                super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
-                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
-                # if the second try again run into a timeout, leave the function without setting the attribute and return $OCF_ERR_GENERIC
-                if [ "$hanalrc" -ge 124 ]; then
-                        super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
-                        return $OCF_ERR_GENERIC
-                fi
+            super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+            # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
+            if [ "$hanalrc" -ge 124 ]; then
+                super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
+                setRole=false
+            fi
         fi
 
         hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
@@ -989,7 +990,9 @@ function sht_monitor_clone() {
     if [ -n "$hanaRemoteHost" ]; then
         set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
     fi
-    set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+    if $setRole; then
+        set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+    fi
     if [ -n "$site" ]; then
         set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
     fi
