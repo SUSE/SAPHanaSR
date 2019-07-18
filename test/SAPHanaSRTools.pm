@@ -2,31 +2,32 @@
 #
 # SAPHanaSRTools.pm
 # (c) 2014 SUSE Linux Products GmbH
-# (c) 2015-2017 SUSE Linux GmbH
+# (c) 2015-2018 SUSE Linux GmbH
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.22.2017.01.20.1
+# Version: 0.23.2018.05.11.1
 #
 ##################################################################
 
 package SAPHanaSRTools;
 require Exporter;
 use POSIX;
-# TODO: PRIO2: Get it stric again 
-#use strict;
+
+use strict;
+
 use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
+use vars qw(@ISA @EXPORT @EXPORT_OK);
+@ISA = qw(Exporter);
+# Init immediately so their contents can be used in the 'use vars' below.
+@EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list set_cibFile get_master_nameserver set_GName set_HName set_SName set_Site insertAttribute);
+
 
 my $VERSION="1.0";
 my $newAttributeModel=0;
 my $cibFile="";
 
-use vars qw(@ISA @EXPORT @EXPORT_OK);
-@ISA = qw(Exporter);
-
-    # Init immediately so their contents can be used in the 'use vars' below.
-    @EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_attr_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list set_cibFile get_master_nameserver set_GName set_HName set_SName set_Site insertAttribute);
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
 
@@ -84,8 +85,7 @@ sub get_nodes_online
     my $result=0;
     my $sid=shift;
     my $result="";
-    my $h;
-    foreach $h ( keys(%{$$refHName{node_state}}) ) {
+    foreach my $h ( keys(%{$$refHName{node_state}}) ) {
         if ( get_node_status($h) eq "online" ) {
            $result++;
         }
@@ -101,7 +101,7 @@ sub get_node_status($)
     my $node=shift;
     my $standby;
     $result=$$refHName{"node_state"}->{$node};
-printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
+#printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
     if ( defined ($$refHName{"standby"}->{$node})) {
        $standby = $$refHName{"standby"}->{$node};
        if ( $standby eq "on" ) {
@@ -115,7 +115,7 @@ sub get_node_list()
 {
     # crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}'
     my @nodes;
-    foreach $h ( keys(%{$$refHName{node_state}}) ) {
+    foreach my $h ( keys(%{$$refHName{node_state}}) ) {
         if ( ! ( $h =~ "^_" )) { 
             push (@nodes, $h);
         }
@@ -130,8 +130,8 @@ sub get_sid_and_InstNr()
 {
     my $sid=""; my $Inr=""; my $noDAACount = 0; my $gotAnswer = 0;
     my @sid_ino;
-    open ListInstances, "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances|";
-    while (<ListInstances>) {
+    open my $ListInstances, "-|", "/usr/sap/hostctrl/exe/saphostctrl -function ListInstances";
+    while (<$ListInstances>) {
         # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
         chomp;
         if ( /^[^:]+:\s*(\w+)\s*-\s*(\w+)\s*-/ ) {
@@ -192,12 +192,13 @@ sub get_hana_attributes($$$$$$$)
 {
     my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN ) = @_;
     my %id2uname;
+    my $CIB;
     if ( $cibFile eq "" ) {
-        open CIB, "cibadmin -Ql |" or die "CIB could not be read from cluster";
+        open $CIB, "-|", "cibadmin -Ql" or die "CIB could not be read from cluster";
     } else  {
-       open CIB, "<$cibFile" or die "CIB file $cibFile not found or not able to read it";
+       open $CIB, "<", "$cibFile" or die "CIB file $cibFile not found or not able to read it";
     }
-while (<CIB>) {
+while (<$CIB>) {
    chomp;
    my ($host, $name, $site, $value);
    if ( $_ =~ /cib-last-written="([^"]*)"/ ) {
@@ -316,8 +317,7 @@ sub get_hana_sync_state($)
     if ( $newAttributeModel == 1 ) {    
         $result = $$refGName{sync_state}->{"global"};
     } else  {
-        my $h;
-        foreach $h ( keys(%{$$refHName{sync_state}}) ) {
+        foreach my $h ( keys(%{$$refHName{sync_state}}) ) {
             if ( $$refHName{sync_state}->{$h} =~ /(S.*)/ ) {
                $result=$1;
             }
@@ -330,8 +330,7 @@ sub get_secondary_score($)
 {
     my $result="-";
     if ( $newAttributeModel == 1 ) {    
-        my $s;
-        foreach $s ( keys(%{$$refSName{"srr"}}) ) {
+        foreach my $s ( keys(%{$$refSName{"srr"}}) ) {
 # TODO
             $result="-";
             #if ( ( $$refSName{"srr"}->{$s} =~ /P/ ) && ( $$refSName{"lss"}->{$s} =~ /[$lss]/ )) {
@@ -339,8 +338,7 @@ sub get_secondary_score($)
             #}
         }
     } else  {
-        my $h;
-        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
             if ( $$refHName{"roles"}->{$h} =~ /[0-9]:S:/ ) {
                 $result = $$refHName{"score"}->{$h};
             }
@@ -355,15 +353,13 @@ sub get_number_primary($ $)
     my $lss=shift;
     my $rc=0;
     if ( $newAttributeModel == 1 ) {    
-        my $s;
-        foreach $s ( keys(%{$$refSName{"srr"}}) ) {
+        foreach my $s ( keys(%{$$refSName{"srr"}}) ) {
             if ( ( $$refSName{"srr"}->{$s} =~ /P/ ) && ( $$refSName{"lss"}->{$s} =~ /[$lss]/ )) {
                $rc++;
             }
         }
     } else  {
-        my $h;
-        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
             if ( $$refHName{"roles"}->{$h} =~ /[$lss]:P:/ ) {
                $rc++;
             }
@@ -378,8 +374,7 @@ sub get_number_HANA_standby($$)
     my $site=shift;
     my $standby=0;
     if ( $newAttributeModel == 1 ) {
-        my $h;
-        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
             my $hSite=$$refHName{"site"}->{$h};
             if ( $hSite eq $site ) {
                 my $role=$$refHName{"roles"}->{$h};
@@ -398,8 +393,7 @@ sub get_HANA_nodes($$)
     my $site=shift;
     my @nodes;
     if ( $newAttributeModel == 1 ) {
-        my $h;
-        foreach $h ( keys(%{$refHName{"site"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"site"}}) ) {
             my $hSite=$$refHName{"site"}->{$h};
             if ( $hSite eq $site ) {
                 push (@nodes, $h);
@@ -447,9 +441,8 @@ sub check_node_mode($$$)
 
 sub get_cluster_status()
 {
-    my $h;
     my $return="";
-    foreach $h ( keys(%{$$refHName{"node_state"}} )) {
+    foreach my $h ( keys(%{$$refHName{"node_state"}} )) {
         my $cl_status;
         if ( ($return eq "") && !($h =~ /^_/) ) {   # TODO: at the moment we filter all strings beginning with "_" maybe thats wrong -> _title, _length
             $cl_status= qx(crmadmin -q -S $h 2>&1);
@@ -467,15 +460,13 @@ sub get_number_secondary($ $)
     my $lss=shift;
     my $rc=0;
     if ( $newAttributeModel == 1 ) {    
-        my $s;
-        foreach $s ( keys(%{$$refSName{"srr"}}) ) {
+        foreach my $s ( keys(%{$$refSName{"srr"}}) ) {
             if ( ( $$refSName{"srr"}->{$s} =~ /S/ ) && ( $$refSName{"lss"}->{$s} =~ /[$lss]/ )) {
                $rc++;
             }
         }
     } else {
-        my $h;
-        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
             if ( $$refHName{"roles"}->{$h} =~ /[$lss]:S:/ ) {
                $rc++;
             }
@@ -490,15 +481,13 @@ sub get_host_primary($ $)
     my $lss=shift;
     my $result="";
     if ( $newAttributeModel == 1 ) {    
-        my $s;
-        foreach $s ( keys(%{$refSName{"srr"}}) ) {
+        foreach my $s ( keys(%{$$refSName{"srr"}}) ) {
             if ( ( $$refSName{"srr"}->{$s} =~ /P/ ) && ( $$refSName{"lss"}->{$s} =~ /[$lss]/ )) {
                $result=$$refSName{"mns"}->{$s};
             }
         }
     } else {
-        my $h;
-        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
             if ( $$refHName{"roles"}->{$h} =~ /[$lss]:P:/ ) {
                $result=$h;
             }
@@ -513,15 +502,13 @@ sub get_host_secondary($ $)
     my $lss=shift;
     my $result="";
     if ( $newAttributeModel == 1 ) {    
-        my $s;
-        foreach $s ( keys(%{$refSName{"srr"}}) ) {
+        foreach my $s ( keys(%{$$refSName{"srr"}}) ) {
             if ( ( $$refSName{"srr"}->{$s} =~ /S/ ) && ( $$refSName{"lss"}->{$s} =~ /[$lss]/ )) {
                $result=$$refSName{"mns"}->{$s};
             }
         }
     } else {
-        my $h;
-        foreach $h ( keys(%{$$refHName{"roles"}}) ) {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
             if ( $$refHName{"roles"}->{$h} =~ /[$lss]:S:/ ) {
                $result=$h;
             }
@@ -645,69 +632,39 @@ sub check_all_ok($$)
     return ($rc, $failed);
 }
 
-sub OLD_host_attr2string()
-{
-    my $string;
-    my ($AKey, $HKey, $len, $line_len, $hclen);
-    $hclen=$HName{_hosts}->{_length};
-    $line_len=$hclen+1;
-    $string .= sprintf "%-$hclen.${hclen}s ", "$table_title";
-    foreach $AKey (sort keys %HName) {
-      if ($AKey ne "_hosts") {
-         $len = $HName{$AKey}->{_length};
-         $line_len=$line_len+$len+1;
-         $string .= sprintf "%-$len.${len}s ", $HName{$AKey}->{_title};
-       }
-    }
-        $string .= sprintf "\n";
-        $string .= sprintf "%s\n", "-" x $line_len ;
-        foreach $HKey (sort keys %Host) {
-           $string .= sprintf "%-$hclen.${hclen}s ", $HKey;
-           foreach $AKey (sort keys %HName) {
-           if ($AKey ne "_hosts") {
-               $len = $HName{$AKey}->{_length};
-               $string .= sprintf "%-$len.${len}s ", $Host{$HKey} -> {$AKey};
-            }
-        }
-           $string .= sprintf "\n";
-        }
-        return $string;
-}
-
-sub print_attr_host()
-{
-    my ($HKey, $AKey);
-	printf "%-22s", "Attribute \\ Host";
-	foreach $HKey (sort keys %Host) {
-	   printf "%-16s ", $HKey;
-	}
-	printf "\n";
-
-	printf "%s\n", "-" x 120 ;
-
-	foreach $AKey (sort keys %HName) {
-	   printf "%-22s", $AKey;
-	   foreach $HKey (sort keys %Host) {
-		   printf "%-16.16s ", $Host{$HKey} -> {$AKey};
-		}
-
-	   printf "\n";
-	}
-	return 0;
-}
+#sub print_attr_host()
+#{
+#	printf "%-22s", "Attribute \\ Host";
+#	foreach my $HKey (sort keys %Host) {
+#	   printf "%-16s ", $HKey;
+#	}
+#	printf "\n";
+#
+#	printf "%s\n", "-" x 120 ;
+#
+#	foreach my $AKey (sort keys %HName) {
+#	   printf "%-22s", $AKey;
+#	   foreach my $HKey (sort keys %Host) {
+#		   printf "%-16.16s ", $Host{$HKey} -> {$AKey};
+#		}
+#
+#	   printf "\n";
+#	}
+#	return 0;
+#}
 
 sub host_attr2string($$$$)
 {
     my $string="";
     my ($refH, $refN, $title, $sort) = @_;
-    my ($AKey, $HKey, $len, $line_len, $hclen);
+    my ($len, $line_len, $hclen);
     $hclen=$$refN{_hosts}->{_length};
     $line_len=$hclen+1;
     $string.=sprintf "%-$hclen.${hclen}s ", "$title";
     #
     # headline
     #
-    foreach $AKey (sort keys %$refN) {
+    foreach my $AKey (sort keys %$refN) {
         if ($AKey ne "_hosts") {
             $len = $$refN{$AKey}->{_length};
             $line_len=$line_len+$len+1;
@@ -725,9 +682,9 @@ sub host_attr2string($$$$)
     # object / name / value lines
     #
     if ( $sort eq "" ) {
-        foreach $HKey (sort keys %$refH) {
+        foreach my $HKey (sort keys %$refH) {
             $string.=sprintf "%-$hclen.${hclen}s ", $HKey;
-            foreach $AKey (sort keys %$refN) {
+            foreach my $AKey (sort keys %$refN) {
                 if ($AKey ne "_hosts") {
                     $len = $$refN{$AKey}->{_length};
                     $string.=sprintf "%-$len.${len}s ", $$refH{$HKey} -> {$AKey};
@@ -738,21 +695,20 @@ sub host_attr2string($$$$)
     } else {
        # try to sort by site (other attrs to follow)
        # first try to get a ordered list of attribute values assigned host names
-       my $sortV;
+       my $sortVal;
        my %GroupedHosts;
-       foreach $HKey (sort keys %$refH) {
-           $sortV = $$refH{$HKey} -> {$sort};
-           push(@{$GroupedHosts{$sortV}}, $HKey);
-           #printf "TST: <%s>\n", $sortV;
+       foreach my $HKey (sort keys %$refH) {
+           $sortVal = $$refH{$HKey} -> {$sort};
+           push(@{$GroupedHosts{$sortVal}}, $HKey);
+           #printf "TST: <%s>\n", $sortVal;
        }
        # not ready so far only print the grouped hosts
-       foreach $sortV (sort keys %GroupedHosts) {
+       foreach my $sortV (sort keys %GroupedHosts) {
            #my $StrHosts;
            #$StrHosts=join(":", @{$GroupedHosts{$sortV}});
-           my $Host;
-           foreach $Host (@{$GroupedHosts{$sortV}}) {
+           foreach my $Host (@{$GroupedHosts{$sortV}}) {
                printf "%-$hclen.${hclen}s ", $Host;
-               foreach $AKey (sort keys %$refN) {
+               foreach my $AKey (sort keys %$refN) {
                 if ($AKey ne "_hosts") {
                     $len = $$refN{$AKey}->{_length};
                     $string.=sprintf "%-$len.${len}s ", $$refH{$Host} -> {$AKey};
@@ -779,8 +735,8 @@ sub print_host_attr($$$$)
 
 sub get_master_nameserver()
 {
-    my ($SKey, @msns);
-    foreach $SKey (sort keys %$refSite) {
+    my @msns;
+    foreach my $SKey (sort keys %$refSite) {
         push(@msns, $$refSite{$SKey}->{"mns"}); 
     }
     return @msns;
