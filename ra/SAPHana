@@ -35,7 +35,7 @@
 #######################################################################
 #
 # Initialization:
-SAPHanaVersion="0.152.22"
+SAPHanaVersion="0.152.23"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -2248,7 +2248,7 @@ function saphana_monitor_secondary()
         lpa_push_lpt 10
     fi
     promote_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_CLONE_STATE[@]})
-    super_ocf_log debug "DBG: saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
+    super_ocf_log debug "DBG: saphana_monitor_secondary: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
         #  DONE: PRIO3: do we need to inizialize also the DEMOTED attribute value?
@@ -2325,9 +2325,13 @@ function saphana_monitor_secondary()
                     super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
                     set_crm_master -INFINITY
                     ;;
-                "*" )     # Unknown sync status
+                * )     # Unknown sync status
                     super_ocf_log info "DEC: secondary with sync status UKNOWN/UNDEFINED ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
+                    # set_crm_master -INFINITY
+                    super_ocf_log info "DEC: secondary with sync status PROMOTED ==> RESCORE"
+                    my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
+                    my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                    scoring_crm_master "$my_role" "$my_sync"
                     ;;
             esac
             ;;
