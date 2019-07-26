@@ -109,6 +109,7 @@ install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 #install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
 install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
+install -m 0555 test/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # crm/hawk wizard files
@@ -140,6 +141,7 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_docdir}/%{name}/LICENSE
 /usr/sbin/SAPHanaSR-monitor
 /usr/sbin/SAPHanaSR-showAttr
+/usr/sbin/SAPHanaSR-replay-archive
 
 # HAWK2 wizard for SLES 12 SP1+
 %if 0%{?sle_version} >= 120100
