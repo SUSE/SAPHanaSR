@@ -662,14 +662,18 @@ function get_SRHOOK()
 {
     local -a ATTR my_sync
     local get_sr_name="$1"
+    local get_sr_host="$2"
     ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$get_sr_name"
     my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
+    super_ocf_log info "RA: SRHOOK1=$my_sync"
     if [ -z "$my_sync" -o "$my_sync" = "SWAIT" ]; then
-        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
+        my_sync=$(get_hana_attribute "$get_sr_host" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
+    super_ocf_log info "RA: SRHOOK2=$my_sync"
     fi
     if [ -z "$my_sync" ]; then   # be pesimistic, if we could not determine the SR attribute
         my_sync="SFAIL"
     fi
+    super_ocf_log info "RA: SRHOOK3=$my_sync"
     echo "$my_sync"
     return 0
 }
@@ -1433,7 +1437,7 @@ function saphana_start_primary()
             # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
             #   then lpa_advice="wait"
             remoteRole=$(get_hana_attribute $remoteNode ${ATTR_NAME_HANA_ROLES[@]})
-            remoteSync=$(get_SRHOOK "$remSR_name")
+            remoteSync=$(get_SRHOOK "$remSR_name" "$remoteNode")
             super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
             if ocf_is_true "${PreferSiteTakeover}"; then
                 remoteStatus="$remoteRole:$remoteSync"
@@ -1477,7 +1481,7 @@ function saphana_start_primary()
        rc=$OCF_ERR_GENERIC
     fi
 
-    my_sync=$(get_SRHOOK "$sr_name")
+    my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
     case "$lpa_advice" in
         start )  # process a normal START
             case "$lss" in
@@ -2170,7 +2174,7 @@ function saphana_monitor_primary()
                         # TODO: PRIO4: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
             # TODO PRIO1: REMOVE remoteNode dependency - get_sync_status
-                        remoteSync=$(get_SRHOOK "$remSR_name")
+                        remoteSync=$(get_SRHOOK "$remSR_name" "$remoteNode")
             # TODO HANDLING OF "NEVER"
                         case "$remoteSync" in
                             SOK | PRIM )
@@ -2195,7 +2199,7 @@ function saphana_monitor_primary()
                         #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here"
                         my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
-                        my_sync=$(get_SRHOOK "$sr_name")
+                        my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
                         super_ocf_log info "SCORE: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)" 
                         scoring_crm_master "$my_role" "$my_sync"
                         rc=$OCF_FAILED_MASTER
@@ -2214,7 +2218,11 @@ function saphana_monitor_primary()
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
             if ocf_is_probe; then
-                rc=$OCF_SUCCESS
+                if [ "$promoted" -eq 1 ]; then
+                    rc=$OCF_RUNNING_MASTER
+                else
+                    rc=$OCF_SUCCESS
+                fi
             else
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc $NODENAME
@@ -2230,7 +2238,7 @@ function saphana_monitor_primary()
                         rc=$OCF_SUCCESS
                     fi
                 fi
-                my_sync=$(get_SRHOOK "$sr_name")
+                my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
                 my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
                 case "$my_role" in
                     [12]:P:*:master:*  ) # primary is down or may not anser hdbsql query so drop analyze_hana_sync_status
@@ -2300,8 +2308,8 @@ function saphana_monitor_secondary()
         lpa_set_lpt  10 $NODENAME
         lpa_push_lpt 10
     fi
-    promote_attr=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
-    super_ocf_log debug "DBG: saphana_monitor_clone: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
+    promote_attr=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_CLONE_STATE[@]})
+    super_ocf_log debug "DBG: saphana_monitor_secondary: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
         #  DONE: PRIO3: do we need to inizialize also the DEMOTED attribute value?
@@ -2356,7 +2364,7 @@ function saphana_monitor_secondary()
         2 | 3 | 4 ) # WARN INFO OK
             rc=$OCF_SUCCESS
             lpa_set_lpt  30 $NODENAME
-            sync_attr=$(get_SRHOOK "$sr_name")
+            sync_attr=$(get_SRHOOK "$sr_name" "$NODENAME")
             local hanaOM=""
             local hanaOut1=""
             # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
@@ -2373,7 +2381,7 @@ function saphana_monitor_secondary()
                 "SOK"   ) # This is a possible node to promote, when primary is missing
                     super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
                     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
-                    my_sync=$(get_SRHOOK "$sr_name")
+                    my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
                     super_ocf_log info "SCORE: saphana_monitor_secondary: scoring_crm_master($my_role,$my_sync)" 
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
@@ -2381,9 +2389,11 @@ function saphana_monitor_secondary()
                     super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
                     set_crm_master -INFINITY
                     ;;
-                "*" )     # Unknown sync status
-                    super_ocf_log info "DEC: secondary with sync status UKNOWN/UNDEFINED ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
+                * )     # Unknown sync status
+                    super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
+                    my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
+                    my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                    scoring_crm_master "$my_role" "$my_sync"
                     ;;
             esac
             ;;
@@ -2419,7 +2429,7 @@ function saphana_monitor_clone() {
     local myMaster=-1
 
     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
-    my_sync=$(get_SRHOOK "$sr_name")
+    my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
 
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG: PROBE ONLY"
@@ -2488,7 +2498,7 @@ function saphana_promote_clone() {
         # we are SECONDARY/SLAVE and need to takeover ...  promote on the replica (secondary) side...
         # promote on the replica side...
         #
-        hana_sync=$(get_SRHOOK "$sr_name")
+        hana_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
         case "$hana_sync" in
              SOK )
                 super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
