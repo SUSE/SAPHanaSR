@@ -1311,6 +1311,7 @@ function saphana_start() {
     local rc=$OCF_NOT_RUNNING
     local output=""
     local loopcount=0
+    local lastSrHook
     check_sapstartsrv
     rc=$?
     #
@@ -1318,7 +1319,11 @@ function saphana_start() {
     #
     if [ $rc -eq $OCF_SUCCESS ]; then
         ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-        set_hana_attribute "X" "SWAIT" "${ATTR[@]}"
+        lastSrHook=$(get_hana_attribute  "X" "${ATTR[@]}")
+        if [ -n "$lastSrHook" ]; then
+            # reset old srHook attribute to SWAIT as we are starting right now
+            set_hana_attribute "X" "SWAIT" "${ATTR[@]}"
+        fi
         output=$($SAPCONTROL -nr $InstanceNr -function Start)
         rc=$?
         super_ocf_log info "ACT: Starting SAPHANA Instance $SID-$InstanceName: $output"
@@ -2537,6 +2542,15 @@ function saphana_promote_clone() {
      fi
   fi
   rc=$?
+    local lastSrHook
+    if [ $rc -eq $OCF_SUCCESS ]; then
+        ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
+        lastSrHook=$(get_hana_attribute  "X" "${ATTR[@]}")
+        if [ -n "$lastSrHook" ]; then
+            # reset old srHook attribute to PRIM as we are starting right now
+            set_hana_attribute "X" "PRIM" "${ATTR[@]}"
+        fi
+    fi
   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
   return $rc
 }
