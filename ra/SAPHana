@@ -16,7 +16,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-#               (c) 2015-2019 SUSE Linux GmbH
+#               (c) 2015-2019 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -39,7 +39,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaVersion="0.153.0"
+SAPHanaVersion="0.153.1"
 #
 # Initialization:
 timeB=$(date '+%s')
@@ -2322,7 +2322,7 @@ function saphana_monitor_secondary()
         promoted=0;
     else
         case "$promote_attr" in
-            PROMOTED ) # However - PROMOTED should never happen for a SECONDARY
+            PROMOTED ) # However - PROMOTED should only happen when coming back from maintenece
                 promoted=1;
                 ;;
             DEMOTED )  # This is the status we expect
@@ -2367,7 +2367,12 @@ function saphana_monitor_secondary()
             rc=$OCF_NOT_RUNNING
             ;;
         2 | 3 | 4 ) # WARN INFO OK
-            rc=$OCF_SUCCESS
+            if [ "$promoted" -eq 1 ]; then
+                # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
+                rc=$OCF_RUNNING_MASTER
+            else
+                rc=$OCF_SUCCESS
+            fi
             lpa_set_lpt  30 $NODENAME
             sync_attr=$(get_SRHOOK "$sr_name" "$NODENAME")
             local hanaOM=""
