@@ -226,6 +226,8 @@ while (<$CIB>) {
        }
       if ( $id eq "cib" ) {
 	      insertAttribute($sid, $refGL, $refGN, "global", "$name", "$value");
+      } elsif ( $id eq "nodes" ) {
+              # to be processed in node section (below)
       } else {
 	      insertAttribute($sid, $refRL, $refRN, "$id", "$name", "$value");
       }
@@ -249,15 +251,15 @@ while (<$CIB>) {
    #
    #  <nvpair id="nodes-1234567890-standby" name="standby" value="off"/>
    #
-   if ( $_ =~ /id="nodes-(.+)-standby"/ ) {
-       my $host=$1;
+   if ( $_ =~ /id="nodes-(.+)-(standby|maintenance)"/ ) {
+       my $host=$1; my $attribute=$2;
          if (defined $id2uname{$host}) {
              $host = $id2uname{$host}
          }
        if ( $_ =~ /value="([a-zA-Z0-9\-\_]+)"/ ) {
            my $value=$1;
 #printf "STANDBY <%s> VALUE <%s>\n", $host, $value;
-           insertAttribute($sid, $refHH, $refHN, $host, "standby", $value);
+           insertAttribute($sid, $refHH, $refHN, $host, $attribute, $value);
        }
    }
    #
