@@ -685,6 +685,13 @@ sub host_attr2string
     my $string="";
     my ($refH, $refN, $title, $sort, $format) = @_;
     my ($len, $line_len, $hclen);
+    #
+    # leave function if hash is empty
+    #    in this case an empty string is returned
+    #
+    if ( ! ( keys %$refN )) {
+       return "";
+    }
     if ( ! defined $format) {
         $format="script"
     }
@@ -716,20 +723,20 @@ sub host_attr2string
     if ( $sort eq "" ) {
         foreach my $HKey (sort keys %$refH) {
             if ( $format eq "tables" ) {
-		    $string.=sprintf "%-$hclen.${hclen}s ", $HKey;
+                $string.=sprintf "%-$hclen.${hclen}s ", $HKey;
             }
             foreach my $AKey (sort keys %$refN) {
                 if ($AKey ne "_hosts") {
                     $len = $$refN{$AKey}->{_length};
                     if ( $format eq "tables" ) {
-			    $string.=sprintf "%-$len.${len}s ", $$refH{$HKey} -> {$AKey};
+                        $string.=sprintf "%-$len.${len}s ", $$refH{$HKey} -> {$AKey};
                     } elsif ( $format eq "script" ) {
-			    $string.=sprintf "%s/%s/%s=\"%s\"\n", $title, $HKey, $AKey, $$refH{$HKey} -> {$AKey};
+                        $string.=sprintf "%s/%s/%s=\"%s\"\n", $title, $HKey, $AKey, $$refH{$HKey} -> {$AKey};
                     }
                 }
             }
             if ( $format eq "tables" ) {
-		    $string.=sprintf "\n";
+                $string.=sprintf "\n";
             }
         }    
     } else {
@@ -770,14 +777,12 @@ sub print_host_attr
 {
     my $string="";
     my ($refH, $refN, $title, $sort, $format) = @_;
-    # my ($AKey, $HKey, $len, $line_len, $hclen);
     if ( ! defined $format) {
         $format="script"
     }
-    if ( $format eq "tables" ) {
-    printf "%s\n", host_attr2string($refH, $refN, $title, $sort, $format);
-    } else {
-    printf "%s", host_attr2string($refH, $refN, $title, $sort, $format);
+    my $print_attributes_result = host_attr2string($refH, $refN, $title, $sort, $format);
+    if ( $print_attributes_result ) {
+        printf "%s", $print_attributes_result;
     }
     return 0;
 }
