@@ -12,7 +12,7 @@
 #
 ##########################################################################
 #
-# Syntax: 
+# Syntax:
 # SAPHanaSR-replay-archive <path-to-pengine-archive> (tar.bz2)
 #
 # SAPHanaSR-replay-archive archive-containing-some-pengine-directories
@@ -26,33 +26,41 @@ version="1.0";
 exe="$0"
 bex=$(basename "$exe")
 format="tables";
+outDir="";
 #
-case $1 in
- --help|-h)
-	echo
-	echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
-	echo
-	echo "usage:    $bex [OPTION]"
-	echo " --help		show help."
-	echo " --version	show version."
-	echo
-	exit
-;;
- --version|-v)
-	echo "$bex version $version"
-	exit
-;;
-    --format=* )
-        format=${1#*=}
-        shift
-;;
-esac
+while [ $# -gt 0 ]; do
+    case "$1" in
+     --help|-h)
+        echo
+        echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
+        echo
+        echo "usage:    $bex [OPTION]"
+        echo " --help		show help."
+        echo " --version	show version."
+        echo
+        exit
+    ;;
+     --version|-v)
+        echo "$bex version $version"
+        exit
+    ;;
+        --format=* )
+            format=${1#*=}
+    ;;
+        --outDir=* )
+            outDir=${1#*=}
+    ;;
+        * )
+        archive="$1"
+    ;;
+    esac
+    shift
+done
 
 #
 ####################
 #
 #
-archive="$1"
 mkdir -p "${archive}-tmp"
 if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
 if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
@@ -85,7 +93,7 @@ cFiles=$(find . -type f -name cib.txt)
 #
 sids=$(
 for cF in $cFiles; do
-    while read line 
+    while read line
     do
         if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
            if [[ "$line" =~ SID=(...) ]]; then
@@ -101,6 +109,15 @@ done | sort -u | tr '[:upper:]' '[:lower:]' )
 # create a tmp directory to extract pengine files
 #
 mkdir -p "${archive}-tmp/tmp"
+#
+####################
+# create output directory, if set
+#
+if [ -n "$outDir" ]; then
+   mkdir -p "$outDir"
+   outNr=0
+fi
+
 
 #
 ####################
@@ -109,12 +126,26 @@ mkdir -p "${archive}-tmp/tmp"
 #
 for sid in $sids; do
     echo "================ replay for sid $sid ==============="
-    for cibBZ2 in $pFilesSorted; do 
-       cib="${cibBZ2%.bz2}"; 
+    for cibBZ2 in $pFilesSorted; do
+       cib="${cibBZ2%.bz2}";
        shortCIB="${cib##*/}"
-       echo "cib: $cib"; 
-       bunzip2 -c "$cibBZ2" > "${archive}-tmp/tmp/$shortCIB"; 
-       /usr/sbin/SAPHanaSR-showAttr --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format";
-       rm "${archive}-tmp/tmp/$shortCIB" ;    
-    done 
+       echo "cib: $cib";
+       bunzip2 -c "$cibBZ2" > "${archive}-tmp/tmp/$shortCIB";
+       case "$format" in
+           tables | script )
+               /usr/sbin/SAPHanaSR-showAttr --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format";
+                   ;;
+           book )
+               if [ -n "$outDir" ]; then
+                   outOption="--out=$outDir/sapMonitor.$outNr.html"
+                   (( outNr ++ ))
+               fi
+               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="html2" "$outOption";
+                   ;;
+           txt | ascii | html )
+               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format"
+                   ;;
+       esac
+       rm "${archive}-tmp/tmp/$shortCIB" ;
+    done
 done
