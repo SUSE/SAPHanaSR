@@ -6,6 +6,7 @@ FILE_LIST = doc \
 			man \
 			ra \
 	 		test \
+			icons \
 			srHook \
 	 		wizard 
 
