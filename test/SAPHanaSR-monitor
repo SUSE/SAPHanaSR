@@ -5,7 +5,7 @@
 # (c) 2015-2016 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com>
 # License: GPL v2+
-my $Version="0.21.2016.11.04.1";
+my $Version="0.22.2019.27-08.1";
 #
 ##################################################################
 use POSIX;
@@ -41,6 +41,19 @@ my $HtmlPage="/srv/www/hawk/public/herschel/index.html";
 my $Intervall=10;
 my $cibFile="";
 my $help=0;
+my $ident = "SAPHanaSR-mon";
+my $logopt = "pid";
+my $facility = "LOCAL0";
+my $priority = "info";
+my %Colors;
+#$Colors{"green"}="#7AC142";
+#$Colors{"yellow"}="#fde944";
+#$Colors{"red"}="#BB0000";
+#$Colors{"grey"}="#B9B9B9";
+$Colors{"green"}="#00c081";
+$Colors{"yellow"}="#ffef8d";
+$Colors{"red"}="#ed6924";
+$Colors{"grey"}="#afa9ac";
 
 sub init()
 {
@@ -67,23 +80,26 @@ sub init()
 ################ BEGIN CUT - MOVE THAT TO AN PERL-LIBRARY LATER
 #
 
-sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$$)
+sub  print_page
 {
-  my ($format, $sid, $sid_color, $hana1stat, $node1, $hana2stat, $node2, $syncstat, $syncdir, $crm_out, $crm_col, $crm_errors, $attr_out, $attr_col, $attr_errors, $score_out, $score_col, $score_errors, $log_out, $log_col, $log_errors,
-     $ftd_out, $ftd_col, $ftd_errors, $check_lpa_col, $check_lpa_msg);
-  $format=shift();
-  $sid=shift(); $sid_color=shift();
-  $hana1stat=shift(); $node1=shift(); 
-  $hana2stat=shift(); $node2=shift(); 
-  $syncstat=shift(); $syncdir=shift();
-  $crm_out=shift(); $crm_col=shift(); $crm_errors=shift(); 
-  $attr_out=shift(); $attr_col=shift(); $attr_errors=shift();
-  $score_out=shift(); $score_col=shift(); $score_errors=shift();
-  $log_out=shift(); $log_col=shift(); $log_errors=shift();
-  $ftd_out=shift(); $ftd_col=shift(); $ftd_errors=shift();
-  $check_lpa_col=shift(); $check_lpa_msg=shift();
+  my %P = @_;
+  my $format=$P{format}; my  $sid=$P{sid}; my  $sid_color=$P{sidColor};
+  my  $hana1stat=$P{hanaStatusA}; my  $node1=$P{nodeListA};
+  my  $hana2stat=$P{hanaStatusB}; my  $node2=$P{nodeListB};
+  my  $syncstat=$P{syncColor}; my  $syncdir=$P{syncDirection};
+  my  $crm_out=$P{crmOut}; my  $crm_col=$P{crmColor}; my  $crm_errors=$P{crmErrors}; my  $crm_cfg=$P{crmConfig};
+  my  $attr_out=$P{attrOut}; my  $attr_col=$P{attrColor}; my  $attr_errors=$P{attrErrors};
+  my  $score_out=$P{scoreOut}; my  $score_col=$P{scoreColor}; my  $score_errors=$P{scoreErrors};
+  my  $log_out=$P{logOut}; my  $log_col=$P{logColor}; my  $log_errors=$P{logErrors};
+  my  $ftd_out=$P{ftdOut}; my  $ftd_col=$P{ftdColor}; my  $ftd_errors=$P{ftdErrors};
+  my  $check_lpa_col=$P{lpaColor}; my  $check_lpa_msg=$P{lpaMessage};
+  my  $cibtime=$P{cibTime} ;
+
+
+
+
   # in the page layout $score_col is ignored right now
-  # TODO: Check id we add more and more parameters to the print_page or if we will use an hash as parameter or 
+  # TODO: Check id we add more and more parameters to the print_page or if we will use an hash as parameter or
   #       id we (recover) more values here inside of the function like for the lpa values:
     my $lpa_node1=get_lpa_by_host($sid, $node1);
     my $lpa_node2=get_lpa_by_host($sid, $node2);
@@ -92,13 +108,24 @@ sub  print_page($$$$$$$$$$$$$$$$$$$$$$$$$)
   chomp($crm_errors);
   chomp($attr_errors);
   chomp($log_errors);
-
+  my $nextUrl=".";
+  my $nextNr; my $prevNr; my $prevUrl;
+  if ( $format = "html2" ) {
+     my $Nr=0;
+     if ( $HtmlPage =~ /(.*\.)([0-9]+)(\.html)/ ) {
+         $Nr = $2 ;
+         $nextNr = $Nr + 1;
+         $prevNr = $Nr - 1;
+         $nextUrl="$1" . "$nextNr" . "$3";
+         $prevUrl="$1" . "$prevNr" . "$3";
+     }
+  }
   if ($format eq "txt") {
       my $syncArrow="??";
       my $SID=uc($sid);
       if ( $syncdir eq "right" ) { $syncArrow = "=>"; }
       if ( $syncdir eq "left" ) { $syncArrow = "<="; }
-      my $myPage = <<EOF;  
+      my $myPage = <<EOF;
 OVERALL:   $SID: $sid_color                   $mydate
 SR:        $syncstat $node1 $syncArrow $node2
 
@@ -114,57 +141,74 @@ LPA:       $node2 $lpa_node2
 Syslog:    $log_col ($log_errors)
 EOF
     printf( "%s\n", $myPage);
-  } elsif ($format eq "html") {
+  } elsif (($format eq "html")||($format eq "html2")) {
   my $myPage = <<EOF;
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <title>SAPHanaSR status</title>
-<meta http-equiv="refresh" content="10; url=." />
+<meta http-equiv="refresh" content="10; url=$nextUrl" />
 <meta charset="utf-8"/>
 </head>
-<body class="">
+<body class="" style="background-color:#dcddde;">
 <table cellpadding=5>
   <!-- ################## AREA SID-STATUS ################# -->
-  <tr><td valign="top" bgcolor="$sid_color"><h2>$sid</h2></td>
-      <td valign="top"><b>SAPHanaSR-monitor $mydate</b>
-          <table cellpadding=1>
-              <tr><td valign="top"><a href="../1"><img width="100%" height="100%" src="final_icons/server_${hana1stat}.png"/></a></td>
-                  <td><img width="100%" height="100%" src="final_icons/arrow_${syncdir}_${syncstat}.png"/></td>
-                  <td valign="top"><a href="../2"><img width="100%" height="100%" src="final_icons/server_${hana2stat}.png"/></a></td>
-              </tr>
-              <tr><td valign="top" align="center"><b>$node1</b></td>
-                  <td valign="top" align="center"><b>$sid</b></td>
-                  <td valign="top" align="center"><b>$node2</b></td>
-              <tr>
-          </table>
+  <tr><td valign="top" bgcolor="$Colors{$sid_color}"><h2>$sid</h2></td>
+      <td valign="top"><b>SAPHanaSR-monitor $cibtime</b>
+
+      <table cellpadding=1>
+          <tr><td valign="top"><a href="../1"><img width="75%" height="75%" src="icons/server_${hana1stat}.svg"/></a></td>
+              <td><img width="75%" height="75%" src="icons/arrow_${syncdir}_${syncstat}.svg"/></td>
+              <td valign="top"><a href="../2"><img width="75%" height="75%" src="icons/server_${hana2stat}.svg"/></a></td>
+          </tr>
+          <tr><td valign="top" align="center"><b>$node1</b></td>
+              <td valign="top" align="center"><b>$sid</b></td>
+              <td valign="top" align="center"><b>$node2</b></td>
+          </tr>
+          <tr>
+      <td></td><td><a href="$prevUrl"> <img width="30" height="30" src="icons/back.svg"/></a>
+      <a href="$nextUrl"> <img width="30" height="30" src="icons/fwd.svg"/></a></td>
+          </tr>
+
+      </table>
       </td>
-      <td valign="top" align="right"><a href="https://www.suse.com/de-de/products/sles-for-sap/resource-library/sap-best-practices.html"><img width="45%" height="45%" src="suse_logo_w-tag_color.jpg"/></a></td>
+      <td valign="top" align="right"><a href="https://www.suse.com/de-de/products/sles-for-sap/resource-library/sap-best-practices.html"><img width="45%" height="45%" src="icons/suse-logo.svg"/></a></td>
   </tr>
-  <!-- ################## AREA CRM ################# -->
-  <tr><td valign="top" bgcolor="$crm_col" rowspan="2"><h2>Crm</h2></td>
+  <!-- ################## AREA ATTR ################# -->
+  <tr><td valign="top" bgcolor="$Colors{$attr_col}" rowspan="2"><h2>Attr</h2></td>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$attr_out</pre></td>
+  </tr>
+  <tr><td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$attr_errors</pre></td>
+  </tr>
+  <!-- ################## AREA CRM #################
+  <tr><td valign="top" bgcolor="$Colors{$crm_col}" rowspan="2"><h2>Crm</h2></td>
       <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$crm_out</pre></td>
   </tr>
   <tr>
       <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$crm_errors</pre></td>
   </tr>
-  <!-- ################## AREA ATTR ################# -->
-  <tr><td valign="top" bgcolor="$attr_col" rowspan="2"><h2>Attr</h2></td>
-      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$attr_out</pre></td>
+  -->
+  <!-- ################## AREA CFG #################
+  <tr><td valign="top" bgcolor="$Colors{$crm_col}" rowspan="2"><h2>Cfg</h2></td>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$crm_cfg</pre></td>
   </tr>
-  <tr><td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$attr_errors</pre></td>
+  <tr>
+      <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$crm_errors</pre></td>
   </tr>
-  <!-- ################## AREA LOG ################## --> 
-  <tr><td valign="top" bgcolor="$log_col" rowspan="2"><h2>Log</h2></td>
+  -->
+  <!-- ################## AREA LOG ##################
+  <tr><td valign="top" bgcolor="$Colors{$log_col}" rowspan="2"><h2>Log</h2></td>
       <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$log_out</pre></td>
   </tr>
   <tr>
       <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$log_errors</pre></td>
   </tr>
-  <!-- ################## AREA TD ################## -->
+  -->
+  <!-- ################## AREA TD ##################
   <tr><td valign="top" bgcolor="#B9B9B9"><h2>TD</h2></td>
       <td valign="top" bgcolor="#B9B9B9" colspan="2"><pre>$ftd_out</pre></td>
   </tr>
+  -->
 </table>
 </body>
 </html>
@@ -178,19 +222,9 @@ system ("mv $HtmlPage.new $HtmlPage");
 
 
 
-my $ident = "SAPHanaSR-mon";
-my $logopt = "pid";
-my $facility = "LOCAL0";
-my $priority = "info";
 
-my %Colors;
-$Colors{"green"}="#7AC142";
-$Colors{"yellow"}="#fde944";
-$Colors{"red"}="#BB0000";
-$Colors{"gray"}="#B9B9B9";
+openlog $ident, $logopt, $facility;
 
-openlog $ident, $logopt, $facility; 
-    
 #( $sid, $ino ) = get_sid_and_InstNr();
 
 mysyslog $priority, "%s", "Monitor startup";
@@ -207,17 +241,33 @@ sub processMonitor($) {
     my %HName;
     my %Site;
     my %SName;
+    my %Resource;
+    my %RName;
     %Host=();
     %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=();
-    set_HName(\%HName);  
+    set_HName(\%HName);
     # set_Host(\%Host);
-    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName);
+    # get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName);
+    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName);
     # get_hana_attributes($sid);
 # we do not need the crm_mon status in the monitor any more
     my $crm_out="";
-#    my $crm_out=`crm_mon -r1 -D`;
-    my $attr_out=host_attr2string(\%Host, \%HName, "title", $sortBy);
+    my $crm_cfg="";
+#    if ( $cibFile ne "" ) {
+#       $crm_out=`/usr/sbin/crm_mon -r1 -D --xml-file $cibFile`;
+#       system("mkdir -p ~/.cib");
+#       system("cp $cibFile ~/.cib/shadow.srMon");
+#       $crm_cfg=`/usr/sbin/crm --cib srMon configure show`;
+#    }
+#    my $crm_out="Should be visible!!";
+    my $attr_out=sprintf("%s%s%s%s\n", host_attr2string(\%Global, \%GName, "global", "", "tables"),
+       host_attr2string(\%Site, \%SName, "sites", "", "tables"),
+       host_attr2string(\%Resource, \%RName, "resources", "", "tables"),
+       host_attr2string(\%Host, \%HName, "global", "", "tables"),
+      );
  #   my $score_out=`crm_simulate -Ls | grep -i promo`;
+    my $cibtime = $GName{"cib-time"}->{"global"};
+ printf ("=========== %s ================\n", $cibtime );
     my $score_out="";
     my $log_out="";
     my $ftd_out="";
@@ -225,7 +275,7 @@ sub processMonitor($) {
         $log_out=`grep 'SAPHana.*INFO: RA' /var/log/messages | tail -20`; # TODO: Do we need to optimize the runtime of this command?
         $ftd_out=`grep 'fhTD' /var/log/messages | tail -10`;
     }
-    my $ftd_col="gray";
+    my $ftd_col="grey";
     my $crm_col="green";
     my $attr_col="green";
     my $score_col="green";
@@ -251,7 +301,7 @@ sub processMonitor($) {
         if ( check_node_status($sid, "2" , $thenode) ) { $hanaStatus{$thenode}="yellow"; }
         if ( check_node_status($sid, "1" , $thenode) ) { $hanaStatus{$thenode}="red"; }
     }
-    if ( get_hana_sync_state($sid) ne "SOK" ) { $sync_col="red"; } 
+    if ( get_hana_sync_state($sid) ne "SOK" ) { $sync_col="red"; }
     my $sync_direction="none";
     if ( check_node_mode( $sid, "P" , $node_list[0]) && check_node_mode( $sid, "S" , $node_list[1]) ) {
     	$sync_direction="right";
@@ -280,10 +330,10 @@ sub processMonitor($) {
     if ( get_number_secondary($sid, "1234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A-s";}
     if ( get_number_secondary($sid, "234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A-S";}
     if ( get_number_primary($sid, "234") > 1 ) { $attr_col="red"; $attr_errors .= " A-PP";}
-    if ( get_hana_sync_state($sid) ne "SOK" ) { $attr_col="yellow"; $attr_errors .= " A-SFAIL"; } 
+    if ( get_hana_sync_state($sid) ne "SOK" ) { $attr_col="yellow"; $attr_errors .= " A-SFAIL"; }
 
     #printf "\n";
-    
+
     #printf "%-16s %-16s %-16s\n", $hanaStatus{$node_list[0]}, "$sync_direction : $sync_col", $hanaStatus{$node_list[1]};
     #printf "%-16s %-16s %-16s\n", $node_list[0], $sid, $node_list[1];
 
@@ -295,24 +345,44 @@ sub processMonitor($) {
 
     ( $check_lpa_status_col, $check_lpa_msg)=check_lpa_status($sid, $node_list[0], $node_list[1]);
 
-    if ( ( $attr_col eq "yellow" ) || ( $crm_col eq "yellow" ) || 
-         ( $log_col eq "yellow" ) || ( $attr_col eq "yellow" ) || 
-         ( $score_col eq "yellow" ) || ( $check_lpa_status_col eq "yellow") ) 
+    if ( ( $attr_col eq "yellow" ) || ( $crm_col eq "yellow" ) ||
+         ( $log_col eq "yellow" ) || ( $attr_col eq "yellow" ) ||
+         ( $score_col eq "yellow" ) || ( $check_lpa_status_col eq "yellow") )
        { $complete_col="yellow"; }
-    if ( ( $attr_col eq "red" ) || ( $crm_col eq "red" ) || 
-         ( $log_col eq "red" ) || ( $attr_col eq "red" ) || 
-         ( $score_col eq "red" ) || ( $check_lpa_status_col eq "red")) 
+    if ( ( $attr_col eq "red" ) || ( $crm_col eq "red" ) ||
+         ( $log_col eq "red" ) || ( $attr_col eq "red" ) ||
+         ( $score_col eq "red" ) || ( $check_lpa_status_col eq "red"))
        { $complete_col="red"; }
-    print_page($Format,$sid, $complete_col,
-               $hanaStatus{$node_list[0]}, $node_list[0],
-               $hanaStatus{$node_list[1]}, $node_list[1],
-               $sync_col, $sync_direction,
-               $crm_out, $crm_col, $crm_errors,
-               $attr_out, $attr_col, $attr_errors,
-               $score_out, $attr_col, $attr_errors,
-               $log_out, $log_col, $log_errors,
-               $ftd_out, $ftd_col, $check_lpa_status_col, $check_lpa_msg
-             );
+# printf ("== 2 ========= %s ================\n", $cibtime );
+    print_page(  format => $Format,
+                  sid    => $sid,
+                  sidColor => $complete_col,
+                  hanaStatusA => $hanaStatus{$node_list[0]},
+                  nodeListA  => $node_list[0],
+                  hanaStatusB => $hanaStatus{$node_list[1]},
+                  nodeListB  => $node_list[1],
+                  syncColor  => $sync_col,
+                  syncDirection => $sync_direction,
+                  crmOut => $crm_out,
+                  crmColor => $crm_col,
+                  crmErrors => $crm_errors,
+                  crmConfig => $crm_cfg,
+                  attrOut => $attr_out,
+                  attrColor => $attr_col,
+                  attrErrors => $attr_errors,
+                  scoreOut => $score_out,
+                  scoreColor => $attr_col,
+                  scoreErrors => $attr_errors,
+                  logOut => $log_out,
+                  logColor => $log_col,
+                  logErrors => $log_errors,
+                  ftdOut => $ftd_out,
+                  ftdColor => $ftd_col,
+                  ftdErrors => "",
+                  lpaColor => $check_lpa_status_col,
+                  lpaMessage => $check_lpa_msg,
+                  cibTime => $cibtime,
+              );
     #
     $phost=get_host_primary($sid, "1234");
     $shost=get_host_secondary($sid, "1234");
@@ -329,7 +399,7 @@ sub processMonitor($) {
         mysyslog $priority, "%s", $message;
     }
 }
-  
+
 init();
 if ( 0 == @sids ) {
     my $sid_ino_list;
@@ -347,6 +417,6 @@ while ( $Continuous eq "yes" ) {
         processMonitor($sid);
     }
 }
- 
+
 closelog;
 #
