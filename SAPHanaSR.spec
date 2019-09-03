@@ -3,6 +3,7 @@
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
+# Copyright (c) 2017-2019 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -20,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.152.22
+Version:        0.153.2
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -47,10 +48,10 @@ Summary:        Setup Guide for SAPHanaSR
 Group:          Productivity/Clustering/HA
 
 %description
-The resource agents SAPHana and SAPHanaTopology are responsible for controlling 
+The resource agents SAPHana and SAPHanaTopology are responsible for controlling
 a SAP HANA Database which is running in system replication (SR) configuration.
 
-For SAP HANA Databases in System Replication only the described or referenced scenarios in 
+For SAP HANA Databases in System Replication only the described or referenced scenarios in
 the README file of this package are supported. For any scenario not matching the scenarios
 named or referenced in the README file please contact SUSE at SAP LinuxLab (sap-lab@suse.de).
 
@@ -64,7 +65,7 @@ Authors:
 
 
 %description doc
-This subpackage includes the Setup Guide and manual pages for getting 
+This subpackage includes the Setup Guide and manual pages for getting
 SAP HANA system replication under cluster control.
 
 
@@ -83,7 +84,9 @@ gzip man/*
 %install
 mkdir -p %{buildroot}/usr/sbin
 mkdir -p %{buildroot}%{_docdir}/%{name}
+mkdir -p %{buildroot}/usr/share/%{name}/icons
 mkdir -p %{buildroot}/usr/share/%{name}/tests
+mkdir -p %{buildroot}/usr/share/%{name}/samples
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}%{_mandir}/man7
@@ -91,6 +94,13 @@ mkdir -p %{buildroot}%{_mandir}/man8
 
 # resource agents
 install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
+
+# HA/DR hook provider
+install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
+install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
+
+# icons for SAPHanaSR-monitor
+install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
 
 # documentation
 install -m 0444 doc/* %{buildroot}/%{_docdir}/%{name}
@@ -103,9 +113,11 @@ install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 #install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
 install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
+install -m 0555 test/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
+install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
-# crm/hawk wizard files 
+# crm/hawk wizard files
 %if 0%{?sle_version} >= 120100
 # SLES 12 SP1+ and HAWK2
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
@@ -134,6 +146,8 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_docdir}/%{name}/LICENSE
 /usr/sbin/SAPHanaSR-monitor
 /usr/sbin/SAPHanaSR-showAttr
+/usr/sbin/SAPHanaSR-replay-archive
+/usr/sbin/SAPHanaSR-filter
 
 # HAWK2 wizard for SLES 12 SP1+
 %if 0%{?sle_version} >= 120100
@@ -161,8 +175,10 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_mandir}/man7/ocf_suse_SAPHanaTopology.7.gz
 %doc %{_mandir}/man7/SAPHanaSR_maintenance_examples.7.gz
 %doc %{_mandir}/man7/SAPHanaSR.7.gz
+%doc %{_mandir}/man7/SAPHanaSR.py.7.gz
 %doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
+%doc %{_mandir}/man8/SAPHanaSR-replay-archive.8.gz
 
 
 %changelog

@@ -2,25 +2,24 @@
 #
 # SAPHanaSR-showAttr
 # (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
-# (c) 2015-2016 SUSE Linux GmbH, Nuremberg, Germany
+# (c) 2015-2018 SUSE Linux GmbH, Nuremberg, Germany
 # Author: Fabian Herschel <fabian.herschel@suse.com>
 # License: GPL v2+
-my $Version="0.21.2016.11.04.1";
+
+use strict;
+
+my $Version="0.21.2018.05.08.1";
 #
 ##################################################################
 #
 use POSIX;
-use strict;
 use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use Getopt::Long;
 use lib '/usr/lib/SAPHanaSR';
-#use lib '.';
 use SAPHanaSRTools;
 
-my $host = hostname();    # TODO: to be removed after removing OLDread_cib
-my $sid="";
 my @sids;
 my $ino="";
 my $sortBy="";
@@ -32,15 +31,19 @@ my %Global;
 my %HName;
 my %SName;
 my %GName;
+my %Resource;
+my %RName;
 my $help;
 my $version;
 my $cibFile="";
+my $format="tables";
 
 sub init()
 {
 	my $result = GetOptions ("sid=s" => \@sids,
 	                      "sort=s" => \$sortBy,
 	                      "cib=s" => \$cibFile,
+                              "format=s" => \$format,
                           "version" => \$version,
                           "help" => \$help,
 		 );
@@ -64,6 +67,7 @@ if ( $cibFile ne "" ) {
    set_cibFile($cibFile);
 }
 
+
 sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  my $a = shift;
  my $b = shift;
@@ -76,17 +80,17 @@ if ( 0 == @sids ) {
        @sids = split(",", $sid_ino_list);
 }
 
-foreach $sid (@sids) {
+foreach my $sid (@sids) {
     ( $sid, $ino ) = split(":", $sid);
     $sid=lc("$sid");
-    %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=();
-    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName);
-    #read_cib($sid);
+    %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=(); %Resource=(); %RName=();
+    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName);
     if ( keys(%Host) == 0 ) {
         printf "No attributes found for SID=%s\n", $sid;
     } else {
-	    if (keys(%Global) > 0 ) {print_host_attr(\%Global, \%GName, "Global", "");}
-	    if (keys(%Site) > 0 ) {print_host_attr(\%Site,   \%SName, "Sites",  "");}
-        print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy);
+	    print_host_attr(\%Global, \%GName, "Global", "", $format);
+	    print_host_attr(\%Resource, \%RName, "Resource", "", $format);
+	    print_host_attr(\%Site,   \%SName, "Sites",  "", $format);
+        print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy, $format);
     }
 }

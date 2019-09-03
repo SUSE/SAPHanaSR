@@ -1,0 +1,175 @@
+#!/bin/bash
+#
+##########################################################################
+#
+# SAPHanaSR-replay
+#
+# Author:       Fabian Herschel, November 2015
+# Support:      linux@sap.com
+# License:      GNU General Public License 2 (GPLv2)
+# Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
+# Copyright (c) 2017-2019 SUSE LLC.
+#
+##########################################################################
+#
+# Syntax:
+# SAPHanaSR-replay-archive <path-to-pengine-archive> (tar.bz2)
+#
+# SAPHanaSR-replay-archive archive-containing-some-pengine-directories
+#
+##########################################################################
+#
+####################
+#
+version="1.0";
+# some help to the newbie
+exe="$0"
+bex=$(basename "$exe")
+format="tables";
+outDir="";
+#
+while [ $# -gt 0 ]; do
+    case "$1" in
+     --help|-h)
+        echo
+        echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
+        echo
+        echo "usage:    $bex [OPTION]"
+        echo " --help		show help."
+        echo " --version	show version."
+        echo
+        exit
+    ;;
+     --version|-v)
+        echo "$bex version $version"
+        exit
+    ;;
+        --format=* )
+            format=${1#*=}
+    ;;
+        --outDir=* )
+            outDir=${1#*=}
+    ;;
+        * )
+        archive="$1"
+    ;;
+    esac
+    shift
+done
+
+#
+####################
+#
+#
+mkdir -p "${archive}-tmp"
+if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
+if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
+#
+####################
+#
+# find pengine directories
+#
+pDirs=$(find . -type d -name pengine)
+
+#
+####################
+#
+# find all pengine inputs sorted by time
+#
+pFiles=$(find $pDirs -name '*input*')
+pFilesSorted=$(ls -tr $pFiles)
+
+#
+####################
+#
+# find all cib.txt files
+#
+cFiles=$(find . -type f -name cib.txt)
+
+#
+####################
+#
+# find all SIDs mentioned in the cib.txt
+#
+sids=$(
+for cF in $cFiles; do
+    while read line
+    do
+        if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
+           if [[ "$line" =~ SID=(...) ]]; then
+               echo "${BASH_REMATCH[1]}"
+           fi
+        fi
+    done < "$cF"
+done | sort -u | tr '[:upper:]' '[:lower:]' )
+
+#
+####################
+#
+# create a tmp directory to extract pengine files
+#
+mkdir -p "${archive}-tmp/tmp"
+#
+####################
+# create output directory, if set
+#
+if [ -n "$outDir" ]; then
+   mkdir -p "$outDir"
+   case "$format" in
+       book )
+           rsync -a  /usr/share/SAPHanaSR/icons $outDir
+           ;;
+   esac
+   outNr=0
+fi
+
+
+#
+####################
+#
+# for all sids process all pengine files and show the hana attributes
+#
+for sid in $sids; do
+    echo "================ replay for sid $sid ==============="
+    for cibBZ2 in $pFilesSorted; do
+       cib="${cibBZ2%.bz2}";
+       shortCIB="${cib##*/}"
+       echo "cib: $cib";
+       bunzip2 -c "$cibBZ2" > "${archive}-tmp/tmp/$shortCIB";
+       case "$format" in
+           tables | script )
+               /usr/sbin/SAPHanaSR-showAttr --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format";
+                   ;;
+           book )
+               if [ -n "$outDir" ]; then
+                   outOption="--out=$outDir/sapMonitor.$outNr.html"
+                   (( outNr ++ ))
+               fi
+               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="html2" "$outOption";
+                   ;;
+           txt | ascii | html )
+               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format"
+                   ;;
+       esac
+       rm "${archive}-tmp/tmp/$shortCIB" ;
+    done
+    case "$format" in
+        book )
+               if [ -n "$outDir" ]; then
+                  lastFile="$outDir/sapMonitor.$outNr.html"
+                  cat << EOF >$lastFile
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>SAPHanaSR status</title>
+<meta http-equiv="refresh" content="1; url=$outDir/sapMonitor.0.html" />
+<meta charset="utf-8"/>
+</head>
+<body class="" style="background-color:#dcddde;">
+</body>
+</html>
+EOF
+               fi
+               ;;
+    esac
+done

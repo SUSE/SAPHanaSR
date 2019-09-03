@@ -2,11 +2,10 @@
 #
 # SAPHanaTopology
 #
-# Description:	Clone resource to anylyze SAPHana-Topology
+# Description:	Clone resource to analyze SAPHana-Topology
 #
-###########################################################################################################################
+###################################################################################################################
 #
-# SAPHanaTopology is a fork of SAPHana
 # Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
 #
 # SAPHanaTopology: (short sht)
@@ -14,7 +13,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
-#               (c) 2015-2017 SUSE Linux GmbH
+#               (c) 2015-2019 SUSE Linux GmbH
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -26,16 +25,16 @@
 #   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
 #
 #######################################################################
+# DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
+SAPHanaTopologyVersion="0.153.02"
 #
 # Initialization:
-SAPHanaVersion="0.152.22"
 timeB=$(date '+%s')
 
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
 
 #######################################################################
-#
 log_attributes=false
 if ocf_is_true "$log_attributes"; then
     log_attr_file="/var/log/fhATTRIBUTES"
@@ -47,6 +46,7 @@ HANA_STATE_PRIMARY=0
 HANA_STATE_SECONDARY=1
 HANA_STATE_STANDALONE=2
 HANA_STATE_DEFECT=3
+HANA_CALL_TIMEOUT=60
 
 debug_attributes=0
 SH=/bin/sh
@@ -116,6 +116,7 @@ function sht_usage() {
     The 'notify'       operation always returns SUCCESS
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
+    The 'reload'       operation allows to change parameters like HANA_CALL_TIMEOUT without forcing a recover of all instances
 
 	!
 	return $rc
@@ -133,7 +134,7 @@ function sht_meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaTopology">
-    <version>$SAPHanaVersion</version>
+    <version>$SAPHanaTopologyVersion</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
         all nodes in the cluster. These attributes are taken by the SAPHana RA to control the SAP Hana Databases.
@@ -171,6 +172,15 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
         <shortdesc lang="en">The SAP Instance Number</shortdesc>
         <content type="string" default="" />
     </parameter>
+    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
+        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
+        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
+          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
+          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          of your cluster resources.
+        </longdesc>
+        <content type="string" default="60" />
+    </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
         <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/\$SID/\$InstanceName/exe.
         While InstanceName is the string of "HDB" and \$InstanceNumber for SAP Hana databases.
@@ -192,6 +202,7 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
     <action name="validate-all" timeout="5" />
     <action name="meta-data" timeout="5" />
     <action name="methods" timeout="5" />
+    <action name="reload" timeout="5" />
 </actions>
 </resource-agent>
 END
@@ -249,12 +260,12 @@ function set_hana_attribute()
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         case "$attr_store" in
             reboot | forever )
-                echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> /var/log/fhATTRIBUTE
-                crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store 2>>/var/log/fhATTRIBUTE; rc=$?
+                echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> $log_attr_file
+                crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
                 ;;
             props )
-                echo "$dstr: SAPHanaTopology: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> /var/log/fhATTRIBUTE
-                crm_attribute -v $attr_value -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>/var/log/fhATTRIBUTE; rc=$?
+                echo "$dstr: SAPHanaTopology: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> $log_attr_file
+                crm_attribute -v $attr_value -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>$log_attr_file; rc=$?
                 ;;
         esac
     else
@@ -285,6 +296,7 @@ function sht_methods() {
     meta-data
     usage
     admin-setup
+    reload
 	!
 	return $rc
 }
@@ -378,6 +390,7 @@ function HANA_CALL()
     #
     # TODO: PRIO 5: remove 'su - ${sidadm} later, when SAP HANA resoled issue with
     #       root-user-called hdbnsutil -sr_state (which creates root-owned shared memory file in /var/lib/hdb/SID/shmgrp)
+    #       would hdbnsutil -sr_stateConfiguration also create such a shared memory file?
     # TODO: PRIO 5: Maybe make "su" optional by a parameter
     local timeOut=0
     local onTimeOut=""
@@ -410,7 +423,7 @@ function HANA_CALL()
         pre_cmd="bash -c"
         pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
     fi
-    case $timeout in
+    case $timeOut in
         0 | inf )
                   output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
@@ -426,7 +439,7 @@ function HANA_CALL()
                       local second_output=""
                       second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
                   fi
-                  ;;
+                 ;;
     esac
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
@@ -483,9 +496,13 @@ function sht_init() {
     # new "central" attributes
     #
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
+    #
+    # SITE based attributes
+    #
+    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_site_sec_sync_state" "props")   # SOK, SFAIL
     # optional OCF parameters, we try to guess which directories are correct
 
-    SAPHanaFilter=$(get_hana_attribute "X" ${ATTR_NAME_HANA_FILTER[@]})
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
 
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
@@ -506,8 +523,7 @@ function sht_init() {
         DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
     fi
 
-
-    PATH=${PATH}:${DIR_EXECUTABLE}
+    #PATH=${PATH}:${DIR_EXECUTABLE}
     #
     # figure-out all needed values from system replication status with ONE call
     # we need: mode=primary|sync|syncmem|...; site name=<site>; mapping/<me>=<site>/<node> (multiple lines)
@@ -544,13 +560,13 @@ function sht_init() {
             gP ) # call getParameter (gP)
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout 60 --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 # DONE: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
-                hdbANSWER=$(HANA_CALL --timeout 60 --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 ;;
         esac
@@ -574,7 +590,7 @@ function sht_init() {
     # for rev >= 111 we use the new mapping query
     #
     if version "$hdbver" ">=" "1.00.111"; then
-        hdbANSWER=$(HANA_CALL --timeout 60 --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
+        hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
     fi
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
@@ -629,8 +645,7 @@ function sht_init() {
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
-# globals:  HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r), HANA_STATE_STANDALONE(r)
-#           srmode(r)
+# globals:  srmode(r), HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r), HANA_STATE_STANDALONE(r)
 #
 function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -866,7 +881,7 @@ function sht_monitor_clone() {
 
 
 	if ocf_is_probe; then
-		super_ocf_log debug "DBG2: PROBE ONLY"
+		super_ocf_log debug "DBG: PROBE ONLY"
         sht_monitor; rc=$?
         local hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
             | awk -F':' '$1=="  version" {print $2}; ' | tr -d '[:space:]')
@@ -874,29 +889,29 @@ function sht_monitor_clone() {
             set_hana_attribute "${NODENAME}" "$hana_version" ${ATTR_NAME_HANA_VERSION[@]}
         fi
 	else
-		super_ocf_log debug "DBG2: REGULAR MONITOR"
+		super_ocf_log debug "DBG: REGULAR MONITOR"
         if ! check_saphostagent; then
              start_saphostagent
         fi
 	#
 	# First check, if we are PRIMARY or SECONDARY
 	#
-    super_ocf_log debug "DBG2: HANA SID $SID"
-    super_ocf_log debug "DBG2: HANA InstanceName $InstanceName"
-    super_ocf_log debug "DBG2: HANA InstanceNr $InstanceNr"
+    super_ocf_log debug "DBG: HANA SID $SID"
+    super_ocf_log debug "DBG: HANA InstanceName $InstanceName"
+    super_ocf_log debug "DBG: HANA InstanceNr $InstanceNr"
 	check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         hanaPrim="P"
-        super_ocf_log debug "DBG2: HANA IS PRIMARY"
+        super_ocf_log debug "DBG: HANA IS PRIMARY"
         sht_monitor; rc=$?
     else
         if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
             hanaPrim="S"
-            super_ocf_log debug "DBG2: HANA IS SECONDARY"
+            super_ocf_log debug "DBG: HANA IS SECONDARY"
             sht_monitor; rc=$?
         elif [ $primary_status -eq $HANA_STATE_STANDALONE  ]; then
             hanaPrim="N"
-            super_ocf_log debug "DBG2: HANA IS STANDALONE"
+            super_ocf_log debug "DBG: HANA IS STANDALONE"
             sht_monitor; rc=$?
         else
             # bsc#1027098 Do not mark HANA instance as failed, if "only" the HANA state could not be detected
@@ -929,8 +944,20 @@ function sht_monitor_clone() {
     # we begin to use --sapcontrol with rev 100
     # since rev 120 we need to use the --sapcontrol, because SAP changed the tool output
     #
+    setRole=true
     if version "$hdbver" ">=" "1.00.100"; then
-        hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+        # retry command, if a timeout occured
+        if [ "$hanalrc" -ge 124 ]; then
+            super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+            # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
+            if [ "$hanalrc" -ge 124 ]; then
+                super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
+                setRole=false
+            fi
+        fi
+
         # TODO: PRIO9: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
         hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
             awk -F= '$1 == "nameServerConfigRole"    {f1=$2}
@@ -942,7 +969,18 @@ function sht_monitor_clone() {
         #
         # old code for backward compatability
         #
-        hanaANSWER=$(HANA_CALL --timeout 60 --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+        # retry command, if a timeout occured
+        if [ "$hanalrc" -ge 124 ]; then
+            super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+            # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
+            if [ "$hanalrc" -ge 124 ]; then
+                super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
+                setRole=false
+            fi
+        fi
+
         hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
     fi
     #if [ -z "$MAPPING" ]; then
@@ -952,7 +990,9 @@ function sht_monitor_clone() {
     if [ -n "$hanaRemoteHost" ]; then
         set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
     fi
-    set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+    if $setRole; then
+        set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+    fi
     if [ -n "$site" ]; then
         set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
     fi
@@ -1058,7 +1098,7 @@ else
     fi
 fi
 
-super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaVersion) ===="
+super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
 ra_rc=$OCF_ERR_UNIMPLEMENTED
 case "$ACTION" in
     start|stop|monitor) # Standard controling actions
@@ -1069,6 +1109,9 @@ case "$ACTION" in
         sht_validate
         ra_rc=$?
         ;;
+    reload )
+        ra_rc="$OCF_SUCCESS"
+        ;;
     *)  # seams to be a unknown request
         sht_methods
         ra_rc=$OCF_ERR_UNIMPLEMENTED
@@ -1076,5 +1119,5 @@ case "$ACTION" in
 esac
 timeE=$(date '+%s')
 (( timeR = timeE - timeB ))
-super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaVersion) (${timeR}s)===="
+super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
 exit ${ra_rc}
