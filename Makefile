@@ -26,15 +26,8 @@ OBSTARG ?= "SLE_12_SP2"
 
 ifeq ($(REL),)
 $(info REL is empty)
-exit 1;
 else
 $(info REL is $(REL))
-REL_CHANGES = ${PKG}.changes_$(REL)
-ifeq ($(REL),"12")
-OBSPROJ = home:AngelaBriel:branches:SUSE:SLE-12-SP3:Update
-else
-OBSPROJ = home:AngelaBriel:branches:SUSE:SLE-15:Update
-endif
 endif
 
 tarball:
@@ -44,6 +37,11 @@ tarball:
 
 .ONESHELL:
 copy: tarball
+	
+	@if [ -z "$(REL)" ]; then
+		echo -e "\e[31m REL is empty. Set it via 'REL=12' or 'REL=15'\e[0m";
+		exit 1;
+	fi
 	@cp ${PKG}.changes_$(REL) ${CHANGESFILE}
 	@if [ $(OBSPROJ) = "placeholder" ]; then
 		echo -e "\e[31mProject directory is missing. Set it via 'OBSPROJ=/path/to/project'\e[0m";
