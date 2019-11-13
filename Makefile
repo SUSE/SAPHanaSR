@@ -51,6 +51,7 @@ copy: tarball
 	@cp SAPHanaSR.changes ${OBSPROJ}
 	@cp SAPHanaSR.spec ${OBSPROJ}
 	@cp SAPHanaSR-${VERSION}.tgz ${OBSPROJ}
+	@rm ${CHANGESFILE}
 	@echo -e "\e[32mDone\e[0m"
 
 .ONESHELL:
