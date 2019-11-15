@@ -11,7 +11,8 @@
 # Author:       Fabian Herschel, June 2015
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
-# Copyright:    (c) 2015 SUSE Linux GmbH
+# Copyright:    (c) 2015-2016 SUSE Linux GmbH
+# Copyright:    (c) 2017-2019 SUSE LLC
 import sys
 import systemReplicationStatus as sr
 
