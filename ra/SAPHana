@@ -2461,12 +2461,15 @@ function saphana_monitor_clone() {
             elif [ $myMaster -eq -1 ]; then
                set_crm_master 5
             fi
+        else
+            saphana_check_local_instance
         fi
-        saphana_check_local_instance
         saphana_monitor_primary; rc=$?
     else
         if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
-            saphana_check_local_instance
+            if ! ocf_is_probe; then
+                saphana_check_local_instance
+            fi
             saphana_monitor_secondary; rc=$?
         else
             #
