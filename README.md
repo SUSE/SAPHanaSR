@@ -28,7 +28,7 @@ cluster avoids to takeover to the secondary side, if the primary fails. This is 
 
 For more information, refer to the ["SAP HANA System Replication Scale-Up - Performance Optimized Scenario" Best Practices guide](https://documentation.suse.com/sbp/all/single-html/SLES4SAP-hana-sr-guide-PerfOpt-12/)
 
-**Note:** To automate SAP HANA SR in scale-out setups, please use the package SAPHanaSR-ScaleOut instead.
+**Note:** To automate SAP HANA SR in scale-out setups, please refer to the [SAPHanaSR-ScaleOut repository](https://github.com/SUSE/SAPHanaSR-ScaleOut) instead.
 
 
 ## File structure
