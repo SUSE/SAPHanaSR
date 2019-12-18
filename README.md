@@ -3,7 +3,7 @@
 The SUSE ScaleUp resource agents to control the SAP HANA database in system replication setups
 
 
-<!-- [![Build Status](https://travis-ci.org/SUSE/SAPHanaSR.svg?branch=master)](https://travis-ci.org/SUSE/SAPHanaSR) -->
+[![Build Status](https://travis-ci.org/SUSE/SAPHanaSR.svg?branch=master)](https://travis-ci.org/SUSE/SAPHanaSR)
 
 
 ## Introduction
