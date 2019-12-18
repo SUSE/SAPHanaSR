@@ -71,3 +71,14 @@ commit: copy
 	@echo -e "\e[32mDone\e[0m"
 
 .phony: 	tarball
+
+.PHONY: checkstyle
+checkstyle:
+ifneq ($(CHECKSTYLE),0)
+	find . -type f -exec awk ' /^#!.*bash/{print FILENAME} {nextfile}' {} + | xargs shellcheck -s bash || :
+	find . -type f -exec awk ' /^#!.*perl/{print FILENAME} {nextfile}' {} + | grep -v .git | xargs perlcritic --gentle || :
+	find . -name '*.py' | xargs flake8 --ignore=E501 || :
+endif
+
+PHONY: test
+test: checkstyle
