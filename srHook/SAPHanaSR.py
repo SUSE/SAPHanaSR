@@ -15,7 +15,7 @@ similar) to your global.ini:
     [trace]
     ha_dr_saphanasr = info
 """
-fhSRHookVersion = "0.161.0"
+fhSRHookVersion = "0.162.0"
 
 
 class SAPHanaSR(HADRBase):
@@ -92,19 +92,22 @@ class SAPHanaSR(HADRBase):
         myInSync = ParamDict["is_in_sync"]
         myReason = ParamDict["reason"]
         mySite = ParamDict["siteName"]
-        if (mySystemStatus == 15):
+        if mySystemStatus == 15:
             mySRS = "SOK"
         else:
-            if (myInSync):
+            if myInSync:
                 # ignoring the SFAIL, because we are still in sync
                 self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged ignoring bad SR status because of is_in_sync=True (reason=%s)" % (fhSRHookVersion, self.__class__.__name__, myReason))
                 mySRS = ""
             else:
                 mySRS = "SFAIL"
-        if (mySRS == ""):
+        if mySRS == "":
             self.tracer.info("SAPHanaSR (%s) 001" % (self.__class__.__name__))
             myMSG = "### Ignoring bad SR status because of is_in_sync=True ###"
             self.tracer.info("SAPHanaSR (%s) 002" % (self.__class__.__name__))
+        elif mySite == "":
+            myMSG = "### Ignoring bad SR status because of empty site name in call params ###"
+            self.tracer.info("SAPHanaSR (%s) was called with empty site name. Ignoring call." % (self.__class__.__name__))
         else:
             myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
             rc = os.system(myCMD)
