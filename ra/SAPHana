@@ -547,7 +547,7 @@ function set_crm_master()
 }
 
 #
-# function: scoring_crm_master - score instance due to role ans sync match (table SCORING_TABLE)
+# function: scoring_crm_master - score instance due to role and sync match (table SCORING_TABLE)
 # params:   NODE_ROLES NODE_SYNC_STATUS
 # globals:  SCORING_TABLE[@],
 #
@@ -2133,7 +2133,7 @@ function saphana_monitor_primary()
                     ;;
                     4 )
                         # lpa internal error
-                        # TODO PRIO3: Impplement special handling for this issue - should we fail the ressource?
+                        # TODO PRIO3: Implement special handling for this issue - should we fail the ressource?
                         super_ocf_log info "LPA: LPA reports an internal error"
                         return $OCF_SUCCESS
                     ;;
@@ -2214,7 +2214,7 @@ function saphana_monitor_primary()
                 else
                     # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
                     # TODO: PRIO3: Adjust with set_crm_master?
-                    #       Current decission: Do NOT adjust master score now as other
+                    #       Current decision: Do NOT adjust master score now as other
                     #       steps should already have done that
                     #
                     super_ocf_log info "DEC: PRIMDEFECT (in DEMOTED status)"
@@ -2229,6 +2229,9 @@ function saphana_monitor_primary()
                 else
                     rc=$OCF_SUCCESS
                 fi
+                my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
+                super_ocf_log info "SCORE: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)" 
+                scoring_crm_master "$my_role" "$my_sync"
             else
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc $NODENAME
@@ -2318,7 +2321,7 @@ function saphana_monitor_secondary()
     super_ocf_log debug "DBG: saphana_monitor_secondary: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
-        #  DONE: PRIO3: do we need to inizialize also the DEMOTED attribute value?
+        #  DONE: PRIO3: do we need to initialise also the DEMOTED attribute value?
         set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
         promoted=0;
     else
@@ -2404,6 +2407,7 @@ function saphana_monitor_secondary()
                     super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
                     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
                     my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                    super_ocf_log info "SCORE: saphana_monitor_secondary: scoring_crm_master($my_role,$my_sync)" 
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
             esac
