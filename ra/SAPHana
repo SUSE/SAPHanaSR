@@ -1054,21 +1054,29 @@ function check_for_primary() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=$HANA_STATE_DEFECT
     # TODO: PRIO 3: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
-    # TODO: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
-    #              This might also solve some problems when we could not figure-out the ilocal or remote site name
+    # DONE: Limit the runtime of hdbnsutil and use getParameter.py as fallback
+    # DONE: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
+    # TODO:        This might also solve some problems when we could not figure-out the local or remote site name (site_name,site_id from global.ini)
     local chkMethod=""
+    local ini_mode=""
     for chkMethod in  hU hU hU gP; do
        case "$chkMethod" in
            gP )
+                # fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
-                gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
+                gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode})
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                node_status=$(echo "$node_full_status" | awk -F= '$1=="mode" {print $2}')
+                # first try to get the value of 'actual_mode' from the global.ini
+                ini_mode=$(echo "$node_full_status" | awk -F= '$1=="actual_mode" {print $2}')
+                # if 'actual_mode' is not available, fallback to 'mode'
+                if [ -z "$ini_mode" ]; then
+                    ini_mode=$(echo "$node_full_status" | awk -F= '$1=="mode" {print $2}')
+                fi
+                node_status="$ini_mode"
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
            hU | * )
-                # DONE: PRIO1: Begginning from SAP HANA rev 112.03 -sr_state is not longer supported
+                # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState" 2>/dev/null )
                 node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
