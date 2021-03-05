@@ -391,12 +391,18 @@ function remoteHost2remoteNode()
 function get_action_timeout() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action in ms
-    local actionTimeOut="${OCF_RESKEY_CRM_meta_timeout:-$HANA_STD_ACTION_TIMEOUT}"
+    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
     local stdTimeOut="$HANA_STD_ACTION_TIMEOUT"
     local actTimeOutPercent=95 # 95% to left 5% for the rest of the resource agent action
+    if [ -z "$actionTimeOut" ]; then
+        actionTimeOut="$stdTimeOut"
+    else
+        # actionTimeOut in seconds
+        ((actionTimeOut = actionTimeOut/1000))
+    fi
 
     # 95%(actionTimeOut)
-    ((timeout = actionTimeOut * actTimeOutPercent/1000))
+    ((timeout = actionTimeOut * actTimeOutPercent/100))
     # max(3600, 95%(actionTimeOut))
     if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
         timeout=$stdTimeOut
