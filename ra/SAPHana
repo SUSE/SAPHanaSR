@@ -39,7 +39,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaVersion="0.154.0"
+SAPHanaVersion="0.155.0"
 #
 # Initialization:
 timeB=$(date '+%s')
@@ -62,6 +62,7 @@ HANA_STATE_SECONDARY=1
 HANA_STATE_STANDALONE=2
 HANA_STATE_DEFECT=3
 HANA_CALL_TIMEOUT=60
+HANA_STD_ACTION_TIMEOUT=3600
 
 debug_attributes=0
 
@@ -315,7 +316,7 @@ function dequote()
     local rc=0; tr -d '"'; return $rc
 }
 
-# function: version: cpmpare two HANA version strings
+# function: version: compare two HANA version strings
 function ver_lt() {
     ocf_version_cmp $1 $2
     test $? -eq 0 && return 0 || return 1
@@ -336,7 +337,7 @@ function ver_ge() {
     test $? -eq 2 -o $? -eq 1 && return 0 || return 1
 }
 #
-# function: version: cpmpare two HANA version strings
+# function: version: compare two HANA version strings
 #
 function version() {
     if [ $# -eq 3 ]; then
@@ -380,6 +381,35 @@ function remoteHost2remoteNode()
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
+}
+
+# function: get_action_timeout
+# output:  action timeout
+#
+# timeOut = max(3600, 95%(actionTimeOut))
+#
+function get_action_timeout() {
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action in ms
+    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
+    local stdTimeOut="$HANA_STD_ACTION_TIMEOUT"
+    local actTimeOutPercent=95 # 95% to left 5% for the rest of the resource agent action
+    if [ -z "$actionTimeOut" ]; then
+        actionTimeOut="$stdTimeOut"
+    else
+        # actionTimeOut in seconds
+        ((actionTimeOut = actionTimeOut/1000))
+    fi
+
+    # 95%(actionTimeOut)
+    ((timeout = actionTimeOut * actTimeOutPercent/100))
+    # max(3600, 95%(actionTimeOut))
+    if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
+        timeout=$stdTimeOut
+    fi
+    super_ocf_log info "actionTimeout: action timeout was '$actionTimeOut', now changed to '$timeout'"
+    super_ocf_log info "FLOW $FUNCNAME"
+    echo $timeout
 }
 
 #
@@ -547,7 +577,7 @@ function set_crm_master()
 }
 
 #
-# function: scoring_crm_master - score instance due to role ans sync match (table SCORING_TABLE)
+# function: scoring_crm_master - score instance due to role and sync match (table SCORING_TABLE)
 # params:   NODE_ROLES NODE_SYNC_STATUS
 # globals:  SCORING_TABLE[@],
 #
@@ -1331,8 +1361,9 @@ function saphana_start() {
     fi
     if [ $rc -eq 0 ]
     then
-        # TODO: PRIO9: something more dynamic than 3600 seconds in WaitforStarted
-        output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted 3600 1)
+        # DONE: PRIO9: something more dynamic than 3600 seconds in WaitforStarted
+        HANA_ACTION_TIMEOUT=$(get_action_timeout)
+        output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted $HANA_ACTION_TIMEOUT 1)
         if [ $? -eq 0 ]
         then
             super_ocf_log info "ACT: SAPHANA Instance $SID-$InstanceName started: $output"
@@ -1367,7 +1398,8 @@ function saphana_stop() {
   fi
   if [ $rc -eq 0 ]
   then
-    output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped 3600 1)
+    HANA_ACTION_TIMEOUT=$(get_action_timeout)
+    output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped $HANA_ACTION_TIMEOUT 1)
     if [ $? -eq 0 ]
     then
       super_ocf_log info "ACT: SAP Instance $SID-$InstanceName stopped: $output"
@@ -2133,7 +2165,7 @@ function saphana_monitor_primary()
                     ;;
                     4 )
                         # lpa internal error
-                        # TODO PRIO3: Impplement special handling for this issue - should we fail the ressource?
+                        # TODO PRIO3: Implement special handling for this issue - should we fail the ressource?
                         super_ocf_log info "LPA: LPA reports an internal error"
                         return $OCF_SUCCESS
                     ;;
@@ -2214,7 +2246,7 @@ function saphana_monitor_primary()
                 else
                     # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
                     # TODO: PRIO3: Adjust with set_crm_master?
-                    #       Current decission: Do NOT adjust master score now as other
+                    #       Current decision: Do NOT adjust master score now as other
                     #       steps should already have done that
                     #
                     super_ocf_log info "DEC: PRIMDEFECT (in DEMOTED status)"
@@ -2229,6 +2261,9 @@ function saphana_monitor_primary()
                 else
                     rc=$OCF_SUCCESS
                 fi
+                my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
+                super_ocf_log info "SCORE: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)" 
+                scoring_crm_master "$my_role" "$my_sync"
             else
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc $NODENAME
@@ -2318,7 +2353,7 @@ function saphana_monitor_secondary()
     super_ocf_log debug "DBG: saphana_monitor_secondary: $ATTR_NAME_HANA_CLONE_STATE=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
-        #  DONE: PRIO3: do we need to inizialize also the DEMOTED attribute value?
+        #  DONE: PRIO3: do we need to initialise also the DEMOTED attribute value?
         set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
         promoted=0;
     else
@@ -2404,6 +2439,7 @@ function saphana_monitor_secondary()
                     super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
                     my_role=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]})
                     my_sync=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_SYNC_STATUS[@]})
+                    super_ocf_log info "SCORE: saphana_monitor_secondary: scoring_crm_master($my_role,$my_sync)" 
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
             esac
