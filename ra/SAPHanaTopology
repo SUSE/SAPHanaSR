@@ -560,9 +560,13 @@ function sht_init() {
         case "$chkMethod" in
             gP ) # call getParameter (gP)
                 local gpKeys=""
-                gpKeys=$(echo --key=global.ini/system_replication/{mode,site_name,site_id})
+                gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+                # if 'actual_mode' is not available, fallback to 'mode'
+                if [ -z "$srmode" ]; then
+                    srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                fi
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
@@ -586,7 +590,13 @@ function sht_init() {
     siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
     siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     site=$siteNAME
-    srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+    if [ -z "$srmode" ]; then
+        srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+        # if 'actual_mode' is not available, fallback to 'mode'
+        if [ -z "$srmode" ]; then
+            srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+        fi
+    fi
     #
     # for rev >= 111 we use the new mapping query
     #
