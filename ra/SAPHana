@@ -1155,7 +1155,7 @@ function analyze_hana_sync_statusSRS()
           lpa_set_lpt 10 "$remoteNode"
        fi
     elif [ $srRc -le 11 ]; then # 11 and 10
-       # if systemReplicationStatus is ERROR and landscapeHostConfiguration is down than do NOT set SFAIL
+       # if systemReplicationStatus is ERROR and landscapeHostConfiguration is down then do NOT set SFAIL
        get_hana_landscape_status; lss=$?
        if [ $lss -lt 2 ]; then
           # keep everithing like it was
@@ -1354,7 +1354,7 @@ function saphana_start() {
     check_sapstartsrv
     rc=$?
     #
-    # DONE: ASK: PRIO5: For SCALE-OUT - do we need to use an other call like StartSystem? Or better to use the HDB command?
+    # DONE: ASK: PRIO5: For SCALE-OUT - do we need to use another call like StartSystem? Or better to use the HDB command?
     #
     if [ $rc -eq $OCF_SUCCESS ]; then
         ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
@@ -1369,7 +1369,7 @@ function saphana_start() {
     fi
     if [ $rc -eq 0 ]
     then
-        # DONE: PRIO9: something more dynamic than 3600 seconds in WaitforStarted
+        # DONE: PRIO9: something more dynamic ehan 3600 seconds in WaitforStarted
         HANA_ACTION_TIMEOUT=$(get_action_timeout)
         output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted $HANA_ACTION_TIMEOUT 1)
         if [ $? -eq 0 ]
@@ -1467,7 +1467,7 @@ function saphana_start_primary()
     local lpa_dec=4
     local lpa_advice=""
     #
-    # we will be a master (PRIMARY) so checking, if the is an OTHER master
+    # we will be a master (PRIMARY) so checking, if the is anOTHER master
     #
     super_ocf_log debug "DBG: saphana_primary - check_for_primary reports HANA_STATE_PRIMARY"
     #
@@ -1513,7 +1513,7 @@ function saphana_start_primary()
         4) # LPA says something is completely wrong - FAIL resource # TODO: PRIO1: RC3 for waiting remote side to report lss
             lpa_advice="fail"
             ;;
-        *) # LPA failed with an unkonown status - FAIL resource
+        *) # LPA failed with an unknown status - FAIL resource
             lpa_advice="fail"
             ;;
     esac
@@ -1531,14 +1531,14 @@ function saphana_start_primary()
     case "$lpa_advice" in
         start )  # process a normal START
             case "$lss" in
-                2 | 3 | 4 ) # as landcape says we are up - just set the scores and return code
-                    super_ocf_log info "LPA: landcape: UP, LPA: start ==> keep running"
+                2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
+                    super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
                     LPTloc=$(date '+%s')
                     lpa_set_lpt $LPTloc $NODENAME
                     rc=$OCF_SUCCESS
                     ;;
-                1 ) # landcape says we are down, lets start and adjust scores and return code
-                    super_ocf_log info "LPA: landcape: DOWN, LPA: start ==> start instance"
+                1 ) # landscape says we are down, lets start and adjust scores and return code
+                    super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start instance"
                     saphana_start
                     rc=$?
                     LPTloc=$(date '+%s')
@@ -1553,7 +1553,7 @@ function saphana_start_primary()
             ;;
         register ) # process a REGISTER
             case "$lss" in
-                2 | 3 | 4 ) # upps we are up - but shoudn't? - we could not register with started HDB
+                2 | 3 | 4 ) # upps we are up - but shouldn't? - we could not register with started HDB
                     # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
                     super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
                     set_crm_master -inf
@@ -1562,7 +1562,7 @@ function saphana_start_primary()
                 1 ) # lets try to register
                     # DONE: PRIO2: Like Action in start_secondary
                     super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
-                    super_ocf_log info "DEC: AN OTHER HANA IS AVAILABLE ==> LETS REGISTER"
+                    super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
                     set_crm_master  0
                     if wait_for_primary_master 1; then
                         register_hana_secondary
@@ -1601,8 +1601,8 @@ function saphana_start_primary()
                 1 ) # we are down, so we should wait --> followup in next monitor
                     # DONE: PRIO3: Check, if WAITING is correct here
                     if ocf_is_true "$AUTOMATED_REGISTER" ; then
-                        super_ocf_log info "LPA: landcape: DOWN, LPA: wait ==> keep waiting"
-                        super_ocf_log info "RA: landcape: DOWN, LPA: wait ==> keep waiting"
+                        super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
+                        super_ocf_log info "RA: landscape: DOWN, LPA: wait ==> keep waiting"
                         set_hana_attribute ${NODENAME} "WAITING4LPA" ${ATTR_NAME_HANA_CLONE_STATE[@]}
                         set_crm_master -9000
                         rc=$OCF_SUCCESS
@@ -1714,9 +1714,9 @@ function saphana_start_secondary()
     #
     #
     # we would be secondary
-    # we first need to check, if there are Master Nodes, because the Scecondary only starts
-    # successfuly, if the Primary is available. Thatfore we mark the Secondary as "WAITING"
-    # DONE: PRIO3: wait_for_primary_master 10 is just a test value: 10 loops x10 seconds than go to WAITING
+    # we first need to check, if there are Master Nodes, because the Secondary only starts
+    # successfully, if the Primary is available. Therefor we mark the Secondary as "WAITING"
+    # DONE: PRIO3: wait_for_primary_master 10 is just a test value: 10 loops x10 seconds, then go to WAITING
     # DONE: PRIO3: rename 'wait_for_primary_master' to match better the use case ("wait_some_time")
     #
     super_ocf_log debug "DBG: wait for promoted side"
@@ -1726,9 +1726,9 @@ function saphana_start_secondary()
        saphana_start; rc=$?
        if [ $rc -ne $OCF_SUCCESS ]; then
            if ! wait_for_primary_master 1; then
-               # It seams the stating secondary could not start because of stopping primary
+               # It seems the stating secondary could not start because of stopping primary
                #    so this is a WAITING situation
-               super_ocf_log info "ACT: PRIMARY seams to be down now ==> WAITING"
+               super_ocf_log info "ACT: PRIMARY seems to be down now ==> WAITING"
                set_hana_attribute ${NODENAME} "WAITING4PRIM" ${ATTR_NAME_HANA_CLONE_STATE[@]}
                set_crm_master -INFINITY
                rc=$OCF_SUCCESS
@@ -2590,7 +2590,7 @@ function saphana_promote_clone() {
         esac
      else
         #
-        # neither PRIMARY nor SECONDARY - This clone instance seams to be broken!!
+        # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
         # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct
         # Let next monitor find, if that HANA instance is available or not
         rc=$OCF_SUCCESS;
@@ -2723,7 +2723,7 @@ case "$ACTION" in
     reload)
         ra_rc=$OCF_SUCCESS
         ;;
-    *)  # seams to be a unknown request
+    *)  # seems to be an unknown request
         saphana_methods
         ra_rc=$OCF_ERR_UNIMPLEMENTED
         ;;
