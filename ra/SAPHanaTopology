@@ -27,7 +27,7 @@
 #
 #######################################################################
 # DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
-SAPHanaTopologyVersion="0.154.0"
+SAPHanaTopologyVersion="0.155.0"
 #
 # Initialization:
 timeB=$(date '+%s')
@@ -429,7 +429,26 @@ function HANA_CALL()
                   output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
                   ;;
         *       )
-                  output=$(timeout $timeOut $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                  errExt=$(date '+%s')
+                  su_err_log=/tmp/HANA_CALL_SU_TOP_${errExt}
+                  cmd_out_log=/tmp/HANA_CALL_CMD_TOP_OUT_${errExt}
+                  cmd_err_log=/tmp/HANA_CALL_CMD_TOP_${errExt}
+
+                  output=$(timeout "$timeOut" "$pre_cmd" "($pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
+
+                  output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
+                  suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
+                  cmdErr=$(if [ -f "$cmd_err_log" ]; then cat "$cmd_err_log"; rm -f "$cmd_err_log"; else echo "NA"; fi)
+                  super_ocf_log debug "DBG: RA ==== action HANA_CALL (cmd is '$cmd', rc is '$rc', stderr from su is '$suErr', stderr from cmd is '$cmdErr') ===="
+                  # on rc=1 - retry to improve the behavior in AD environments
+                  if [ $rc -eq 1 ]; then
+                      super_ocf_log warn "HANA_CALL stderr from command '$pre_cmd' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
+                      if [ "$cmdErr" == "NA" ]; then
+                          # seems something was going wrong with the 'pre_cmd' (su)
+                          super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
+                          output=$(timeout "$timeOut" "$pre_cmd" "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                      fi
+                  fi
                   #
                   # on timeout ...
                   #
