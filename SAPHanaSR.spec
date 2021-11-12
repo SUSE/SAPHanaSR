@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2019 SUSE LLC.
+# Copyright (c) 2017-2020 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.154.0
+Version:        0.155.0
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -33,6 +33,7 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
 Requires:       pacemaker > 1.1.1
 Requires:       resource-agents
+Requires:       perl
 
 # Require crmsh-scripts on SLES 12 SP1+ for the new HAWK wizards
 %if 0%{?sle_version} >= 120100
@@ -66,8 +67,7 @@ Authors:
 
 
 %description doc
-This subpackage includes the Setup Guide and manual pages for getting
-SAP HANA system replication under cluster control.
+This subpackage includes the Setup Guide for getting SAP HANA system replication under cluster control.
 
 
 %prep
@@ -180,6 +180,5 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-replay-archive.8.gz
-
 
 %changelog
