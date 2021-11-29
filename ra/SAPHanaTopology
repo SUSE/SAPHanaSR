@@ -14,7 +14,7 @@
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
 #               (c) 2015-2018 SUSE Linux GmbH
-#               (c) 2019 SUSE LLC
+#               (c) 2019-2021 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -477,6 +477,8 @@ function sht_init() {
     local siteID
     local siteNAME
     local chkMethod=""
+    SYSTEMCTL="/usr/bin/systemctl"
+    systemd_unit_name="saphostagent.service"
     HOSTEXECNAME=saphostexec
     USRSAP=/usr/sap
     SAPSERVICE_PATH=${USRSAP}/sapservices
@@ -691,6 +693,24 @@ function check_for_primary() {
    return $rc
 }
 
+# chk4systemdsupport - check, if SAP systemd support is available
+# check for the existence of the SAP Host Agent related unit file
+# rc=0 - SAP Host Agent unit file exists
+# rc=1 - SAP Host Agent unit file does NOT exist
+function chk4systemdsupport() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]}"
+    local rc=1
+    if [ -x "$SYSTEMCTL" ]; then
+        if [ -f /etc/systemd/system/"$systemd_unit_name" ]; then
+            rc=0
+        elif $SYSTEMCTL list-unit-files "$systemd_unit_name" >/dev/null 2>&1; then
+            rc=0
+        else
+            rc=1
+        fi
+    fi
+    return $rc
+}
 
 #
 # function: start_saphostagent
@@ -700,8 +720,19 @@ function check_for_primary() {
 function start_saphostagent()
 {
     ### SAP-CALL
-    if [ -x "${HOSTEXEC_PATH}" ]; then
-        ${HOSTEXEC_PATH} pf=${HOSTEXEC_PROFILE_PATH}
+    if chk4systemdsupport; then
+        # use systemd to control saphostagent
+        if $SYSTEMCTL is-active --quiet "$systemd_unit_name"; then
+            super_ocf_log info "ACT: systemd service $systemd_unit_name is active"
+        else
+            super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
+            $SYSTEMCTL start "$systemd_unit_name" >/dev/null 2>&1
+        fi
+    else
+        # no SAP systemd unit available, continue with old code...
+        if [ -x "${HOSTEXEC_PATH}" ]; then
+            ${HOSTEXEC_PATH} pf=${HOSTEXEC_PROFILE_PATH}
+        fi
     fi
     return 0
 }
@@ -714,8 +745,19 @@ function start_saphostagent()
 function stop_saphostagent()
 {
     ### SAP-CALL
-    if [ -x "${HOSTEXEC_PATH}" ]; then
-        ${HOSTEXEC_PATH} -stop
+    if chk4systemdsupport; then
+        # use systemd to control saphostagent
+        if $SYSTEMCTL is-active --quiet "$systemd_unit_name"; then
+            super_ocf_log warn "ACT: systemd service $systemd_unit_name is active, now stopping using systemd"
+            $SYSTEMCTL stop "$systemd_unit_name" >/dev/null 2>&1
+        else
+            super_ocf_log info "ACT: systemd service $systemd_unit_name is not active"
+        fi
+    else
+        # no SAP systemd unit available, continue with old code...
+        if [ -x "${HOSTEXEC_PATH}" ]; then
+            ${HOSTEXEC_PATH} -stop
+        fi
     fi
 }
 
@@ -727,9 +769,20 @@ function stop_saphostagent()
 function check_saphostagent()
 {
     local rc=1
-    # TODO: PRIO3: should the path been removed like "saphostexec" instead of "/usr/sap/hostctrl/exe/saphostexec"
-    #       or should we use ${HOSTEXEC_PATH} instead?
-    pgrep -f /usr/sap/hostctrl/exe/saphostexec; rc=$?
+    if chk4systemdsupport; then
+        # use systemd to control saphostagent
+        if $SYSTEMCTL is-active --quiet "$systemd_unit_name"; then
+            super_ocf_log warn "ACT: systemd service $systemd_unit_name is active"
+            rc=0
+        else
+            super_ocf_log info "ACT: systemd service $systemd_unit_name is not active"
+        fi
+    else
+        # no SAP systemd unit available, continue with old code...
+        # TODO: PRIO3: should the path been removed like "saphostexec" instead of "/usr/sap/hostctrl/exe/saphostexec"
+        #       or should we use ${HOSTEXEC_PATH} instead?
+        pgrep -f /usr/sap/hostctrl/exe/saphostexec; rc=$?
+    fi
     return $rc
 }
 

@@ -733,6 +733,7 @@ function saphana_init() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=$OCF_SUCCESS
     local clN
+    SYSTEMCTL="/usr/bin/systemctl"
     # local site
     # two parameter models (for transition only)
     # OLD: InstanceName
@@ -963,6 +964,26 @@ function check_secstore_users()
     return $rc
 }
 
+# chk4systemdsupport - check, if SAP systemd support is available
+# check for the existence of the SAP SID+Instance related unit file
+# rc=0 - sap instance unit file exists
+# rc=1 - sap instance unit file does NOT exist
+function chk4systemdsupport() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]}"
+    local systemd_unit_name="SAP${SID}_${InstanceNr}.service"
+    local rc=1
+    if [ -x "$SYSTEMCTL" ]; then
+        if [ -f /etc/systemd/system/"$systemd_unit_name" ]; then
+            rc=0
+        elif $SYSTEMCTL list-unit-files "$systemd_unit_name" >/dev/null 2>&1; then
+            rc=0
+        else
+            rc=1
+        fi
+    fi
+    return $rc
+}
+
 #
 # function: check_sapstartsrv - check for sapstartsrv - optional start
 # params:   -
@@ -975,67 +996,86 @@ function check_sapstartsrv() {
     local runninginst=""
     local rc=$OCF_SUCCESS
     local output=""
-    if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
-        super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
-        restart=1
-    else
-        output=$($SAPCONTROL -nr $InstanceNr -function ParameterValue INSTANCE_NAME -format script)
-        if [ $? -eq 0 ]
-        then
-            runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
-            if [ "$runninginst" != "$InstanceName" ]
-            then
-                super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
-                restart=1
-            else
-                output=$($SAPCONTROL -nr $InstanceNr -function AccessCheck Start)
-                if [ $? -ne 0 ]; then
-                    super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 /tmp/.sapstream5${InstanceNr}13))"
-                    super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
-                    restart=1
-                fi
+    if chk4systemdsupport; then
+        # use systemd to control sapstartsrv
+        local systemd_unit_name="SAP${SID}_${InstanceNr}.service"
+
+        if $SYSTEMCTL is-active --quiet "$systemd_unit_name"; then
+            super_ocf_log info "ACT: systemd service $systemd_unit_name is active"
+        else
+            super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
+            # use start, because restart does also stop sap instance
+            $SYSTEMCTL start "$systemd_unit_name" >/dev/null 2>&1; src=$?
+            if [ $src -ne 0 ]; then
+                super_ocf_log error "ACT: error during start of systemd unit ${systemd_unit_name}!"
+                rc=$OCF_ERR_GENERIC
+                ocf_is_probe && rc=$OCF_NOT_RUNNING
             fi
-        else
-            super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+        fi
+    else
+        # no SAP systemd unit available, continue with old code...
+        if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
+            super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
             restart=1
-        fi
-    fi
-    if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
-    if [ $restart -eq 1 ]
-    then
-        if [ -d /usr/sap/$SID/SYS/profile/ ]
-        then
-            DIR_PROFILE="/usr/sap/$SID/SYS/profile"
         else
-            assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
+            output=$($SAPCONTROL -nr $InstanceNr -function ParameterValue INSTANCE_NAME -format script)
+            if [ $? -eq 0 ]
+            then
+                runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
+                if [ "$runninginst" != "$InstanceName" ]
+                then
+                    super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
+                    restart=1
+                else
+                    output=$($SAPCONTROL -nr $InstanceNr -function AccessCheck Start)
+                    if [ $? -ne 0 ]; then
+                        super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 /tmp/.sapstream5${InstanceNr}13))"
+                        super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
+                        restart=1
+                    fi
+                fi
+            else
+                super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+                restart=1
+            fi
         fi
-        [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
-        pkill -9 -f "sapstartsrv.*$runninginst"
-        # removing the unix domain socket files as they might have wrong permissions
-        # or ownership - they will be recreated by sapstartsrv during next start
-        rm -f /tmp/.sapstream5${InstanceNr}13
-        rm -f /tmp/.sapstream5${InstanceNr}14
-        (
-          export PATH="$DIR_EXECUTABLE${PATH:+:}$PATH"
-          export LD_LIBRARY_PATH="$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
-          $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
-        )
-        # now make sure the daemon has been started and is able to respond
-        local srvrc=1
-        while [ $srvrc -eq 1 -a $(pgrep -f "sapstartsrv.*$runninginst" | wc -l) -gt 0 ]
-        do
-            sleep 1
-            $SAPCONTROL -nr $InstanceNr -function GetProcessList > /dev/null 2>&1
-            srvrc=$?
-        done
-        if [ $srvrc -ne 1 ]
+        if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
+        if [ $restart -eq 1 ]
         then
-            super_ocf_log info "ACT: sapstartsrv for instance $SID-$InstanceName was restarted!"
-            rc=$OCF_SUCCESS
-        else
-            super_ocf_log error "ACT: sapstartsrv for instance $SID-$InstanceName could not be started!"
-            rc=$OCF_ERR_GENERIC
-            ocf_is_probe && rc=$OCF_NOT_RUNNING
+            if [ -d /usr/sap/$SID/SYS/profile/ ]
+            then
+                DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+            else
+                assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
+            fi
+            [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
+            pkill -9 -f "sapstartsrv.*$runninginst"
+            # removing the unix domain socket files as they might have wrong permissions
+            # or ownership - they will be recreated by sapstartsrv during next start
+            rm -f /tmp/.sapstream5${InstanceNr}13
+            rm -f /tmp/.sapstream5${InstanceNr}14
+            (
+              export PATH="$DIR_EXECUTABLE${PATH:+:}$PATH"
+              export LD_LIBRARY_PATH="$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
+              $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
+            )
+            # now make sure the daemon has been started and is able to respond
+            local srvrc=1
+            while [ $srvrc -eq 1 -a $(pgrep -f "sapstartsrv.*$runninginst" | wc -l) -gt 0 ]
+            do
+                sleep 1
+                $SAPCONTROL -nr $InstanceNr -function GetProcessList > /dev/null 2>&1
+                srvrc=$?
+            done
+            if [ $srvrc -ne 1 ]
+            then
+                super_ocf_log info "ACT: sapstartsrv for instance $SID-$InstanceName was restarted!"
+                rc=$OCF_SUCCESS
+            else
+                super_ocf_log error "ACT: sapstartsrv for instance $SID-$InstanceName could not be started!"
+                rc=$OCF_ERR_GENERIC
+                ocf_is_probe && rc=$OCF_NOT_RUNNING
+            fi
         fi
     fi
     return $rc
