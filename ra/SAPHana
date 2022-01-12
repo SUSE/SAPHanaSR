@@ -29,6 +29,8 @@
 #   OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
+#   new instance parameter for the RA
+#   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
 #   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
 #
 # HANA must support the following commands:
@@ -224,6 +226,14 @@ The resource agent uses the following four interfaces provided by SAP:
         </longdesc>
         <shortdesc lang="en">Local or site recover preferred?</shortdesc>
         <content type="string" default="false" />
+    </parameter>
+    <parameter name="REMOVE_SAP_SOCKETS" unique="0" required="0">
+        <longdesc lang="en">Should the RA remove the unix domain sockets related to sapstartsrv before (re-)starting sapstartsrv ? Default="true"
+        no: Do not remove the sockets, try chown/chgrp instead
+        yes: Do remove the sockets
+        </longdesc>
+        <shortdesc lang="en">Remove unix domain sockets related to sapstartsrv?</shortdesc>
+        <content type="boolean" default="true" />
     </parameter>
     <parameter name="AUTOMATED_REGISTER"  unique="0" required="0">
         <shortdesc lang="en">Define, if a former primary should automatically be registered.</shortdesc>
@@ -772,6 +782,7 @@ function saphana_init() {
     SAPVIRHOST=${vName}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
+    RemoveSAPSockets="O${CF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     LPA_ATTR=("lpa_${sid}_lpt" "forever")
     super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
@@ -986,6 +997,53 @@ function chk4systemdsupport() {
 }
 
 #
+# handle_unix_domain_sockets
+# params: -
+# globals: OCF_RESKEY_REMOVE_SAP_SOCKETS
+#
+handle_unix_domain_sockets() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]}"
+
+    if ocf_is_true "$RemoveSAPSockets"; then
+        # previous and new default handling
+        # removing the unix domain socket files as they might have
+        # wrong permissions or ownership
+        # they will be recreated by sapstartsrv during next start
+        rm -f /tmp/.sapstream5"${InstanceNr}"13
+        rm -f /tmp/.sapstream5"${InstanceNr}"14
+    else
+        # try to change permission and ownership of the unix domain socket files
+        for sockFile in /tmp/.sapstream5"${InstanceNr}"13 /tmp/.sapstream5"${InstanceNr}"14; do
+            sockError=false
+            if [ -S "$sockFile" ]; then
+                if ! chown "${sid}"adm "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+                if ! chgrp sapsys "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+                if chmod 700 "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+            else
+                if [ -f "$sockFile" ]; then
+                    super_ocf_log error "RA: file '$sockFile' still exists, but is NO longer a socket."
+                    super_ocf_log info "DEC: remove file '$sockFile' to give sapstartsrv a chance to create it the right way during next start"
+                    sockError=true
+                else
+                    super_ocf_log info "RA: file '$sockFile' not found. Nothing to do, let sapstartsrv create a new one during start"
+                fi
+            fi
+            if ocf_is_true $sockError; then
+                # fallback - if there are Errors, remove unix domain socket as
+                # last resort
+                rm -f "$sockFile"
+            fi
+        done
+    fi
+}
+
+#
 # function: check_sapstartsrv - check for sapstartsrv - optional start
 # params:   -
 # globals:  DIR_PROFILE(w), SAPSTARTPROFILE(r), SAPCONTROL(r), SID(r), InstanceName(r), InstanceNr(r), OCF_*(r)
@@ -1051,10 +1109,8 @@ function check_sapstartsrv() {
             fi
             [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
             pkill -9 -f "sapstartsrv.*$runninginst"
-            # removing the unix domain socket files as they might have wrong permissions
-            # or ownership - they will be recreated by sapstartsrv during next start
-            rm -f /tmp/.sapstream5${InstanceNr}13
-            rm -f /tmp/.sapstream5${InstanceNr}14
+
+            handle_unix_domain_sockets
             (
               export PATH="$DIR_EXECUTABLE${PATH:+:}$PATH"
               export LD_LIBRARY_PATH="$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
