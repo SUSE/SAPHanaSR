@@ -1,6 +1,6 @@
-.\" Version: 0.154.0
+.\" Version: 0.155.0
 .\"
-.TH SAPHanaSR 7 "06 Jun 2018" "" "SAPHanaSR"
+.TH SAPHanaSR 7 "26 Jan 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR \- Tools for automating SAP HANA system replication in scale-up setups.
@@ -19,7 +19,7 @@ operation, internal SAP HANA high-availability (HA) mechanisms and the Linux
 cluster have to work together.
 .PP
 The SAPHana RA performs the actual check of the SAP HANA
-database instances and is configured as a master/slave resource.
+database instances and is configured as a multi-state resource.
 Managing the two SAP HANA instances means that the resource agent controls
 the start/stop of the instances. In addition the resource agent is able to
 monitor the SAP HANA databases on landscape host configuration level.
@@ -62,7 +62,7 @@ A primary absolutely must never be started, if the cluster does not know
 anything about the other site.
 On initial cluster start, the cluster needs to detect a valid HANA system
 replication setup, including system replication status (SOK) and last primary
-timestamp (LPT). This is neccessary to ensure data integrity.
+timestamp (LPT). This is necessary to ensure data integrity.
 .PP
 The rational behind this is shown in the following scenario:
 .br
@@ -86,7 +86,7 @@ The rational behind this is shown in the following scenario:
     secondary.
 .br
 6.3 It would start the HANA from point of time of step 1.->2. (the crash),
-    so all data changed inbetween would be lost.
+    so all data changed in between would be lost.
 .br
 This is why the Linux cluster needs to enforce a restart inhibit.
 .PP
@@ -151,13 +151,13 @@ Resulting in at least three physical links. Unicast is preferred.
 sites. Of course, together with hardware watchdog.
 .PP
 \fB*\fR Align all timeouts in the Linux cluster with the timeouts of the underlying
-storage and multipathing.
+infrastructure - particuarly network, storage and multipathing.
 .PP
 \fB*\fR Check the installation of OS and Linux cluster on all nodes before doing
 any functional tests.
 .PP
 \fB*\fR Carefully define, perform, and document tests for all scenarios that should
-be covered. 
+be covered, as well as all maintenance procedures.
 .PP
 \fB*\fR Test HANA features without Linux cluster before doing the overall
 cluster tests.
@@ -166,12 +166,15 @@ cluster tests.
 cluster tests.
 .PP
 \fB*\fR Be patient. For detecting the overall HANA status, the Linux cluster needs
-a certain amount of time, depending on the HANA and the configured intervalls and
+a certain amount of time, depending on the HANA and the configured intervals and
 timeouts.
 .PP
 \fB*\fR Before doing anything, always check for the Linux cluster's idle status,
 left-over migration constraints, and resource failures as well as the HANA
 landscape status, and the HANA SR status.
+.PP
+\fB*\fR Manually activating an HANA primary creates risk of a dual-primary situation.
+The user is responsible for data integrity.
 .PP
 .\"
 .SH REQUIREMENTS
@@ -186,7 +189,9 @@ Note: A three-node Linux cluster is possible, but not covered by current
 best practices.
 .PP
 2. Technical users and groups such as sidadm are defined locally in the
-Linux system.
+Linux system. If users are resolved by remote service, local caching is
+neccessary. Substitute user (su) to sidadm needs to work reliable and without
+customized actions or messages. Supported shell is bash.
 .PP
 3. Strict time synchronization between the cluster nodes, e.g. NTP.
 .PP
@@ -197,30 +202,78 @@ SAPHanaSR package:
 .br
 	4.2 cost-optimized (e.g. with QA on secondary)
 .br
-	4.3 multi-tier (replication chaining, third node connected to second one)
+	4.3 multi-tier with HANA 2.0 (replication chaining, third node connected to second one)
 .br
-	4.4 single-tenant or multi-tenant (MDC) for all of the above
+	4.4 multi-target with HANA 2.0 (star replication, third node connected to primary one)
 .br
-	4.5 multiple independent HANA SR pairs (MCOS) in one cluster
+	4.5 single-tenant or multi-tenant (MDC) for all of the above
+.br
+	4.6 multiple independent HANA SR pairs (MCOS) in one cluster
 .br
 Note: For MCOS, there must be no constraints between HANA SR pairs. 
 .PP
-5. Only one system replication for the SAP HANA database.
+5. Only one system replication between the two SAP HANA database in the Linux cluster.
+Maximum one system replication to an HANA database outside the Linux cluster.
+See also item 12 below.
 .PP
-6. Both SAP HANA database systems have the same SAP Identifier (SID)
-and Instance Number.
+6. The replication mode is either sync or syncmem for the controlled replication.
+Replication mode async is not supported. The operation modes delta_datashipping,
+logreplay and logreplay_readaccess are supported.
 .PP
-7. Besides SAP HANA you need SAP hostagent to be installed and started 
+7. Both SAP HANA database systems have the same SAP Identifier (SID) and
+Instance Number.
+.PP
+8. Besides SAP HANA you need SAP hostagent to be installed and started 
 on your system.
 .PP
-8. Automated start of SAP HANA database systems during system boot
-must be switched off.
+9. Automated start of SAP HANA database systems during system boot must be switched
+off.
 .PP
-9. The RA's monitoring operations have to be active.
+10. The RA's monitoring operations have to be active.
 .PP
-10. For scale-up, the current resource agent supports SAP HANA in system
+11. Using HADR provider hook for srConnectionChanged() by enabling SAPHanaSR.py
+is strongly recommended. This might become mandatory in furture versions.
+.PP
+12. For scale-up, the current resource agent supports SAP HANA in system
 replication beginning with HANA version 1.0 SPS 7 patch level 70,
-recommended is SPS 11. HANA version 2.0 is supported as well.
+recommended is SPS 11.
+With HANA 2.0 SPS04 and later multi-target system replication
+is possible as well. Even in HANA multi-target environments, the current
+resource agent manages only two sites. Thus only two HANA sites are part
+of the Linux cluster. See also item 5 above.
+.PP
+13. Colocation constraints between the SAPHanaController or SAPHana RA and
+other resources are allowed only if they do not affect the RA's scoring.
+The location scoring finally depends on system replication status an must not
+be over-ruled by additional constraints. Thus it is not allowed to define rules
+forcing a SAPHanaController or SAPHana master to follow another resource.
+.PP
+14. The Linux cluster needs to be up and running to allow HA/DR provider events
+being written into CIB attributes. The current HANA SR status might differ
+from CIB srHook attribute after cluster maintenance.
+.PP
+15. Once an HANA system replication site is known to the Linux cluster, that
+exact site name has to be used whenever the site is registered manually.
+.PP
+16. Reliable access to the /hana/shared/ filesystem is crucial for HANA and the
+Linux cluster.
+.PP
+17. HANA feature Secondary Time Travel is not supported.
+.PP
+18. In MDC configurations the HANA database is treated as a single system
+including all database containers. Therefore, cluster takeover decisions are
+based on the complete status independent of the status of individual containers.
+.PP
+19. If a third HANA site is connected by system replication, that HANA is not
+controlled by another SUSE HA cluster. If that third site should work as part
+of a fall-back HA cluster in DR case, that HA cluster needs to be in standby.
+.PP
+20. RA and srHook runtime almost completely depends on call-outs to controlled
+resources, OS and Linux cluster. The infrastructure needs to allow these call-outs
+to return in time.
+.PP
+21. The SAP HANA Fast Restart feature on RAM-tmfps as well as HANA on persistent
+memory can be used, as long as they are transparent to SUSE HA.
 .PP
 .\"
 .SH BUGS
@@ -232,16 +285,21 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) ,
-\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,  
-\fBntp.conf\fP(5) , \fBstonith\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR.py\fP(7) , 
+\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , 
+\fBstonith\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) ,
 \fBcrm\fP(8) , \fBcorosync.conf\fP(5) , \fBcrm_no_quorum_policy\fP(7) ,
-\fBcs_precheck_for_hana\fP(8) , \fBcs_add_watchdog_to_initrd\fP(8)
+\fBsaptune\fP(8) , \fBcs_show_hana_info\fP(8) , \fBsupportconfig\fP(8) ,
 .br
-https://www.suse.com/products/sles-for-sap/resource-library/sap-best-practices.html ,
+https://documentation.suse.com/sbp/sap/ ,
+.br
+https://documentation.suse.com/sles-sap/ ,
 .br
 https://www.suse.com/releasenotes/ ,
 .br
 https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
+.br
+https://www.susecon.com/doc/2016/sessions/TUT90846.pdf ,
 .br
 https://www.suse.com/media/presentation/TUT90846_towards_zero_downtime%20_how_to_maintain_sap_hana_system_replication_clusters.pdf ,
 .br
@@ -252,16 +310,18 @@ http://scn.sap.com/docs/DOC-60334 ,
 http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy ,
 .br
 https://wiki.scn.sap.com/wiki/display/ATopics/HOW+TO+SET+UP+SAPHanaSR+IN+THE+COST+OPTIMIZED+SAP+HANA+SR+SCENARIO+-+PART+I
+.br
+https://blogs.sap.com/2020/01/30/sap-hana-and-persistent-memory/
 .PP
 .SH AUTHORS
 .br
-F.Herschel, L.Pinne.
+A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
 (c) 2015-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019 SUSE LLC
+(c) 2019-2022 SUSE LLC
 .br
 The package SAPHanaSR comes with ABSOLUTELY NO WARRANTY.
 .br
