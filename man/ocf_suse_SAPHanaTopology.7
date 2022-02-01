@@ -1,6 +1,6 @@
-.\" Version: 0.154.0
+.\" Version: 0.155.0
 .\"
-.TH ocf_suse_SAPHanaTopology 7 "02 Feb 2017" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaTopology 7 "29 Apr 2021" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaTopology \- Helps to manage two SAP HANA databases with system replication.
@@ -22,12 +22,12 @@ The resource agent uses the following interfaces provided by SAP:
 .br
 landscapeHostConfiguration.py has some detailed output about HANA system
 status and node roles. For our monitor the overall status is relevant. This
-overall status is reported by the returncode of the script:
+overall status is reported by the return code of the script:
 0: Internal Fatal 1: ERROR 2: WARNING 3: INFO (maybe a switch of the resource
 running) 4: OK
 .br
-The SAPHanaTopology resource agent will interpret returncodes 1 as
-NOT-RUNNING (or 1 failure) and returncodes 2+3+4 as RUNNING.
+The SAPHanaTopology resource agent will interpret return codes 1 as
+NOT-RUNNING (or 1 failure) and return codes 2+3+4 as RUNNING.
 SAPHanaTopology scans the output table of landscapeHostConfiguration.py to
 identify the roles of the cluster node. Roles means configured and current
 role of the nameserver as well as the indexserver.
@@ -73,13 +73,40 @@ For system replication also Instance Number+1 is blocked.
 Example "InstanceNumber=00".
 .RE
 .PP
+\fBHANA_CALL_TIMEOUT\fR
+.RS 4
+Define timeout how long a call to HANA to receive information can take. This
+could be e.g. landscapeHostConfiguration.py.
+There are some specific calls to HANA which have their own timeout values.
+For example the sr_takeover command does not timeout (inf).
+If the timeout is reached, the return code will be 124. If you increase the
+timeouts for HANA calls you should also adjust the operation timeouts of your
+Linux cluster resources.
+.br
+Optional. Default value: 120.
+.RE
+.PP
 .\"
 .SH SUPPORTED PROPERTIES
 \fBhana_${sid}_glob_filter\fR
 .RS 4
-Global cluster property \fBhana_${sid}_glob_filter\fR .
-This property should only be set if requested by support engineers.
-The default is sufficient for normal operation.
+Global cluster property \fBhana_${sid}_glob_filter\fR . This property defines which messages are logged by the RA. It should only be set if requested by support engineers. The default is sufficient for normal operation.
+.br
+Message Types: [ act | dbg | dec | flow | top ]
+.\" TODO dbg2?
+.\" TODO message levels: (dbg)|info|warn|err|error
+.br
+ACT: Action. Start, stop, sr_takeover and others. See also section SUPPORTED ACTIONS.
+.br
+DBG: Debugging info. Usually not needed at customer site. See SUSE TID 7022678 for maximum RA tracing.
+.br
+DEC: Decision taken by the RA.
+.br
+FLOW: Function calls and the respective return codes.
+.br
+TOP: Topology. Messages related to HANA SR topology, like site name and remote site.
+.br
+Optional, advanced. Default value: ra-act-dec-lpa\&.
 .RE
 .PP
 .\"
@@ -217,19 +244,19 @@ SAPHanaSR(7) or SAPHanaSR-ScaleOut(7).
 \fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBntp.conf\fP(5) , \fBstonith\fP(8)
+\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBstonith\fP(8)
 .br
-https://www.suse.com/products/sles-for-sap/resource-library/sap-best-practices.html ,
+https://documentation.suse.com/sbp/all/?context=sles-sap ,
 .br
 https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
 .br
+https://www.susecon.com/doc/2016/sessions/TUT90846.pdf ,
+.br
 http://clusterlabs.org/doc/en-US/Pacemaker/1.1/html/Pacemaker_Explained/s-ocf-return-codes.html ,
 .br
-http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution ,
+http://scn.sap.com/docs/DOC-60334
 .br
-http://scn.sap.com/docs/DOC-60334 ,
-.br
-http://scn.sap.com/docs/DOC-65899
+http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy ,
 .PP
 .\"
 .SH AUTHORS
@@ -241,7 +268,7 @@ F.Herschel, L.Pinne.
 .br
 (c) 2015-2017 SUSE Linux GmbH, Germany.
 .br
-(c) 2017-2019 SUSE LLC
+(c) 2018-2021 SUSE LLC
 .br
 SAPHanaTopology comes with ABSOLUTELY NO WARRANTY.
 .br
