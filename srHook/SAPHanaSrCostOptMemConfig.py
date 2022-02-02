@@ -34,6 +34,7 @@ fhSRHookVersion = "0.160.0"
 userkey_dflt = "saphanasr_<sid>_costopt"
 #
 
+
 class SAPHanaSrCostOptMemConfig(HADRBase):
 
     def __init__(self, *args, **kwargs):
@@ -65,7 +66,7 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
         # unset preload_column_tables
         self.sql_set_preload = "ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') UNSET ('system_replication','preload_column_tables') WITH RECONFIGURE"
 
-        self.tracer.info("{0}.{1}() version {2}, hookGeneration {3}, userkey {4}, sid {5}, costopt_primary_global_allocation_limit {6}".format(self.__class__.__name__, method, fhSRHookVersion, srHookGen, self.userkey, mysid, costopt_primary_global_allocation_limit))
+        self.tracer.info("{0}.{1}() version {2}, userkey {3}, sid {4}, costopt_primary_global_allocation_limit {5}".format(self.__class__.__name__, method, fhSRHookVersion, self.userkey, mysid, costopt_primary_global_allocation_limit))
 
     def about(self):
         method = "about"
@@ -133,10 +134,10 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
             cursor.execute(self.sql_set_preload)
             cursor.close()
 
-            #return 0
-        #elif rc == 2:
+            # return 0
+        # elif rc == 2:
             # error, something went wrong
-            #return 0
+            # return 0
 
         self.tracer.info("leave postTakeover hook")
         return 0
@@ -145,16 +146,16 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
         self.tracer.debug("enter srConnectionChanged hook; %s" % locals())
 
         # Access to parameters dictionary
-        #hostname = ParamDict['hostname']
-        #port = ParamDict['port']
-        #database = ParamDict['database']
-        #status = ParamDict['status']
-        #databaseStatus = ParamDict['database_status']
-        #systemStatus = ParamDict['system_status']
-        #timestamp = ParamDict['timestamp']
-        #isInSync = ParamDict['is_in_sync']
-        #reason = ParamDict['reason']
-        #siteName = ParamDict['siteName']
+        # hostname = ParamDict['hostname']
+        # port = ParamDict['port']
+        # database = ParamDict['database']
+        # status = ParamDict['status']
+        # databaseStatus = ParamDict['database_status']
+        # systemStatus = ParamDict['system_status']
+        # timestamp = ParamDict['timestamp']
+        # isInSync = ParamDict['is_in_sync']
+        # reason = ParamDict['reason']
+        # siteName = ParamDict['siteName']
 
         self.tracer.info("leave srConnectionChanged hook")
         return 0
