@@ -696,7 +696,7 @@ sub host_attr2string
         $format="script"
     }
     if ( $format eq "tables" ) {
-	    $hclen=$$refN{_hosts}->{_length};
+        $hclen=max($$refN{_hosts}->{_length}, length($title));
 	    $line_len=$hclen+1;
 	    $string.=sprintf "%-$hclen.${hclen}s ", "$title";
 	    #
