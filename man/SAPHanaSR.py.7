@@ -1,6 +1,6 @@
 .\" Version: 0.155.0
 .\"
-.TH SAPHanaSR.py 7 "12 Feb 2021" "" "SAPHanaSR"
+.TH SAPHanaSR.py 7 "26 Jan 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
@@ -61,6 +61,15 @@ Usage, syntax or execution errors.
 ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_ha1_site_srHook_* 
 .RE
 .PP
+* Example for looking up the sudo permission for the srHook script.
+.br
+All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
+Example SID is HA1.
+.PP
+.RS 2
+# sudo -U ha1adm -l | grep "NOPASSWD.*crm_attribute.*hana_ha1" 
+.RE
+.PP
 * Example for entry in SAP HANA global configuration
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 .br
@@ -94,8 +103,86 @@ ha_dr_saphanasr = info
 # python -m py_compile /usr/share/SAPHanaSR/SAPHanaSR.py
 .br
 # ls -l SAPHanaSR.pyc
+.RE
 .PP
-.\" TODO grep in HANA tracefile for srHook messages
+* Example for checking the system log for srHook setting HANA system replication status in the CIB properties section. To be executed on respective HANA primary site's master nameserver.
+.PP
+.RS 2
+# grep "sudo.*crm_attribute.*srHook" /var/log/messages
+.RE
+.PP
+* Example for checking the HANA tracefiles for srConnectionChanged() events. To be executed on respective HANA primary site's master nameserver.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+~> grep SAPHanaSR.srConnectionChanged.*called nameserver_*.trc
+.br
+~> grep crm_attribute.*SAPHanaSR nameserver_*.trc
+.br
+# exit
+.RE
+.PP
+* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on both site's master nameservers.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+~> grep HADR.*load.*SAPHanaS nameserver_*.trc
+.RE
+.PP
+* Example for comparing Linux cluster srHook attribute with current HANA SR state. SID is HA1. To be executed on current HANA primary site.
+.PP
+.RS 2
+# SAPHanaSR-showAttr | grep -A4 srHook
+.br
+# su - ha1adm -c "HDBSettings.sh systemReplicationStatus.py"
+.RE
+.PP
+* Potentially dangerous example for manually changing Linux cluster srHook
+attribute according to current HANA SR state. This might be desired if the
+HANA SR state has changed while the Linux cluster was completely down.
+SID is ICE, site is BERG, current HANA SR state is SFAIL.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+# su - iceadm -c "HDBSettings.sh systemReplicationStatus.py"
+.br
+# cs_clusterstate -i
+.br
+# crm_attribute -n hana_ice_site_srHook_BERG -v SFAIL -t crm_config -s SAPHanaSR
+.br
+# SAPHanaSR-showAttr
+.RE
+.PP
+\fB*\fR Example for removing orphaned global srHook attribute.
+This might be done after upgrading from old-style srHook, to avoid confusion
+caused by different HANA HADR provider API versions.
+See also SAPHanaSR.py(7) and SAPHanaSR-manageAttr(8) from SAPHanaSR-ScaleOut.
+SID is HA1.
+.\" TODO scale-up: SID is HA1, node is node1. All nodes need to be cleaned.
+.\" TODO scale-up: # crm_attribute --delete -t nodes --node node1 --name hana_ha1_glob_srHook
+.\" TODO double check orphaned attributes to be removed
+.PP
+.RS 2
+# SAPHanaSR-showAttr
+.br
+# crm configure show SAPHanaSR
+.br
+# cs_clusterstate -i
+.br
+# crm_attribute --delete -t crm_config --name hana_ha1_glob_srHook
+.br
+# crm configure show SAPHanaSR
+.br
+# SAPHanaSR-showAttr
+.RE
+.PP
 .\"
 .SH FILES
 .TP
@@ -108,7 +195,7 @@ ha_dr_saphanasr = info
 /hana/shared/$SID/global/hdb/custom/config/global.ini
  the on-disk representation of HANA global system configuration
 .TP
-/etc/sudoers
+/etc/sudoers , /etc/sudoers.d/*
  the sudo permissions configuration
 .\" TODO path to HANA trace file
 .PP
@@ -158,7 +245,7 @@ F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2015-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2021 SUSE LLC
+(c) 2019-2022 SUSE LLC
 .br
 SAPHanaSR.py comes with ABSOLUTELY NO WARRANTY.
 .br
