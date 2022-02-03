@@ -3,7 +3,7 @@
 # SAPHanaSRTools.pm
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
 # Copyright:    (c) 2015-2016 SUSE Linux GmbH
-# Copyright:    (c) 2017-2020 SUSE LLC
+# Copyright:    (c) 2017-2022 SUSE LLC
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
 # Version: 0.24.2022.02.02
