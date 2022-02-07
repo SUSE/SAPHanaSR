@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2021 SUSE LLC.
+# Copyright (c) 2017-2022 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -98,7 +98,9 @@ install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
 
 # HA/DR hook provider
 install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/SAPHanaSrTakeoverBlocker.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
 
 # icons for SAPHanaSR-monitor
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
