@@ -10,6 +10,8 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     path = /usr/share/SAPHanaSR
     userKey = costoptkey
     execution_order = 1
+    costopt_primary_global_allocation_limit = limit-in-mb # optional only for special use-cases
+    costopt_primary_global_allocation_limit = 0  # optional, as of global.ini documentation defines limitation by current resources
 
     [trace]
     ha_dr_saphanasrcostoptmemconfig = info
@@ -30,7 +32,7 @@ except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
 # parameter section
-fhSRHookVersion = "0.160.0"
+fhSRHookVersion = "0.160.1"
 userkey_dflt = "saphanasr_<sid>_costopt"
 #
 
@@ -76,31 +78,6 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
                 "provider_description": "postTakeover script to reset parameters to default or set parameters as defined in global.ini.",
                 "provider_version": "1.0"}
 
-    def startup(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter startup hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave startup hook")
-        return 0
-
-    def shutdown(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter shutdown hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave shutdown hook")
-        return 0
-
-    def failover(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter failover hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave failover hook")
-        return 0
-
-    def stonith(self, failingHost, **kwargs):
-        self.tracer.debug("enter stonith hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        # e.g. stonith of params["failed_host"]
-        # e-g- set vIP active
-        self.tracer.info("leave stonith hook")
-        return 0
 
     def preTakeover(self, isForce, **kwargs):
         """Pre takeover hook."""
@@ -118,44 +95,21 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
         method = "postTakeover"
         """Post takeover hook."""
         self.tracer.info("{0}.{1}() method called with rc={2}".format(self.__class__.__name__, method, rc))
-        # TODO: PRIO4: Do we need to differ forced (rc=1) and normal (rc=0) takeover?
+        # TODO PRIO4: How to handle return code (rc) not equal to 0 or 1? And to we need to differ rc==0 and rc==1
         if rc == 0 or rc == 1:
-            # normal takeover succeeded
-            # and
-            # waiting for force takeover
+            # takeover finished with returnocde 0 or 1
             connection = dbapi.connect(
                 key=self.userkey,
                 # address='localhost',port=dbport,user=dbuser,passwort=dbpwd,
             )
             cursor = connection.cursor()
+            # TODO PRIO4: Do we need to log failed database changes/requests?
             self.tracer.info("sqlstatement: {0}".format(self.sql_set_memory))
             cursor.execute(self.sql_set_memory)
+            # TODO PRIO4: Do we need to log failed database changes/requests?
             self.tracer.info("sqlstatement: {0}".format(self.sql_set_preload))
             cursor.execute(self.sql_set_preload)
+            # TODO PRIO4: Do we need to log failed database changes/requests?
             cursor.close()
-
-            # return 0
-        # elif rc == 2:
-            # error, something went wrong
-            # return 0
-
         self.tracer.info("leave postTakeover hook")
-        return 0
-
-    def srConnectionChanged(self, ParamDict, **kwargs):
-        self.tracer.debug("enter srConnectionChanged hook; %s" % locals())
-
-        # Access to parameters dictionary
-        # hostname = ParamDict['hostname']
-        # port = ParamDict['port']
-        # database = ParamDict['database']
-        # status = ParamDict['status']
-        # databaseStatus = ParamDict['database_status']
-        # systemStatus = ParamDict['system_status']
-        # timestamp = ParamDict['timestamp']
-        # isInSync = ParamDict['is_in_sync']
-        # reason = ParamDict['reason']
-        # siteName = ParamDict['siteName']
-
-        self.tracer.info("leave srConnectionChanged hook")
         return 0
