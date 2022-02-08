@@ -102,10 +102,13 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
                 # address='localhost',port=dbport,user=dbuser,passwort=dbpwd,
             )
             cursor = connection.cursor()
+            # TODO PRIO4: Do we need to log failed database changes/requests?
             self.tracer.info("sqlstatement: {0}".format(self.sql_set_memory))
             cursor.execute(self.sql_set_memory)
+            # TODO PRIO4: Do we need to log failed database changes/requests?
             self.tracer.info("sqlstatement: {0}".format(self.sql_set_preload))
             cursor.execute(self.sql_set_preload)
+            # TODO PRIO4: Do we need to log failed database changes/requests?
             cursor.close()
         self.tracer.info("leave postTakeover hook")
         return 0
