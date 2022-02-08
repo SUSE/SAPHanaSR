@@ -94,11 +94,9 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
         method = "postTakeover"
         """Post takeover hook."""
         self.tracer.info("{0}.{1}() method called with rc={2}".format(self.__class__.__name__, method, rc))
-        # TODO: PRIO4: Do we need to differ forced (rc=1) and normal (rc=0) takeover?
+        # TODO PRIO4: How to handle return code (rc) not equal to 0 or 1? And to we need to differ rc==0 and rc==1
         if rc == 0 or rc == 1:
-            # normal takeover succeeded
-            # and
-            # waiting for force takeover
+            # takeover finished with returnocde 0 or 1
             connection = dbapi.connect(
                 key=self.userkey,
                 # address='localhost',port=dbport,user=dbuser,passwort=dbpwd,
@@ -109,11 +107,5 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
             self.tracer.info("sqlstatement: {0}".format(self.sql_set_preload))
             cursor.execute(self.sql_set_preload)
             cursor.close()
-
-            # return 0
-        # elif rc == 2:
-            # error, something went wrong
-            # return 0
-
         self.tracer.info("leave postTakeover hook")
         return 0
