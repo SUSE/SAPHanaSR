@@ -11,6 +11,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     userKey = costoptkey
     execution_order = 1
     costopt_primary_global_allocation_limit = limit-in-mb # optional only for special use-cases
+    costopt_primary_global_allocation_limit = 0  # optional, as of global.ini documentation defines limitation by current resources
 
     [trace]
     ha_dr_saphanasrcostoptmemconfig = info
