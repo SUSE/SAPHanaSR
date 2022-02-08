@@ -10,6 +10,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     path = /usr/share/SAPHanaSR
     userKey = costoptkey
     execution_order = 1
+    costopt_primary_global_allocation_limit = limit-in-mb # optional only for special use-cases
 
     [trace]
     ha_dr_saphanasrcostoptmemconfig = info
