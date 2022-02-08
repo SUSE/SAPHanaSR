@@ -76,31 +76,6 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
                 "provider_description": "postTakeover script to reset parameters to default or set parameters as defined in global.ini.",
                 "provider_version": "1.0"}
 
-    def startup(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter startup hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave startup hook")
-        return 0
-
-    def shutdown(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter shutdown hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave shutdown hook")
-        return 0
-
-    def failover(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter failover hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave failover hook")
-        return 0
-
-    def stonith(self, failingHost, **kwargs):
-        self.tracer.debug("enter stonith hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        # e.g. stonith of params["failed_host"]
-        # e-g- set vIP active
-        self.tracer.info("leave stonith hook")
-        return 0
 
     def preTakeover(self, isForce, **kwargs):
         """Pre takeover hook."""
