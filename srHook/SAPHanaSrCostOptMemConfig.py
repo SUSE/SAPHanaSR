@@ -30,7 +30,7 @@ except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
 # parameter section
-fhSRHookVersion = "0.160.0"
+fhSRHookVersion = "0.160.1"
 userkey_dflt = "saphanasr_<sid>_costopt"
 #
 
@@ -115,22 +115,4 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
             # return 0
 
         self.tracer.info("leave postTakeover hook")
-        return 0
-
-    def srConnectionChanged(self, ParamDict, **kwargs):
-        self.tracer.debug("enter srConnectionChanged hook; %s" % locals())
-
-        # Access to parameters dictionary
-        # hostname = ParamDict['hostname']
-        # port = ParamDict['port']
-        # database = ParamDict['database']
-        # status = ParamDict['status']
-        # databaseStatus = ParamDict['database_status']
-        # systemStatus = ParamDict['system_status']
-        # timestamp = ParamDict['timestamp']
-        # isInSync = ParamDict['is_in_sync']
-        # reason = ParamDict['reason']
-        # siteName = ParamDict['siteName']
-
-        self.tracer.info("leave srConnectionChanged hook")
         return 0
