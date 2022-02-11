@@ -55,6 +55,9 @@ while [ $# -gt 0 ]; do
             pengine=${1#*=}
 	    echo "pengine directory $pengine"
     ;;
+	--sid=* )
+           sids=${1#*=}
+    ;;
         * )
         archive="$1"
     ;;
@@ -102,17 +105,30 @@ cFiles=$(find . -type f -name cib.txt)
 #
 # find all SIDs mentioned in the cib.txt
 #
-sids=$(
-for cF in $cFiles; do
-    while read line
-    do
-        if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
-           if [[ "$line" =~ SID=(...) ]]; then
-               echo "${BASH_REMATCH[1]}"
-           fi
-        fi
-    done < "$cF"
-done | sort -u | tr '[:upper:]' '[:lower:]' )
+if [ -z "$sids" ]; then
+    sids=$(
+    for cF in $cFiles; do
+      cF=$(basename $cF)
+      (
+      case "$cF" in
+        *.txt )
+            cat "$cF"
+          ;;
+       *.xml )
+          crm --cib="$cF" configure save cib$$.txt
+          cat "cib$$.txt"
+          ;;
+      esac
+      ) | while read line
+        do
+            if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
+               if [[ "$line" =~ SID=(...) ]]; then
+                   echo "${BASH_REMATCH[1]}"
+               fi
+            fi
+        done
+    done | sort -u | tr '[:upper:]' '[:lower:]' )
+fi
 
 #
 ####################
