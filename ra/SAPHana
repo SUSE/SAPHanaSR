@@ -2387,6 +2387,16 @@ function saphana_monitor_primary()
                 fi
                 my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
                 my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+                #
+                # first check, if we have a pending HA/DR provider attribute in the interface files
+                #
+                recover_site_attributes_from_file "/hana/shared/$SID/$InstanceName/.crm_attribute.$remSR_name"
+                #
+                # second check, if we have a pending HA/DR provider attribute in the interface files of "other" (cluster external) sites
+                #
+                for rFile in $(ls "/hana/shared/$SID/$InstanceName/.crm_attribute."* 2>/dev/null); do
+                    recover_site_attributes_from_file "$rFile"
+                done
                 case "$my_role" in
                     [12]:P:*:master:*  ) # primary is down or may not anser hdbsql query so drop analyze_hana_sync_status
                         ;;
