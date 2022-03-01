@@ -625,8 +625,8 @@ function sht_init() {
         local hanaVHost=""
         local n1=""
         hanaRemoteHost=""
-        for n1 in $nodelist; do
-              hanaVHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+        for n1 in ${nodelist}; do
+              hanaVHost=$(get_hana_attribute "${n1}" "${ATTR_NAME_HANA_VHOST[@]}")
               for n2 in $MAPPING; do
                  if [ "$hanaVHost" == "$n2" ]; then
                     hanaRemoteHost="$hanaVHost"
@@ -639,17 +639,17 @@ function sht_init() {
         # HANA DID NOT TOLD THE MAPPING, LETS TRY TO USE THE SITE ATTRIBUTES
         local n1=""
         local hanaSite=""
-        for n1 in $nodelist; do
+        for n1 in ${nodelist}; do
             # TODO: PRIO9 - For multi tier with more than 2 chain/star members IN the cluster we might need to be
             #       able to catch more than one remoteHost
             #       currently having more than 2 HANA in a chain/star members IN the cluster is not allowed, the third must be external
             if [ "$NODENAME" != "$n1" ]; then
-                hanaSite=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_SITE[@]})
+                hanaSite=$(get_hana_attribute "${n1}" "${ATTR_NAME_HANA_SITE[@]}")
                 #
                 # only, if a hanaSite is found use that node - this allows majority makers
                 #
                 if [ -n "$hanaSite" ]; then
-                    hanaRemoteHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+                    hanaRemoteHost=$(get_hana_attribute "${n1}" "${ATTR_NAME_HANA_VHOST[@]}")
                     #
                     # only if vhost is NOT set use the nodename instead
                     #
@@ -936,7 +936,7 @@ function sht_stop_clone() {
     else
         hanaPrim="-"
     fi
-    set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]}
+    set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" "${ATTR_NAME_HANA_ROLES[@]}"
     sht_stop; rc=$?
     return $rc
 }
@@ -961,7 +961,7 @@ function sht_monitor_clone() {
         local hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
             | awk -F':' '$1=="  version" {print $2}; ' | tr -d '[:space:]')
         if [[ -n $hana_version ]]; then
-            set_hana_attribute "${NODENAME}" "$hana_version" ${ATTR_NAME_HANA_VERSION[@]}
+            set_hana_attribute "${NODENAME}" "$hana_version" "${ATTR_NAME_HANA_VERSION[@]}"
         fi
 	else
 		super_ocf_log debug "DBG: REGULAR MONITOR"
@@ -990,7 +990,7 @@ function sht_monitor_clone() {
             sht_monitor; rc=$?
         else
             # bsc#1027098 Do not mark HANA instance as failed, if "only" the HANA state could not be detected
-            hanaPrim=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]} | awk -F: '{ print $2}')
+            hanaPrim=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}" | awk -F: '{ print $2}')
             if [ "$hanaPrim" = "" ]; then
                 hanaPrim="-"
             fi
@@ -1006,9 +1006,9 @@ function sht_monitor_clone() {
         | awk '$4 == SID && $6 == SYSNR { print $8 }' SID=$SID SYSNR=$InstanceNr 2>/dev/null )
     # super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     if [ -n "$vName" ]; then
-       set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]}
+       set_hana_attribute "${NODENAME}" "$vName" "${ATTR_NAME_HANA_VHOST[@]}"
     else
-       vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
+       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}")
     fi
     #site=$(get_site_name)
     #### SAP-CALL
@@ -1063,13 +1063,13 @@ function sht_monitor_clone() {
     #fi
     # FH TODO PRIO3: TRY TO GET RID OF "ATTR_NAME_HANA_REMOTEHOST"
     if [ -n "$hanaRemoteHost" ]; then
-        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
+        set_hana_attribute "${NODENAME}" "$hanaRemoteHost" "${ATTR_NAME_HANA_REMOTEHOST[@]}"
     fi
     if $setRole; then
-        set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+        set_hana_attribute "${NODENAME}" "$hanalrc:$hanaPrim:$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     if [ -n "$site" ]; then
-        set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
+        set_hana_attribute "${NODENAME}" "$site" "${ATTR_NAME_HANA_SITE[@]}"
     fi
     case "$hanaPrim" in
         P ) ;;
@@ -1081,7 +1081,7 @@ function sht_monitor_clone() {
         esac
 
         for n in ${nodelist}; do
-           set_hana_attribute ${n} "$srmode" ${ATTR_NAME_HANA_SRMODE[@]}
+           set_hana_attribute "${n}" "$srmode" "${ATTR_NAME_HANA_SRMODE[@]}"
         done
         ;;
     esac
