@@ -10,16 +10,21 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     [ha_dr_provider_SAPHanaSrTakeoverBlocker]
     provider = SAPHanaSrTakeoverBlocker
     path = /usr/share/SAPHanaSR
+    tbsrhook_timeout = 30
     execution_order = 1
 
     [trace]
     ha_dr_saphanasrtakeoverblocker = info
+
+Please make sure to use our supported maintenance procedure together with this HA/DR hook as described in the man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools
+or a manual performed takeover will be blocked.
 
 """
 
 # loading classes and libraries
 import os
 import tempfile
+import time
 
 try:
     from hdb_ha_dr.client import HADRBase
@@ -27,7 +32,9 @@ except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
 # parameter section
-fhSRHookVersion = "0.160.1"
+fhSRHookVersion = "0.161.0"
+TIME_OUT_DFLT = 30
+RC_TOB = 50277
 
 try:
     class SAPHanaSrTakeoverBlocker(HADRBase):
@@ -36,7 +43,14 @@ try:
             # delegate construction to base class
             super(SAPHanaSrTakeoverBlocker, self).__init__(*args, **kwargs)
             method = "init"
-            self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, fhSRHookVersion))
+
+            # read settings from global.ini
+            # read tbsrhook_timeout
+            if self.config.hasKey("tbsrhook_timeout"):
+                self.time_out = self.config.get("tbsrhook_timeout")
+            else:
+                self.time_out = TIME_OUT_DFLT
+            self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, fhSRHookVersion, self.time_out))
 
         def about(self):
             method = "about"
@@ -45,36 +59,6 @@ try:
                     "provider_name": "SAPHanaSrTakeoverBlocker",  # class name
                     "provider_description": "Inform Cluster about SR state",
                     "provider_version": "1.0"}
-
-        def startup(self, hostname, storage_partition, sr_mode, **kwargs):
-            method = "startup"
-            self.tracer.debug("enter startup hook; {0}".format(locals()))
-            self.tracer.debug(self.config.toString())
-            self.tracer.info("leave startup hook")
-            return 0
-
-        def shutdown(self, hostname, storage_partition, sr_mode, **kwargs):
-            method = "shutdown"
-            self.tracer.debug("enter shutdown hook; {0}".format(locals()))
-            self.tracer.debug(self.config.toString())
-            self.tracer.info("leave shutdown hook")
-            return 0
-
-        def failover(self, hostname, storage_partition, sr_mode, **kwargs):
-            method = "failover"
-            self.tracer.debug("enter failover hook; {0}".format(locals()))
-            self.tracer.debug(self.config.toString())
-            self.tracer.info("leave failover hook")
-            return 0
-
-        def stonith(self, failingHost, **kwargs):
-            method = "stonith"
-            self.tracer.debug("enter stonith hook; {0}".format(locals()))
-            self.tracer.debug(self.config.toString())
-            # e.g. stonith of params["failed_host"]
-            # e-g- set vIP active
-            self.tracer.info("leave stonith hook")
-            return 0
 
         def preTakeover(self, isForce, **kwargs):
             """Pre takeover hook."""
@@ -85,69 +69,70 @@ try:
                *    Sudoers does allow the query of the attribute (alternatively add <sid>adm user(s) to hacluster group)
             """
             method = "preTakeover"
+            start_time = time.time()
             self.tracer.info("{0}.{1}() called with isForce={2}".format(self.__class__.__name__, method, isForce))
             if not isForce:
                 # run pre takeover code
                 # run pre-check, return != 0 in case of error => will abort takeover
                 # for test purposes just block all sr_takeover() calls
-                tmpFile = tempfile.NamedTemporaryFile(prefix='SAPHanaSR_', suffix='_TBSRHOOK')
-                cmdOut = tmpFile.name
-                tmpFile.close()
-                mySID = os.environ.get('SAPSYSTEMNAME')
-                mysid = mySID.lower()
-                myAttribute = "hana_{0}_sra".format(mysid)
-                myCMD = "sudo /usr/sbin/crm_attribute -n {0} -G -t reboot -q".format(myAttribute)
-                self.tracer.info("{0}.{1}() myCMD is: {2}, cmdOut is: {3}".format(self.__class__.__name__, method, myCMD, cmdOut))
-                mySRA = ""
-                rc = os.system(myCMD + " > " + cmdOut)
-                if rc != 0:
-                    # srtakeover attribute not found
-                    return 0
+                tmp_file = tempfile.NamedTemporaryFile(prefix='SAPHanaSR_', suffix='_TBSRHOOK')
+                cmd_out = tmp_file.name
+                tmp_file.close()
+                my_sid = os.environ.get('SAPSYSTEMNAME')
+                low_sid = my_sid.lower()
+                my_attribute = "hana_{0}_sra".format(low_sid)
+                my_cmd = "sudo /usr/sbin/crm_attribute -n {0} -G -t reboot -q".format(my_attribute)
+                self.tracer.info("{0}.{1}() my_cmd is: {2}, cmd_out is: {3}".format(self.__class__.__name__, method, my_cmd, cmd_out))
+                my_sra = ""
+                cmdrc = os.system(my_cmd + " > " + cmd_out)
+                if cmdrc != 0:
+                    # sr_takeover attribute not found or other problem
+                    # block takeover
+                    self.tracer.info("{0}.{1}() sr_takeover attribute not found, reject non-cluster action sr_takeover() - rc of my_cmd is {2} - runtime was ---{3} seconds ---".format(self.__class__.__name__, method, os.WEXITSTATUS(cmdrc), (time.time() - start_time)))
+                    return RC_TOB
 
                 # srtakeover attribute found, read values from file
-                mySRAres = ""
-                with open(cmdOut, 'r') as sraFile:
-                    mySRAres = sraFile.read()
-                    sraFile.close()
-                os.remove(cmdOut)
+                my_sra_res = ""
+                try:
+                    with open(cmd_out, 'r') as sra_file:
+                        my_sra_res = sra_file.read()
+                        sra_file.close()
+                except (IOError, OSError) as err:
+                    self.tracer.info("{0}.{1}() reading command output failed - {2}".format(self.__class__.__name__, method, err))
+                os.remove(cmd_out)
 
-                mySRAlines = list(mySRAres)
-                for line in mySRAlines:
-                    mySRA = mySRA + line
-                mySRA = mySRA.rstrip()
-                if mySRA == "T":
-                    self.tracer.info("{0}.{1}() permit cluster action sr_takeover() sra={2}".format(self.__class__.__name__, method, mySRA))
-                    rc = 0
+                my_sra_lines = list(my_sra_res)
+                for line in my_sra_lines:
+                    my_sra = my_sra + line
+                my_sra = my_sra.rstrip()
+                if my_sra == "T":
+                    self.tracer.info("{0}.{1}() permit cluster action sr_takeover() sra={2}".format(self.__class__.__name__, method, my_sra))
+                    sra_rc = 0
                 else:
-                    self.tracer.info("{0}.{1}() reject non-cluster action sr_takeover() sra={2}".format(self.__class__.__name__, method, mySRA))
-                    try:
-                        rc = self.errorCodeClusterConfigured  # take the correct rc from HANA settings
-                    except:  # pylint: disable=bare-except
-                        rc = 50277  # fallback for self.errorCodeClusterConfigured, if HANA does not already provide the rc codes
-                return rc
+                    tout_cmd = "timeout {0}s".format(self.time_out)
+                    maint_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper {0}".format(my_sid.upper())
+                    self.tracer.info("{0}.{1}() maint_cmd is: {2}, tout_cmd is: {3}".format(self.__class__.__name__, method, maint_cmd, tout_cmd))
+                    cmdrc = os.WEXITSTATUS(os.system(tout_cmd + " " + maint_cmd))
+                    if cmdrc == 5:
+                        # multi-state resource in maintenance, permit takeover
+                        self.tracer.info("{0}.{1}() permit cluster action sr_takeover() sra={2}, but found cluster maintenance settings".format(self.__class__.__name__, method, my_sra))
+                        sra_rc = 0
+                    else:
+                        # block takeover because
+                        # timeout or multi-state resource NOT in maintenance
+                        self.tracer.info("{0}.{1}() reject non-cluster action sr_takeover() sra={2}, cmdrc={3}".format(self.__class__.__name__, method, my_sra, cmdrc))
+                        try:
+                            sra_rc = self.errorCodeClusterConfigured  # take the correct rc from HANA settings
+                        except:  # pylint: disable=bare-except
+                            sra_rc = RC_TOB  # fallback for self.errorCodeClusterConfigured, if HANA does not already provide the rc codes
+
+                self.tracer.info("{0}.{1}() leave postTakeover hook - rc is {2} - runtime was ---{3} seconds ---".format(self.__class__.__name__, method, sra_rc, (time.time() - start_time)))
+                return sra_rc
 
             # possible force-takeover only code
             # usually nothing to do here
+            self.tracer.info("{0}.{1}() leave postTakeover hook - runtime was ---{2} seconds ---".format(self.__class__.__name__, method, (time.time() - start_time)))
             return 0
 
-        def postTakeover(self, rc, **kwargs):
-            """Post takeover hook."""
-            method = "postTakeover"
-            self.tracer.info("{0}.{1}() method called with rc={2}".format(self.__class__.__name__, method, rc))
-            if rc == 0:
-                # normal takeover succeeded
-                return 0
-            elif rc == 1:
-                # waiting for force takeover
-                return 0
-            elif rc == 2:
-                # error, something went wrong
-                return 0
-
-        def srConnectionChanged(self, ParamDict, **kwargs):
-            """ This hook should just do nothing for this HA/DR method """
-            method = "srConnectionChanged"
-            self.tracer.info("{0}.{1}() method called".format(self.__class__.__name__, method))
-            return 0
 except NameError as e:
     print("Could not find base class ({0})".format(e))
