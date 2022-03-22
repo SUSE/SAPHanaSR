@@ -118,7 +118,7 @@ install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
-install -m 0555 test/SAPHanaSR-SRHhelper %{buildroot}/usr/sbin
+install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # crm/hawk wizard files
@@ -152,7 +152,7 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 /usr/sbin/SAPHanaSR-showAttr
 /usr/sbin/SAPHanaSR-replay-archive
 /usr/sbin/SAPHanaSR-filter
-/usr/sbin/SAPHanaSR-SRHhelper
+/usr/sbin/SAPHanaSR-hookHelper
 
 # HAWK2 wizard for SLES 12 SP1+
 %if 0%{?sle_version} >= 120100
