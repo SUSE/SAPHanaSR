@@ -1,0 +1,166 @@
+#!/bin/bash
+
+# Helper script for HA/DR hooks
+# currently the only use case is 'checkTakeover' for the TakeOver Hook
+
+# For now we only check the maintenance mode of the multi-state ressource (as descibed in the official supported maintenance procedure described in man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools. 
+
+# Definition of the exit codes returned to the hook scripts:
+# 0 - OK
+#     for the current use case 'checkTakeover' it translate to
+#     - takeover requested by cluster, permit takeover
+# 4 - block takeover (sr_takeover attribute not found or not set to 'T' and
+#     multi-state ressource is NOT in maintenance)
+# 5 - multi-state resource in maintenance, permit takeover
+#
+
+# do not use '1' as return value, so we can distinguish between the return of
+# the helper script and an error of 'sudo'
+#
+
+##### functions
+
+# USAGE
+usage() {
+    echo "USAGE:    $0 --sid=<SID> --case <use case>"
+    echo -e "\\t--sid=<SID>: SID of the SAP system"
+    echo -e "\\t--case <use case>: the use case for the hook helper"
+    echo -e "\\t                   at the moment only 'checkTakeover' is supported"
+    echo -e "\\t--version: show script version"
+    echo -e "\\t--help:    show help"
+    exit 1
+}
+
+# check the exitence and the value of the takeover attribute
+chk_takeover_attr() {
+    sra_attr="hana_${ASID}_sra"
+    sra_value=$(/usr/sbin/crm_attribute -n "$sra_attr" -G -t reboot -q 2>/dev/null); rc=$?
+    if [ "$rc" != 0 ]; then
+        # sr_takeover attribute not found or other problem
+        # block takeover
+        rc=4
+    else
+        # sr_takeover attribute found, check value
+        if [ "$sra_value" == "T" ]; then
+	    # permit cluster action sr_takeover
+            rc=0
+        else
+            # block takeover
+            rc=4
+        fi
+    fi
+    return $rc
+}
+
+# check, if the multi-state resource is in maintenance
+chk_msres_maintenance() {
+    mmaint="false"
+    # get primitives
+    prims="$(xmllint -xpath "//*/primitive[@class='ocf' and @provider='suse']/@id" "$cibtmp" | sed -e 's/id=//g' -e 's/"//g')"
+    for ps in $prims; do
+        sid=$(xmllint -xpath "string(//primitive[@id='$ps']/instance_attributes/nvpair[@name='SID']/@value)" "$cibtmp")
+        if [ "$sid" != "$RSID" ]; then
+            # SID does not match, skipping
+            continue
+        fi
+        rname=$(xmllint -xpath "string(//*[primitive[@id='$ps']]/@id)" "$cibtmp")
+        rtype=$(xmllint -xpath "name(//*[@id='$rname'])" "$cibtmp")
+    
+        # multi-state resource - master/Promoted
+        if [ "$rtype" == "master" ] || [ "$rtype" == "Promoted" ]; then
+             # found multi-state resource name
+             if crm_mon -r1 | grep "$rname" | grep unmanaged >/dev/null 2>&1; then
+                 mmaint="true"
+             fi
+        fi
+    done
+    echo "$mmaint"
+}
+
+# end function definition
+
+##### main
+
+# variables
+version="202203242015"
+exe="$0"
+cmd=$(basename "$exe")
+
+# parse cmdline
+if [ $# -eq 0 ]
+then
+    usage
+elif [ $# -lt 2 ]
+then
+    usage
+else
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --sid=?*)
+            SID=${1#*=}
+            ;;
+        --case)
+            USECASE="$2"
+            shift
+            ;;
+        --version)
+            echo "$cmd version - $version"
+            exit
+            ;;
+        --help|-h|-\?)    usage ;;
+        *)     usage ;;
+        esac
+        shift
+    done
+fi
+if [ -z "$SID" ]; then
+    echo "ERROR: missing SID"
+    usage
+fi
+
+# uppercase SID used for resources
+RSID=${SID^^}
+# lowercase SID used for attributes
+ASID=${SID,,}
+
+case "$USECASE" in
+"checkTakeover")
+    # query CIB and write content to a temporary file to limit the
+    # cluster calls to a minimum.
+    cibtmp=$(mktemp /tmp/SAPHanaSR_SRHhelper.XXXXXX)
+    cibadmin -Q > "$cibtmp"
+    rc=0
+
+    chk_takeover_attr; rc=$?
+    if [ "$rc" == 4 ]; then
+        # sr_takeover attribute not found or not set to 'T'
+	# check, if multi-state ressource is in maintenance
+        maint=$(chk_msres_maintenance)
+        if [ "$maint" == "true" ]; then
+            # permit sr_takeover, because multi-state ressource is
+            # in maintenance
+	    rc=5
+        else
+            # block takeover, because sr_takeover attribute not found or not
+            # set to 'T' and multi-state ressource is NOT in maintenance
+            rc=4
+        fi
+    # else
+        # rc=0, sr_takeover attribute set to 'T'
+        # permit cluster action sr_takeover
+    fi
+    ;;
+#"nextUsecase")
+#    chk_next_case; rc=$?
+#    ;;
+*)
+    wr_info -eh "Unsupported use case. Exiting...."
+    rc=1
+    ;;
+esac
+
+# cleanup
+rm -f "$cibtmp"
+
+# return exit status to the hook
+exit $rc
