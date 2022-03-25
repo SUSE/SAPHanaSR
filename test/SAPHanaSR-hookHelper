@@ -55,25 +55,15 @@ chk_takeover_attr() {
 # check, if the multi-state resource is in maintenance
 chk_msres_maintenance() {
     mmaint="false"
-    # get primitives
-    prims="$(xmllint -xpath "//*/primitive[@class='ocf' and @provider='suse']/@id" "$cibtmp" | sed -e 's/id=//g' -e 's/"//g')"
-    for ps in $prims; do
-        sid=$(xmllint -xpath "string(//primitive[@id='$ps']/instance_attributes/nvpair[@name='SID']/@value)" "$cibtmp")
-        if [ "$sid" != "$RSID" ]; then
-            # SID does not match, skipping
-            continue
+    # get multi-state resource name
+    rname=$(xmllint -xpath "string(//master/primitive[@class='ocf' and @provider='suse']/instance_attributes/nvpair[@name='SID' and @value='$RSID']/../../../@id)" "$cibtmp")
+    if [ -n "$rname" ]; then
+        # check for maintenance
+        mmaint=$(xmllint -xpath "string(//master[@id='$rname']/meta_attributes/nvpair[@name='maintenance']/@value)" "$cibtmp")
+        if [ -z "$mmaint" ]; then
+            mmaint="false"
         fi
-        rname=$(xmllint -xpath "string(//*[primitive[@id='$ps']]/@id)" "$cibtmp")
-        rtype=$(xmllint -xpath "name(//*[@id='$rname'])" "$cibtmp")
-    
-        # multi-state resource - master/Promoted
-        if [ "$rtype" == "master" ] || [ "$rtype" == "Promoted" ]; then
-             # found multi-state resource name
-             if crm_mon -r1 | grep "$rname" | grep unmanaged >/dev/null 2>&1; then
-                 mmaint="true"
-             fi
-        fi
-    done
+    fi
     echo "$mmaint"
 }
 
