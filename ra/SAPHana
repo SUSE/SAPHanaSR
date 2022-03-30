@@ -16,7 +16,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-#               (c) 2015-2019 SUSE LLC
+#               (c) 2015-2022 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -2126,9 +2126,12 @@ function saphana_start_clone() {
     check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         saphana_start_primary; rc=$?
-    else
+    elif [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
         lpa_set_lpt  10 $NODENAME
         saphana_start_secondary; rc=$?
+    else
+        super_ocf_log error "SAP HANA is neither PRIMARY nor SECONDARY cant start this SAP HANA database for SR control."
+        rc="$OCF_NOT_RUNNING"
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
