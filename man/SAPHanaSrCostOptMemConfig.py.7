@@ -1,0 +1,155 @@
+.\" Version: 0.155.0
+.\"
+.TH SAPHanaSrCostOptMemConfig.py 7 "13 Apr 2022" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSrCostOptMemConfig.py \- Provider for SAP HANA srHook method postTakeover().
+.PP
+.\"
+.\" .SH SYNOPSYS
+.\" \fBSAPHanaSR.py\fP
+.\" .PP
+.\"
+.SH DESCRIPTION
+SAPHanaSrCostOptMemConfig.py can be used to provide a script for the SAP HANA
+srHook method postTakeover().
+
+The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
+is called at important points of the host auto-failover and system replication
+takeover processes. These so called hooks can be used for arbitrary operations
+that need to be executed. The method postTakeover() is called after successful
+sr_takeover action.
+
+SAPHanaSrCostOptMemConfig.py executes SQL statements to remove the memory allocation
+limit and switches off HANA column tables pre-load after take-over from primary to
+secondary site in an SAP HANA scale-up cost-optimized scenario.
+
+This hook script needs to be configured and activated on the secondary node.
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+The "HA/DR providers" API accepts the following parameters for the 
+ha_dr_provider_saphanasrcostoptmemconfig section:
+.TP
+\fBprovider = SAPHanaSrCostOptMemConfig\fP
+.TP
+\fBpath = /usr/share/SAPHanaSR\fP
+.TP
+\fBuserKey = <costoptkey>\fP
+.TP
+\fBcostopt_primary_global_allocation_limit = [ 0 | <limit-in-mb> ]\fP
+.TP
+\fBexecution_order = 1\fP
+.PP
+The "HA/DR providers" API accepts the following parameter for the trace section:
+.TP
+\fBha_dr_saphanasrcostoptmemconfig = [ info | debug ]\fP
+.PP
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.PP
+.\"
+.SH EXAMPLES
+.PP
+* Example for entry in SAP HANA global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+.br
+The section ha_dr_provider_saphanasrcostoptmemconfig is needed on the secondary
+site only. The HANA has to be stopped before the files can be edited.
+.PP
+.RS 4
+[ha_dr_provider_saphanasrcostoptmemconfig]
+.br
+provider = SAPHanaSrCostOptMemConfig
+.br
+path = /usr/share/SAPHanaSR
+.br
+userKey = TODO
+.br
+execution_order = 1
+.br
+[trace]
+.br
+ha_dr_saphanasr = info
+.RE
+.PP
+* Example for checking the HANA tracefiles for postTakeover() events. To be executed on HANA secondary site.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+.\" TODO  correct pattern
+~> grep "postTakeover" nameserver_*.trc
+.br
+# exit
+.RE
+.PP
+* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on HANA site.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+.\" TODO correct pattern
+~> grep HADR.*load.*SAPHanaS nameserver_*.trc
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR/SAPHanaSrCostOptMemConfig.py
+ the hook provider, delivered with the RPM
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+ the on-disk representation of HANA global system configuration
+.\" TODO HANA hdbuserstore for costoptkey?
+.\" TODO path to HANA trace file
+.PP
+.\"
+.SH REQUIREMENTS 
+1. SAP HANA 2.0 SPS04 or later provides the HA/DR provider hook method postTakeover().
+.PP
+2. The hook provider needs to be added to the HANA global configuration
+on the secondary site, in memory and on disk (in persistence).
+.PP
+\" TODO 3. TODO HANA hdbuserstore for costoptkey?
+.PP
+4. If the hook provider should be pre-compiled, the particular Python version
+that comes with SAP HANA has to be used.
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
+\fBocf_heartbeat_SAPInstance\fP(7) , \fBpython3\fP(8) ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5df2e766549a405e95de4c5d7f2efc2d.html?locale=en-US
+.PP
+.\"
+.SH AUTHORS
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2022 SUSE LLC
+.br
+SAPHanaSrCostOptMemConfig.py comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
