@@ -3,7 +3,7 @@
 .TH SAPHanaSrTakeoverBlocker.py 7 "15 Apr 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
-SAPHanaSrTakeoverBlocker.py \- Provider for SAP HANA srHook method srConnectionChanged().
+SAPHanaSrTakeoverBlocker.py \- Provider for SAP HANA srHook method preTakeover().
 .PP
 .\"
 .\" .SH SYNOPSYS
@@ -11,19 +11,23 @@ SAPHanaSrTakeoverBlocker.py \- Provider for SAP HANA srHook method srConnectionC
 .\" .PP
 .\"
 .SH DESCRIPTION
-SAPHanaSrTakeoverBlocker.py can be used to provide a script for the SAP HANA srHook method srConnectionChanged().
+SAPHanaSrTakeoverBlocker.py can be used to provide a script for the SAP HANA srHook method preTakeover().
 
 The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
 is called at important points of the host auto-failover and system replication 
 takeover process. These so called hooks can be used for arbitrary operations that
-need to be executed. The method srConnectionChanged() is called on the master
-nameserver as soon as one of the replicating services loses or establishes
-the system replication connection. This method is called only once.
+need to be executed. The method preTakeover() is called before the sr_takeover
+action.
 
-.\"TODO to block sr_takeover if resource is not in maintenance
+SAPHanaSrTakeoverBlocker.py allows manual take-over of the HANA primary if the
+SAP HANA resource (SAPHana or SAPHanaController) is set into maintainance.
+Otherwise the manual take-over is blocked.
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
+
+a. HANA global.ini parameters
+
 The "HA/DR providers" API accepts the following parameters for the 
 ha_dr_provider_saphanasrtakeoverblocker section:
 .TP
@@ -35,12 +39,27 @@ ha_dr_provider_saphanasrtakeoverblocker section:
 .PP
 The "HA/DR providers" API accepts the following parameter for the trace section:
 .TP
-\fBha_dr_saphanasr = [ info | debug ]\fP
+\fBha_dr_saphanasrtakeoverblocker = [ info | debug ]\fP
 .PP
-The SAPHanaController and SAPHana RAs are recognizing the effecting system
-replication status via the following cluster attribute:
+
+b. Linux cluster information base CIB attributes
+ 
+The SAPHanaController and SAPHana RAs are recognizing the pending take-over
+request via the following cluster attribute:
 .TP
-.\" \fBTODO\fP
+\fBsra = [ T | R | - ]\fP
+.PP
+HANA system replication takeover action, indicated by preTakeover()
+.PP
+The node attribute system replication action is se  by the HA/DR provider API
+method preTakeover(). It indicates whether a take-over or registration is
+ongoing. The attribute is not updated if the cluster is not running.
+.br
+T = Take-over on new primary (sr_takeover) ongoing.
+.br
+R = Registration on new secondary (sr_register) ongoing.
+.br
+- = No action pending.
 .PP
 .\"
 .SH RETURN CODES
@@ -87,7 +106,7 @@ execution_order = 1
 .br
 [trace]
 .br
-ha_dr_saphanasr = info
+ha_dr_saphanasrtakeoverblocker = info
 .RE
 .PP
 * Example for checking the system log for srHook setting HANA system replication status in the CIB properties section. To be executed on respective HANA primary site's master nameserver.
@@ -96,14 +115,14 @@ ha_dr_saphanasr = info
 # grep "sudo.*TODO" /var/log/messages
 .RE
 .PP
-* Example for checking the HANA tracefiles for srConnectionChanged() events. To be executed on respective HANA primary site's master nameserver.
+* Example for checking the HANA tracefiles for preTakeover() events. To be executed on respective HANA primary site's master nameserver.
 .PP
 .RS 2
 # su - sleadm
 .br
 ~> cdtrace
 .br
-~> grep SAPHanaTODO.srConnectionChanged.*called nameserver_*.trc
+~> grep SAPHana.*preTakeover.*called nameserver_*.trc
 .br
 ~> grep TODO nameserver_*.trc
 .br
@@ -164,7 +183,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython3\fP(8) ,
 .\" TODO helper script
 .br
-.\" TODO links to SAP
+https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5df2e766549a405e95de4c5d7f2efc2d.html?locale=en-US
 .PP
 .\"
 .SH AUTHORS
