@@ -1,6 +1,6 @@
 .\" Version: 0.155.0
 .\"
-.TH SAPHanaSrCostOptMemConfig.py 7 "13 Apr 2022" "" "SAPHanaSR"
+.TH SAPHanaSrCostOptMemConfig.py 7 "15 Apr 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSrCostOptMemConfig.py \- Provider for SAP HANA srHook method postTakeover().
@@ -20,9 +20,9 @@ takeover processes. These so called hooks can be used for arbitrary operations
 that need to be executed. The method postTakeover() is called after successful
 sr_takeover action.
 
-SAPHanaSrCostOptMemConfig.py executes SQL statements to remove the memory allocation
-limit and switches off HANA column tables pre-load after take-over from primary to
-secondary site in an SAP HANA scale-up cost-optimized scenario.
+SAPHanaSrCostOptMemConfig.py executes SQL statements to remove the memory
+allocation limit and switches off HANA column tables pre-load after take-over
+from primary to secondary site in an SAP HANA scale-up cost-optimized scenario.
 
 This hook script needs to be configured and activated on the secondary node.
 .PP
@@ -32,18 +32,24 @@ The "HA/DR providers" API accepts the following parameters for the
 ha_dr_provider_saphanasrcostoptmemconfig section:
 .TP
 \fBprovider = SAPHanaSrCostOptMemConfig\fP
+Mandatory. Must not be changed.
 .TP
 \fBpath = /usr/share/SAPHanaSR\fP
+Mandatory. Please change only if requested.
 .TP
 \fBcostopt_primary_global_allocation_limit = [ 0 | <limit-in-mb> ]\fP
+Optional. Not set or set to 0 means unlimited.
 .TP
 \fBuserkey = <costoptkey>\fP
+Optional. Default is saphanasr_<SID>_costopt.
 .TP
 \fBexecution_order = 2\fP
+Needs to run after SAPHanaSR.py.
 .PP
 The "HA/DR providers" API accepts the following parameter for the trace section:
 .TP
 \fBha_dr_saphanasrcostoptmemconfig = [ info | debug ]\fP
+Optional. Will be added automatically if not set.
 .PP
 .\"
 .SH RETURN CODES
@@ -57,7 +63,7 @@ Usage, syntax or execution errors.
 .SH EXAMPLES
 .PP
 * Example for entry in SAP HANA global configuration
-/hana/shared/$SID/global/hdb/custom/config/global.ini
+/hana/shared/$SID/global/hdb/custom/config/global.ini .
 .br
 The section ha_dr_provider_saphanasrcostoptmemconfig is needed on the secondary
 site only. Additional settings in sections memorymanager and system_replication on secondary site are needed for the cost-optimised scenario. The example SID is HA1, memory limit is 32000MB in case of running as HANA primary. 
@@ -98,25 +104,54 @@ ha_dr_saphanasrcostoptmemconfig = info
 * Example for checking the HANA tracefiles for postTakeover() events. To be executed on HANA secondary site.
 .PP
 .RS 2
-# su - sleadm
+# su - ha1adm
 .br
 ~> cdtrace
 .br
 .\" TODO  correct pattern
 ~> grep "postTakeover" nameserver_*.trc
-.br
-# exit
 .RE
 .PP
-* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on HANA site.
+* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on HANA secondary site.
 .PP
 .RS 2
-# su - sleadm
+# su - ha1adm
 .br
 ~> cdtrace
 .br
 .\" TODO correct pattern
 ~> grep HADR.*load.*SAPHanaS nameserver_*.trc
+.RE
+.PP
+* Example for creating an HANA database user and add them to <sid>adm´s keystore.
+.br
+That user gets permission to change memory limit and column pre-load.
+The example SID is HA1, lowercase-SID is ha1, instance number is 10,
+TCP port for database access is 31015, database user is costoptkey,
+userkey in keystore is saphanasr_HA1_costopt, final password is SuSE1234.
+The database user has to be created on HANA primary site, the keystore on HANA
+secondary site.
+Please refer to SAP documentation for details on HANA commands.
+.PP
+.RS 2
+# su - ha1adm
+.br
+.\" hanacost1:~> hdbsql -u system -i 10 'create user costoptkey password Suse1234'
+hanacost1:~> hdbsql -u system -i 10 'create user costoptkey password SuSE1234'
+.br
+hanacost1:~> hdbsql -u system -i 10 'grant DATA ADMIN to costoptkey'
+.\" .br
+.\" ~> hdbsql -u costoptkey -i 10 'alter user costoptkey password SuSE1234'
+.br
+hanacost1:~> ssh hanacost2
+.br
+hanacost2:~> hdbuserstore SET saphanasr_HA1_costopt localhost:31015 costoptkey SuSE1234
+.br
+hanacost2:~> hdbuserstore LIST saphanasr_HA1_costopt
+.br
+hanacost2:~> exit
+.br
+hanacost1:~> TODO check password free access
 .RE
 .PP
 .\"
@@ -130,7 +165,7 @@ ha_dr_saphanasrcostoptmemconfig = info
 .\" TODO HANA <sid>adm keystore for costoptkey
 .TP
 /usr/sap/$SID/HDB$nr/$HOST/trace
-path to HANA trace files
+ path to HANA trace files
 .PP
 .\"
 .SH REQUIREMENTS 
@@ -151,7 +186,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBSAPHanaSR\fP(7) ,
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_heartbeat_SAPInstance\fP(7) , \fBpython3\fP(8) ,
 .br
