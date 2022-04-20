@@ -101,7 +101,9 @@ ha_dr_saphanasrcostoptmemconfig = info
  \.\.\.
 .RE
 .PP
-* Example for checking the HANA tracefiles for postTakeover() events. To be executed on HANA secondary site.
+* Example for checking the HANA tracefiles for postTakeover() events.
+.br
+To be executed on HANA secondary site.
 .PP
 .RS 2
 # su - ha1adm
@@ -112,7 +114,9 @@ ha_dr_saphanasrcostoptmemconfig = info
 ~> grep "postTakeover" nameserver_*.trc
 .RE
 .PP
-* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on HANA secondary site.
+* Example for checking the HANA tracefiles for when the hook script has been loaded.
+.br
+To be executed on HANA secondary site.
 .PP
 .RS 2
 # su - ha1adm
@@ -136,12 +140,10 @@ Please refer to SAP documentation for details on HANA commands.
 .RS 2
 # su - ha1adm
 .br
-.\" hanacost1:~> hdbsql -u system -i 10 'create user costoptkey password Suse1234'
 hanacost1:~> hdbsql -u system -i 10 'create user costoptkey password SuSE1234'
 .br
 hanacost1:~> hdbsql -u system -i 10 'grant DATA ADMIN to costoptkey'
-.\" .br
-.\" ~> hdbsql -u costoptkey -i 10 'alter user costoptkey password SuSE1234'
+.\" TODO hdbsql to display user and permission
 .br
 hanacost1:~> ssh hanacost2
 .br
@@ -149,10 +151,20 @@ hanacost2:~> hdbuserstore SET saphanasr_HA1_costopt localhost:31015 costoptkey S
 .br
 hanacost2:~> hdbuserstore LIST saphanasr_HA1_costopt
 .br
-hanacost2:~> exit
-.br
-hanacost1:~> TODO check password free access
+~> exit
 .RE
+.PP
+* Example for checking password-free permission, as needed by the srHook.
+.br
+The example SID is HA1, lowercase-SID is ha1, instance number is 10.
+To be executed on the HANA secondary site.
+.PP
+.RS 2
+# su - ha1adm
+.br
+hanacost2:~> hdbsql -U saphanasr_HA1_costopt -i 10 'ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') UNSET ('system_replication','preload_column_tables') WITH RECONFIGURE' 
+.br
+hanacost2:~> hdbsql -U saphanasr_HA1_costopt -i 10 'ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') SET ('system_replication','preload_column_tables') WITH RECONFIGURE'
 .PP
 .\"
 .SH FILES
