@@ -35,11 +35,11 @@ ha_dr_provider_saphanasrcostoptmemconfig section:
 .TP
 \fBpath = /usr/share/SAPHanaSR\fP
 .TP
-\fBuserKey = <costoptkey>\fP
-.TP
 \fBcostopt_primary_global_allocation_limit = [ 0 | <limit-in-mb> ]\fP
 .TP
-\fBexecution_order = 1\fP
+\fBuserkey = <costoptkey>\fP
+.TP
+\fBexecution_order = 2\fP
 .PP
 The "HA/DR providers" API accepts the following parameter for the trace section:
 .TP
@@ -60,22 +60,39 @@ Usage, syntax or execution errors.
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 .br
 The section ha_dr_provider_saphanasrcostoptmemconfig is needed on the secondary
-site only. The HANA has to be stopped before the files can be edited.
+site only. Additional settings in sections memorymanager and system_replication on secondary site are needed for the cost-optimised scenario. The example SID is HA1, memory limit is 32000MB in case of running as HANA primary. 
+The HANA has to be stopped before the files can be edited.
 .PP
-.RS 4
+.RS 2
+[memorymanager]
+.br
+global_allocation_limit = 24000
+
+.PP
+[system_replication]
+.br
+preload_column_tables = false
+.br
+ \.\.\.
+
+.PP
 [ha_dr_provider_saphanasrcostoptmemconfig]
 .br
 provider = SAPHanaSrCostOptMemConfig
 .br
 path = /usr/share/SAPHanaSR
 .br
-userKey = TODO
+userkey = saphanasr_HA1_costopt
 .br
-execution_order = 1
+costopt_primary_global_allocation_limit = 32000
 .br
+execution_order = 2
+
+.PP
 [trace]
 .br
-ha_dr_saphanasr = info
+ha_dr_saphanasrcostoptmemconfig = info
+ \.\.\.
 .RE
 .PP
 * Example for checking the HANA tracefiles for postTakeover() events. To be executed on HANA secondary site.
@@ -110,8 +127,10 @@ ha_dr_saphanasr = info
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
  the on-disk representation of HANA global system configuration
-.\" TODO HANA hdbuserstore for costoptkey?
-.\" TODO path to HANA trace file
+.\" TODO HANA <sid>adm keystore for costoptkey
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace
+path to HANA trace files
 .PP
 .\"
 .SH REQUIREMENTS 
