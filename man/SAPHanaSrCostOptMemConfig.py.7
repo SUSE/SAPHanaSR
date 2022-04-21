@@ -5,11 +5,6 @@
 .SH NAME
 SAPHanaSrCostOptMemConfig.py \- Provider for SAP HANA srHook method postTakeover().
 .PP
-.\"
-.\" .SH SYNOPSYS
-.\" \fBSAPHanaSR.py\fP
-.\" .PP
-.\"
 .SH DESCRIPTION
 SAPHanaSrCostOptMemConfig.py can be used to provide a script for the SAP HANA
 srHook method postTakeover().
@@ -127,44 +122,24 @@ To be executed on HANA secondary site.
 ~> grep SAPHanaSrCostOptMemConfig.init nameserver_*.trc
 .RE
 .PP
-* Example for creating an HANA database user and add them to <sid>adm´s keystore.
+* Example for adding the HANA database user to <sid>adm´s keystore.
 .br
-That user gets permission to change memory limit and column pre-load.
+The HANA database user SYSTEM has permission to change memory limit and column
+pre-load. For security reasons on production systems always a dedicated user
+with restricted permission needs to be created.
+The keystore for <sid>adm has to be created on secondary site.
 The example SID is HA1, lowercase-SID is ha1, instance number is 10,
-TCP port for database access is 31015, database user is costoptkey,
+TCP port for database access is 31013, database user is SYSTEM,
 userkey in keystore is saphanasr_HA1_costopt, final password is SuSE1234.
-The database user has to be created on HANA primary site, the keystore on HANA
-secondary site.
 Please refer to SAP documentation for details on HANA commands.
 .PP
 .RS 2
 # su - ha1adm
 .br
-hanacost1:~> hdbsql -u system -i 10 'create user costoptkey password SuSE1234'
-.br
-hanacost1:~> hdbsql -u system -i 10 'grant DATA ADMIN to costoptkey'
-.\" TODO hdbsql to display user and permission
-.br
-hanacost1:~> ssh hanacost2
-.br
-hanacost2:~> hdbuserstore SET saphanasr_HA1_costopt localhost:31015 costoptkey SuSE1234
+hanacost2:~> hdbuserstore SET saphanasr_HA1_costopt localhost:31013 SYSTEM SuSE1234
 .br
 hanacost2:~> hdbuserstore LIST saphanasr_HA1_costopt
-.br
-~> exit
 .RE
-.PP
-* Example for checking password-free permission, as needed by the hook script.
-.br
-The example SID is HA1, lowercase-SID is ha1, instance number is 10.
-To be executed on the HANA secondary site.
-.PP
-.RS 2
-# su - ha1adm
-.br
-hanacost2:~> hdbsql -U saphanasr_HA1_costopt -i 10 'ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') UNSET ('system_replication','preload_column_tables') WITH RECONFIGURE' 
-.br
-hanacost2:~> hdbsql -U saphanasr_HA1_costopt -i 10 'ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') SET ('system_replication','preload_column_tables') WITH RECONFIGURE'
 .PP
 .\"
 .SH FILES
@@ -186,7 +161,7 @@ hanacost2:~> hdbsql -U saphanasr_HA1_costopt -i 10 'ALTER SYSTEM ALTER CONFIGURA
 2. The hook provider needs to be added to the HANA global configuration
 on the secondary site, in memory and on disk (in persistence).
 .PP
-3. An HANA database user with permission for changing memory limit and table preload needs to created. This user needs to be added to <sid>adm´s keystore on the secondary site.
+3. An HANA database user with permission for changing memory limit and table preload needs to be added to <sid>adm´s keystore on the secondary site.
 .PP
 4. If the hook provider should be pre-compiled, the particular Python version
 that comes with SAP HANA has to be used.
