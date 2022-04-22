@@ -59,10 +59,16 @@ Usage, syntax or execution errors.
 .PP
 * Example for entry in SAP HANA global configuration
 /hana/shared/$SID/global/hdb/custom/config/global.ini .
-.br
+.PP
 The section ha_dr_provider_saphanasrcostoptmemconfig is needed on the secondary
-site only. Additional settings in sections memorymanager and system_replication on secondary site are needed for the cost-optimised scenario. The example SID is HA1, memory limit is 32000MB in case of running as HANA primary. 
-The HANA has to be stopped before the files can be edited.
+site only. Additional settings in sections memorymanager and system_replication
+on secondary site are needed for the cost-optimised scenario. The example SID is
+HA1, memory limit is 24000MB in case of running as HANA secondary, 32000MB in
+case of running as HANA primary.
+These settings will be changed in case of take-over. So they need to be
+restored in order to recover the original state. See also example recovery
+procedure.
+The HANA has to be stopped before the file can be changed.
 .PP
 .RS 2
 [memorymanager]
@@ -97,7 +103,7 @@ ha_dr_saphanasrcostoptmemconfig = info
 .RE
 .PP
 * Example for checking the HANA tracefiles for postTakeover() events.
-.br
+.PP
 To be executed on HANA secondary site.
 .PP
 .RS 2
@@ -109,7 +115,7 @@ To be executed on HANA secondary site.
 .RE
 .PP
 * Example for checking the HANA tracefiles for when the hook script has been loaded.
-.br
+.PP
 To be executed on HANA secondary site.
 .PP
 .RS 2
@@ -123,14 +129,14 @@ To be executed on HANA secondary site.
 .RE
 .PP
 * Example for adding the HANA database user to <sid>adm´s keystore.
-.br
+.PP
 The HANA database user SYSTEM has permission to change memory limit and column
 pre-load. For security reasons on production systems always a dedicated user
 with restricted permission needs to be created.
 The keystore for <sid>adm has to be created on secondary site.
 The example SID is HA1, lowercase-SID is ha1, instance number is 10,
 TCP port for database access is 31013, database user is SYSTEM,
-userkey in keystore is saphanasr_HA1_costopt, final password is SuSE1234.
+userkey in keystore is saphanasr_HA1_costopt, password is SuSE1234.
 Please refer to SAP documentation for details on HANA commands.
 .PP
 .RS 2
@@ -141,30 +147,46 @@ Please refer to SAP documentation for details on HANA commands.
 ~> hdbuserstore LIST saphanasr_HA1_costopt
 .RE
 .PP
-* Overview on procedure for reverting to normal operation after take-over
-.\" .br
-.\" TODO description
+* Overview on recovery procedure for reverting to normal operation after take-over.
+.PP
+On postTakeover() the hook script changes configuration in memory and in
+persistence. It is neccessary to recover the initial settings on secondary site
+(step 7) before the fully operational state can be re-established (steps 8-11).
+Futher the HANA cluster resource default is AUTOMATED_REGISTER=false. This also
+makes administrative interaction neccessary (steps 1-4).
+If AUTOMATED_REGISTER=true is set, the Linux cluster will do that automatically.
+See manual page ocf_suse_SAPHana(7) for details on cluster resource settings.
+Use exact same site names as known to the Linux cluster. See manual page
+SAPHanaSR_maintenance_examples(7).
+Before doing anything with the cluster, and after something has been done, the
+status of Linux cluster and HANA system replication has to be checked.
+See manual page SAPHanaSR_maintenance_examples(7).
+.\" TODO change global.ini with hdbsql, see test matrix
+.PP
+The procedure at a glance:
 .PP
 .RS 2
-1. set msl_... resource into maintenance
+1. set HANA multi-state resource into maintenance
 .br
-2. site_A: register former primary as new secondary
+2. cleanup HANA primitive resource
 .br
-3. site_A: start new secondary, and wait for SR sync to finish
+3. site_A: register former primary as new secondary
 .br
-4. site_B: stop primary
+4. site_A: start new secondary, and wait for SR sync to finish
 .br
-5. site_A: do sr_takeover on secondary
+5. site_B: stop primary
 .br
-6. site_B: adapt global.ini on stopped former primary
+6. site_A: do sr_takeover on secondary
 .br
-7. site_B: register former primary as new secondary
+7. site_B: adapt global.ini on stopped former primary
 .br
-8. site_B: start new secondary, and wait for SR sync to finish
+8. site_B: register former primary as new secondary
 .br
-9. refresh msl_... resource
+9. site_B: start new secondary, and wait for SR sync to finish
 .br
-10. take msl_... resource out of maintenance
+10. refresh HANA multi-state resource
+.br
+11. take HANA multi-state resource out of maintenance
 .RE
 .PP
 .\"
@@ -175,19 +197,21 @@ Please refer to SAP documentation for details on HANA commands.
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
  the on-disk representation of HANA global system configuration
-.\" TODO HANA <sid>adm keystore for costoptkey
+.\" TODO HANA <sid>adm keystore
 .TP
 /usr/sap/$SID/HDB$nr/$HOST/trace
  path to HANA trace files
 .PP
 .\"
-.SH REQUIREMENTS 
+.SH REQUIREMENTS
+.\" TODO check HANA version
 1. SAP HANA 2.0 SPS04 or later provides the HA/DR provider hook method postTakeover().
 .PP
 2. The hook provider needs to be added to the HANA global configuration
 on the secondary site, in memory and on disk (in persistence).
 .PP
-3. An HANA database user with permission for changing memory limit and table preload needs to be added to <sid>adm´s keystore on the secondary site.
+3. An HANA database user with permission for changing memory limit and table 
+preload needs to be added to <sid>adm´s keystore on the secondary site.
 .PP
 4. If the hook provider should be pre-compiled, the particular Python version
 that comes with SAP HANA has to be used.
@@ -201,7 +225,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
-\fBocf_heartbeat_SAPInstance\fP(7) , \fBpython3\fP(8) ,
+\fBocf_heartbeat_SAPInstance\fP(7) , \fBcrm\fP(8) , \fBpython3\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
 .br
