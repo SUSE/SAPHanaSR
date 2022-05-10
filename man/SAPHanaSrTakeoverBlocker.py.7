@@ -1,0 +1,232 @@
+.\" Version: 0.155.0
+.\"
+.TH SAPHanaSrTakeoverBlocker.py 7 "15 Apr 2022" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSrTakeoverBlocker.py \- Provider for SAP HANA srHook method preTakeover().
+.PP
+.\"
+.\"
+.SH DESCRIPTION
+SAPHanaSrTakeoverBlocker.py can be used to provide a script for the SAP HANA srHook method preTakeover().
+
+The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
+is called at important points of the host auto-failover and system replication 
+takeover process. These so called hooks can be used for arbitrary operations that
+need to be executed. The method preTakeover() is called before the sr_takeover
+action.
+
+SAPHanaSrTakeoverBlocker.py allows manual take-over of the HANA primary if the
+SAP HANA mulit-state resource (managed by SAPHana or SAPHanaController) is set
+into maintainance. Otherwise the manual take-over is blocked.
+
+This hook script needs to be configured and activated on all HANA nodes.
+
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+* The "HA/DR providers" API accepts the following parameters for the 
+ha_dr_provider_saphanasrtakeoverblocker section:
+.TP
+\fB[ha_dr_provider_saphanasrtakeoverblocker]\fP
+.TP
+\fBprovider = SAPHanaSrTakeoverBlocker\fP
+Mandatory. Must not be changed.
+.TP
+\fBpath = [ /usr/share/SAPHanaSR | /usr/share/SAPHanaSR-ScaleOut ]\fP
+Mandatory. Depending on path delivered within RPM package. Please change only if requested.
+.TP
+\fBexecution_order = [ INTEGER ]\fP
+Mandatory. Order might depend on other hook scripts.
+.TP
+\fBtbsrhook_timeout = [ INTEGER ]\fP
+Optional. Default is 30 seconds.
+.PP
+* The "HA/DR providers" API accepts the following parameter for the trace section:
+.TP
+\fB[trace]\fP
+.TP
+\fBha_dr_saphanasrtakeoverblocker = [ info | debug ]\fP
+Optional. Default is info. Will be added automatically, if not set.
+.PP
+* The SAPHanaController and SAPHana RAs are recognizing the pending take-over
+request via the following cluster attributes:
+.TP
+\fBsra = [ T | R | - ]\fP
+.PP
+HANA system replication takeover action, indicated by preTakeover().
+.PP
+The node attribute system replication action is set by the HA/DR provider API
+method preTakeover(). It indicates whether a take-over or registration is
+ongoing. The attribute is not updated if the cluster is not running.
+.br
+T = Take-over on new primary (sr_takeover) ongoing.
+.br
+R = Registration on new secondary (sr_register) ongoing.
+.br
+- = No action pending.
+.PP
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.PP
+.\"
+.SH EXAMPLES
+.PP
+* Example for entry in sudo permissions /etc/sudoers.d/SAPHanaSR
+.PP
+.RS 2
+# SAPHanaSR and SAPHanaSR-ScaleOut need for SAPHanaSrTakeOverBlocker
+.br
+ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper *
+.RE
+.PP
+* Example for looking up the sudo permission for the hook script.
+.br
+All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
+Example SID is HA1.
+.PP
+.RS 2
+# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/sbin/SAPHanaSR-hookHelper" 
+.RE
+.PP
+* Example for entry in SAP HANA scale-up global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+.br
+This file is needed at both sites. The HANA has to be stopped before the files
+can be changed.
+.PP
+.RS 4
+[ha_dr_provider_saphanasrtakeoverblocker]
+.br
+provider = SAPHanaSrTakeoverBlocker
+.br
+path = /usr/share/SAPHanaSR
+.br
+tbsrhook_timeout = 30
+.br
+execution_order = 1
+.br
+[trace]
+.br
+ha_dr_saphanasrtakeoverblocker = info
+.RE
+.PP
+* Example for entry in SAP HANA scale-out global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+.br
+This file is needed at both sites. The HANA has to be stopped before the files
+can be edited.
+.PP
+.RS 4
+[ha_dr_provider_saphanasrtakeoverblocker]
+.br
+provider = SAPHanaSrTakeoverBlocker
+.br
+path = /usr/share/SAPHanaSR-ScaleOut
+.br
+tbsrhook_timeout = 30
+.br
+execution_order = 1
+.br
+[trace]
+.br
+ha_dr_saphanasrtakeoverblocker = info
+.RE
+.PP
+* Example for checking the system log for SAPHanaSrTakeOverBlocker setting HANA system replication status in the CIB properties section. To be executed on respective HANA primary site's master nameserver.
+.PP
+.RS 2
+# grep "sudo.*SAPHanaSR-hookHelper" /var/log/messages
+.RE
+.PP
+* Example for checking the HANA tracefiles for preTakeover() events. To be executed on respective HANA primary site's master nameserver.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+~> grep SAPHana.*preTakeover.*called nameserver_*.trc
+.\" .br
+.\" ~> grep TODO nameserver_*.trc
+.RE
+.PP
+* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on both site's master nameservers.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+~> grep HADR.*load.*SAPHanaS nameserver_*.trc
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR/SAPHanaSrTakeoverBlocker.py , /usr/share/SAPHanaSR-ScaleOut/SAPHanaSrTakeoverBlocker.py
+ the hook provider, delivered with the RPM
+.TP
+/usr/sbin/SAPHanaSR-hookHelper
+ the external script to check and update the CIB attribute
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+ the on-disk representation of HANA global system configuration
+.TP
+/etc/sudoers , /etc/sudoers.d/*
+ the sudo permissions configuration
+.TP
+/usr/sap/$sid/HDB$nr/$host/trace/nameserver_$vhost.3????.???.trc
+ the HANA master nameserver trace file
+.PP
+.\"
+.SH REQUIREMENTS 
+1. SAP HANA 2.0 SPS06 or later provides the HA/DR provider hook method
+preTakeover() with multi-target aware parameters and separate return code
+for Linux HA clusters.
+.PP
+2. The user ${sid}adm needs execution permission as user root for the command 
+TODO. 
+.PP
+3. The hook provider needs to be added to the HANA global configuration,
+in memory and on disk (in persistence).
+.PP
+4. If the hook provider should be pre-compiled, the particular Python version
+that comes with SAP HANA has to be used.
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , 
+\fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBSAPHanaSR-hookHelper\fP(8) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython3\fP(8) ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5df2e766549a405e95de4c5d7f2efc2d.html?locale=en-US
+.PP
+.\"
+.SH AUTHORS
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2022 SUSE LLC
+.br
+SAPHanaSrTakeoverBlocker.py comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
