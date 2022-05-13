@@ -8,7 +8,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License 2 (GPLv2)
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2019 SUSE LLC.
+# Copyright (c) 2017-2022 SUSE LLC.
 #
 ##########################################################################
 #
@@ -74,7 +74,7 @@ done
 #
 #
 if [ -z "$pengine" ]; then
-	echo "pengine is not set"
+	echo "INFO: pengine is not set"
     mkdir -p "${archive}-tmp"
     if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
     if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
@@ -104,7 +104,7 @@ pFilesSorted=$(ls -tr $pFiles)
 #
 cFiles=$(find . -type f -name cib.txt -o -name cib.xml)
 
-echo "#### cFiles=$cFiles ####"
+echo "#### cFiles="$cFiles" ####"
 
 #
 ####################
@@ -114,26 +114,29 @@ echo "#### cFiles=$cFiles ####"
 if [ -z "$sids" ]; then
     sids=$(
     for cF in $cFiles; do
-      cF=$(basename $cF)
+      #cF=$(basename $cF)
       (
       case "$cF" in
         *.txt )
-            cat "$cF"
+            cat "$cF" | while read line
+		do
+		    if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
+		       if [[ "$line" =~ SID=(...) ]]; then
+			   echo "${BASH_REMATCH[1]}"
+		       fi
+		    fi
+		done
           ;;
        *.xml )
-          crm --cib="$cF" configure save cib$$.txt
-          cat "cib$$.txt"
+	  for line in $(xmllint --xpath '//clone/primitive[@type="SAPHanaTopology"]//nvpair[@name="SID"]/@value' "$cF" ); do
+	       if [[ "$line" =~ value=.(...). ]]; then
+		   echo "${BASH_REMATCH[1]}"
+	       fi
+          done
           ;;
       esac
-      ) | while read line
-        do
-            if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
-               if [[ "$line" =~ SID=(...) ]]; then
-                   echo "${BASH_REMATCH[1]}"
-               fi
-            fi
-        done
-    done | sort -u | tr '[:upper:]' '[:lower:]' )
+      )
+    done | tr '[:upper:]' '[:lower:]' | sort -u )
 fi
 
 #
@@ -141,13 +144,7 @@ fi
 #
 # create a tmp directory to extract pengine files
 #
-if [ -z "$pengine" ]; then
-    mkdir -p "${archive}-tmp/tmp"
-    pengine_tmp="${archive}-tmp/tmp"
-else
-    mkdir -p "${pengine}-tmp"
-    pengine_tmp="${pengine}-tmp"
-fi
+mkdir -p "${archive}-tmp/tmp"
 #
 ####################
 # create output directory, if set
@@ -174,21 +171,20 @@ for sid in $sids; do
        cib="${cibBZ2%.bz2}";
        shortCIB="${cib##*/}"
        echo "cib: $cib";
-       cibFile="$pengine_tmp"/"$shortCIB"
-       less -c "$cibBZ2" > "$cibFile";
+       bunzip2 -c "$cibBZ2" > "${archive}-tmp/tmp/$shortCIB";
        case "$format" in
            tables | script )
-               /usr/sbin/SAPHanaSR-showAttr --cib="$cibFile" --sid="$sid" --format="$format";
+               /usr/sbin/SAPHanaSR-showAttr --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format";
                    ;;
            book )
                if [ -n "$outDir" ]; then
                    outOption="--out=$outDir/sapMonitor.$outNr.html"
                    (( outNr ++ ))
                fi
-               /usr/sbin/SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="html2" "$outOption";
+               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="html2" "$outOption";
                    ;;
            txt | ascii | html )
-               /usr/sbin/SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="$format"
+               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format"
                    ;;
        esac
        rm "${archive}-tmp/tmp/$shortCIB" ;
