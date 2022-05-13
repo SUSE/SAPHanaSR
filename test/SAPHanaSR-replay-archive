@@ -28,10 +28,9 @@ bex=$(basename "$exe")
 format="tables";
 outDir="";
 pengine="";
-#
-while [ $# -gt 0 ]; do
-    case "$1" in
-     --help|-h)
+
+function help()
+{
         echo
         echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
         echo "usage:    $bex [--format=script] --pengine=/path/to/pengine-files"
@@ -43,6 +42,18 @@ while [ $# -gt 0 ]; do
         echo " --help		show help."
         echo " --version	show version."
         echo
+}
+
+function assert() 
+{
+        echo "$1"
+	exit 2
+}
+#
+while [ $# -gt 0 ]; do
+    case "$1" in
+     --help|-h)
+	     help;
         exit
     ;;
      --version|-v)
@@ -69,6 +80,12 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+if [ -z "$pengine" -a -z "$archive" ]; then
+	echo "Either archive or pengine path is needed."
+	help
+	exit 2
+fi
+
 #
 ####################
 #
@@ -79,8 +96,9 @@ if [ -z "$pengine" ]; then
     if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
     if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
 else
-	echo "pengine is set"
-        cd $pengine; cd ..
+	echo "INFO: pengine is set"
+	cd $pengine ||  assert "Can not change to directory $pengine" 
+	cd ..
 fi
 #
 ####################
@@ -144,7 +162,13 @@ fi
 #
 # create a tmp directory to extract pengine files
 #
-mkdir -p "${archive}-tmp/tmp"
+if [ -z "$pengine" ]; then
+    mkdir -p "${archive}-tmp/tmp"
+    pengine_tmp="${archive}-tmp/tmp"
+else
+    mkdir -p "${pengine}-tmp"
+    pengine_tmp="${pengine}-tmp"
+fi
 #
 ####################
 # create output directory, if set
@@ -171,20 +195,21 @@ for sid in $sids; do
        cib="${cibBZ2%.bz2}";
        shortCIB="${cib##*/}"
        echo "cib: $cib";
-       bunzip2 -c "$cibBZ2" > "${archive}-tmp/tmp/$shortCIB";
+       cibFile="$pengine_tmp"/"$shortCIB"
+       less -c "$cibBZ2" > "$cibFile";
        case "$format" in
            tables | script )
-               /usr/sbin/SAPHanaSR-showAttr --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format";
+               /usr/sbin/SAPHanaSR-showAttr --cib="$cibFile" --sid="$sid" --format="$format";
                    ;;
            book )
                if [ -n "$outDir" ]; then
                    outOption="--out=$outDir/sapMonitor.$outNr.html"
                    (( outNr ++ ))
                fi
-               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="html2" "$outOption";
+               /usr/sbin/SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="html2" "$outOption";
                    ;;
            txt | ascii | html )
-               /usr/sbin/SAPHanaSR-monitor --cib="${archive}-tmp/tmp/$shortCIB" --sid="$sid" --format="$format"
+               /usr/sbin/SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="$format"
                    ;;
        esac
        rm "${archive}-tmp/tmp/$shortCIB" ;
