@@ -8,7 +8,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License 2 (GPLv2)
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2019 SUSE LLC.
+# Copyright (c) 2017-2022 SUSE LLC.
 #
 ##########################################################################
 #
@@ -28,10 +28,9 @@ bex=$(basename "$exe")
 format="tables";
 outDir="";
 pengine="";
-#
-while [ $# -gt 0 ]; do
-    case "$1" in
-     --help|-h)
+
+function help()
+{
         echo
         echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
         echo "usage:    $bex [--format=script] --pengine=/path/to/pengine-files"
@@ -43,6 +42,18 @@ while [ $# -gt 0 ]; do
         echo " --help		show help."
         echo " --version	show version."
         echo
+}
+
+function assert() 
+{
+        echo "$1"
+	exit 2
+}
+#
+while [ $# -gt 0 ]; do
+    case "$1" in
+     --help|-h)
+	     help;
         exit
     ;;
      --version|-v)
@@ -69,18 +80,25 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+if [ -z "$pengine" -a -z "$archive" ]; then
+	echo "Either archive or pengine path is needed."
+	help
+	exit 2
+fi
+
 #
 ####################
 #
 #
 if [ -z "$pengine" ]; then
-	echo "pengine is not set"
+	echo "INFO: pengine is not set"
     mkdir -p "${archive}-tmp"
     if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
     if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
 else
-	echo "pengine is set"
-        cd $pengine; cd ..
+	echo "INFO: pengine is set"
+	cd $pengine ||  assert "Can not change to directory $pengine" 
+	cd ..
 fi
 #
 ####################
@@ -104,7 +122,7 @@ pFilesSorted=$(ls -tr $pFiles)
 #
 cFiles=$(find . -type f -name cib.txt -o -name cib.xml)
 
-echo "#### cFiles=$cFiles ####"
+echo "#### cFiles="$cFiles" ####"
 
 #
 ####################
@@ -114,26 +132,29 @@ echo "#### cFiles=$cFiles ####"
 if [ -z "$sids" ]; then
     sids=$(
     for cF in $cFiles; do
-      cF=$(basename $cF)
+      #cF=$(basename $cF)
       (
       case "$cF" in
         *.txt )
-            cat "$cF"
+            cat "$cF" | while read line
+		do
+		    if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
+		       if [[ "$line" =~ SID=(...) ]]; then
+			   echo "${BASH_REMATCH[1]}"
+		       fi
+		    fi
+		done
           ;;
        *.xml )
-          crm --cib="$cF" configure save cib$$.txt
-          cat "cib$$.txt"
+	  for line in $(xmllint --xpath '//clone/primitive[@type="SAPHanaTopology"]//nvpair[@name="SID"]/@value' "$cF" ); do
+	       if [[ "$line" =~ value=.(...). ]]; then
+		   echo "${BASH_REMATCH[1]}"
+	       fi
+          done
           ;;
       esac
-      ) | while read line
-        do
-            if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
-               if [[ "$line" =~ SID=(...) ]]; then
-                   echo "${BASH_REMATCH[1]}"
-               fi
-            fi
-        done
-    done | sort -u | tr '[:upper:]' '[:lower:]' )
+      )
+    done | tr '[:upper:]' '[:lower:]' | sort -u )
 fi
 
 #
