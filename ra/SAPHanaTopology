@@ -173,6 +173,15 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
         <shortdesc lang="en">The SAP Instance Number</shortdesc>
         <content type="string" default="" />
     </parameter>
+    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
+        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
+        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
+          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
+          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          of your cluster resources.
+        </longdesc>
+        <content type="string" default="120" />
+    </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
         <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/\$SID/\$InstanceName/exe.
         While InstanceName is the string of "HDB" and \$InstanceNumber for SAP Hana databases.
@@ -490,6 +499,7 @@ function sht_init() {
     InstanceNr=$OCF_RESKEY_InstanceNumber
     myInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-60}"
     super_ocf_log debug "DBG2: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"

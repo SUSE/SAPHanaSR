@@ -252,6 +252,15 @@ The resource agent uses the following four interfaces provided by SAP:
         </longdesc>
         <content type="string" default="7200" />
     </parameter>
+    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
+        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
+        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
+          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
+          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          of your cluster resources.
+        </longdesc>
+        <content type="string" default="60" />
+    </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
         <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
         <shortdesc lang="en">Path of sapstartsrv and sapcontrol</shortdesc>
@@ -754,6 +763,7 @@ function saphana_init() {
     SIDInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
     export SAPSYSTEMNAME=$SID
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-60}"
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
