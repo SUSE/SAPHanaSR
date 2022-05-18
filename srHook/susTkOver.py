@@ -14,7 +14,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     execution_order = 1
 
     [trace]
-    ha_dr_saphanasrtakeoverblocker = info
+    ha_dr_sustkover = info
 
 Please make sure to use our supported maintenance procedure together with this HA/DR hook as described in the man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools
 or a manual performed takeover will be blocked.
