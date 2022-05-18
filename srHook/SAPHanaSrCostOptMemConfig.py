@@ -78,38 +78,46 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
                 "provider_description": "postTakeover script to reset parameters to default or set parameters as defined in global.ini.",
                 "provider_version": "1.0"}
 
-
-    def preTakeover(self, isForce, **kwargs):
-        """Pre takeover hook."""
-        self.tracer.info("%s.preTakeover method called with isForce=%s" % (self.__class__.__name__, isForce))
-        if not isForce:
-            # run pre takeover code
-            # run pre-check, return != 0 in case of error => will abort takeover
-            return 0
-        else:
-            # possible force-takeover only code
-            # usually nothing to do here
-            return 0
-
     def postTakeover(self, rc, **kwargs):
         method = "postTakeover"
         """Post takeover hook."""
         self.tracer.info("{0}.{1}() method called with rc={2}".format(self.__class__.__name__, method, rc))
         # TODO PRIO4: How to handle return code (rc) not equal to 0 or 1? And to we need to differ rc==0 and rc==1
-        if rc == 0 or rc == 1:
+        if rc in (0, 1):
             # takeover finished with returnocde 0 or 1
-            connection = dbapi.connect(
-                key=self.userkey,
-                # address='localhost',port=dbport,user=dbuser,passwort=dbpwd,
-            )
+            # open database connection
+            try:
+                connection = dbapi.connect(
+                    key=self.userkey,
+                    # address='localhost',port=dbport,user=dbuser,passwort=dbpwd,
+                )
+            except Exception as exerr:
+                self.tracer.info("error during database connection - {0}.".format(exerr))
+                return 1
+
+            # check, if database connection was successfull
+            if not connection.isconnected():
+                self.tracer.info("database connection could not be established")
+                return 1
+
             cursor = connection.cursor()
-            # TODO PRIO4: Do we need to log failed database changes/requests?
-            self.tracer.info("sqlstatement: {0}".format(self.sql_set_memory))
-            cursor.execute(self.sql_set_memory)
-            # TODO PRIO4: Do we need to log failed database changes/requests?
-            self.tracer.info("sqlstatement: {0}".format(self.sql_set_preload))
-            cursor.execute(self.sql_set_preload)
-            # TODO PRIO4: Do we need to log failed database changes/requests?
+            try:
+                self.tracer.info("sqlstatement: {0}".format(self.sql_set_memory))
+                cursor.execute(self.sql_set_memory)
+            except Exception as exerr:
+                self.tracer.info("error during execution of the sql statement {0} - {1}.".format(self.sql_set_memory, exerr))
+            try:
+                self.tracer.info("sqlstatement: {0}".format(self.sql_set_preload))
+                cursor.execute(self.sql_set_preload)
+            except Exception as exerr:
+                self.tracer.info("error during execution of the sql statement {0} - {1}.".format(self.sql_set_preload, exerr))
+
+            # commit the changes in the database
+            connection.commit()
+            # close cursor
             cursor.close()
+            # close database connection, disconnect from server
+            connection.close()
+
         self.tracer.info("leave postTakeover hook")
         return 0
