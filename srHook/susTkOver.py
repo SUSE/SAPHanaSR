@@ -4,11 +4,11 @@
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2022 SUSE LLC
 
-SAPHanaSrTakeoverBlocker needs SAP HANA 2.0 SPS4 (2.00.040.00) as minimum version
+susTkOver needs SAP HANA 2.0 SPS4 (2.00.040.00) as minimum version
 
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
-    [ha_dr_provider_SAPHanaSrTakeoverBlocker]
-    provider = SAPHanaSrTakeoverBlocker
+    [ha_dr_provider_susTkOver]
+    provider = susTkOver
     path = /usr/share/SAPHanaSR
     tbsrhook_timeout = 30
     execution_order = 1
@@ -36,11 +36,11 @@ TIME_OUT_DFLT = 30
 RC_TOB = 50277
 
 try:
-    class SAPHanaSrTakeoverBlocker(HADRBase):
+    class susTkOver(HADRBase):
 
         def __init__(self, *args, **kwargs):
             # delegate construction to base class
-            super(SAPHanaSrTakeoverBlocker, self).__init__(*args, **kwargs)
+            super(susTkOver, self).__init__(*args, **kwargs)
             method = "init"
 
             # read settings from global.ini
@@ -55,7 +55,7 @@ try:
             method = "about"
             self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, fhSRHookVersion))
             return {"provider_company": "SUSE",
-                    "provider_name": "SAPHanaSrTakeoverBlocker",  # class name
+                    "provider_name": "susTkOver",  # class name
                     "provider_description": "Inform Cluster about SR state",
                     "provider_version": "1.0"}
 
