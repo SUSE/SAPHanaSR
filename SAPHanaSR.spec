@@ -189,5 +189,6 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-replay-archive.8.gz
+%doc %{_mandir}/man8/SAPHanaSR-hookHelper.8.gz
 
 %changelog
