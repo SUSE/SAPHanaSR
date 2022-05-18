@@ -98,7 +98,7 @@ install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
 
 # HA/DR hook provider
 install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
-install -m 0644 srHook/SAPHanaSrTakeoverBlocker.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
 
