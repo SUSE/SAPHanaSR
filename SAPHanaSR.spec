@@ -181,6 +181,7 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_mandir}/man7/SAPHanaSR_maintenance_examples.7.gz
 %doc %{_mandir}/man7/SAPHanaSR.7.gz
 %doc %{_mandir}/man7/SAPHanaSR.py.7.gz
+%doc %{_mandir}/man7/susTkOver.py.7.gz
 %doc %{_mandir}/man8/SAPHanaSR-filter.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
