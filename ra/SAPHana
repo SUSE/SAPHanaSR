@@ -16,7 +16,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-#               (c) 2015-2019 SUSE LLC
+#               (c) 2015-2022 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -799,6 +799,7 @@ function saphana_init() {
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
     ATTR_NAME_HANA_OPERATION_MODE=("hana_${sid}_op_mode" "forever")
+    ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     #
     # new "central" attributes
     #
@@ -1422,10 +1423,14 @@ function register_hana_secondary()
                hanaOM="--operationMode=$hanaOM"
            fi
            super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"
+           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"; rc=$?
+           set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
        else
            super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
+           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
+           set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
        fi
        # backup_global_and_nameserver
     else
@@ -2177,9 +2182,12 @@ function saphana_start_clone() {
     check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         saphana_start_primary; rc=$?
-    else
+    elif [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
         lpa_set_lpt  10 $NODENAME
         saphana_start_secondary; rc=$?
+    else
+        super_ocf_log error "SAP HANA is neither PRIMARY nor SECONDARY cant start this SAP HANA database for SR control."
+        rc="$OCF_NOT_RUNNING"
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
@@ -2678,7 +2686,9 @@ function saphana_promote_clone() {
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
     # SAP_CALL
+                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
                 HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"
+                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
                 #
                 # now gain check, if we are primary NOW
                 #
