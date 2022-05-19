@@ -1,12 +1,12 @@
 """
 # Copyright:    (c) 2022 SUSE LLC
 
-SAPHanaSrCostOptMemConfig
+susCostOpt
 prepared SQL statements to remove memory allocation limit and the switch-off of the pre-load of column tables after takeover from primary to the secondary site in case of a cost optimized scenario
 
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
-    [ha_dr_provider_SAPHanaSrCostOptMemConfig]
-    provider = SAPHanaSrCostOptMemConfig
+    [ha_dr_provider_susCostOpt]
+    provider = susCostOpt
     path = /usr/share/SAPHanaSR
     userKey = costoptkey
     execution_order = 1
@@ -14,7 +14,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     costopt_primary_global_allocation_limit = 0  # optional, as of global.ini documentation defines limitation by current resources
 
     [trace]
-    ha_dr_saphanasrcostoptmemconfig = info
+    ha_dr_suscostopt = info
 
 The hook needs to be installed on the second node.
 """
@@ -37,11 +37,11 @@ userkey_dflt = "saphanasr_<sid>_costopt"
 #
 
 
-class SAPHanaSrCostOptMemConfig(HADRBase):
+class susCostOpt(HADRBase):
 
     def __init__(self, *args, **kwargs):
         # delegate construction to base class
-        super(SAPHanaSrCostOptMemConfig, self).__init__(*args, **kwargs)
+        super(susCostOpt, self).__init__(*args, **kwargs)
         method = "init"
         mySID = os.environ.get('SAPSYSTEMNAME')
         mysid = mySID.lower()
@@ -74,7 +74,7 @@ class SAPHanaSrCostOptMemConfig(HADRBase):
         method = "about"
         self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, fhSRHookVersion))
         return {"provider_company": "SUSE",
-                "provider_name": "SAPHanaSrCostOptMemConfig",  # class name
+                "provider_name": "susCostOpt",  # class name
                 "provider_description": "postTakeover script to reset parameters to default or set parameters as defined in global.ini.",
                 "provider_version": "1.0"}
 

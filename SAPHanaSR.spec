@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.155.1
+Version:        0.160.1
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -99,8 +99,10 @@ install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
 # HA/DR hook provider
 install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name}/samples
 
 # icons for SAPHanaSR-monitor
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
@@ -182,9 +184,11 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 %doc %{_mandir}/man7/SAPHanaSR.7.gz
 %doc %{_mandir}/man7/SAPHanaSR.py.7.gz
 %doc %{_mandir}/man7/susTkOver.py.7.gz
+%doc %{_mandir}/man7/susCostOpt.py.7.gz
 %doc %{_mandir}/man8/SAPHanaSR-filter.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
 %doc %{_mandir}/man8/SAPHanaSR-replay-archive.8.gz
+%doc %{_mandir}/man8/SAPHanaSR-hookHelper.8.gz
 
 %changelog
