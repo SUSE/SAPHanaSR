@@ -10,7 +10,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     [ha_dr_provider_susTkOver]
     provider = susTkOver
     path = /usr/share/SAPHanaSR
-    tbsrhook_timeout = 30
+    sustkover_timeout = 30
     execution_order = 1
 
     [trace]
@@ -44,9 +44,9 @@ try:
             method = "init"
 
             # read settings from global.ini
-            # read tbsrhook_timeout
-            if self.config.hasKey("tbsrhook_timeout"):
-                self.time_out = self.config.get("tbsrhook_timeout")
+            # read sustkover_timeout
+            if self.config.hasKey("sustkover_timeout"):
+                self.time_out = self.config.get("sustkover_timeout")
             else:
                 self.time_out = TIME_OUT_DFLT
             self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, fhSRHookVersion, self.time_out))
