@@ -173,22 +173,14 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 /srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
 /srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
 %endif
-
+%dir %{_docdir}/%{name}
+%doc %{_docdir}/%{name}/README
+%doc %{_docdir}/%{name}/LICENSE
+%doc %{_mandir}/man7/*
+%doc %{_mandir}/man8/*
 
 %files doc
 %defattr(-,root,root)
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
-%doc %{_mandir}/man7/ocf_suse_SAPHana.7.gz
-%doc %{_mandir}/man7/ocf_suse_SAPHanaTopology.7.gz
-%doc %{_mandir}/man7/SAPHanaSR_maintenance_examples.7.gz
-%doc %{_mandir}/man7/SAPHanaSR.7.gz
-%doc %{_mandir}/man7/SAPHanaSR.py.7.gz
-%doc %{_mandir}/man7/susTkOver.py.7.gz
-%doc %{_mandir}/man7/susCostOpt.py.7.gz
-%doc %{_mandir}/man8/SAPHanaSR-filter.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-replay-archive.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-hookHelper.8.gz
 
 %changelog
