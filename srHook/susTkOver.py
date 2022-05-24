@@ -84,10 +84,21 @@ try:
                     # permit cluster action sr_takeover()
                     self.tracer.info("{0}.{1}() permit cluster action sr_takeover() cmdrc={2}".format(self.__class__.__name__, method, cmdrc))
                     sra_rc = 0
+                elif cmdrc == 6:
+                    # cluster connection not available, permit takeover
+                    self.tracer.info("{0}.{1}() permit non-cluster action sr_takeover() because cluster connection is not available (cmdrc={2})".format(self.__class__.__name__, method, cmdrc))
+                    sra_rc = 0
+                elif cmdrc == 99:
+                    # unknown cluster command error, permit takeover
+                    self.tracer.info("{0}.{1}() permit non-cluster action sr_takeover() because cluster is not working properly (cmdrc={2})".format(self.__class__.__name__, method, cmdrc))
+                    sra_rc = 0
                 elif cmdrc == 5:
                     # multi-state resource in maintenance, permit takeover
                     self.tracer.info("{0}.{1}() permit non-cluster action sr_takeover() because found cluster maintenance settings (cmdrc={2})".format(self.__class__.__name__, method, cmdrc))
                     sra_rc = 0
+                elif cmdrc == 7:
+                    # given SID not configured in the cluster, block takeover
+                    self.tracer.info("{0}.{1}() reject non-cluster action sr_takeover() because related SID is not configured in the cluster - missing resources (cmdrc={2})".format(self.__class__.__name__, method, cmdrc))
                 elif cmdrc == 4:
                     # block takeover
                     # sr_takeover attribute not found or not set to 'T'

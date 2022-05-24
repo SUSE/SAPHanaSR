@@ -6,12 +6,15 @@
 # For now we only check the maintenance mode of the multi-state ressource (as descibed in the official supported maintenance procedure described in man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools.
 
 # Definition of the exit codes returned to the hook scripts:
-# 0 - OK
-#     for the current use case 'checkTakeover' it translate to
-#     - takeover requested by cluster, permit takeover
-# 4 - block takeover (sr_takeover attribute not found or not set to 'T' and
-#     multi-state ressource is NOT in maintenance)
-# 5 - multi-state resource in maintenance, permit takeover
+# for the current use case 'checkTakeover' it translate to
+#  0 - OK
+#    - takeover requested by cluster, permit takeover
+#  4 - block takeover (sr_takeover attribute not found or not set to 'T' and
+#      multi-state ressource is NOT in maintenance)
+#  5 - multi-state resource in maintenance, permit takeover
+#  6 - cluster not available, permit takeover
+#  7 - given SID not configured in the cluster, block takeover
+# 99 - unknown cluster command error, permit takeover
 #
 
 # do not use '1' as return value, so we can distinguish between the return of
@@ -36,9 +39,23 @@ chk_takeover_attr() {
     sra_attr="hana_${ASID}_sra"
     sra_value=$(/usr/sbin/crm_attribute -n "$sra_attr" -G -t reboot -q 2>/dev/null); rc=$?
     if [ "$rc" != 0 ]; then
-        # sr_takeover attribute not found or other problem
-        # block takeover
-        rc=4
+        case "$rc" in
+        102)
+            # ipc connection to cluster (or parts) lost
+            # permit takeover
+            rc=6
+            ;;
+        105)
+            # sr_takeover attribute not found
+            # block takeover
+            rc=4
+            ;;
+        *)
+            # other problem with crm_attribute call
+            # block takeover
+            rc=4
+            ;;
+        esac
     else
         # sr_takeover attribute found, check value
         if [ "$sra_value" == "T" ]; then
@@ -50,6 +67,19 @@ chk_takeover_attr() {
         fi
     fi
     return $rc
+}
+
+# get list of known SIDs from cluster config
+#csids="$(xmllint -xpath "//primitive[@*]/instance_attributes/nvpair[@name='SID']/@value" "$cibtmp" 2>/dev/null | sed -e 's/value=//g' -e 's/"//g')"
+
+# check, if given SID is configured in the cluster
+sid_is_in_cluster() {
+    csid="$(xmllint -xpath "string(//primitive[@*]/instance_attributes/nvpair[@name='SID' and @value='$RSID']/@value)" "$cibtmp" 2>/dev/null)"
+    if [ -s "$csid" ]; then
+        return 1
+    else
+        return 0
+    fi
 }
 
 # check, if the multi-state resource is in maintenance
@@ -125,26 +155,40 @@ case "$USECASE" in
     # query CIB and write content to a temporary file to limit the
     # cluster calls to a minimum.
     cibtmp=$(mktemp /tmp/SAPHanaSR_SRHhelper.XXXXXX)
-    cibadmin -Q > "$cibtmp"
-    rc=0
-
-    chk_takeover_attr; rc=$?
-    if [ "$rc" == 4 ]; then
-        # sr_takeover attribute not found or not set to 'T'
-	# check, if multi-state ressource is in maintenance
-        maint=$(chk_msres_maintenance)
-        if [ "$maint" == "true" ]; then
-            # permit sr_takeover, because multi-state ressource is
-            # in maintenance
-	    rc=5
+    cibadmin -Q > "$cibtmp"; rc=$?
+    if [ "$rc" != 0 ]; then
+        case "$rc" in
+        102)
+            # ipc connection to cluster (or parts) lost
+            # permit takeover
+            rc=6
+            ;;
+        *)
+            rc=99
+            ;;
+        esac
+    else
+        # check, if given SID is configured in the cluster
+        if sid_is_in_cluster; then
+            chk_takeover_attr; rc=$?
+            if [ "$rc" == 4 ]; then
+                # sr_takeover attribute not found or not set to 'T'
+	        # check, if multi-state ressource is in maintenance
+                maint=$(chk_msres_maintenance)
+                if [ "$maint" == "true" ]; then
+                    # permit sr_takeover, because multi-state ressource is
+                    # in maintenance
+	            rc=5
+                else
+                    # block takeover, because sr_takeover attribute not found or not
+                    # set to 'T' and multi-state ressource is NOT in maintenance
+                    rc=4
+                fi
+            fi
         else
-            # block takeover, because sr_takeover attribute not found or not
-            # set to 'T' and multi-state ressource is NOT in maintenance
-            rc=4
+            # given SID not configured in the cluster, block takeover
+            rc=7
         fi
-    # else
-        # rc=0, sr_takeover attribute set to 'T'
-        # permit cluster action sr_takeover
     fi
     ;;
 #"nextUsecase")
