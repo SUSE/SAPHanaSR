@@ -1,6 +1,6 @@
-.\" Version: 0.155.0
+.\" Version: 0.160.0
 .\"
-.TH susTkOver.py 7 "15 Apr 2022" "" "SAPHanaSR"
+.TH susTkOver.py 7 "27 May 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 susTkOver.py \- Provider for SAP HANA srHook method preTakeover().
@@ -12,13 +12,15 @@ susTkOver.py can be used to provide a script for the SAP HANA srHook method preT
 
 The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
 is called at important points of the host auto-failover and system replication 
-takeover process. These so called hooks can be used for arbitrary operations that
-need to be executed. The method preTakeover() is called before the sr_takeover
-action.
+takeover process. These so called hooks can be used for arbitrary operations
+that need to be executed. The method preTakeover() is called before the
+sr_takeover action.
 
-susTkOver.py allows manual take-over of the HANA primary if the
-SAP HANA mulit-state resource (managed by SAPHana or SAPHanaController) is set
-into maintenance. Otherwise the manual take-over is blocked.
+susTkOver.py allows manual take-over of the HANA primary if the SAP HANA
+multi-state resource (managed by SAPHana or SAPHanaController) is set into
+maintenance or the Linux cluster is stopped.
+Otherwise the manual take-over is blocked. See also manual page
+SAPHanaSR_maintenance_examples(7).
 
 This hook script needs to be configured and activated on all HANA nodes.
 
@@ -144,7 +146,7 @@ ha_dr_sustkover = info
 # grep "sudo.*SAPHanaSR-hookHelper" /var/log/messages
 .RE
 .PP
-* Example for checking the HANA tracefiles for preTakeover() events. To be executed on respective HANA primary site's master nameserver.
+* Example for checking the HANA tracefiles for preTakeover() events. To be executed on respective HANA secondary site's master nameserver.
 .PP
 .RS 2
 # su - sleadm
@@ -152,9 +154,19 @@ ha_dr_sustkover = info
 ~> cdtrace
 .br
 ~> grep susTk.*preTakeover.*called nameserver_*.trc
-.\" .br
-.\" ~> grep TODO nameserver_*.trc
 .RE
+.PP
+* Example for for showing intentionally blocked manual take-over attempts. To be executed on respective HANA secondary site's master nameserver.
+.PP
+.RS 2
+# su - sleadm
+.br
+~> cdtrace
+.br
+~> grep susTkOver.preTakeover.*failed.*50277
+.RE
+.PP
+Note: If you see such messages, you may want to read SAPHanaSR_maintenance_examples(7).
 .PP
 * Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on both site's master nameservers.
 .PP
@@ -164,6 +176,8 @@ ha_dr_sustkover = info
 ~> cdtrace
 .br
 ~> grep HADR.*load.*susTkOver nameserver_*.trc
+.br
+~> grep susTkOver.init nameserver_*.trc
 .RE
 .PP
 .\"
@@ -206,11 +220,12 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , 
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 \fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_suse_SAPHanaController\fP(7) , \fBSAPHanaSR-hookHelper\fP(8) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR_maintenance_examples\fP(7) ,
 \fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython3\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
