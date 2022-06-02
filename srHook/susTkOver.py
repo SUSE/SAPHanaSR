@@ -31,7 +31,7 @@ except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
 # parameter section
-fhSRHookVersion = "0.161.0"
+fhSRHookVersion = "0.160.1"
 TIME_OUT_DFLT = 30
 RC_TOB = 50277
 
