@@ -131,7 +131,7 @@ function saphana_usage() {
     The 'status'       operation reports whether the HANA instance is running
     The 'monitor'      operation reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status
     The 'promote'      operation either runs a takeover for a secondary or a just-nothing for a primary
-    The 'demote'       operation neary does nothing and just mark the instance as demoted
+    The 'demote'       operation nearly does nothing and just mark the instance as demoted
     The 'notify'       operation always returns SUCCESS
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
@@ -186,9 +186,9 @@ The resource agent uses the following four interfaces provided by SAP:
    The interface is used to monitor a HANA system. The python script is named landscapeHostConfiguration.py.
    landscapeHostConfiguration.py has some detailed output about HANA system status
    and node roles. For our monitor the overall status is relevant. This overall
-   status is reported by the returncode of the script:
+   status is reported by the return code of the script:
    0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
-   The SAPHana resource agent will interpret returncodes 0 as FATAL, 1 as not-running or ERROR and and returncodes 2+3+4 as RUNNING.
+   The SAPHana resource agent will interpret return codes 0 as FATAL, 1 as not-running or ERROR and and returncodes 2+3+4 as RUNNING.
 
 3. hdbnsutil
    The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
@@ -198,7 +198,7 @@ The resource agent uses the following four interfaces provided by SAP:
 4. hdbsql / systemReplicationStatus
    Interface is SQL query into HANA (system replication table).  The hdbsql query will be replaced by a python script
    "systemReplicationStatus.py" in SAP HANA SPS8 or 9.
-   As long as we need to use hdbsql you need to setup secure store users for linux user root to be able to
+   As long as we need to use hdbsql you need to set up secure store users for linux user root to be able to
    access the SAP HANA database. You need to configure a secure store user key "SAPHANA${SID}SR" which can connect the SAP
    HANA database:
 
@@ -219,9 +219,9 @@ The resource agent uses the following four interfaces provided by SAP:
         <content type="string" default="" />
     </parameter>
     <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
-        <longdesc lang="en">Should cluster/RA prefer to switchover to slave instance instead of restarting master locally? Default="false"
+        <longdesc lang="en">Should cluster/RA prefer to switchover to secondary instance instead of restarting master locally? Default="false"
         no: Do prefer restart locally
-        yes: Do prefer takever to remote site
+        yes: Do prefer takeover to remote site
         never: Do never run a sr_takeover (promote) at the secondary side. THIS VALUE IS CURRENTLY NOT SUPPORTED.
         </longdesc>
         <shortdesc lang="en">Local or site recover preferred?</shortdesc>
@@ -542,7 +542,7 @@ function assert() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local err_msg=$1
     local default_rc=$OCF_NOT_RUNNING
-    # DONE: Check, if we need to destinguish between probe and others
+    # DONE: Check, if we need to distinguish between probe and others
     if ocf_is_probe; then
         default_exit=$OCF_NOT_RUNNING
     else
@@ -716,6 +716,12 @@ function HANA_CALL()
     return $rc;
 }
 
+# function get_SRHOOK
+# fetches or site specific Hook SR status or (as fallback) the polling-attribute
+# params: site-name site-host
+# globals: ATTR_NAME_HANA_GLOB_SRHOOK[@](r), ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# locals:  ATTR[@], my_sync, get_sr_name, get_sr_host
+#
 function get_SRHOOK()
 {
     local -a ATTR my_sync
@@ -1276,7 +1282,7 @@ function analyze_hana_sync_statusSRS()
        # if systemReplicationStatus is ERROR and landscapeHostConfiguration is down then do NOT set SFAIL
        get_hana_landscape_status; lss=$?
        if [ $lss -lt 2 ]; then
-          # keep everithing like it was
+          # keep everything like it was
           rc=2
        else
           # ok we should be careful and set secondary to SFAIL
@@ -1501,7 +1507,7 @@ function saphana_start() {
             super_ocf_log info "ACT: SAPHANA Instance $SID-$InstanceName started: $output"
             rc=$OCF_SUCCESS
         else
-            super_ocf_log err "ACT: SAPHANA Instance $SID-$InstanceName start failed: $output"
+            super_ocf_log err "ACT: SAP HANA: Instance $SID-$InstanceName start failed: $output"
             rc=$OCF_ERR_GENERIC
         fi
     else
@@ -1552,7 +1558,7 @@ function saphana_stop() {
 # function: saphana_validate - validation of (some) variables/parameters
 # params:   -
 # globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
-# saphana_validate: Check the symantic of the input parameters
+# saphana_validate: Check the semantic of the input parameters
 #
 function saphana_validate() {
   super_ocf_log info "FLOW $FUNCNAME ($*)"
@@ -1731,7 +1737,7 @@ function saphana_start_primary()
                         set_crm_master -9000
                         rc="$OCF_SUCCESS"
                     else
-                        super_ocf_log warning "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
+                        super_ocf_log warn "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
                         set_hana_attribute "${NODENAME}" "WAITING4REG" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                         set_crm_master -9000
                         rc="$OCF_NOT_RUNNING"
@@ -1890,7 +1896,7 @@ function saphana_check_local_instance()
     if [ $rc -eq $OCF_SUCCESS ]
     then
       output=$($SAPCONTROL -nr $InstanceNr -function GetProcessList -format script)
-      # we have to parse the output, because the returncode doesn't tell anything about the instance status
+      # we have to parse the output, because the return code doesn't tell anything about the instance status
       for SERVNO in `echo "$output" | grep '^[0-9] ' | cut -d' ' -f1 | sort -u`
       do
         local COLOR=`echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3`
@@ -1975,7 +1981,7 @@ function lpa_set_lpt() {
             rc=0
         fi
     else
-        super_ocf_log info "DEC: lpa_set_lpt ignore to change value for empty node name"
+       super_ocf_log info "DEC: lpa_set_lpt - ignore to change value for empty node name"
     fi
     super_ocf_log info "FLOW $FUNCNAME rc=$rc"
     return $rc
@@ -2344,11 +2350,11 @@ function saphana_monitor_primary()
                     if ocf_is_true "${PreferSiteTakeover}" ; then
                         #
                         # DONE: PRIO1: first check, if remote site is already (and still) in sync
-                        # TODO: PRIO4: Decide if penality (-9000) or weak (5) is better here to cover situations where other clone is gone
+                        # TODO: PRIO4: Decide if penalty (-9000) or weak (5) is better here to cover situations where other clone is gone
                         #
-            # TODO PRIO1: REMOVE remoteNode dependency - get_sync_status
+                        # TODO PRIO1: REMOVE remoteNode dependency - get_sync_status
                         remoteSync=$(get_SRHOOK "$remSR_name" "$remoteNode")
-            # TODO HANDLING OF "NEVER"
+                        # TODO HANDLING OF "NEVER"
                         case "$remoteSync" in
                             SOK | PRIM )
                                  super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
@@ -2493,7 +2499,7 @@ function saphana_monitor_secondary()
         promoted=0;
     else
         case "$promote_attr" in
-            PROMOTED ) # However - PROMOTED should only happen when coming back from maintenece
+            PROMOTED ) # However - PROMOTED should only happen when coming back from maintenance
                 promoted=1;
                 ;;
             DEMOTED )  # This is the status we expect
@@ -2590,7 +2596,7 @@ function saphana_monitor_secondary()
 #
 # function: saphana_monitor_clone - monitor a hana clone instance
 # params:   -
-# globals:  OCF_*, ATTR_NAME_*, HOSTNANE, HANA_STATE_*
+# globals:  OCF_*, ATTR_NAME_*, HOSTNAME, HANA_STATE_*
 # saphana_monitor_clone
 #
 function saphana_monitor_clone() {
