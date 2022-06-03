@@ -30,6 +30,7 @@ try:
         def __init__(self, *args, **kwargs):
             # delegate construction to base class
             super(SAPHanaSR, self).__init__(*args, **kwargs)
+            self.tracer.info("SAPHanaSR init()") 
 
         def about(self):
             return {"provider_company": "SUSE",
@@ -39,7 +40,9 @@ try:
 
         def srConnectionChanged(self, ParamDict, **kwargs):
             """ finally we got the srConnection hook :) """
-            self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged method called with Dict=%s" % (fhSRHookVersion, self.__class__.__name__, ParamDict))
+            method = "srConnectionChanged"
+            self.tracer.info("SAPHanaSR {0} {1}.srConnectionChanged method called with Dict={2}".format(fhSRHookVersion, self.__class__.__name__, ParamDict))
+            # self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged method called with Dict=%s" % (fhSRHookVersion, self.__class__.__name__, ParamDict))
             # myHostname = socket.gethostname()
             # myDatebase = ParamDict["database"]
             mySystemStatus = ParamDict["system_status"]
@@ -48,6 +51,7 @@ try:
             myInSync = ParamDict["is_in_sync"]
             myReason = ParamDict["reason"]
             mySite = ParamDict["siteName"]
+            self.tracer.info("SAPHanaSR {0}.srConnectionChanged mySystemStatus={1} mySID={2} myInSync={3} myReason={4}".format(self.__class__.__name__, mySystemStatus, mySID, myInSync, myReason))
             if mySystemStatus == 15:
                 mySRS = "SOK"
             else:
@@ -63,7 +67,6 @@ try:
             elif mySite == "":
                 myMSG = "### Ignoring bad SR status because of empty site name in call params ###"
                 self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
-                #self.tracer.info("SAPHanaSR (%s) was called with empty site name. Ignoring call." % (self.__class__.__name__))
             else:
                 myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
                 rc = os.system(myCMD)
@@ -88,7 +91,6 @@ try:
                     #      .crm_attribute.stage.<site> is renamed to .crm_attribute.<site>
                     #
                     os.rename("../.crm_attribute.stage.{0}".format(mySite), "../.crm_attribute.{0}".format(mySite))
-            #### self.tracer.info("SAPHanaSR %s \n" % (myMSG))
             return 0
 except NameError as e:
     print("Could not find base class ({0})".format(e))
