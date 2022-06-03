@@ -2231,6 +2231,47 @@ function saphana_stop_clone() {
     return "$rc"
 }
 
+function recover_site_attributes_from_file()
+{
+    local srHookAttributeFile="$1"
+    local site
+
+    if [ -f "$srHookAttributeFile" ]; then
+        #
+        # need to read attribute from the file
+        #
+        # TODO: PRIO0: also allow a=b instead of a = b
+        # TODO: PRIO5: also allow multiple attributes each in an own line - for now only one attribute is needed
+        read srATTR EQS srVALUE <"$srHookAttributeFile"
+        case "$srATTR" in
+            hana_${sid}_site_srHook_* )
+                #
+                # get site name from site attribute-name
+                #
+                site="${srATTR#hana_${sid}_site_srHook_}"
+                super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event ($srATTR=$srVALUE)"
+                #
+                # DONE: PRIO0 - add check for srATTR name here
+                #
+                case "$srVALUE" in
+                SOK )
+                      super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SOK"
+                      set_SRHOOK "$site" "SOK"
+                      ;;
+                SFAIL )
+                      super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SFAIL"
+                      set_SRHOOK "$site" "SFAIL"
+                      ;;
+                * )
+                      super_ocf_log info "DEC: failed recover attributes from file $srHookAttributeFile - Unknown value <<$srVALUE>>"
+                      ;;
+                esac
+                ;;
+        esac
+        rm "$srHookAttributeFile"
+    fi
+}
+
 #
 # function: saphana_monitor_primary - monitor a hana clone instance
 # params:   -
@@ -2422,6 +2463,16 @@ function saphana_monitor_primary()
                 fi
                 my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
                 my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+                #
+                # first check, if we have a pending HA/DR provider attribute in the interface files
+                #
+                recover_site_attributes_from_file "/hana/shared/$SID/$InstanceName/.crm_attribute.$remSR_name"
+                #
+                # second check, if we have a pending HA/DR provider attribute in the interface files of "other" (cluster external) sites
+                #
+                for rFile in $(ls "/hana/shared/$SID/$InstanceName/.crm_attribute."* 2>/dev/null); do
+                    recover_site_attributes_from_file "$rFile"
+                done
                 case "$my_role" in
                     [12]:P:*:master:*  ) # primary is down or may not anser hdbsql query so drop analyze_hana_sync_status
                         ;;
@@ -2487,6 +2538,7 @@ function saphana_monitor_secondary()
     # OK, we are running as HANA SECONDARY
     #
     if ! lpa_get_lpt "${NODENAME}"; then
+        super_ocf_log debug "DBG: 010 * lpa_set_lpt 10 $NODENAME"
         lpa_set_lpt  10 "$NODENAME"
         lpa_push_lpt 10
     fi
