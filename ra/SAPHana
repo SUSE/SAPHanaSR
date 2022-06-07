@@ -603,7 +603,7 @@ scoring_crm_master()
             if grep "$rolePatt" <<< "$roles"; then
                if grep "$syncPatt" <<< "$sync"; then
                   super_ocf_log info "DEC: scoring_crm_master: roles($roles) are matching pattern ($rolePatt)"
-                  super_ocf_log info "DEC: scoring_crm_master: sync($sync) is  matching syncPattern ($syncPatt)"
+                  super_ocf_log info "DEC: scoring_crm_master: sync($sync) is matching syncPattern ($syncPatt)"
                   super_ocf_log info "DEC: scoring_crm_master: set score $score"
                   skip=1
                   myScore=$score
@@ -716,8 +716,9 @@ function HANA_CALL()
     return $rc;
 }
 
+#
 # function get_SRHOOK_plain
-# fetches or site specific Hook SR status ONLY
+# fetches site specific Hook SR status ONLY
 # globals: ATTR_NAME_HANA_SRHOOK[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name
 #
@@ -732,8 +733,9 @@ function get_SRHOOK_plain()
     return 0
 }
 
+#
 # function get_SRHOOK
-# fetches or site specific Hook SR status or (as fallback) the polling-attribute
+# fetches site specific Hook SR status or (as fallback) the polling-attribute
 # params: site-name site-host
 # globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name, get_sr_host
@@ -758,6 +760,7 @@ function get_SRHOOK()
     return 0
 }
 
+#
 # function set_SRHOOK - sets the site specific Hook SR status
 # params: site-name, value
 # globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
@@ -1522,7 +1525,7 @@ function saphana_start() {
         lastSrHook=$(get_SRHOOK_plain "$sr_name")
         if [ -n "$lastSrHook" ]; then
             # reset old srHook attribute to SWAIT as we are starting right now
-            set_hana_attribute "X" "SWAIT" "${ATTR[@]}"
+            set_SRHOOK "$sr_name" "SWAIT"
         fi
         output=$($SAPCONTROL -nr $InstanceNr -function Start)
         rc=$?
@@ -1530,7 +1533,6 @@ function saphana_start() {
     fi
     if [ $rc -eq 0 ]
     then
-        # DONE: PRIO9: something more dynamic ehan 3600 seconds in WaitforStarted
         HANA_ACTION_TIMEOUT=$(get_action_timeout)
         output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted $HANA_ACTION_TIMEOUT 1)
         if [ $? -eq 0 ]
@@ -2822,7 +2824,6 @@ function saphana_promote_clone() {
         if [ -n "$lastSrHook" ]; then
             # TODO: Should we do this also, if the attribute is empty? If set, only if non-PRIM
             # reset old srHook attribute to PRIM as we are starting right now
-            #set_hana_attribute "X" "PRIM" "${ATTR[@]}"
             set_SRHOOK "$sr_name" "PRIM"
         fi
     fi
