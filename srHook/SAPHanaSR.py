@@ -1,15 +1,21 @@
-from hdb_ha_dr.client import HADRBase
+"""
+# SAPHana
+# Author:       Fabian Herschel, 2015
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2015-2016 SUSE Linux GmbH
+# Copyright:    (c) 2017-2022 SUSE LLC
+"""
+try:
+    from hdb_ha_dr.client import HADRBase
+except ImportError as e:
+    print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 import os
 
 """
-Sample for a HA/DR hook provider.
-When using your own code in here, please copy this file to location on
-/hana/shared outside the HANA installation.
-To use this HA/DR hook provide please add the following lines (or
-similar) to your global.ini:
+To use this HA/DR hook provide please add the following lines to your global.ini:
     [ha_dr_provider_SAPHanaSR]
     provider = SAPHanaSR
-    path = /hana/shared/myHooks/SAPHanaSR-ScaleOut
+    path = /usr/share/SAPHanaSR
     execution_order = 1
 
     [trace]
@@ -18,100 +24,73 @@ similar) to your global.ini:
 fhSRHookVersion = "0.162.0"
 
 
-class SAPHanaSR(HADRBase):
+try:
+    class SAPHanaSR(HADRBase):
 
-    def __init__(self, *args, **kwargs):
-        # delegate construction to base class
-        super(SAPHanaSR, self).__init__(*args, **kwargs)
+        def __init__(self, *args, **kwargs):
+            # delegate construction to base class
+            super(SAPHanaSR, self).__init__(*args, **kwargs)
+            self.tracer.info("SAPHanaSR init()") 
 
-    def about(self):
-        return {"provider_company": "SUSE",
-                "provider_name": "SAPHanaSR",  # class name
-                "provider_description": "Inform Cluster about SR state",
-                "provider_version": "1.0"}
+        def about(self):
+            return {"provider_company": "SUSE",
+                    "provider_name": "SAPHanaSR",  # class name
+                    "provider_description": "Inform Cluster about SR state",
+                    "provider_version": "1.0"}
 
-    def startup(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter startup hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave startup hook")
-        return 0
-
-    def shutdown(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter shutdown hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave shutdown hook")
-        return 0
-
-    def failover(self, hostname, storage_partition, sr_mode, **kwargs):
-        self.tracer.debug("enter failover hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        self.tracer.info("leave failover hook")
-        return 0
-
-    def stonith(self, failingHost, **kwargs):
-        self.tracer.debug("enter stonith hook; %s" % locals())
-        self.tracer.debug(self.config.toString())
-        # e.g. stonith of params["failed_host"]
-        # e-g- set vIP active
-        self.tracer.info("leave stonith hook")
-        return 0
-
-    def preTakeover(self, isForce, **kwargs):
-        """Pre takeover hook."""
-        self.tracer.info("%s.preTakeover method called with isForce=%s" % (self.__class__.__name__, isForce))
-        if not isForce:
-            # run pre takeover code
-            # run pre-check, return != 0 in case of error => will abort takeover
-            return 0
-        else:
-            # possible force-takeover only code
-            # usually nothing to do here
-            return 0
-
-    def postTakeover(self, rc, **kwargs):
-        """Post takeover hook."""
-        self.tracer.info("%s.postTakeover method called with rc=%s" % (self.__class__.__name__, rc))
-        if rc == 0:
-            # normal takeover succeeded
-            return 0
-        elif rc == 1:
-            # waiting for force takeover
-            return 0
-        elif rc == 2:
-            # error, something went wrong
-            return 0
-
-    def srConnectionChanged(self, ParamDict, **kwargs):
-        """ finally we got the srConnection hook :) """
-        self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged method called with Dict=%s" % (fhSRHookVersion, self.__class__.__name__, ParamDict))
-        # myHostname = socket.gethostname()
-        # myDatebase = ParamDict["database"]
-        mySystemStatus = ParamDict["system_status"]
-        mySID = os.environ.get('SAPSYSTEMNAME')
-        mysid = mySID.lower()
-        myInSync = ParamDict["is_in_sync"]
-        myReason = ParamDict["reason"]
-        mySite = ParamDict["siteName"]
-        if mySystemStatus == 15:
-            mySRS = "SOK"
-        else:
-            if myInSync:
-                # ignoring the SFAIL, because we are still in sync
-                self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged ignoring bad SR status because of is_in_sync=True (reason=%s)" % (fhSRHookVersion, self.__class__.__name__, myReason))
-                mySRS = ""
+        def srConnectionChanged(self, ParamDict, **kwargs):
+            """ finally we got the srConnection hook :) """
+            method = "srConnectionChanged"
+            self.tracer.info("SAPHanaSR {0} {1}.srConnectionChanged method called with Dict={2}".format(fhSRHookVersion, self.__class__.__name__, ParamDict))
+            # self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged method called with Dict=%s" % (fhSRHookVersion, self.__class__.__name__, ParamDict))
+            # myHostname = socket.gethostname()
+            # myDatebase = ParamDict["database"]
+            mySystemStatus = ParamDict["system_status"]
+            mySID = os.environ.get('SAPSYSTEMNAME')
+            mysid = mySID.lower()
+            myInSync = ParamDict["is_in_sync"]
+            myReason = ParamDict["reason"]
+            mySite = ParamDict["siteName"]
+            self.tracer.info("SAPHanaSR {0}.srConnectionChanged mySystemStatus={1} mySID={2} myInSync={3} myReason={4}".format(self.__class__.__name__, mySystemStatus, mySID, myInSync, myReason))
+            if mySystemStatus == 15:
+                mySRS = "SOK"
             else:
-                mySRS = "SFAIL"
-        if mySRS == "":
-            self.tracer.info("SAPHanaSR (%s) 001" % (self.__class__.__name__))
-            myMSG = "### Ignoring bad SR status because of is_in_sync=True ###"
-            self.tracer.info("SAPHanaSR (%s) 002" % (self.__class__.__name__))
-        elif mySite == "":
-            myMSG = "### Ignoring bad SR status because of empty site name in call params ###"
-            self.tracer.info("SAPHanaSR (%s) was called with empty site name. Ignoring call." % (self.__class__.__name__))
-        else:
-            myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
-            rc = os.system(myCMD)
-            myMSG = "CALLING CRM: <" + myCMD + "> rc=" + str(rc)
-        self.tracer.info("SAPHanaSR %s.srConnectionChanged method called with Dict=%s ###\n" % (self.__class__.__name__, ParamDict))
-        self.tracer.info("SAPHanaSR %s \n" % (myMSG))
-        return 0
+                if myInSync:
+                    # ignoring the SFAIL, because we are still in sync
+                    self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged ignoring bad SR status because of is_in_sync=True (reason=%s)" % (fhSRHookVersion, self.__class__.__name__, myReason))
+                    mySRS = ""
+                else:
+                    mySRS = "SFAIL"
+            if mySRS == "":
+                myMSG = "### Ignoring bad SR status because of is_in_sync=True ###"
+                self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
+            elif mySite == "":
+                myMSG = "### Ignoring bad SR status because of empty site name in call params ###"
+                self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
+            else:
+                myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
+                rc = os.system(myCMD)
+                myMSG = "CALLING CRM: <{0}> rc={1}".format(myCMD, rc)
+                self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
+                if rc != 0:
+                    #
+                    # FALLBACK
+                    # sending attribute to the cluster failed - using fallback method and write status to a file - RA to pick-up the value during next SAPHanaController monitor operation
+                    #
+                    myMSG = "sending attribute to the cluster failed - using local file as fallback"
+                    self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
+                    #
+                    # cwd of hana is /hana/shared/<SID>/HDB00/<hananode> we use a relative path to cwd this gives us a <sid>adm permitted directory
+                    #     however we go one level up (..) to have the file accessible for all SAP HANA swarm nodes
+                    #
+                    fallbackFileObject = open("../.crm_attribute.stage.{0}".format(mySite), "w")
+                    fallbackFileObject.write("hana_{0}_site_srHook_{1} = {2}".format(mysid, mySite, mySRS))
+                    fallbackFileObject.close()
+                    #
+                    # release the stage file to the original name (move is used to be atomic)
+                    #      .crm_attribute.stage.<site> is renamed to .crm_attribute.<site>
+                    #
+                    os.rename("../.crm_attribute.stage.{0}".format(mySite), "../.crm_attribute.{0}".format(mySite))
+            return 0
+except NameError as e:
+    print("Could not find base class ({0})".format(e))

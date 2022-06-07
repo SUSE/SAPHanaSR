@@ -3,15 +3,17 @@
 .TH SAPHanaSR-hookHelper 8 "27 May 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
-SAPHanaSR-hookHelper - TODO
+SAPHanaSR-hookHelper - generic helper for SAP HANA HADR provider hook scripts
 .\"
 .SH SYNOPSIS
 \fBSAPHanaSR-hookHelper\fR [ --help | --version ]
 .br
-\fBSAPHanaSR-hookHelper\fR TODO
+\fBSAPHanaSR-hookHelper\fR --SID=\fISID\fR --case=\fIuse_case\fR
 .\"
 .SH DESCRIPTION
-\fBSAPHanaSR-hookHelper\fR TODO
+\fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HADR provider hook scripts.
+.br
+For now it only checks the maintenance mode of the multi-state resource, as descibed in manual page SAPHanaSR_maitenance_examples(7).
 .\"
 .SH OPTIONS
 .TP 4
@@ -21,22 +23,49 @@ show help
 \fB --version\fR
 show script version
 .TP 4
-TODO
+\fB --case=\fIuse_case\fR
+run this use case
 .TP
 \fB --sid=\fISID\fR
-use SID of the SAP system
+use this SID
 .\"
 .SH SUPPORTED PARAMETERS
+The script supports the following paramters:
 .TP
-TODO
+SAP SID to handle.
+.TP
+Use case. At the moment only 'checkTakeover' is supported. 
 .\"
 .SH RETURN CODES
-.B 0
-Successful program execution.
-.br
-.B >0
-Usage, syntax or execution errors.
-.SH EXAMPLES 
+.TP
+\fB0\fR
+take-over requested by cluster, permit takeover.
+.TP
+\fB1\fR
+not from SAPHanaSR-hookHelper, but passed from called sudo.
+.TP
+\fB4\fR
+sr_takeover attribute not found or not set to 'T' and multi-state resource is NOT in maintenance, block take-over.
+.TP
+\fB5\fR
+multi-state resource in maintenance, permit take-over.
+.TP
+\fB6\fR
+cluster not available, permit take-over.
+.TP
+\fB7\fR
+given SID not configured in the cluster, block take-over.
+.TP
+\fB99\fR
+unknown cluster command error, permit take-over.
+.\"
+.SH EXAMPLES
+* Example for checking the system log for when SAPHanaSR-hookHelper has been called:
+.PP
+.RS 4 
+# grep sudo.*SAPHanaSR-hookHelper /var/log/messages
+.RE
+.PP
 .\"
 .SH FILES
 .TP 4
@@ -44,6 +73,10 @@ Usage, syntax or execution errors.
 the program itself
 .TP 4
 /usr/share/SAPHanaSR/susTkOver.py
+a calling HADR provider hook script
+.TP 4
+/tmp/SAPHanaSR_SRHhelper.XXXXXX
+temporary file, for internal use only
 .TP 4
 /etc/sudoers, /etc/sudoers.d/SAPHanaSR
 the sudo permissions configuration
