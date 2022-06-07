@@ -716,10 +716,26 @@ function HANA_CALL()
     return $rc;
 }
 
+# function get_SRHOOK_plain
+# fetches or site specific Hook SR status ONLY
+# globals: ATTR_NAME_HANA_SRHOOK[@](r)
+# locals:  ATTR[@], my_sync, get_sr_name
+#
+function get_SRHOOK_plain()
+{
+    local -a ATTR my_sync
+    local get_sr_name="$1"
+    ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
+    my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
+    super_ocf_log info "DEC: ${ATTR[0]}=$my_sync"
+    echo "$my_sync"
+    return 0
+}
+
 # function get_SRHOOK
 # fetches or site specific Hook SR status or (as fallback) the polling-attribute
 # params: site-name site-host
-# globals: ATTR_NAME_HANA_GLOB_SRHOOK[@](r), ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name, get_sr_host
 #
 function get_SRHOOK()
@@ -753,7 +769,7 @@ function set_SRHOOK()
     local -a ATTR my_sync old_sync
     local get_sr_name="$1"
     local value="$2"
-    ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$get_sr_name"
+    ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
     set_hana_attribute "X" "$value" "${ATTR[@]}"
     return 0
 }
@@ -1503,8 +1519,7 @@ function saphana_start() {
     # DONE: ASK: PRIO5: For SCALE-OUT - do we need to use another call like StartSystem? Or better to use the HDB command?
     #
     if [ $rc -eq $OCF_SUCCESS ]; then
-        ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$sr_name"
-        lastSrHook=$(get_hana_attribute  "X" "${ATTR[@]}")
+        lastSrHook=$(get_SRHOOK_plain "$sr_name")
         if [ -n "$lastSrHook" ]; then
             # reset old srHook attribute to SWAIT as we are starting right now
             set_hana_attribute "X" "SWAIT" "${ATTR[@]}"
@@ -2803,11 +2818,12 @@ function saphana_promote_clone() {
   fi
     local lastSrHook
     if [ $rc -eq $OCF_SUCCESS ]; then
-        ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$sr_name"
-        lastSrHook=$(get_hana_attribute  "X" "${ATTR[@]}")
+        lastSrHook=$(get_SRHOOK_plain "$sr_name")
         if [ -n "$lastSrHook" ]; then
+            # TODO: Should we do this also, if the attribute is empty? If set, only if non-PRIM
             # reset old srHook attribute to PRIM as we are starting right now
-            set_hana_attribute "X" "PRIM" "${ATTR[@]}"
+            #set_hana_attribute "X" "PRIM" "${ATTR[@]}"
+            set_SRHOOK "$sr_name" "PRIM"
         fi
     fi
   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
