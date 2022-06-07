@@ -2753,69 +2753,69 @@ function saphana_monitor_clone() {
 #    In a multi-state configuration get Master being the primary OR by running hana takeover
 #
 function saphana_promote_clone() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
-  local rc="$OCF_SUCCESS";
-  local hana_sync;
-  local primary_status;
-  #
-  # first check, if we WILL be PRIMARY (checking HANA status)
-  #
-  set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-  check_for_primary; primary_status=$?
-  #
-  if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-     #
-     # as we are already planned to be PRIMARY we only mark the node as PROMOTED
-     #
-     super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
-     rc=$OCF_SUCCESS;
-  else
-     if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    local rc="$OCF_SUCCESS";
+    local hana_sync;
+    local primary_status;
+    #
+    # first check, if we WILL be PRIMARY (checking HANA status)
+    #
+    set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+    check_for_primary; primary_status=$?
+    #
+    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         #
-        # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
-        # promote on the replica side...
+        # as we are already planned to be PRIMARY we only mark the node as PROMOTED
         #
-        hana_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
-        case "$hana_sync" in
-             SOK )
-                super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
-                LPTloc=$(date '+%s')
-                # lpa_set_lpt 20 $remoteNode
-                lpa_set_lpt $LPTloc "$NODENAME"
-                lpa_push_lpt $LPTloc
-    # TODO: Get rid of the su by using a new interface:
-    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_takeover ...
-    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
-    # SAP_CALL
-                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
-                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-                HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"
-                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-                #
-                # now gain check, if we are primary NOW
-                #
-                # TODO: PRIO3: check, if we need to destinguish between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-                #
-                if check_for_primary; then
-                    rc=$OCF_SUCCESS;
-                else
-                    rc=$OCF_FAILED_MASTER
-                fi
-                ;;
-             * )
-                super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
-                rc=$OCF_ERR_GENERIC
-                ;;
-        esac
-     else
-        #
-        # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
-        # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct
-        # Let next monitor find, if that HANA instance is available or not
-        rc="$OCF_SUCCESS";
-     fi
-  fi
+        super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
+        rc=$OCF_SUCCESS;
+    else
+        if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+            #
+            # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
+            # promote on the replica side...
+            #
+            hana_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
+            case "$hana_sync" in
+                SOK )
+                    super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
+                    LPTloc=$(date '+%s')
+                    # lpa_set_lpt 20 $remoteNode
+                    lpa_set_lpt $LPTloc "$NODENAME"
+                    lpa_push_lpt $LPTloc
+                    # TODO: Get rid of the su by using a new interface:
+                    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_takeover ...
+                    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+                    # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
+                    # SAP_CALL
+                    set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
+                    set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                    HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"
+                    set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+                    #
+                    # now gain check, if we are primary NOW
+                    #
+                    # TODO: PRIO3: check, if we need to destinguish between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+                    #
+                    if check_for_primary; then
+                        rc=$OCF_SUCCESS;
+                    else
+                        rc=$OCF_FAILED_MASTER
+                    fi
+                    ;;
+                * )
+                    super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
+                    rc=$OCF_ERR_GENERIC
+                    ;;
+            esac
+        else
+            #
+            # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
+            # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct
+            # Let next monitor find, if that HANA instance is available or not
+            rc="$OCF_SUCCESS";
+        fi
+    fi
     local lastSrHook
     if [ $rc -eq $OCF_SUCCESS ]; then
         lastSrHook=$(get_SRHOOK_plain "$sr_name")
@@ -2826,8 +2826,8 @@ function saphana_promote_clone() {
             set_SRHOOK "$sr_name" "PRIM"
         fi
     fi
-  super_ocf_log info "FLOW $FUNCNAME rc=$rc"
-  return $rc
+    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    return $rc
 }
 
 #
