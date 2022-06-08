@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.155.1
+Version:        0.160.1
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -98,9 +98,11 @@ install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
 
 # HA/DR hook provider
 install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
-install -m 0644 srHook/SAPHanaSrTakeoverBlocker.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name}/samples
 
 # icons for SAPHanaSR-monitor
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
@@ -118,6 +120,7 @@ install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
+install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # crm/hawk wizard files
@@ -151,6 +154,7 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 /usr/sbin/SAPHanaSR-showAttr
 /usr/sbin/SAPHanaSR-replay-archive
 /usr/sbin/SAPHanaSR-filter
+/usr/sbin/SAPHanaSR-hookHelper
 
 # HAWK2 wizard for SLES 12 SP1+
 %if 0%{?sle_version} >= 120100
@@ -169,19 +173,14 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 /srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
 /srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
 %endif
-
+%dir %{_docdir}/%{name}
+%doc %{_docdir}/%{name}/README
+%doc %{_docdir}/%{name}/LICENSE
+%doc %{_mandir}/man7/*
+%doc %{_mandir}/man8/*
 
 %files doc
 %defattr(-,root,root)
 %doc %{_docdir}/%{name}/SAPHanaSR-Setup-Guide.pdf
-%doc %{_mandir}/man7/ocf_suse_SAPHana.7.gz
-%doc %{_mandir}/man7/ocf_suse_SAPHanaTopology.7.gz
-%doc %{_mandir}/man7/SAPHanaSR_maintenance_examples.7.gz
-%doc %{_mandir}/man7/SAPHanaSR.7.gz
-%doc %{_mandir}/man7/SAPHanaSR.py.7.gz
-%doc %{_mandir}/man8/SAPHanaSR-filter.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-monitor.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-showAttr.8.gz
-%doc %{_mandir}/man8/SAPHanaSR-replay-archive.8.gz
 
 %changelog

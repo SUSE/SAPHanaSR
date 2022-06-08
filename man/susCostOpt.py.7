@@ -1,0 +1,246 @@
+.\" Version: 0.160.1
+.\"
+.TH susCostOpt.py 7 "27 May 2022" "" "SAPHanaSR"
+.\"
+.SH NAME
+susCostOpt.py \- Provider for SAP HANA srHook method postTakeover().
+.PP
+.SH DESCRIPTION
+susCostOpt.py can be used to provide a script for the SAP HANA
+srHook method postTakeover().
+
+The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
+is called at important points of the host auto-failover and system replication
+takeover processes. These so called hooks can be used for arbitrary operations
+that need to be executed. The method postTakeover() is called after successful
+sr_takeover action.
+
+susCostOpt.py executes SQL statements to remove the memory
+allocation limit and switches off HANA column table preload after take-over
+from primary to secondary site in an SAP HANA scale-up cost-optimized scenario.
+
+This hook script needs to be configured and activated on the secondary node.
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+The "HA/DR providers" API accepts the following parameters for the 
+ha_dr_provider_suscostopt section:
+.TP
+\fBprovider = susCostOpt\fP
+Mandatory. Must not be changed.
+.TP
+\fBpath = /usr/share/SAPHanaSR\fP
+Mandatory. Please change only if requested.
+.TP
+\fBcostopt_primary_global_allocation_limit = [ 0 | <limit-in-mb> ]\fP
+Optional. Not set or set to 0 means unlimited.
+.TP
+\fBuserkey = <costoptkey>\fP
+Optional. Default is saphanasr_<SID>_costopt.
+.TP
+\fBexecution_order = 2\fP
+Mandatory. Needs to run after SAPHanaSR.py.
+.PP
+The "HA/DR providers" API accepts the following parameter for the trace section:
+.TP
+\fBha_dr_suscostopt = [ info | debug ]\fP
+Optional. Will be added automatically if not set.
+.PP
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.PP
+.\"
+.SH EXAMPLES
+.PP
+* Example for entry in SAP HANA global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini .
+.PP
+The section ha_dr_provider_suscostopt is needed on the secondary
+site only. Additional settings in sections memorymanager and system_replication
+on secondary site are needed for the cost-optimised scenario. The example SID is
+HA1, memory limit is 24000MB in case of running as HANA secondary, 32000MB in
+case of running as HANA primary.
+These settings will be changed in case of take-over. So they need to be
+restored in order to recover the original state. See also example recovery
+procedure.
+The HANA has to be stopped before the file can be changed.
+.PP
+.RS 2
+[memorymanager]
+.br
+global_allocation_limit = 24000
+
+.PP
+[system_replication]
+.br
+preload_column_tables = false
+.br
+ \.\.\.
+
+.PP
+[ha_dr_provider_suscostopt]
+.br
+provider = susCostOpt
+.br
+path = /usr/share/SAPHanaSR
+.br
+userkey = saphanasr_HA1_costopt
+.br
+costopt_primary_global_allocation_limit = 32000
+.br
+execution_order = 2
+
+.PP
+[trace]
+.br
+ha_dr_suscostopt = info
+ \.\.\.
+.RE
+.PP
+* Example for checking the HANA tracefiles for postTakeover() events.
+.PP
+To be executed on HANA secondary site.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> grep susCostOpt.*postTakeover nameserver_*.trc
+.RE
+.PP
+* Example for checking the HANA tracefiles for when the hook script has been loaded.
+.PP
+To be executed on HANA secondary site.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> grep HADR.*load.*susCostOpt nameserver_*.trc
+.br
+~> grep susCostOpt.init nameserver_*.trc
+.RE
+.PP
+* Example for adding the HANA database user to <sid>adm´s keystore.
+.PP
+The HANA database user SYSTEM has permission to change memory limit and column
+pre-load. For security reasons on production systems always a dedicated user
+with restricted permission needs to be created.
+The keystore for <sid>adm has to be created on secondary site.
+The example SID is HA1, lowercase-SID is ha1, instance number is 10,
+TCP port for database access is 31013, database user is SYSTEM,
+userkey in keystore is saphanasr_HA1_costopt, password is SuSE1234.
+Please refer to SAP documentation for details on HANA commands.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbuserstore SET saphanasr_HA1_costopt localhost:31013 SYSTEM SuSE1234
+.br
+~> hdbuserstore LIST saphanasr_HA1_costopt
+.RE
+.PP
+* Overview on recovery procedure for reverting to normal operation after take-over.
+.PP
+On postTakeover() the hook script changes configuration in memory and in
+persistence. It is neccessary to recover the initial settings on secondary site
+(step 7) before the fully operational state can be re-established (steps 8-11).
+Futher the HANA cluster resource default is AUTOMATED_REGISTER=false. This also
+makes administrative interaction neccessary (steps 1-4).
+If AUTOMATED_REGISTER=true is set, the Linux cluster will do that automatically.
+See manual page ocf_suse_SAPHana(7) for details on cluster resource settings.
+Use exact same site names as known to the Linux cluster. See manual page
+SAPHanaSR_maintenance_examples(7).
+Before doing anything with the cluster, and after something has been done, the
+status of Linux cluster and HANA system replication has to be checked.
+See manual page SAPHanaSR_maintenance_examples(7).
+.\" TODO change global.ini with hdbsql, see test matrix
+.PP
+The procedure at a glance:
+.PP
+.RS 2
+1. set HANA multi-state resource into maintenance
+.br
+2. cleanup HANA primitive resource
+.br
+3. site_A: register former primary as new secondary
+.br
+4. site_A: start new secondary, and wait for SR sync to finish
+.br
+5. site_B: stop primary
+.br
+6. site_A: do sr_takeover on secondary
+.br
+7. site_B: adapt global.ini on stopped former primary
+.br
+8. site_B: register former primary as new secondary
+.br
+9. site_B: start new secondary, and wait for SR sync to finish
+.br
+10. refresh HANA multi-state resource
+.br
+11. take HANA multi-state resource out of maintenance
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR/susCostOpt.py
+ the hook provider, delivered with the RPM
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+ the on-disk representation of HANA global system configuration
+.\" TODO HANA <sid>adm keystore
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace
+ path to HANA trace files
+.PP
+.\"
+.SH REQUIREMENTS
+.\" TODO check HANA version
+1. SAP HANA 2.0 SPS04 or later provides the HA/DR provider hook method postTakeover().
+.PP
+2. The hook provider needs to be added to the HANA global configuration
+on the secondary site, in memory and on disk (in persistence).
+.PP
+3. An HANA database user with permission for changing memory limit and table 
+preload needs to be added to <sid>adm´s keystore on the secondary site.
+.PP
+4. If the hook provider should be pre-compiled, the particular Python version
+that comes with SAP HANA has to be used.
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR.py\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
+\fBocf_heartbeat_SAPInstance\fP(7) , \fBcrm\fP(8) , \fBpython3\fP(8) ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5df2e766549a405e95de4c5d7f2efc2d.html?locale=en-US
+.PP
+.\"
+.SH AUTHORS
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2022 SUSE LLC
+.br
+susCostOpt.py comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
