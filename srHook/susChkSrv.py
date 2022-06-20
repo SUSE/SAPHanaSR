@@ -26,9 +26,11 @@ try:
 except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
+# hook section
+SRHookName="susChkSrv"
+SRHookVersion = "0.0.3"
 # parameter section
-fhSRHookVersion = "0.0.1"
-// TIME_OUT_DFLT = 30
+TIME_OUT_DFLT = 30
 
 try:
     class susChkSrv(HADRBase):
@@ -40,20 +42,41 @@ try:
 
             # read settings from global.ini
             # read sustkover_timeout
-            if self.config.hasKey("sustkover_timeout"):
-                self.time_out = self.config.get("sustkover_timeout")
+            if self.config.hasKey("suschksrv_timeout"):
+                self.time_out = self.config.get("suschksrv_timeout")
             else:
                 self.time_out = TIME_OUT_DFLT
-            self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, fhSRHookVersion, self.time_out))
+            self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, SRHookVersion, self.time_out))
 
         def about(self):
             method = "about"
-            self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, fhSRHookVersion))
+            self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, SRHookVersion))
             return {"provider_company": "SUSE",
                     "provider_name": "susChkSrv",  # class name
                     "provider_description": "Process service status changed events",
                     "provider_version": "1.0"}
 
+        def srServiceStateChanged(self, ParamDict, **kwargs):
+            method="srServiceStateChanged"
+            mySID = os.environ.get('SAPSYSTEMNAME')
+            self.tracer.info("{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
+            self.tracer.info("{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
+            self.tracer.info("{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
+            # extract the 'central' values from the dictionary
+            hostname = ParamDict['hostname']
+            service = ParamDict['service_name']
+            port = ParamDict['service_port']
+            status = ParamDict['service_status']
+            previousStatus = ParamDict['service_previous_status']
+            timestamp = ParamDict['timestamp']
+            daemonStatus = ParamDict['daemon_status']
+            databaseId = ParamDict['database_id']
+            databaseName = ParamDict['database_name']
+            databaseStatus = ParamDict['database_status']
+
+            # log service_name, service_port, service_status, service_previous_status,    database_id, database_name, database_status,    daemon_status
+            self.tracer.info("srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} deam:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus ))
+            return 0
 
 except NameError as e:
     print("Could not find base class ({0})".format(e))
