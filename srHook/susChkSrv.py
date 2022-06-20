@@ -30,7 +30,7 @@ except ImportError as e:
 SRHookName="susChkSrv"
 SRHookVersion = "0.0.1"
 # parameter section
-# TIME_OUT_DFLT = 30
+TIME_OUT_DFLT = 30
 
 try:
     class susChkSrv(HADRBase):
@@ -42,8 +42,8 @@ try:
 
             # read settings from global.ini
             # read sustkover_timeout
-            if self.config.hasKey("sustkover_timeout"):
-                self.time_out = self.config.get("sustkover_timeout")
+            if self.config.hasKey("suschksrv_timeout"):
+                self.time_out = self.config.get("suschksrv_timeout")
             else:
                 self.time_out = TIME_OUT_DFLT
             self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, SRHookVersion, self.time_out))
