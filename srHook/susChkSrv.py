@@ -26,9 +26,11 @@ try:
 except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
+# hook section
+SRHookName="susChkSrv"
+SRHookVersion = "0.0.1"
 # parameter section
-fhSRHookVersion = "0.0.1"
-// TIME_OUT_DFLT = 30
+# TIME_OUT_DFLT = 30
 
 try:
     class susChkSrv(HADRBase):
@@ -44,16 +46,21 @@ try:
                 self.time_out = self.config.get("sustkover_timeout")
             else:
                 self.time_out = TIME_OUT_DFLT
-            self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, fhSRHookVersion, self.time_out))
+            self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, SRHookVersion, self.time_out))
 
         def about(self):
             method = "about"
-            self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, fhSRHookVersion))
+            self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, SRHookVersion))
             return {"provider_company": "SUSE",
                     "provider_name": "susChkSrv",  # class name
                     "provider_description": "Process service status changed events",
                     "provider_version": "1.0"}
 
+        def srServiceStateChanged(self, ParamDict, **kwargs):
+            method="srServiceStateChanged"
+            self.tracer.info("{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
+            self.tracer.info("{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
+            return 0
 
 except NameError as e:
     print("Could not find base class ({0})".format(e))
