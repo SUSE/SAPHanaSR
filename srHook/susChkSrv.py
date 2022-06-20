@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.0.1"
+SRHookVersion = "0.0.3"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -58,8 +58,24 @@ try:
 
         def srServiceStateChanged(self, ParamDict, **kwargs):
             method="srServiceStateChanged"
+            mySID = os.environ.get('SAPSYSTEMNAME')
             self.tracer.info("{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
             self.tracer.info("{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
+            self.tracer.info("{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
+            # extract the 'central' values from the dictionary
+            hostname = ParamDict['hostname']
+            service = ParamDict['service_name']
+            port = ParamDict['service_port']
+            status = ParamDict['service_status']
+            previousStatus = ParamDict['service_previous_status']
+            timestamp = ParamDict['timestamp']
+            daemonStatus = ParamDict['daemon_status']
+            databaseId = ParamDict['database_id']
+            databaseName = ParamDict['database_name']
+            databaseStatus = ParamDict['database_status']
+
+            # log service_name, service_port, service_status, service_previous_status,    database_id, database_name, database_status,    daemon_status
+            self.tracer.info("srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} deam:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus ))
             return 0
 
 except NameError as e:
