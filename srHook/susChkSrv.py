@@ -75,7 +75,7 @@ try:
             databaseStatus = ParamDict['database_status']
 
             # log service_name, service_port, service_status, service_previous_status,    database_id, database_name, database_status,    daemon_status
-            self.tracer.info("srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} deam:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus ))
+            self.tracer.info("srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} daem:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus ))
             return 0
 
 except NameError as e:
