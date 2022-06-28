@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.0.4"
+SRHookVersion = "0.1.0"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -81,8 +81,10 @@ try:
             isIndexserver = (service == "indexserver")
             serviceRestart = (status in ["starting", "stopping", "no"])
             serviceStop = (status in [ "stopping", "no"])
+            serviceDown = (status == "no" )
             daemonActive = (daemonStatus == "yes")
             daemonStop = (daemonStatus == "stopping")
+            daemonStarting = (daemonStatus == "starting")
             databaseActive = (databaseStatus == "yes")
             databaseStop = (databaseStatus == "stopping")
 
@@ -90,8 +92,16 @@ try:
                 self.tracer.info("LOST: indexserver event looks like a lost indexserver")
             if ( isIndexserver and serviceStop and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop")
+            if ( isIndexserver and serviceDown and daemonStop ) :
+                self.tracer.info("STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
             if ( isIndexserver and serviceStop and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tennant stop")
+            if ( isIndexserver and serviceDown and daemonActive and databaseStop ) :
+                self.tracer.info("DOWN: indexserver event looks like graceful tennant stop (indexserver stopped)")
+            if ( isIndexserver and serviceRestart and daemonStarting and databaseActive ) :
+                self.tracer.info("START: indexserver event looks like graceful tennant start")
+            if ( isIndexserver ) :
+                self.tracer.info("DBG: serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
             return 0
 
 except NameError as e:
