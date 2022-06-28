@@ -18,8 +18,6 @@ configurations might match specific needs.
 
 \fB* CRM Basics\fR
 
-.\" \fBno-quorum-policy = freeze\fR
-
 \fBdefault-resource-stickiness = 1000\fR
 
 The crm basic parameter default-resource-stickiness defines the 'stickiness'
@@ -31,25 +29,33 @@ HANA primary master resource can affect cluster decisions.
 Too high value might prevent not only unwanted but also useful actions.
 This is because SAPHanaSR uses an internal scoring table for placing the HANA
 roles on the right nodes.
+.br
+Mandatory, default 3.
 
 \fBfailure-timeout = 86400\fR
 
 The crm basic parameter failure-timeout defines how long failed actions will
 be kept in the CIB. After that time the failure record will be deleted. The
-time is measured in seconds. See also \fBmigration-threshold\fR below.
+time is measured in seconds. See also migration-threshold below.
+.br
+Optional, no default.
 
-\fBmigration-threshold = 3\fR
+\fBmigration-threshold = 5000\fR
 
 The crm basic parameter migration-threshold defines how many errors on a
 resource can be detected before this resource will be migrated to another node.
 See also \fBfailure-timeout\fR.
+.br
+Mandatory. Default 3.
 
 \fBrecord-pending = true\fR
 
 The op_default record-pending defines, whether the intention of an action
 upon the resource is recorded in the Cluster Information Base (CIB).
 Setting this parameter to 'true' allows the user to see pending actions like
-'starting' and 'stopping' in \fBcrm_mon\fR and \fBHawk\fR.
+ 'starting' and 'stopping' in \fBcrm_mon\fR and \fBHawk\fR.
+.br
+Optional, default false.
 
 .PP
 \fBpcmk_delay_max = 30\fR
@@ -59,6 +65,8 @@ before a fencing/stonith request will be triggerd.
 This parameter should prevent the cluster from unwanted double fencing in case
 of spilt-brain. A value around 30 seconds is required in two-node clusters,
 except priority fencing is used.
+.br
+Mandatory, default 5.
 
 .PP
 \fBpriority-fencing-delay = 30\fR
@@ -73,9 +81,10 @@ the base priority is not 0. Any delay that are introduced by pcmk_delay_max
 configured for the corresponding fencing resources will be added to this
 delay. A meta attribute priority=100 or alike for the ASCS resource is needed
 to make this work. See ocf_suse_SAPHana(7).
-
 The delay should be significantly greater than, or safely twice,
 pcmk_delay_max.
+.br
+Optional, no default.
 
 .PP
 \fB* systemd Basics\fR
@@ -84,9 +93,9 @@ pcmk_delay_max.
 .br
 \fBSAP${SID}_${INO}.service enabled\fR
 
-In case systemd-style init is used for the HANA database, the services saphostagent
-and SAP${SID}_${INO} need to be enabled and running inside the SAP slice.
-The instance profile Autostart feature needs to be off.
+In case systemd-style init is used for the HANA database, the services
+saphostagent and SAP${SID}_${INO} need to be enabled and running inside the SAP
+slice. The instance profile Autostart feature needs to be off.
 The service saptune is highly recommended, see manual page saptune(8).
 
 .PP
