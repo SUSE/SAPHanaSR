@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.0.3"
+SRHookVersion = "0.0.4"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -76,6 +76,22 @@ try:
 
             # log service_name, service_port, service_status, service_previous_status,    database_id, database_name, database_status,    daemon_status
             self.tracer.info("srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} daem:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus ))
+
+            # analysis, if the event looks like an dying indexserver (LOST)
+            isIndexserver = (service == "indexserver")
+            serviceRestart = (status in ["starting", "stopping", "no"])
+            serviceStop = (status in [ "stopping", "no"])
+            daemonActive = (daemonStatus == "yes")
+            daemonStop = (daemonStatus == "stopping")
+            databaseActive = (databaseStatus == "yes")
+            databaseStop = (databaseStatus == "stopping")
+
+            if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
+                self.tracer.info("LOST: indexserver event looks like a lost indexserver")
+            if ( isIndexserver and serviceStop and daemonStop ) :
+                self.tracer.info("STOP: indexserver event looks like graceful instance stop")
+            if ( isIndexserver and serviceStop and daemonActive and databaseStop ) :
+                self.tracer.info("DOWN: indexserver event looks like graceful tennant stop")
             return 0
 
 except NameError as e:
