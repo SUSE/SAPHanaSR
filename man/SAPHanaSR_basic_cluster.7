@@ -57,24 +57,25 @@ Setting this parameter to 'true' allows the user to see pending actions like
 The sbd stonith parameter pcmk_delay_max defines an upper limit for waiting
 before a fencing/stonith request will be triggerd.
 This parameter should prevent the cluster from unwanted double fencing in case
-of spilt-brain. A value around 30 seconds is required in two-node clusters.
-
-.PP
-\fBpcmk_delay_base = 15\fR
-
-The sbd stonith parameter pcmk_delay_base defines a static time for waiting
-before a fencing/stonith request will be triggerd. This parameter is used
-for priority fencing. pcmk_delay_base should be not more than 0.5 * 
-priority-fencing-delay. A value around 15 seconds is fine.
-See also priority-fencing-delay.
- 
+of spilt-brain. A value around 30 seconds is required in two-node clusters,
+except priority fencing is used.
 
 .PP
 \fBpriority-fencing-delay = 30\fR
 
-.\" TODO
-A value of 30 seconds is fine.
-See also pcmk_delay_base.
+The optional crm property priority-fencing-delay specified delay for the
+fencings that are targeting the lost nodes with the highest total resource
+priority in case we do not have the majority of the nodes in our cluster
+partition, so that the more significant nodes potentially win any fencing
+match, which is especially meaningful under split-brain of 2-node cluster.
+A promoted resource instance takes the base priority + 1 on calculation if
+the base priority is not 0. Any delay that are introduced by pcmk_delay_max
+configured for the corresponding fencing resources will be added to this
+delay. A meta attribute priority=100 or alike for the ASCS resource is needed
+to make this work. See ocf_suse_SAPHana(7).
+
+The delay should be significantly greater than, or safely twice,
+pcmk_delay_max.
 
 .PP
 \fB* systemd Basics\fR
@@ -140,7 +141,6 @@ of any other fencing/stonith mechanism. Example for a basic disk-based SBD
 resource:
 .PP
 .RS 2
-.br
 primitive rsc_stonith_sbd stonith:external/sbd \\
 .br
  params pcmk_delay_max="30"
@@ -150,13 +150,13 @@ primitive rsc_stonith_sbd stonith:external/sbd \\
 \fB* crm priority fencing SBD stonith configuration\fR
 
 .\" TODO priority fencing for two-node cluster, rsc_SAPHana_... meta priority=100
-Example for a priority fencing disk-based SBD resource:
+Example for a priority fencing disk-based SBD resource.
 .PP
 .RS 2
 .br
 primitive rsc_stonith_sbd stonith:external/sbd \\
 .br
- params pcmk_delay_base="15"
+ params pcmk_delay_base=15
 .br
 property cib-bootstrap-options: \
 .br
@@ -216,7 +216,11 @@ location loc_ip_ro_not_master_SLE_HDB00 \\
 Let the Linux cluster manage one IP address and move that address along
 with the HANA primary master nameserver. An auxiliary resource is needed
 for specific public cloud purpose.
-.\" TODO
+
+You should not bind resource to the HANA master role. This would change the
+effective resource scoring and might prevent the cluster from taking expected
+actions. If, for any reason, you need to bind additional resource to the
+HANA resource, you need to reduce that additional resource´s stickiness to 1.
 .PP
 .RS 2
 .br
@@ -240,18 +244,24 @@ colocation col_ip_with_SLE_HDB00 \\
 .RE
 .PP
 
-\fB* crm MailTo address resource configuration\fR
+\fB* crm MailTo resource configuration\fR
 
-.\" TODO
+The HANA landscape status is stored inside CIB as attribute hana_<sid>_roles.
+A healthy HANA master looks like "4:P:master1:master:worker:master".
+First field is the HANA landscape status. If that status goes to 3 or 2,
+something has happened to HANA, but the cluster will not perform a takeover.
+Status 1 will trigger a takeover, status 0 indicates an undefined fatal failure.
+See man page ocf_suse_SAPHana(7) and ocf_heartbeat_MailTo(7). 
+
+You could define a MailTo resource that informs you as soon as attribute
+hana_<sid>_roles deviates from above ideal:
 .PP
 .RS 2
 primitive rsc_mailto_HA1_HDB10 MailTo \\
 .br
  params email="root@localhost" subject="hana_ha1_roles changed" \\
 .br
- op monitor timeout=10 interval=30 \\
-.br
- op_params depth=0
+ op monitor timeout=10 interval=30 depth=0 \\
 .br
 location loc_mailto_HA1_HDB10_with_prim rsc_mailto_HA1_HDB10 \\
 .br
