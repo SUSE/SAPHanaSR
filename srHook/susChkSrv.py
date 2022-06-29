@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.1.0"
+SRHookVersion = "0.1.4"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -79,8 +79,10 @@ try:
 
             # analysis, if the event looks like an dying indexserver (LOST)
             isIndexserver = (service == "indexserver")
+            serviceActive = (status == "yes" )
             serviceRestart = (status in ["starting", "stopping", "no"])
             serviceStop = (status in [ "stopping", "no"])
+            serviceStopping = (status in [ "stopping"])
             serviceDown = (status == "no" )
             daemonActive = (daemonStatus == "yes")
             daemonStop = (daemonStatus == "stopping")
@@ -88,20 +90,21 @@ try:
             databaseActive = (databaseStatus == "yes")
             databaseStop = (databaseStatus == "stopping")
 
-            if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
-                self.tracer.info("LOST: indexserver event looks like a lost indexserver")
-            if ( isIndexserver and serviceStop and daemonStop ) :
+            if ( isIndexserver and serviceStopping and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop")
             if ( isIndexserver and serviceDown and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
-            if ( isIndexserver and serviceStop and daemonActive and databaseStop ) :
+            if ( isIndexserver and serviceStopping and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tennant stop")
             if ( isIndexserver and serviceDown and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tennant stop (indexserver stopped)")
             if ( isIndexserver and serviceRestart and daemonStarting and databaseActive ) :
                 self.tracer.info("START: indexserver event looks like graceful tennant start")
+            if ( isIndexserver and serviceActive and daemonStarting and databaseActive ) :
+                self.tracer.info("START: indexserver event looks like graceful tennant start (indexserver started)")
             if ( isIndexserver ) :
-                self.tracer.info("DBG: serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
+                self.tracer.info("DBG: version={},serviceRestart={}, daemonStarting={}, databaseActive={}".format(SRHookVersion, serviceRestart,daemonStarting,databaseActive))
+                self.tracer.info("DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
             return 0
 
 except NameError as e:
