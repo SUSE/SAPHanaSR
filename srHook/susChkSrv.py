@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.1.8"
+SRHookVersion = "0.1.9"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -48,8 +48,13 @@ try:
                 self.time_out = TIME_OUT_DFLT
             if self.config.hasKey("suschksrv_action_on_lost"):
                 self.action_on_lost = self.config.get("suschksrv_action_on_lost")
+                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
+                if ( not (isValidAction )):
+                    self.tracer.info("Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
+                    self.action_on_lost = "ignore_fallback"
             else:
-                self.action_on_lost = "ignore"
+                self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
+                self.action_on_lost = "ignore_default"
             self.tracer.info("{0}.{1}() version {2}, time_out {3} action_on_lost {4}".format(self.__class__.__name__, method, SRHookVersion, self.time_out, self.action_on_lost))
 
         def about(self):
@@ -95,9 +100,11 @@ try:
             databaseStop = (databaseStatus == "stopping")
 
             eventKnown = False
+            isLostIndexserver = False
 
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
                 self.tracer.info("LOST: indexserver event looks like a lost indexserver")
+                isLostIndexserver = True
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonActive and databaseActive ) :
                 self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
@@ -122,6 +129,24 @@ try:
                 eventKnown = True
             if ( isIndexserver and not eventKnown ) :
                 self.tracer.info("DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
+
+            #
+            # doing the action
+            #
+            if ( isLostIndexserver and ( self.action_on_lost in [ "ignore", "ignore_fallback", "ignore_default" ] )):
+                self.tracer.info("LOST: event ignored. action_on_lost is set to {}".format(self.action_on_lost))
+            if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
+                self.tracer.info("LOST: fence node. action_on_lost is set to {}".format(self.action_on_lost))
+                # TODO add fence code here
+            if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
+                self.tracer.info("LOST: kill instance. action_on_lost is set to {}".format(self.action_on_lost))
+                # TODO add kill code here
+            if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
+                self.tracer.info("LOST: kill instance. action_on_lost is set to {}".format(self.action_on_lost))
+                # TODO add stop code here
+            if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
+                self.tracer.info("LOST: set cluster attribute. action_on_lost is set to {}".format(self.action_on_lost))
+                # TODO add attribute code here
             return 0
 
 except NameError as e:
