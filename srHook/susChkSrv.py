@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.1.9"
+SRHookVersion = "0.2.1"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -140,6 +140,9 @@ try:
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
                 self.tracer.info("LOST: kill instance. action_on_lost is set to {}".format(self.action_on_lost))
+                tout_cmd=""
+                action_cmd = "HDB kill-{}".format("9")
+                cmdrc = os.WEXITSTATUS(os.system("sleep 5;" + " " +  tout_cmd + " " + action_cmd))
                 # TODO add kill code here
             if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
                 self.tracer.info("LOST: kill instance. action_on_lost is set to {}".format(self.action_on_lost))
