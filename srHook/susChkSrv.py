@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.1.7"
+SRHookVersion = "0.1.8"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -46,7 +46,11 @@ try:
                 self.time_out = self.config.get("suschksrv_timeout")
             else:
                 self.time_out = TIME_OUT_DFLT
-            self.tracer.info("{0}.{1}() version {2}, time_out {3}".format(self.__class__.__name__, method, SRHookVersion, self.time_out))
+            if self.config.hasKey("suschksrv_action_on_lost"):
+                self.action_on_lost = self.config.get("suschksrv_action_on_lost")
+            else:
+                self.action_on_lost = "ignore"
+            self.tracer.info("{0}.{1}() version {2}, time_out {3} action_on_lost {4}".format(self.__class__.__name__, method, SRHookVersion, self.time_out, self.action_on_lost))
 
         def about(self):
             method = "about"
