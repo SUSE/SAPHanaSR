@@ -11,9 +11,18 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     provider = susChkSrv
     path = /usr/share/SAPHanaSR
     execution_order = 2
+    action_on_lost = kill | ignore (fence, stop, attr currently not implemented)
+    # timeout = timeout-in-seconds (currently not implemented)
 
     [trace]
     ha_dr_suschksrv = info
+
+TODO: Do we also want this hook to jump-in, if a secondary indexserver is crashing? Maybe to be selected by a parameter.
+TODO: The hook might not do it's action, if the SR is not-in-sync. Maybe to be selected by a parameter
+TODO: actions "fence", "stop", "attr" (attr is to inform the cluster (RA) to handle this SAP instance as broken)
+TODO: action "kill". The hard-coded sleep 5 is to allow the nameserver to log events. To be checked, if 5s is a good sleep time. Maybe to be tuned by a parameter
+TODO: To be tested with "real"  slow dying indexservers
+TODO: action "kill" is only valid for Scale-Up and might break on SAP HANA instances with tenants and high-isolation (different linux users per tenant)
 
 """
 
