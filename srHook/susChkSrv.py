@@ -28,7 +28,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.2.1"
+SRHookVersion = "0.2.2"
 # parameter section
 TIME_OUT_DFLT = 30
 
@@ -42,12 +42,12 @@ try:
 
             # read settings from global.ini
             # read sustkover_timeout
-            if self.config.hasKey("suschksrv_timeout"):
-                self.time_out = self.config.get("suschksrv_timeout")
+            if self.config.hasKey("timeout"):
+                self.time_out = self.config.get("timeout")
             else:
                 self.time_out = TIME_OUT_DFLT
-            if self.config.hasKey("suschksrv_action_on_lost"):
-                self.action_on_lost = self.config.get("suschksrv_action_on_lost")
+            if self.config.hasKey("action_on_lost"):
+                self.action_on_lost = self.config.get("action_on_lost")
                 isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
                 if ( not (isValidAction )):
                     self.tracer.info("Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
@@ -55,7 +55,7 @@ try:
             else:
                 self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
                 self.action_on_lost = "ignore_default"
-            self.tracer.info("{0}.{1}() version {2}, time_out {3} action_on_lost {4}".format(self.__class__.__name__, method, SRHookVersion, self.time_out, self.action_on_lost))
+            self.tracer.info("{0}.{1}() version {2}, parameter info: time_out={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.time_out, self.action_on_lost))
 
         def about(self):
             method = "about"
