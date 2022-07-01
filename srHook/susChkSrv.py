@@ -38,7 +38,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.2.2"
+SRHookVersion = "0.2.4"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -65,7 +65,7 @@ try:
             else:
                 self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
                 self.action_on_lost = "ignore_default"
-            self.tracer.info("{0}.{1}() version {2}, parameter info: time_out={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.time_out, self.action_on_lost))
+            self.tracer.info("{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
 
         def about(self):
@@ -120,6 +120,7 @@ try:
             if ( isIndexserver and serviceActive and daemonActive and databaseActive ) :
                 self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
                 eventKnown = True
+                # TODO: this event (LOST/started) seams also to come, if a sr_takeover is been processed (using preTakeover() and postTakeover() to mark this event?)
             if ( isIndexserver and serviceStopping and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop")
                 eventKnown = True
@@ -148,18 +149,24 @@ try:
                 self.tracer.info("LOST: event ignored. action_on_lost is set to {}".format(self.action_on_lost))
             if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
                 self.tracer.info("LOST: fence node. action_on_lost is set to {}".format(self.action_on_lost))
+                self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
                 self.tracer.info("LOST: kill instance. action_on_lost is set to {}".format(self.action_on_lost))
                 tout_cmd=""
                 action_cmd = "HDB kill-{}".format("9")
-                cmdrc = os.WEXITSTATUS(os.system("sleep 5;" + " " +  tout_cmd + " " + action_cmd))
-                # TODO add kill code here
+                # doing a short sleep before killing all SAP HANA processes to allow nameserver to write the already sent log messages
+                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
+                # TODO: hadcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
             if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
-                self.tracer.info("LOST: kill instance. action_on_lost is set to {}".format(self.action_on_lost))
-                # TODO add stop code here
+                self.tracer.info("LOST: stop instance. action_on_lost is set to {}".format(self.action_on_lost))
+                tout_cmd="timeout {}".format(self.stop_timeout)
+                action_cmd = "HDB stop"
+                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
+                # TODO HDB stop is only valid for Scale-Up but does not need the instance number
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 self.tracer.info("LOST: set cluster attribute. action_on_lost is set to {}".format(self.action_on_lost))
+                self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
                 # TODO add attribute code here
             return 0
 
