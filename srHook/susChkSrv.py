@@ -12,6 +12,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     path = /usr/share/SAPHanaSR
     execution_order = 2
     action_on_lost = kill | ignore (fence, stop, attr currently not implemented)
+    stop_timeout = 20 
     # timeout = timeout-in-seconds (currently not implemented)
 
     [trace]
@@ -39,7 +40,7 @@ except ImportError as e:
 SRHookName="susChkSrv"
 SRHookVersion = "0.2.2"
 # parameter section
-TIME_OUT_DFLT = 30
+TIME_OUT_DFLT = 20
 
 try:
     class susChkSrv(HADRBase):
@@ -51,10 +52,10 @@ try:
 
             # read settings from global.ini
             # read sustkover_timeout
-            if self.config.hasKey("timeout"):
-                self.time_out = self.config.get("timeout")
+            if self.config.hasKey("stop_timeout"):
+                self.stop_timeout = self.config.get("stop_timeout")
             else:
-                self.time_out = TIME_OUT_DFLT
+                self.stop_timeout = TIME_OUT_DFLT
             if self.config.hasKey("action_on_lost"):
                 self.action_on_lost = self.config.get("action_on_lost")
                 isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
@@ -65,6 +66,7 @@ try:
                 self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
                 self.action_on_lost = "ignore_default"
             self.tracer.info("{0}.{1}() version {2}, parameter info: time_out={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.time_out, self.action_on_lost))
+            # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
 
         def about(self):
             method = "about"
