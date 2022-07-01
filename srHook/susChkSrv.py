@@ -11,8 +11,8 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     provider = susChkSrv
     path = /usr/share/SAPHanaSR
     execution_order = 2
-    action_on_lost = kill | ignore (fence, stop, attr currently not implemented)
-    stop_timeout = 20 
+    action_on_lost = kill | stop | ignore (fence and attr currently not implemented)
+    stop_timeout = 20
     # timeout = timeout-in-seconds (currently not implemented)
 
     [trace]
@@ -20,7 +20,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
 
 TODO: Do we also want this hook to jump-in, if a secondary indexserver is crashing? Maybe to be selected by a parameter.
 TODO: The hook might not do it's action, if the SR is not-in-sync. Maybe to be selected by a parameter
-TODO: actions "fence", "stop", "attr" (attr is to inform the cluster (RA) to handle this SAP instance as broken)
+TODO: actions "fence", "attr" (attr is to inform the cluster (RA) to handle this SAP instance as broken)
 TODO: action "kill". The hard-coded sleep 5 is to allow the nameserver to log events. To be checked, if 5s is a good sleep time. Maybe to be tuned by a parameter
 TODO: To be tested with "real"  slow dying indexservers
 TODO: action "kill" is only valid for Scale-Up and might break on SAP HANA instances with tenants and high-isolation (different linux users per tenant)
@@ -38,7 +38,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.2.4"
+SRHookVersion = "0.2.9"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -67,6 +67,7 @@ try:
                 self.action_on_lost = "ignore_default"
             self.tracer.info("{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
+            self.takeover_active = False
 
         def about(self):
             method = "about"
@@ -75,6 +76,15 @@ try:
                     "provider_name": "susChkSrv",  # class name
                     "provider_description": "Process service status changed events",
                     "provider_version": "1.0"}
+
+        def preTakeover(self, isForce, **kwargs):
+            self.takeover_active = True
+            # TODO: what about "blocked" takeovers?
+            return 0;
+
+        def postTakeover(self, isForce, **kwargs):
+            self.takeover_active = False
+            return 0;
 
         def srServiceStateChanged(self, ParamDict, **kwargs):
             method="srServiceStateChanged"
@@ -118,9 +128,12 @@ try:
                 isLostIndexserver = True
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonActive and databaseActive ) :
-                self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
+                if ( self.takeover_active ):
+                    self.tracer.info("TAKEOVER: indexserver event looks like a takeover event")
+                else:
+                    self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
                 eventKnown = True
-                # TODO: this event (LOST/started) seams also to come, if a sr_takeover is been processed (using preTakeover() and postTakeover() to mark this event?)
+                # TODO: this event (LOST/started) seems also to come, if a sr_takeover is been processed (using preTakeover() and postTakeover() to mark this event?)
             if ( isIndexserver and serviceStopping and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop")
                 eventKnown = True
@@ -141,6 +154,10 @@ try:
                 eventKnown = True
             if ( isIndexserver and not eventKnown ) :
                 self.tracer.info("DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
+            # event on secondary, if HA1 tenant is stopped on primary
+            # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=False, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
+            # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=True, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
+
 
             #
             # doing the action
