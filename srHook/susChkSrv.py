@@ -38,7 +38,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.2.9"
+SRHookVersion = "0.3.0"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -79,11 +79,13 @@ try:
 
         def preTakeover(self, isForce, **kwargs):
             self.takeover_active = True
+            self.tracer.info("DBG: version={} preTakeover - set takeover_active = True".format(SRHookVersion))
             # TODO: what about "blocked" takeovers?
             return 0;
 
         def postTakeover(self, isForce, **kwargs):
             self.takeover_active = False
+            self.tracer.info("DBG: version={} postTakeover - set takeover_active = False".format(SRHookVersion))
             return 0;
 
         def srServiceStateChanged(self, ParamDict, **kwargs):
