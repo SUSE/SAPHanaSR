@@ -80,7 +80,7 @@ try:
         def preTakeover(self, isForce, **kwargs):
             self.takeover_active = True
             self.tracer.info("DBG: version={} preTakeover - set takeover_active = True".format(SRHookVersion))
-            # TODO: what about "blocked" takeovers?
+            # TODO: what about "blocked" takeovers? Test-Result: In a blocked takeover situation, postTakeover() is not called
             return 0;
 
         def postTakeover(self, isForce, **kwargs):
