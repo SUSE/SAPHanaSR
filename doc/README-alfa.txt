@@ -24,6 +24,8 @@ Note: The find shows what you got wit the package.
 
 2. Enabling the new HADR provider hook script
 
+2.1 Enabling the HADR provider
+
 In HANA global.ini the section [ha_dr_provider_suschksrv] needs to be added:
 ---  
 [ha_dr_provider_suschksrv]
@@ -57,6 +59,8 @@ execution_order = 2
 action_on_lost = kill
 
 ~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
+
+2.2 Checking the HADR provider related HANA trace entries
 
 ~> cdtrace; grep "HADR.*load.*susChkSrv" nameserver_*.trc | tail -3
 ... 
@@ -96,6 +100,8 @@ An example for extracting hook script runtimes on the master nameserver:
 
 4. Disabling the new HADR provider hook script
 
+4.1 Disabling the HADR provider completely
+
 The new HADR provider hook script might be disabled after the tests.
 
 In HANA global.ini the section [ha_dr_provider_suschksrv] needs to be removed.
@@ -104,6 +110,42 @@ The config change and reload have to be done at both sites.
 Finally it might a good idea to remove the directory /usr/share/SAPHanaSR-alfa/
 at both sites.
 
+4.2 Setting the HADR provider action to ignore
+
+As an alternative the HADR provider could be keep loaded into SAP HANA, but the
+hook script should neither kill nor stop SAP HANA in an indexsever lost event.
+
+In this case change the parameter 'action_on_lost' to value 'ignore'. With that action
+the event is only mentioned in the trace file, but no action as kill or stop is beeing startet.
+
+After changing the value in global.ini the HADR provider needs to be reloaded as documented in section2.
+
+An example procedure for enabling the hook script looks like:
+---
+# su - <sid>adm
+~> cdcoc; cp global.ini global.ini.BAK2
+~> vi global.ini
+...
+~> grep -A4 "^\[ha_dr_provider_suschksrv\]" global.ini
+[ha_dr_provider_suschksrv]
+provider = susChkSrv
+path = /usr/share/SAPHanaSR-alfa/
+execution_order = 2
+action_on_lost = ignore
+
+~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
+
+Checking the HADR provider related HANA trace entries:
+
+~> cdtrace; grep "HADR.*load.*susChkSrv" nameserver_*.trc | tail -3
+... 
+... loading HA/DR Provider 'susChkSrv' from /usr/share/SAPHanaSR-alfa/
+~> grep "ha_dr_susChkSrv.*init" nameserver_*.trc | tail -3
+...
+... susChkSrv.init() version 0.3.1, parameter info: stop_timeout=20 action_on_lost=ignore
+~> exit
+---
+Note: The grep shows what has been logged. The action_on_lost is documented as set to "ignore".
 
 
 5. Requirements and limits
@@ -123,7 +165,7 @@ The hook script has the following requirements:
 
 3. The hook script action_on_lost should return faster than the stop_timeout.
 
-If an HANA takeover attempt is blocked, the hook script may report that as
-successful takeover.
+If an HANA takeover attempt was blocked before, the hook script may report a later
+occuring indexserver recovery as a successful takeover.
 
 #
