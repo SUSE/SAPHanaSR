@@ -1,6 +1,6 @@
 .\" Version: 0.160.0
 .\"
-.TH susChkSrv.py 7 "18 Jun 2022" "" "SAPHanaSR"
+.TH susChkSrv.py 7 "07 Jul 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 susChkSrv.py \- Provider for SAP HANA srHook method srServiceStateChanged().
@@ -48,27 +48,35 @@ Mandatory. Depending on path delivered within RPM package. Please change only if
 \fBexecution_order = [ INTEGER ]\fP
 Mandatory. Order might depend on other hook scripts.
 .TP
-\fBaction_on_lost = [ ignore | kill | fence | stop ]\fP
+.\" TODO: \fBaction_on_lost = [ ignore | stop | kill | fence ]\fP
+\fBaction_on_lost = [ ignore | stop | kill ]\fP
 Define action to be processed when a lost indexserver is identified.
 .br
+- ignore: do nothing, just write to log
+.br
+- stop: do HDB stop
+.br
+- kill: do HDB kill 
+.br
 Optional. Default is ignore.
-.TP
-\fBignore_srhook = [ yes | no ]\fP
-Initiate takeover even if HANA system replication (srHook) is not in sync.
-.br
-Advanced. Default is no. Please use only if requested.
-.TP
-\fBmonitor_services = [ <service>,<service>,... ]\fP
-HANA services (processes) to look at.
-Represented by dictionary entry "service_name".
-.br
-Optional. Default is service "indexserver".
-.TP
-\fBmonitor_tennants = [ <tennant>,<tennant>,... ]\fP
-HANA tennants to look at.
-Represented by dictionary entry "database".
-.br
-Optional. Default is tennant TODO.
+.\" TODO:
+.\" .TP
+.\" \fBignore_srhook = [ yes | no ]\fP
+.\" Initiate takeover even if HANA system replication (srHook) is not in sync.
+.\" .br
+.\" Advanced. Default is no. Please use only if requested.
+.\" .TP
+.\" \fBmonitor_services = [ <service>,<service>,... ]\fP
+.\" HANA services (processes) to look at.
+.\" Represented by dictionary entry "service_name".
+.\" .br
+.\" Optional. Default is service "indexserver".
+.\" .TP
+.\" \fBmonitor_tennants = [ <tennant>,<tennant>,... ]\fP
+.\" HANA tennants to look at.
+.\" Represented by dictionary entry "database".
+.\" .br
+.\" Optional. Default is tennant TODO.
 .TP
 \fBstop_timeout = [ INTEGER ]\fP
 How many seconds to wait for stop?
@@ -99,7 +107,7 @@ TODO Should be 15000.
 Optional. Timeout in milliseconds. Default is TODO.
 .PP
 The HANA daemon TODO for the indexserver.<tennant> section of daemon.ini:
-.\" TODO check the below values with GCP
+.\" TODO check the below values with cloud partner
 .TP
 \fB[indexserver.<tennant>]\fP
 .TP
@@ -135,39 +143,40 @@ path = /usr/share/SAPHanaSR
 execution_order = 1
 .RE
 .PP
-\fB*\fP Example for entry in SAP HANA scale-out global configuration
-/hana/shared/HA1/global/hdb/custom/config/global.ini
-.PP
-Example SID is HA1.
-.br
-The hook script should wait for 25 seconds on stopping processes.
-In case of a failing indexserver, the process should be stopped and a takeover
-should be initiated even if the HANA secondary site is not in sync.
-This may \fBcause data loss\fP. It needs the RA SAPHanaController parameter
-AUTOMATED_REGISTER=false to be set.
-.br
-The section ha_dr_provider_suschksrv is needed on all HANA nodes.
-The HANA has to be stopped before the file can be changed.
-.PP
-.RS 2
-[ha_dr_provider_suschksrv]
-.br
-provider = suschksrv
-.br
-path = /usr/share/SAPHanaSR-ScaleOut
-.br
-execution_order = 1
-.br
-ignore_srhook = yes
-.br
-stop_timeout = 25
-.PP
-[trace]
-.br
-ha_dr_suschksrv = info
- \.\.\.
-.RE
-.PP
+.\" TODO:
+.\" \fB*\fP Example for entry in SAP HANA scale-out global configuration
+.\" /hana/shared/HA1/global/hdb/custom/config/global.ini
+.\" .PP
+.\" Example SID is HA1.
+.\" .br
+.\" The hook script should wait for 25 seconds on stopping processes.
+.\" In case of a failing indexserver, the process should be stopped and a takeover
+.\" should be initiated even if the HANA secondary site is not in sync.
+.\" This may \fBcause data loss\fP. It needs the RA SAPHanaController parameter
+.\" AUTOMATED_REGISTER=false to be set.
+.\" .br
+.\" The section ha_dr_provider_suschksrv is needed on all HANA nodes.
+.\" The HANA has to be stopped before the file can be changed.
+.\" .PP
+.\" .RS 2
+.\" [ha_dr_provider_suschksrv]
+.\" .br
+.\" provider = suschksrv
+.\" .br
+.\" path = /usr/share/SAPHanaSR-ScaleOut
+.\" .br
+.\" execution_order = 1
+.\" .br
+.\" ignore_srhook = yes
+.\" .br
+.\" stop_timeout = 25
+.\" .PP
+.\" [trace]
+.\" .br
+.\" ha_dr_suschksrv = info
+.\"  \.\.\.
+.\" .RE
+.\" .PP
 \fB*\fP Example for entry in SAP HANA daemon configuration
 /hana/shared/HA1/global/hdb/custom/config/daemon.ini
 .PP
@@ -249,6 +258,9 @@ with needed parameters.
 that comes with SAP HANA has to be used.
 .\"
 .SH BUGS
+The hook script may report a successful HANA takeover, even if the attempt has
+been blocked.
+.br
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
