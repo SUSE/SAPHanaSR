@@ -18,7 +18,7 @@
 # tar -zxf SAPHanaSR-alfa.tgz -C /
 # find /usr/share/SAPHanaSR-alfa/
 
-Note: The find shows what you got wit the package.
+Note: The find shows what you got with the package.
 
 
 
@@ -60,6 +60,7 @@ action_on_lost = kill
 
 ~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
 
+
 2.2 Checking the HADR provider related HANA trace entries
 
 ~> cdtrace; grep "HADR.*load.*susChkSrv" nameserver_*.trc | tail -3
@@ -71,6 +72,7 @@ action_on_lost = kill
 ~> exit
 ---
 Note: The grep shows what has been logged.
+
 
 
 3. Extracting hook script entries from HANA tracefiles
@@ -110,17 +112,20 @@ The config change and reload have to be done at both sites.
 Finally it might a good idea to remove the directory /usr/share/SAPHanaSR-alfa/
 at both sites.
 
+
 4.2 Setting the HADR provider action to ignore
 
 As an alternative the HADR provider could be keep loaded into SAP HANA, but the
 hook script should neither kill nor stop SAP HANA in an indexsever lost event.
 
-In this case change the parameter 'action_on_lost' to value 'ignore'. With that action
-the event is only mentioned in the trace file, but no action as kill or stop is beeing startet.
+In this case change the parameter 'action_on_lost' to value 'ignore'. With that
+action the event is only mentioned in the trace file, but no action as kill or
+stop is beeing started.
 
-After changing the value in global.ini the HADR provider needs to be reloaded as documented in section2.
+After changing the value in global.ini the HADR provider needs to be reloaded
+as documented in section 2.1.
 
-An example procedure for enabling the hook script looks like:
+An example procedure for changing the hook script action to "ignore" looks like:
 ---
 # su - <sid>adm
 ~> cdcoc; cp global.ini global.ini.BAK2
@@ -145,7 +150,9 @@ Checking the HADR provider related HANA trace entries:
 ... susChkSrv.init() version 0.3.1, parameter info: stop_timeout=20 action_on_lost=ignore
 ~> exit
 ---
-Note: The grep shows what has been logged. The action_on_lost is documented as set to "ignore".
+Note: The grep shows what has been logged. The action_on_lost is logged as set
+to "ignore".
+
 
 
 5. Requirements and limits
