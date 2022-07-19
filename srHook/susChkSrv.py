@@ -151,35 +151,45 @@ try:
 
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
                 self.tracer.info("LOST: indexserver event looks like a lost indexserver")
+                logTimestamp(epsiode, "LOST: indexserver event looks like a lost indexserver")
                 isLostIndexserver = True
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonActive and databaseActive ) :
                 if ( self.takeover_active ):
                     self.tracer.info("TAKEOVER: indexserver event looks like a takeover event")
+                    logTimestamp(epsiode, "TAKEOVER: indexserver event looks like a takeover event")
                 else:
                     self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
+                    logTimestamp(epsiode, "LOST: indexserver event looks like a lost indexserver (indexserver started)")
                 eventKnown = True
                 # TODO: this event (LOST/started) seems also to come, if a sr_takeover is been processed (using preTakeover() and postTakeover() to mark this event?)
             if ( isIndexserver and serviceStopping and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop")
+                logTimestamp(epsiode, "STOP: indexserver event looks like graceful instance stop")
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
+                logTimestamp(epsiode, "STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
                 eventKnown = True
             if ( isIndexserver and serviceStopping and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tenant stop")
+                logTimestamp(epsiode, "DOWN: indexserver event looks like graceful tenant stop")
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
+                logTimestamp(epsiode, "DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
                 eventKnown = True
             if ( isIndexserver and serviceRestart and daemonStarting and databaseActive ) :
                 self.tracer.info("START: indexserver event looks like graceful tenant start")
+                logTimestamp(epsiode, "START: indexserver event looks like graceful tenant start")
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonStarting and databaseActive ) :
                 self.tracer.info("START: indexserver event looks like graceful tenant start (indexserver started)")
+                logTimestamp(epsiode, "START: indexserver event looks like graceful tenant start (indexserver started)")
                 eventKnown = True
             if ( isIndexserver and not eventKnown ) :
                 self.tracer.info("DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
+                logTimestamp(epsiode, "DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
             # event on secondary, if HA1 tenant is stopped on primary
             # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=False, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
             # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=True, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
@@ -190,6 +200,7 @@ try:
             #
             if ( isLostIndexserver and ( self.action_on_lost in [ "ignore", "ignore_fallback", "ignore_default" ] )):
                 self.tracer.info("LOST: event ignored. action_on_lost={}".format(self.action_on_lost))
+     
             if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
                 self.tracer.info("LOST: fence node. action_on_lost={}".format(self.action_on_lost))
                 self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
