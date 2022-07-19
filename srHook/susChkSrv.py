@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.3"
+SRHookVersion = "0.3.5"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -154,45 +154,45 @@ try:
 
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
                 self.tracer.info("LOST: indexserver event looks like a lost indexserver")
-                logTimestamp(epsiode, "LOST: indexserver event looks like a lost indexserver")
+                logTimestamp(episode, "LOST: indexserver event looks like a lost indexserver")
                 isLostIndexserver = True
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonActive and databaseActive ) :
                 if ( self.takeover_active ):
                     self.tracer.info("TAKEOVER: indexserver event looks like a takeover event")
-                    logTimestamp(epsiode, "TAKEOVER: indexserver event looks like a takeover event")
+                    logTimestamp(episode, "TAKEOVER: indexserver event looks like a takeover event")
                 else:
                     self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
-                    logTimestamp(epsiode, "LOST: indexserver event looks like a lost indexserver (indexserver started)")
+                    logTimestamp(episode, "LOST: indexserver event looks like a lost indexserver (indexserver started)")
                 eventKnown = True
                 # TODO: this event (LOST/started) seems also to come, if a sr_takeover is been processed (using preTakeover() and postTakeover() to mark this event?)
             if ( isIndexserver and serviceStopping and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop")
-                logTimestamp(epsiode, "STOP: indexserver event looks like graceful instance stop")
+                logTimestamp(episode, "STOP: indexserver event looks like graceful instance stop")
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonStop ) :
                 self.tracer.info("STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
-                logTimestamp(epsiode, "STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
+                logTimestamp(episode, "STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
                 eventKnown = True
             if ( isIndexserver and serviceStopping and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tenant stop")
-                logTimestamp(epsiode, "DOWN: indexserver event looks like graceful tenant stop")
+                logTimestamp(episode, "DOWN: indexserver event looks like graceful tenant stop")
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonActive and databaseStop ) :
                 self.tracer.info("DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
-                logTimestamp(epsiode, "DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
+                logTimestamp(episode, "DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
                 eventKnown = True
             if ( isIndexserver and serviceRestart and daemonStarting and databaseActive ) :
                 self.tracer.info("START: indexserver event looks like graceful tenant start")
-                logTimestamp(epsiode, "START: indexserver event looks like graceful tenant start")
+                logTimestamp(episode, "START: indexserver event looks like graceful tenant start")
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonStarting and databaseActive ) :
                 self.tracer.info("START: indexserver event looks like graceful tenant start (indexserver started)")
-                logTimestamp(epsiode, "START: indexserver event looks like graceful tenant start (indexserver started)")
+                logTimestamp(episode, "START: indexserver event looks like graceful tenant start (indexserver started)")
                 eventKnown = True
             if ( isIndexserver and not eventKnown ) :
                 self.tracer.info("DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
-                logTimestamp(epsiode, "DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
+                logTimestamp(episode, "DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
             # event on secondary, if HA1 tenant is stopped on primary
             # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=False, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
             # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=True, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
@@ -207,20 +207,21 @@ try:
             if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
                 self.tracer.info("LOST: fence node. action_on_lost={}".format(self.action_on_lost))
                 self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
-                logTimestamp(epsiode, "LOST: fence node. action_on_lost=fence is currently not implemented")
+                logTimestamp(episode, "LOST: fence node. action_on_lost=fence is currently not implemented")
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
                 self.tracer.info("LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
-                logTimestamp(epsiode, "LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
+                logTimestamp(episode, "LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
                 tout_cmd=""
-                action_cmd = "HDB kill-{}".format("9")
+                action_cmd = "HDB kill-{}".format("2")
                 # doing a short sleep before killing all SAP HANA processes to allow nameserver to write the already sent log messages
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
-                logTimestamp(epsiode, "LOST: killed instance. action_on_lost={}".format(self.action_on_lost))
+                # the following message will most-likely also be lost, if we use signal 9
+                logTimestamp(episode, "LOST: killed instance. action_on_lost={}".format(self.action_on_lost))
                 # TODO: hadcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
             if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
                 self.tracer.info("LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
-                logTimestamp(epsiode, "LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
+                logTimestamp(episode, "LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
                 tout_cmd="timeout {}".format(self.stop_timeout)
                 action_cmd = "HDB stop"
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
@@ -228,7 +229,7 @@ try:
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 self.tracer.info("LOST: set cluster attribute. action_on_lost={}".format(self.action_on_lost))
                 self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
-                logTimestamp(epsiode, "LOST: attr node. action_on_lost=attr is currently not implemented")
+                logTimestamp(episode, "LOST: attr node. action_on_lost=attr is currently not implemented")
                 # TODO add attribute code here
             return 0
 
