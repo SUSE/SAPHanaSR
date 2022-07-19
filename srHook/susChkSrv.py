@@ -30,6 +30,8 @@ TODO: action "kill" is only valid for Scale-Up and might break on SAP HANA insta
 # loading classes and libraries
 import os
 import time
+import random
+from datetime import datetime
 
 try:
     from hdb_ha_dr.client import HADRBase
@@ -39,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.2"
+SRHookVersion = "0.3.3"
 # parameter section
 TIME_OUT_DFLT = 20
 
