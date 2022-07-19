@@ -87,6 +87,7 @@ try:
             self.tracer.info("{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
             self.takeover_active = False
+            self.ino = ConfigMgrPy.sapgparam('SAPSYSTEM')
 
         def about(self):
             method = "about"
@@ -114,9 +115,9 @@ try:
             self.tracer.info("{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
             self.tracer.info("{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
             self.tracer.info("{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
-            logTimestamp(episode, "{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
-            logTimestamp(episode, "{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
-            logTimestamp(episode, "{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
+            logTimestamp(episode, "{} version {}. Method {} method called.".format(SRHookName, SRHookVersion, method))
+            logTimestamp(episode, "{} {} method called with Dict={}".format(SRHookName, method, ParamDict))
+            logTimestamp(episode, "{} {} method called with SAPSYSTEMNAME={} instanceNumber={}".format(SRHookName, method, mySID, self.ino))
             # extract the 'central' values from the dictionary
             hostname = ParamDict['hostname']
             service = ParamDict['service_name']
