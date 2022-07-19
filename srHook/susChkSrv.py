@@ -30,10 +30,10 @@ TODO: action "kill" is only valid for Scale-Up and might break on SAP HANA insta
 # loading classes and libraries
 import os
 import time
-import ConfigMgrPy
 
 try:
     from hdb_ha_dr.client import HADRBase
+    import ConfigMgrPy
 except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
@@ -56,11 +56,12 @@ def logTimestamp(episode, outputMessage):
             saphanasr_multitarget_file.write(outputMessage + "\n")
             saphanasr_multitarget_file.flush()
 
-try:
-    class susChkSrv(HADRBase):
     except ( RuntimeError, TypeError, NameError, OSError ) as e :
         self.tracer.info("{0}.{1}() logTimestamp error {2}".format(self.__class__.__name__, method, e))
         print("Error in logTimestamp(): {0}".format(e))
+
+try:
+    class susChkSrv(HADRBase):
 
         def __init__(self, *args, **kwargs):
             # delegate construction to base class
