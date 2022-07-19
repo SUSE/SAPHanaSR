@@ -204,16 +204,20 @@ try:
             if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
                 self.tracer.info("LOST: fence node. action_on_lost={}".format(self.action_on_lost))
                 self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
+                logTimestamp(epsiode, "LOST: fence node. action_on_lost=fence is currently not implemented")
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
                 self.tracer.info("LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
+                logTimestamp(epsiode, "LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
                 tout_cmd=""
                 action_cmd = "HDB kill-{}".format("9")
                 # doing a short sleep before killing all SAP HANA processes to allow nameserver to write the already sent log messages
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
+                logTimestamp(epsiode, "LOST: killed instance. action_on_lost={}".format(self.action_on_lost))
                 # TODO: hadcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
             if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
                 self.tracer.info("LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
+                logTimestamp(epsiode, "LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
                 tout_cmd="timeout {}".format(self.stop_timeout)
                 action_cmd = "HDB stop"
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
@@ -221,6 +225,7 @@ try:
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 self.tracer.info("LOST: set cluster attribute. action_on_lost={}".format(self.action_on_lost))
                 self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
+                logTimestamp(epsiode, "LOST: attr node. action_on_lost=attr is currently not implemented")
                 # TODO add attribute code here
             return 0
 
