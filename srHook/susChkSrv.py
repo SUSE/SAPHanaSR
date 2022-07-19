@@ -30,6 +30,7 @@ TODO: action "kill" is only valid for Scale-Up and might break on SAP HANA insta
 # loading classes and libraries
 import os
 import time
+import ConfigMgrPy
 
 try:
     from hdb_ha_dr.client import HADRBase
@@ -38,17 +39,35 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.1"
+SRHookVersion = "0.3.2"
 # parameter section
 TIME_OUT_DFLT = 20
 
+def getEpisode():
+    episode = "{0}-{1}".format( datetime.now().strftime('%s') , random.randrange(10000,20000))
+    return episode
+
+def logTimestamp(episode, outputMessage):
+    traceFilepath = os.path.join(os.environ['SAP_RETRIEVAL_PATH'], 'trace', 'nameserver_suschksrv.trc')
+    try:
+        with open(traceFilepath, "a") as saphanasr_multitarget_file:
+            currentTimeStr = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f ')
+            outputMessage = "{0} [{2}] {1}".format(currentTimeStr,outputMessage, episode)
+            saphanasr_multitarget_file.write(outputMessage + "\n")
+            saphanasr_multitarget_file.flush()
+
 try:
     class susChkSrv(HADRBase):
+    except ( RuntimeError, TypeError, NameError, OSError ) as e :
+        self.tracer.info("{0}.{1}() logTimestamp error {2}".format(self.__class__.__name__, method, e))
+        print("Error in logTimestamp(): {0}".format(e))
 
         def __init__(self, *args, **kwargs):
             # delegate construction to base class
             super(susChkSrv, self).__init__(*args, **kwargs)
             method = "init"
+            episode = getEpisode()
+            logTimestamp(episode, "init called")
 
             # read settings from global.ini
             # read sustkover_timeout
@@ -91,9 +110,13 @@ try:
         def srServiceStateChanged(self, ParamDict, **kwargs):
             method="srServiceStateChanged"
             mySID = os.environ.get('SAPSYSTEMNAME')
+            episode = getEpisode()
             self.tracer.info("{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
             self.tracer.info("{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
             self.tracer.info("{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
+            logTimestamp(episode, "{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
+            logTimestamp(episode, "{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
+            logTimestamp(episode, "{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
             # extract the 'central' values from the dictionary
             hostname = ParamDict['hostname']
             service = ParamDict['service_name']
