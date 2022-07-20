@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.7"
+SRHookVersion = "0.3.9"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -84,16 +84,20 @@ try:
                 isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop"] )
                 if ( not (isValidAction )):
                     self.tracer.info("Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
+                    logTimestamp(episode,"Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
                     self.action_on_lost = "ignore_fallback"
             else:
                 self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
+                logTimestamp(episode,"action_on_lost not configured. Fallback to ignore".format())
                 self.action_on_lost = "ignore_default"
             if  ( self.action_on_lost == "kill" ):
-                if self.config.hasKey("signal"):
-                    self.killSignal = self.config.get("signal")
+                if self.config.hasKey("kill_signal"):
+                    self.killSignal = self.config.get("kill_signal")
                 else:
                     self.killSignal = "2"
+            # TODO: logging the signal parameter, but only if it is the kill action
             self.tracer.info("{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
+            logTimestamp(episode,"{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
             self.takeover_active = False
             self.ino = ConfigMgrPy.sapgparam('SAPSYSTEM')
@@ -216,8 +220,8 @@ try:
                 logTimestamp(episode, "LOST: fence node. action_on_lost=fence is currently not implemented")
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
-                self.tracer.info("LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.signal))
-                logTimestamp(episode, "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.signal))
+                self.tracer.info("LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal))
+                logTimestamp(episode, "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal))
                 tout_cmd=""
                 action_cmd = "HDB kill-{}".format(self.killSignal)
                 # doing a short sleep before killing all SAP HANA processes to allow nameserver to write the already sent log messages
