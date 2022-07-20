@@ -56,16 +56,20 @@ Mandatory. Depending on path delivered within RPM package. Please change only if
 \fBexecution_order = [ INTEGER ]\fP
 Mandatory. Order might depend on other hook scripts.
 .TP
-.\" TODO: \fBaction_on_lost = [ ignore | stop | kill | fence ]\fP
-\fBaction_on_lost = [ ignore | stop | kill ]\fP
+\fBaction_on_lost = [ ignore | stop | kill | fence ]\fP
+.\" TODO: \fBaction_on_lost = [ ignore | stop | kill | fence | suicide ]\fP
 Define action to be processed when a lost indexserver is identified.
 .br
-- ignore: do nothing, just write to log
+- ignore: do nothing, just write to tracefiles.
 .br
-- stop: do HDB stop
+- stop: do 'HDB stop'
 .br
-- kill: do HDB kill-9 
+- kill: do 'HDB kill-9' 
 .br
+- fence: do 'crm node fence'. This needs a Linux cluster. NOT yet implemented.
+.br
+.\" TODO: - suicide: do 'echo b >/proc/sysrq-trigger'. Do NOT use this!
+.\" .br
 Optional. Default is ignore.
 .\" TODO:
 .\" .TP
@@ -165,6 +169,9 @@ execution_order = 1
 .\" .br
 .\" The section ha_dr_provider_suschksrv is needed on all HANA nodes.
 .\" The HANA has to be stopped before the file can be changed.
+.\" .br
+.\" HANA scale-out is supported only with exactly one master nameserver. No HANA
+.\" host auto-failover.
 .\" .PP
 .\" .RS 2
 .\" [ha_dr_provider_suschksrv]
@@ -208,7 +215,11 @@ gracetime = 6000
 .PP
 \fB*\fP Example for checking the HANA tracefiles for srServiceStateChanged() events.
 .PP
-To be executed on the respective HANA master nameserver.
+Example SID is HA1. To be executed on the respective HANA master nameserver.
+.br
+If the HANA nameserver process is killed, in some cases hook script actions do not
+make it into the nameserver tracefile. In such cases the hook script´s own tracefile
+might help, see respective example.
 .PP
 .RS 2
 # su - ha1adm
@@ -222,7 +233,7 @@ To be executed on the respective HANA master nameserver.
 .PP
 \fB*\fP Example for checking the HANA tracefiles for when the hook script has been loaded.
 .PP
-To be executed on both site's master nameservers.
+Example SID is HA1. To be executed on both site's master nameservers.
 .PP
 .RS 2
 # su - ha1adm
@@ -232,6 +243,18 @@ To be executed on both site's master nameservers.
 ~> grep HADR.*load.*susChkSrv nameserver_*.trc
 .br
 ~> grep susChkSrv.init nameserver_*.trc
+.RE
+.PP
+\fB*\fP Example for checking the hook script tracefile for actions.
+.PP
+Example SID is HA1. To be executed on both site's master nameservers.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> egrep '(LOST:|STOP:|START:|DOWN:|init|load|fail)' nameserver_suschksrv.trc 
 .RE
 .PP
 .\"
@@ -267,7 +290,8 @@ memory and on disk (in persistence).
 4. The hook script runs on the HANA master nameserver. It does not reach out to
 worker nodes.
 .PP
-5. HANA host auto-failover is not supported. Thus no standby nodes.
+5. HANA scale-out is supported only with exactly one master namesever. HANA
+host auto-failover is not supported. Thus no standby nodes.
 .PP
 6. If the hook provider should be pre-compiled, the particular Python version
 that comes with SAP HANA has to be used.
