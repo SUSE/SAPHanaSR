@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.1"
+SRHookVersion = "0.4.2"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -126,6 +126,7 @@ try:
         def srServiceStateChanged(self, ParamDict, **kwargs):
             method="srServiceStateChanged"
             mySID = os.environ.get('SAPSYSTEMNAME')
+            low_sid = mySID.lower()
             episode = getEpisode()
             msg1 = "{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method)
             msg2 = "{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict)
@@ -231,9 +232,12 @@ try:
                 logTimestamp(episode, msg )
                 self.tracer.info( msg )
             if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
-                msg = "LOST: fence node. action_on_lost={} is currently not implemented".format(self.action_on_lost)
+                msg = "LOST: fence node. action_on_lost={}".format(self.action_on_lost)
                 logTimestamp( episode, msg )
                 self.tracer.info( msg )
+                tout_cmd=""
+                action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --case fenceMe --sid={0}".format(low_sid)
+                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
                 msg = "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal)
