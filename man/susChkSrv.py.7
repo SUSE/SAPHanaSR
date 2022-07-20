@@ -21,10 +21,10 @@ the SAPHanaSR resource management in a Linux cluster does not trigger a takeover
 to the secondary site when:
 .br
 - A software failure causes one or more HANA processes to be restarted in place
-by the HANA daemon (hdbdaemon)
+by the HANA daemon (hdbdaemon).
 .br
 - A hardware error (e.g. SIGBUS from an uncorrectable memory error) causes the
-indexserver to restart locally
+indexserver to restart locally.
 .br
 See also SAPHanaSR(7) or SAPHanaSR-ScaleOut(7). 
 
@@ -38,7 +38,7 @@ PREFER_SITE_TAKEOVER and AUTOMATED_REGISTER, see manual page ocf_suse_SAPHana(7)
 ocf_suse_SAPHanaController(7).
 
 An adapted HANA daemon configuration is needed to TODO
-This hook script needs to be configured and activated on all HANA nodes.
+This hook script needs to be installed, configured and activated on all HANA nodes.
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
@@ -58,19 +58,24 @@ Mandatory. Order might depend on other hook scripts.
 .TP
 \fBaction_on_lost = [ ignore | stop | kill | fence ]\fP
 .\" TODO: \fBaction_on_lost = [ ignore | stop | kill | fence | suicide ]\fP
-Define action to be processed when a lost indexserver is identified.
+Action to be processed when a lost indexserver is identified.
 .br
 - ignore: do nothing, just write to tracefiles.
 .br
 - stop: do 'HDB stop'
 .br
-- kill: do 'HDB kill-9' 
+- kill: do 'HDB kill-<signal>'. The signal can be defined by parameter kill_signal. 
 .br
 - fence: do 'crm node fence'. This needs a Linux cluster. NOT yet implemented.
 .br
 .\" TODO: - suicide: do 'echo b >/proc/sysrq-trigger'. Do NOT use this!
 .\" .br
 Optional. Default is ignore.
+.TP
+\fBkill_signal = [ INTEGER ]\fP
+Signal to be used with 'HDB kill-<signal>'.
+.br
+Optional. Default is 9.
 .\" TODO:
 .\" .TP
 .\" \fBignore_srhook = [ yes | no ]\fP
@@ -91,8 +96,9 @@ Optional. Default is ignore.
 .\" Optional. Default is tennant TODO.
 .TP
 \fBstop_timeout = [ INTEGER ]\fP
-How many seconds to wait for stop?
-Should be greater than value of daemon.ini parameter "forcedtimeout".
+How many seconds to wait for 'HDB stop' to return?
+Should be greater than value of daemon.ini parameter 'forcedtimeout'.
+.\" TODO: what is "forcedtimeout" ?
 .br
 Optional. Default is 20 seconds.
 .TP
@@ -162,8 +168,8 @@ execution_order = 1
 .\" Example SID is HA1.
 .\" .br
 .\" The hook script should wait for 25 seconds on stopping processes.
-.\" In case of a failing indexserver, the process should be stopped and a takeover
-.\" should be initiated even if the HANA secondary site is not in sync.
+.\" In case of a failing indexserver, the process should be stopped by HANA signal 9.
+.\" A takeover should be initiated even if the HANA secondary site is not in sync.
 .\" This may \fBcause data loss\fP. It needs the RA SAPHanaController parameter
 .\" AUTOMATED_REGISTER=false to be set.
 .\" .br
@@ -182,9 +188,14 @@ execution_order = 1
 .\" .br
 .\" execution_order = 1
 .\" .br
-.\" ignore_srhook = yes
+.\" action_on_lost = kill
+.\" .br
+.\" kill_signal = 9
 .\" .br
 .\" stop_timeout = 25
+.\" .br
+.\" ignore_srhook = yes
+.\" .br
 .\" .PP
 .\" [trace]
 .\" .br
@@ -308,7 +319,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,  \fBSAPHanaSR.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
-\fBocf_suse_SAPHanaController\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBSAPHanaSR-hookHelper\fP(8) ,
 \fBcrm\fP(8) , \fBpython3\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
