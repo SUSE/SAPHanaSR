@@ -83,21 +83,23 @@ try:
                 #isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
                 isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop"] )
                 if ( not (isValidAction )):
-                    self.tracer.info("Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
-                    logTimestamp(episode,"Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
+                    msg = "Invalid action_on_lost {}. Fallback to 'ignore'".format(self.action_on_lost)
+                    logTimestamp( episode, msg )
+                    self.tracer.info( msg )
                     self.action_on_lost = "ignore_fallback"
             else:
-                self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
-                logTimestamp(episode,"action_on_lost not configured. Fallback to ignore".format())
+                msg = "action_on_lost not configured. Fallback to 'ignore'"
+                logTimestamp( episode,msg )
+                self.tracer.info( msg )
                 self.action_on_lost = "ignore_default"
-            if  ( self.action_on_lost == "kill" ):
-                if self.config.hasKey("kill_signal"):
-                    self.killSignal = self.config.get("kill_signal")
-                else:
-                    self.killSignal = "2"
+            if self.config.hasKey("kill_signal"):
+                self.killSignal = self.config.get("kill_signal")
+            else:
+                self.killSignal = "2"
             # TODO: logging the signal parameter, but only if it is the kill action
-            self.tracer.info("{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
-            logTimestamp(episode,"{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
+            msg = "{}.{}() version {}, parameter info: action_on_lost={} stop_timeout={} kill_signal={}".format(self.__class__.__name__, method, SRHookVersion, self.action_on_lost, self.stop_timeout, self.killSignal)
+            logTimestamp( episode, msg )
+            self.tracer.info( msg )
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
             self.takeover_active = False
             self.ino = ConfigMgrPy.sapgparam('SAPSYSTEM')
@@ -125,12 +127,15 @@ try:
             method="srServiceStateChanged"
             mySID = os.environ.get('SAPSYSTEMNAME')
             episode = getEpisode()
-            self.tracer.info("{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method))
-            self.tracer.info("{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict))
-            self.tracer.info("{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID))
-            logTimestamp(episode, "{} version {}. Method {} method called.".format(SRHookName, SRHookVersion, method))
-            logTimestamp(episode, "{} {} method called with Dict={}".format(SRHookName, method, ParamDict))
-            logTimestamp(episode, "{} {} method called with SAPSYSTEMNAME={} instanceNumber={}".format(SRHookName, method, mySID, self.ino))
+            msg1 = "{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method)
+            msg2 = "{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict)
+            msg3 = "{0} {1} method called with SAPSYSTEMNAME={2}".format(SRHookName, method, mySID)
+            logTimestamp(episode, msg1 )
+            logTimestamp(episode, msg2 )
+            logTimestamp(episode, msg3 )
+            self.tracer.info( msg1 )
+            self.tracer.info( msg2 )
+            self.tracer.info( msg3 )
             # extract the 'central' values from the dictionary
             hostname = ParamDict['hostname']
             service = ParamDict['service_name']
@@ -144,7 +149,9 @@ try:
             databaseStatus = ParamDict['database_status']
 
             # log service_name, service_port, service_status, service_previous_status,    database_id, database_name, database_status,    daemon_status
-            self.tracer.info("srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} daem:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus ))
+            msg = "srv:{0}-{1}-{2}-{3} db:{4}-{5}-{6} daem:{7}".format(service,port,status,previousStatus, databaseName,databaseId,databaseStatus, daemonStatus )
+            logTimestamp( episode,  msg )
+            self.tracer.info( msg )
 
             # analysis, if the event looks like an dying indexserver (LOST)
             isIndexserver = (service == "indexserver")
@@ -163,46 +170,54 @@ try:
             isLostIndexserver = False
 
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
-                self.tracer.info("LOST: indexserver event looks like a lost indexserver")
-                logTimestamp(episode, "LOST: indexserver event looks like a lost indexserver")
+                msg = "LOST: indexserver event looks like a lost indexserver"
+                logTimestamp( episode, msg )
+                self.tracer.info( msg ) 
                 isLostIndexserver = True
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonActive and databaseActive ) :
                 if ( self.takeover_active ):
-                    self.tracer.info("TAKEOVER: indexserver event looks like a takeover event")
-                    logTimestamp(episode, "TAKEOVER: indexserver event looks like a takeover event")
+                    msg = "TAKEOVER: indexserver event looks like a takeover event"
+                    logTimestamp(episode, msg )
+                    self.tracer.info( msg )
                 else:
-                    self.tracer.info("LOST: indexserver event looks like a lost indexserver (indexserver started)")
-                    logTimestamp(episode, "LOST: indexserver event looks like a lost indexserver (indexserver started)")
+                    msg = "LOST: indexserver event looks like a lost indexserver (indexserver started)"
+                    logTimestamp(episode, msg )
+                    self.tracer.info( msg )
                 eventKnown = True
                 # TODO: this event (LOST/started) seems also to come, if a sr_takeover is been processed (using preTakeover() and postTakeover() to mark this event?)
             if ( isIndexserver and serviceStopping and daemonStop ) :
-                self.tracer.info("STOP: indexserver event looks like graceful instance stop")
-                logTimestamp(episode, "STOP: indexserver event looks like graceful instance stop")
+                msg = "STOP: indexserver event looks like graceful instance stop"
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonStop ) :
-                self.tracer.info("STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
-                logTimestamp(episode, "STOP: indexserver event looks like graceful instance stop (indexserver stopped)")
+                msg = "STOP: indexserver event looks like graceful instance stop (indexserver stopped)"
+                self.tracer.info( msg )
+                logTimestamp(episode, msg )
                 eventKnown = True
             if ( isIndexserver and serviceStopping and daemonActive and databaseStop ) :
-                self.tracer.info("DOWN: indexserver event looks like graceful tenant stop")
-                logTimestamp(episode, "DOWN: indexserver event looks like graceful tenant stop")
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonActive and databaseStop ) :
-                self.tracer.info("DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
-                logTimestamp(episode, "DOWN: indexserver event looks like graceful tenant stop (indexserver stopped)")
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 eventKnown = True
             if ( isIndexserver and serviceRestart and daemonStarting and databaseActive ) :
-                self.tracer.info("START: indexserver event looks like graceful tenant start")
-                logTimestamp(episode, "START: indexserver event looks like graceful tenant start")
+                msg = "START: indexserver event looks like graceful tenant start"
+                logTimestamp(episode,  msg )
+                self.tracer.info( msg )
                 eventKnown = True
             if ( isIndexserver and serviceActive and daemonStarting and databaseActive ) :
-                self.tracer.info("START: indexserver event looks like graceful tenant start (indexserver started)")
-                logTimestamp(episode, "START: indexserver event looks like graceful tenant start (indexserver started)")
+                msg = "START: indexserver event looks like graceful tenant start (indexserver started)"
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 eventKnown = True
             if ( isIndexserver and not eventKnown ) :
-                self.tracer.info("DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
-                logTimestamp(episode, "DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop))
+                msg = "DBG: version={},serviceRestart={}, serviceStop={}, serviceDown={}, daemonActive={}, daemonStop={}, daemonStarting={}, databaseActive={}, databaseStop={}".format(SRHookVersion, serviceRestart,serviceStop,serviceDown,daemonActive,daemonStop,daemonStarting,databaseActive,databaseStop)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
             # event on secondary, if HA1 tenant is stopped on primary
             # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=False, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
             # DBG: version=0.2.7,serviceRestart=True, serviceStop=True, serviceDown=True, daemonActive=True, daemonStop=False, daemonStarting=False, databaseActive=False, databaseStop=False
