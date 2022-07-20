@@ -64,9 +64,9 @@ Action to be processed when a lost indexserver is identified.
 .br
 - stop: do 'HDB stop'
 .br
-- kill: do 'HDB kill-<signal>'. The signal can be defined by parameter kill_signal. 
+- kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
-- fence: do 'crm node fence'. This needs a Linux cluster. NOT yet implemented.
+- fence: do 'stonith_admin --fence=<host>'. This needs a Linux cluster. NOT yet implemented.
 .br
 .\" TODO: - suicide: do 'echo b >/proc/sysrq-trigger'. Do NOT use this!
 .\" .br
@@ -148,6 +148,7 @@ Usage, syntax or execution errors.
 \fB*\fP Example for minimal entry in SAP HANA scale-up global configuration
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 .PP
+In case of a failing indexserver, the event is logged. No action is performed.
 The section ha_dr_provider_suschksrv is needed on all HANA nodes.
 The HANA has to be stopped before the file can be changed.
 .PP
@@ -158,51 +159,44 @@ provider = suschksrv
 .br
 path = /usr/share/SAPHanaSR
 .br
-execution_order = 1
+execution_order = 2
 .RE
 .PP
-.\" TODO:
-.\" \fB*\fP Example for entry in SAP HANA scale-out global configuration
-.\" /hana/shared/HA1/global/hdb/custom/config/global.ini
-.\" .PP
-.\" Example SID is HA1.
-.\" .br
-.\" The hook script should wait for 25 seconds on stopping processes.
-.\" In case of a failing indexserver, the process should be stopped by HANA signal 9.
-.\" A takeover should be initiated even if the HANA secondary site is not in sync.
-.\" This may \fBcause data loss\fP. It needs the RA SAPHanaController parameter
-.\" AUTOMATED_REGISTER=false to be set.
-.\" .br
-.\" The section ha_dr_provider_suschksrv is needed on all HANA nodes.
-.\" The HANA has to be stopped before the file can be changed.
-.\" .br
-.\" HANA scale-out is supported only with exactly one master nameserver. No HANA
-.\" host auto-failover.
-.\" .PP
-.\" .RS 2
-.\" [ha_dr_provider_suschksrv]
-.\" .br
-.\" provider = suschksrv
-.\" .br
-.\" path = /usr/share/SAPHanaSR-ScaleOut
-.\" .br
-.\" execution_order = 1
-.\" .br
-.\" action_on_lost = kill
-.\" .br
-.\" kill_signal = 9
-.\" .br
-.\" stop_timeout = 25
-.\" .br
+\fB*\fP Example for entry in SAP HANA scale-out global configuration
+/hana/shared/HA1/global/hdb/custom/config/global.ini
+.PP
+.\" TODO sapcontrol StopSystem ?
+In case of a failing indexserver, the process should be killed with 'HDB kill-9'.
+The hook script should wait for maximum 25 seconds on the HDB command to return.
+A takeover is initiated even if the HANA secondary site is not in sync.
+This may \fBcause data loss\fP. The RA SAPHanaController parameter
+AUTOMATED_REGISTER=false needs to be set, see manual page ocf_suse_SAPHanaController(7).
+.br
+The section ha_dr_provider_suschksrv is needed on all HANA nodes.
+The HANA has to be stopped before the file can be changed.
+.br
+Note: HANA scale-out is supported only with exactly one master nameserver.
+No HANA host auto-failover.
+.PP
+.RS 2
+[ha_dr_provider_suschksrv]
+.br
+provider = suschksrv
+.br
+path = /usr/share/SAPHanaSR-ScaleOut
+.br
+execution_order = 2
+.br
+action_on_lost = kill
+.br
+kill_signal = 9
+.br
+stop_timeout = 25
+.br
 .\" ignore_srhook = yes
 .\" .br
-.\" .PP
-.\" [trace]
-.\" .br
-.\" ha_dr_suschksrv = info
-.\"  \.\.\.
-.\" .RE
-.\" .PP
+.RE
+.PP
 \fB*\fP Example for entry in SAP HANA daemon configuration
 /hana/shared/HA1/global/hdb/custom/config/daemon.ini
 .PP
