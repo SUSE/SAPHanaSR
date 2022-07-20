@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.6"
+SRHookVersion = "0.3.7"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -216,10 +216,10 @@ try:
                 logTimestamp(episode, "LOST: fence node. action_on_lost=fence is currently not implemented")
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
-                self.tracer.info("LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
-                logTimestamp(episode, "LOST: kill instance. action_on_lost={}".format(self.action_on_lost))
+                self.tracer.info("LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.signal))
+                logTimestamp(episode, "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.signal))
                 tout_cmd=""
-                action_cmd = "HDB kill-{}".format("2")
+                action_cmd = "HDB kill-{}".format(self.killSignal)
                 # doing a short sleep before killing all SAP HANA processes to allow nameserver to write the already sent log messages
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
                 # the following message will most-likely also be lost, if we use signal 9
