@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.9"
+SRHookVersion = "0.4.0"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -227,34 +227,38 @@ try:
             # doing the action
             #
             if ( isLostIndexserver and ( self.action_on_lost in [ "ignore", "ignore_fallback", "ignore_default" ] )):
-                self.tracer.info("LOST: event ignored. action_on_lost={}".format(self.action_on_lost))
-     
+                msg = "LOST: event ignored. action_on_lost={}".format(self.action_on_lost)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
             if ( isLostIndexserver and ( self.action_on_lost == "fence" )):
-                self.tracer.info("LOST: fence node. action_on_lost={}".format(self.action_on_lost))
-                self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
-                logTimestamp(episode, "LOST: fence node. action_on_lost=fence is currently not implemented")
+                msg = "LOST: fence node. action_on_lost={} is currently not implemented".format(self.action_on_lost)
+                logTimestamp( episode, msg )
+                self.tracer.info( msg )
                 # TODO add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
-                self.tracer.info("LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal))
-                logTimestamp(episode, "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal))
+                msg = "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 tout_cmd=""
                 action_cmd = "HDB kill-{}".format(self.killSignal)
                 # doing a short sleep before killing all SAP HANA processes to allow nameserver to write the already sent log messages
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
                 # the following message will most-likely also be lost, if we use signal 9
-                logTimestamp(episode, "LOST: killed instance. action_on_lost={}".format(self.action_on_lost))
-                # TODO: hadcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
+                msg = "LOST: killed instance. action_on_lost={}".format(self.action_on_lost)
+                logTimestamp(episode, msg )
+                # DONE: hadcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
             if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
-                self.tracer.info("LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
-                logTimestamp(episode, "LOST: stop instance. action_on_lost={}".format(self.action_on_lost))
+                msg = "LOST: stop instance. action_on_lost={}".format(self.action_on_lost)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 tout_cmd="timeout {}".format(self.stop_timeout)
                 action_cmd = "HDB stop"
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
                 # TODO HDB stop is only valid for Scale-Up but does not need the instance number
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
-                self.tracer.info("LOST: set cluster attribute. action_on_lost={}".format(self.action_on_lost))
-                self.tracer.info("LOST: action_on_lost={} is currently not implemented".format(self.action_on_lost))
-                logTimestamp(episode, "LOST: attr node. action_on_lost=attr is currently not implemented")
+                msg = "LOST: set cluster attribute. action_on_lost={} is currently not implemented".format(self.action_on_lost)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
                 # TODO add attribute code here
             return 0
 
