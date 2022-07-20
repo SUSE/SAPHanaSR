@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.3.5"
+SRHookVersion = "0.3.6"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -80,13 +80,19 @@ try:
                 self.stop_timeout = TIME_OUT_DFLT
             if self.config.hasKey("action_on_lost"):
                 self.action_on_lost = self.config.get("action_on_lost")
-                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
+                #isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
+                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop"] )
                 if ( not (isValidAction )):
                     self.tracer.info("Invalid action_on_lost {}. Fallback to ignore".format(self.action_on_lost))
                     self.action_on_lost = "ignore_fallback"
             else:
                 self.tracer.info("action_on_lost not configured. Fallback to ignore".format())
                 self.action_on_lost = "ignore_default"
+            if  ( self.action_on_lost == "kill" ):
+                if self.config.hasKey("signal"):
+                    self.killSignal = self.config.get("signal")
+                else:
+                    self.killSignal = "2"
             self.tracer.info("{0}.{1}() version {2}, parameter info: stop_timeout={3} action_on_lost={4}".format(self.__class__.__name__, method, SRHookVersion, self.stop_timeout, self.action_on_lost))
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
             self.takeover_active = False
