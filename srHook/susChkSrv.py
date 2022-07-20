@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.0"
+SRHookVersion = "0.4.1"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -95,7 +95,7 @@ try:
             if self.config.hasKey("kill_signal"):
                 self.killSignal = self.config.get("kill_signal")
             else:
-                self.killSignal = "2"
+                self.killSignal = "9"
             # TODO: logging the signal parameter, but only if it is the kill action
             msg = "{}.{}() version {}, parameter info: action_on_lost={} stop_timeout={} kill_signal={}".format(self.__class__.__name__, method, SRHookVersion, self.action_on_lost, self.stop_timeout, self.killSignal)
             logTimestamp( episode, msg )
