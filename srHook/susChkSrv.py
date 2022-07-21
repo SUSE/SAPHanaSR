@@ -238,7 +238,7 @@ try:
                 tout_cmd=""
                 action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --case fenceMe --sid={0}".format(low_sid)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
-                # TODO add fence code here
+                # DONE add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
                 msg = "LOST: kill instance. action_on_lost={} signal={}".format(self.action_on_lost,self.killSignal)
                 logTimestamp(episode, msg )
