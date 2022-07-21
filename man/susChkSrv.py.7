@@ -1,6 +1,6 @@
 .\" Version: 0.160.0
 .\"
-.TH susChkSrv.py 7 "20 Jul 2022" "" "SAPHanaSR"
+.TH susChkSrv.py 7 "22 Jul 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 susChkSrv.py \- Provider for SAP HANA srHook method srServiceStateChanged().
@@ -66,7 +66,7 @@ Action to be processed when a lost indexserver is identified.
 .br
 - kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
-- fence: do 'stonith_admin --fence=<host>'. This needs a Linux cluster. NOT yet implemented.
+- fence: do 'stonith_admin --fence=<host>'. This needs a Linux STONITH device.
 .br
 .\" TODO: - suicide: do 'echo b >/proc/sysrq-trigger'. Do NOT use this!
 .\" .br
@@ -218,6 +218,25 @@ forcedterminationtimeout = 15000
 gracetime = 6000
 .RE
 .PP
+\fB*\fP Example for sudo permissions in /etc/sudoers.d/SAPHanaSR .
+.PP
+SID is HA1. See also manual page SAPHanaSR-hookHelper(8).
+.PP
+.RS 2
+# SAPHanaSR and SAPHanaSR-ScaleOut need for susChkSrv
+.br
+ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper --SID=HA1 --case=fenceMe
+.RE
+.PP
+\fB*\fP Example for looking up the sudo permission for the hook script.
+.PP
+All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
+Example SID is HA1.
+.PP
+.RS 2
+# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/sbin/SAPHanaSR-hookHelper" 
+.RE
+.PP
 \fB*\fP Example for checking the HANA tracefiles for srServiceStateChanged() events.
 .PP
 Example SID is HA1. To be executed on the respective HANA master nameserver.
@@ -269,6 +288,12 @@ Example SID is HA1. To be executed on both site's master nameservers.
 /usr/share/SAPHanaSR/susChkSrv.py
  the hook provider, delivered with the RPM
 .TP
+/usr/sbin/SAPHanaSR-hookHelper
+ the external script for node fencing 
+.TP
+/etc/sudoers, /etc/sudoers.d/*
+ the sudo permissions configuration
+.TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
  the on-disk representation of HANA global system configuration
 .TP
@@ -287,18 +312,24 @@ Example SID is HA1. To be executed on both site's master nameservers.
 1. SAP HANA 2.0 SPS05 or later provides the HA/DR provider hook method
 srServiceStateChanged() with needed parameters.
 .PP
-2. The hook provider needs to be added to the HANA global configuration, in
+2. The user ${sid}adm needs execution permission as user root for the command
+SAPHanaSR-hookHelper.
+.PP
+3. The hook provider needs to be added to the HANA global configuration, in
 memory and on disk (in persistence).
 .PP
-3. HANA daemon timeout TODO
+4. HANA daemon timeout TODO
 .PP
-4. The hook script runs on the HANA master nameserver. It does not reach out to
+5. The hook script runs on the HANA master nameserver. It does not reach out to
 worker nodes.
 .PP
-5. HANA scale-out is supported only with exactly one master namesever. HANA
+6. HANA scale-out is supported only with exactly one master namesever. HANA
 host auto-failover is not supported. Thus no standby nodes.
 .PP
-6. If the hook provider should be pre-compiled, the particular Python version
+7. A STONITH method for all nodes.
+.PP
+.PP
+8. If the hook provider should be pre-compiled, the particular Python version
 that comes with SAP HANA has to be used.
 .\"
 .SH BUGS
