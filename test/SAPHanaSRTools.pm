@@ -22,7 +22,7 @@ use File::Path;
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
 # Init immediately so their contents can be used in the 'use vars' below.
-@EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list set_cibFile get_master_nameserver set_GName set_HName set_SName set_Site insertAttribute);
+@EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list set_cibFile get_master_nameserver set_GName set_HName set_SName set_Site insertAttribute path_to_table);
 
 
 my $VERSION="1.0";
@@ -353,6 +353,36 @@ close CIB;
 }
 
 ################
+
+#
+# path_to_table
+# converts output in path form (<table>/<object>i/<key>="<value>") into hashes which can be output by print_host_attr()
+# table could (for first) be one of ['Global','Resource','Sites','Hosts']
+sub path_to_table 
+{
+    my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN ) = @_;
+    #
+    # for first we take plain stdin to parse the path lines
+    #
+    while  (<>) {
+        chomp();
+        # <table>/<object>i/<key>="<value>"
+        if ( $_ =~ m|([^/]*)/([^/]*)/([^/]*)="?([^"]*)"?| ) {
+            my ( $table, $object, $key, $value ) = ( $1, $2, $3, $4 );
+            if ( $table eq "Global" ) {
+                insertAttribute($sid, $refGL, $refGN, $object, $key, $value);
+            } elsif ( $table eq "Resource" ) {
+                insertAttribute($sid, $refRL, $refRN, $object, $key, $value);
+            } elsif ( $table eq "Sites" ) {
+                insertAttribute($sid, $refST, $refSN, $object, $key, $value);
+            } elsif ( $table eq "Hosts" ) {
+                insertAttribute($sid, $refHH, $refHN, $object, $key, $value);
+            }
+        } else {
+            printf("DBG: not a path: %s\n", $_);
+        }
+    }
+}
 
 sub get_hana_sync_state
 {
