@@ -64,7 +64,7 @@ Action to be processed when a lost indexserver is identified.
 .br
 - ignore: do nothing, just write to tracefiles.
 .br
-- stop: do 'HDB stop'
+- stop: do 'sapcontrol ... StopSystem'
 .br
 - kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
@@ -99,7 +99,7 @@ Optional. Default is 9.
 .\" Optional. Default is tenant TODO.
 .TP
 \fBstop_timeout = [ INTEGER ]\fP
-How many seconds to wait for 'HDB stop' to return?
+How many seconds to wait for 'sapcontrol ... StopSystem' to return?
 Should be greater than value of daemon.ini parameter 'forcedtimeout'.
 .\" TODO: what is "forcedtimeout" ?
 .br
@@ -169,11 +169,12 @@ execution_order = 2
 /hana/shared/HA1/global/hdb/custom/config/global.ini
 .PP
 .\" TODO sapcontrol StopSystem ?
-In case of a failing indexserver, the process should be killed with 'HDB kill-9'.
-The hook script should wait for maximum 25 seconds on the HDB command to return.
-A takeover might be initiated even if the HANA secondary site is not in sync.
-This may \fBcause data loss\fP. The RA SAPHanaController parameter
-AUTOMATED_REGISTER=false needs to be set, see manual page ocf_suse_SAPHanaController(7).
+In case of a failing indexserver, the HANA instance will be stopped with
+ 'sacpcontrol ... StopSystem'. The hook script should wait maximum 25 seconds 
+on the sapcontrol command to return. 
+./" A takeover might be initiated even if the HANA secondary site is not in sync.
+./" This may \fBcause data loss\fP. The RA SAPHanaController parameter
+./" AUTOMATED_REGISTER=false needs to be set, see manual page ocf_suse_SAPHanaController(7).
 .br
 The section ha_dr_provider_suschksrv is needed on all HANA nodes.
 The HANA has to be stopped before the file can be changed.
@@ -190,12 +191,9 @@ path = /usr/share/SAPHanaSR-ScaleOut
 .br
 execution_order = 2
 .br
-action_on_lost = kill
-.br
-kill_signal = 9
+action_on_lost = stop
 .br
 stop_timeout = 25
-.br
 .\" ignore_srhook = yes
 .\" .br
 .RE
