@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Helper script for HA/DR hooks
-# currently the only use case is 'checkTakeover' for the TakeOver Hook
+# currently implemented use case are 'checkTakeover' and 'fenceMe'
 
 # For now we only check the maintenance mode of the multi-state ressource (as descibed in the official supported maintenance procedure described in man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools.
 
@@ -34,7 +34,7 @@ usage() {
     exit 1
 }
 
-# check the exitence and the value of the takeover attribute
+# check the existence and the value of the takeover attribute
 chk_takeover_attr() {
     sra_attr="hana_${ASID}_sra"
     sra_value=$(/usr/sbin/crm_attribute -n "$sra_attr" -G -t reboot -q 2>/dev/null); rc=$?
@@ -194,6 +194,7 @@ case "$USECASE" in
 "fenceMe" )
      nodeName=$(crm_node -n)
      stonith_admin --reboot="$nodeName"
+     # TODO: rc=1 should not be used, see above
      rc=1
      ;;
 #"nextUsecase")
