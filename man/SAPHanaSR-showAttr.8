@@ -1,21 +1,21 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR-showAttr 8 "27 May 2022" "" "SAPHanaSR"
+.TH SAPHanaSR-showAttr 8 "22 Jul 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replication.
 .\"
 .SH SYNOPSIS
-\fBSAPHanaSR-showAttr\fR [ --help | --version ]
+\fBSAPHanaSR-showAttr\fR [ --help | --version | --path2table ]
 .br
 \fBSAPHanaSR-showAttr\fR [ --sid=SID[:INO] ] [ --sort=FIELD ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
 .\"
 .SH DESCRIPTION
 SAPHanaSR-showAttr shows Linux cluster attributes for SAP HANA system replication automation.
-The overall system replication (SR) state is shown as well as the HANA state on
-each node.
-Because the HANA srHook methods srConnectionChanged() and preTakeover() are used, the respective
-information shows up as well.
+The overall system replication (SR) state is shown as well as the HANA state
+on each node.
+Because the HANA srHook methods srConnectionChanged() and preTakeover() are
+used, the respective information shows up as well.
 The information is fetched from the Linux cluster information base (CIB), not
 from HANA directly.
 .PP
@@ -468,30 +468,29 @@ to map from the local hostname to the HANA virtual hostname.
 .\" TODO details, see HANA global.ini
 .\"
 .SH OPTIONS
-.HP
+.TP 4
 \fB --help\fR
-        show help.
-.HP
+show help.
+.TP 4
 \fB --version\fR
-        show version.
-.HP
+show version.
+.TP 4
+\fB --path2table\fR
+convert script-style input pipe back into normal output.
+.TP 4
 \fB --sid=\fISID\fR[:\fIINO\fR]
-.br
-	use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
+use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
 Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
-.HP
+.TP 4
 \fB --sort \fIFIELD\fR
-.br
-	sort Hosts section table by field. Allowed values: roles, site. The default sort is by hostnames.
+sort Hosts section table by field. Allowed values: roles, site. The default sort is by hostnames.
 .\" TODO --format
-.\".HP
-.\"\fB --format \fIFORMAT\fR
-.\".br
-.\"	output format. Allowed values: [ text | HTML ]. Default is text.
-.HP
+.\" .TP 4
+.\" \fB --format \fIFORMAT\fR
+.\" output format. Allowed values: [ text | HTML ]. Default is text.
+.TP 4
 \fB --cib=\fIOFFLINE_CIB_FILE\fR
-.br
-	read data from given offline CIB file.
+read data from given offline CIB file.
 .\"
 .SH RETURN CODES
 .B 0
@@ -501,31 +500,34 @@ Successful program execution.
 Usage, syntax or execution errors.
 .\"
 .SH EXAMPLES
-.TP
+.TP 4
 # SAPHanaSR-showAttr
 show all SAPHanaSR attributes and relevant cluster maintenance states.
 .br
 If the roles sub-fields are 1:P:::: landscapeHostConfiguration.py has not been able to detect the HANA roles during last recent RA monitor operation. Likely HANA was down or sudo <sid>adm failed.
-.TP
+.TP 4
 # SAPHanaSR-showAttr --sort roles
 show all SAPHanaSR attributes in the cluster and sort host table output by roles.
-.TP
+.TP 4
 # SAPHanaSR-showAttr --sid=HA1:10 --cib=./hb_report-17-07-2019/grauenstein01/cib.xml
 show all SAPHanaSR attributes for SAP System ID HA1 and instance number 10 from given CIB file.
-.TP
+.TP 4
 # SAPHanaSR-showAttr | grep -e master: -e worker: -e slave:
-show SAPHanaSR promotion scores on running nodes. 
+show SAPHanaSR promotion scores on running nodes.
+.TP 4 
+# SAPHanaSR-showAttr --format=script | egrep -v '/(version|op_mode|vhost|remoteHost|node_state|site)=' | SAPHanaSR-showAttr --path2table
+reduce output to selected fields.
 .\"
 .SH FILES
 .TP
 /usr/sbin/SAPHanaSR-showAttr
-	the program itself.
+the program itself.
 .TP
 /usr/lib/SAPHanaSR-ScaleOut/SAPHanaSRTools.pm
-	needed functions.
+needed functions.
 .TP
 /usr/sap/hostctrl/exe/saphostctrl
-	the SAP host control command.
+the SAP host control command.
 .\"
 .SH BUGS
 Formatting and content of this script's output will change, since this script
