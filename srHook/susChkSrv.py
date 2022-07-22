@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.2"
+SRHookVersion = "0.4.3"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -250,15 +250,16 @@ try:
                 # the following message will most-likely also be lost, if we use signal 9
                 msg = "LOST: killed instance. action_on_lost={}".format(self.action_on_lost)
                 logTimestamp(episode, msg )
-                # DONE: hadcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
+                # DONE: hardcoded 5 here to be moved to a self.sleep_before_action (or however it will be named)
             if ( isLostIndexserver and ( self.action_on_lost == "stop" )):
                 msg = "LOST: stop instance. action_on_lost={}".format(self.action_on_lost)
                 logTimestamp(episode, msg )
                 self.tracer.info( msg )
                 tout_cmd="timeout {}".format(self.stop_timeout)
-                action_cmd = "HDB stop"
+                #action_cmd = "HDB stop"
+                action_cmd = "sapcontrol -nr {} -function StopSystem".format(self.ino)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
-                # TODO HDB stop is only valid for Scale-Up but does not need the instance number
+                # DONE HDB stop is only valid for Scale-Up but does not need the instance number
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 msg = "LOST: set cluster attribute. action_on_lost={} is currently not implemented".format(self.action_on_lost)
                 logTimestamp(episode, msg )
