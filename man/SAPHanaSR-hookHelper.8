@@ -13,7 +13,8 @@ SAPHanaSR-hookHelper - generic helper for SAP HANA HADR provider hook scripts
 .SH DESCRIPTION
 \fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HADR provider hook scripts.
 .br
-For now it only checks the maintenance mode of the multi-state resource, as descibed in manual page SAPHanaSR_maitenance_examples(7).
+For now it only checks the maintenance mode of the multi-state resource, as
+descibed in manual page SAPHanaSR_maitenance_examples(7).
 .\"
 .SH OPTIONS
 .TP 4
@@ -63,22 +64,38 @@ given SID not configured in the cluster, block takeover.
 unknown cluster command error, permit takeover.
 .\"
 .SH EXAMPLES
-* Example for checking the system log for when SAPHanaSR-hookHelper has been called:
+* Example for checking the system log for when SAPHanaSR-hookHelper has been called.
 .PP
 .RS 2
 # grep sudo.*SAPHanaSR-hookHelper /var/log/messages
 .RE
 .PP
-* Example for sudo permissions in /etc/sudoers.d/SAPHanaSR .
-.br
-SID is HA1. See also manual pages susTkOver.py(7) and sudoers(5).
+* Example for generic sudo permissions in /etc/sudoers.d/SAPHanaSR .
+.PP
+Example SID is HA1. See also manual pages susTkOver.py(7), susChkSrv.py(7) and
+sudoers(5).
 .PP
 .RS 2
-# SAPHanaSR and SAPHanaSR-ScaleOut need for susTkOver
-.br
-Cmnd_Alias HOOK_HELPER  = /usr/sbin/SAPHanaSR-hookHelper --SID=HA1 --case=checkTakeover
+# SAPHanaSR and SAPHanaSR-ScaleOut need for HADR provider hook scripts
+.PP
+Cmnd_Alias HOOK_HELPER  = /usr/sbin/SAPHanaSR-hookHelper --SID=HA1 --case=*
 .br
 ha1adm ALL=(ALL) NOPASSWD: HOOK_HELPER
+.RE
+.PP
+* Example for checking the Linux cluster STONITH setup and logs.
+.PP
+This steps are useful with use case 'fenceMe'.
+First the STONITH method for the local node is shown. Then the last successful
+fencing action is looked up. Finally the Linux cluster log is checked for STONITH
+requests. See also manual pages stonith_admin(8) and susChkSrv.py(7).
+.PP
+.RS 2
+# stonith_admin -l $(crm_node -n)
+.br
+# stonith_admin -h $(crm_node -n)
+.br
+# grep Requesting.*fencing  /var/log/pacemaker/pacemaker.log
 .RE
 .PP
 .\"
@@ -87,8 +104,8 @@ ha1adm ALL=(ALL) NOPASSWD: HOOK_HELPER
 /usr/sbin/SAPHanaSR-hookHelper
 the program itself
 .TP 4
-/usr/share/SAPHanaSR/susTkOver.py
-a calling HADR provider hook script
+/usr/share/SAPHanaSR/susTkOver.py , /usr/share/SAPHanaSR/susChkSrv.py
+calling HADR provider hook scripts
 .TP 4
 /tmp/SAPHanaSR_SRHhelper.XXXXXX
 temporary file, for internal use only
@@ -105,11 +122,11 @@ open a request for the component BC-OP-LNX-SUSE. Please report any other feedbac
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , 
 \fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
-\fBsusTkOver.py\fP(7) ,
+\fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_suse_SAPHanaController\fP(7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
-\fBcrm_attribute\fP(8) , \fBstonith_admin\fP(1) , \fBsudo\fP(8) , \fBsudoers\fP(5), 
+\fBcrm_attribute\fP(8) , \fBstonith_admin\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), 
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap
 .\"
