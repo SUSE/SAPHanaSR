@@ -15,10 +15,10 @@ takeover processes. These so called hooks can be used for arbitrary operations
 that need to be executed. The method srServiceStateChanged() is called when
 HANA processes are failing, starting or stopping. 
 
-Purpose of susChkSrv.py is to detect failing HANA processes and trigger a fast
-takeover to the secondary site. With regular configuration of an HANA database,
-the SAPHanaSR resource management in a Linux cluster does not trigger a takeover
-to the secondary site when:
+Purpose of susChkSrv.py is to detect failing HANA indexserver processes and
+trigger a fast takeover to the secondary site. With regular configuration of an
+HANA database, the resource agent (RA) for HANA in a Linux cluster does not
+trigger a takeover to the secondary site when:
 .br
 - A software failure causes one or more HANA processes to be restarted in place
 by the HANA daemon (hdbdaemon).
@@ -37,7 +37,9 @@ take action. The action depends on the RA´s configuration parameters
 PREFER_SITE_TAKEOVER and AUTOMATED_REGISTER, see manual page ocf_suse_SAPHana(7) or
 ocf_suse_SAPHanaController(7).
 
-An adapted HANA daemon configuration is needed to TODO
+Customising of HANA daemon timeout parameters might be needed for adapting the
+solution to a given environment. Please refer to SAP HANA documentation.
+
 This hook script needs to be installed, configured and activated on all HANA nodes.
 .PP
 .\"
@@ -62,7 +64,7 @@ Action to be processed when a lost indexserver is identified.
 .br
 - ignore: do nothing, just write to tracefiles.
 .br
-- stop: do 'HDB stop'
+- stop: do 'sapcontrol ... StopSystem'
 .br
 - kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
@@ -97,7 +99,7 @@ Optional. Default is 9.
 .\" Optional. Default is tenant TODO.
 .TP
 \fBstop_timeout = [ INTEGER ]\fP
-How many seconds to wait for 'HDB stop' to return?
+How many seconds to wait for 'sapcontrol ... StopSystem' to return?
 Should be greater than value of daemon.ini parameter 'forcedtimeout'.
 .\" TODO: what is "forcedtimeout" ?
 .br
@@ -167,11 +169,12 @@ execution_order = 2
 /hana/shared/HA1/global/hdb/custom/config/global.ini
 .PP
 .\" TODO sapcontrol StopSystem ?
-In case of a failing indexserver, the process should be killed with 'HDB kill-9'.
-The hook script should wait for maximum 25 seconds on the HDB command to return.
-A takeover might be initiated even if the HANA secondary site is not in sync.
-This may \fBcause data loss\fP. The RA SAPHanaController parameter
-AUTOMATED_REGISTER=false needs to be set, see manual page ocf_suse_SAPHanaController(7).
+In case of a failing indexserver, the HANA instance will be stopped with
+ 'sacpcontrol ... StopSystem'. The hook script should wait maximum 25 seconds 
+on the sapcontrol command to return. 
+./" A takeover might be initiated even if the HANA secondary site is not in sync.
+./" This may \fBcause data loss\fP. The RA SAPHanaController parameter
+./" AUTOMATED_REGISTER=false needs to be set, see manual page ocf_suse_SAPHanaController(7).
 .br
 The section ha_dr_provider_suschksrv is needed on all HANA nodes.
 The HANA has to be stopped before the file can be changed.
@@ -188,12 +191,9 @@ path = /usr/share/SAPHanaSR-ScaleOut
 .br
 execution_order = 2
 .br
-action_on_lost = kill
-.br
-kill_signal = 9
+action_on_lost = stop
 .br
 stop_timeout = 25
-.br
 .\" ignore_srhook = yes
 .\" .br
 .RE
@@ -258,7 +258,7 @@ might help, see respective example.
 .PP
 \fB*\fP Example for checking the HANA tracefiles for when the hook script has been loaded.
 .PP
-Example SID is HA1. To be executed on both site's master nameservers.
+Example SID is HA1. To be executed on both sites' master nameservers.
 .PP
 .RS 2
 # su - ha1adm
@@ -272,7 +272,7 @@ Example SID is HA1. To be executed on both site's master nameservers.
 .PP
 \fB*\fP Example for checking the hook script tracefile for actions.
 .PP
-Example SID is HA1. To be executed on both site's master nameservers.
+Example SID is HA1. To be executed on both sites' master nameservers.
 .PP
 .RS 2
 # su - ha1adm
@@ -284,7 +284,7 @@ Example SID is HA1. To be executed on both site's master nameservers.
 .PP
 \fB*\fP Example for checking the hook script tracefile for node fencing actions.
 .PP
-Example SID is HA1. To be executed on both site's master nameservers. See also
+Example SID is HA1. To be executed on both sites' master nameservers. See also
 manual page SAPHanaSR-hookHelper(8).
 .PP
 .RS 2
@@ -298,13 +298,12 @@ manual page SAPHanaSR-hookHelper(8).
 .\"
 .SH FILES
 .TP
-.\" TODO /usr/share/SAPHanaSR/susChkSrv.py or /usr/share/SAPHanaSR-ScaleOut/susChkSrv.py
-/usr/share/SAPHanaSR/susChkSrv.py
+/usr/share/SAPHanaSR/susChkSrv.py or /usr/share/SAPHanaSR-ScaleOut/susChkSrv.py
 the hook provider, delivered with the RPM
 .TP
 /usr/sbin/SAPHanaSR-hookHelper
 the external script for node fencing 
-TP
+.TP
 /etc/sudoers, /etc/sudoers.d/*
 the sudo permissions configuration
 .TP
@@ -334,8 +333,7 @@ memory and on disk (in persistence).
 .PP
 4. HANA daemon timeout TODO
 .PP
-5. The hook script runs on the HANA master nameserver. It does not reach out to
-worker nodes.
+5. The hook script runs on the HANA master nameserver.
 .PP
 6. HANA scale-out is supported only with exactly one master nameserver. HANA
 host auto-failover is not supported. Thus no standby nodes.
