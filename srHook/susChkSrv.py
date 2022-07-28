@@ -126,7 +126,6 @@ try:
         def srServiceStateChanged(self, ParamDict, **kwargs):
             method="srServiceStateChanged"
             mySID = os.environ.get('SAPSYSTEMNAME')
-            low_sid = mySID.lower()
             episode = getEpisode()
             msg1 = "{0} version {1}. Method {2} method called.".format(SRHookName, SRHookVersion, method)
             msg2 = "{0} {1} method called with Dict={2}".format(SRHookName, method, ParamDict)
@@ -236,7 +235,7 @@ try:
                 logTimestamp( episode, msg )
                 self.tracer.info( msg )
                 tout_cmd=""
-                action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --sid={0} --case fenceMe".format(low_sid)
+                action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --sid={0} --case=fenceMe".format(mySID)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
                 # DONE add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
