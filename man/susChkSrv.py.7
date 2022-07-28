@@ -64,7 +64,7 @@ Action to be processed when a lost indexserver is identified.
 .br
 - ignore: do nothing, just write to tracefiles.
 .br
-- stop: do 'sapcontrol ... StopSystem'.
+- stop: do 'sapcontrol ... StopSystem'. This is recommended for scale-out.
 .br
 - kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
@@ -162,19 +162,16 @@ provider = susChkSrv
 .br
 path = /usr/share/SAPHanaSR/
 .br
-execution_order = 3 
+execution_order = 3
 .RE
 .PP
 \fB*\fP Example for entry in SAP HANA scale-out global configuration
 /hana/shared/HA1/global/hdb/custom/config/global.ini
 .PP
-.\" TODO sapcontrol StopSystem ?
 In case of a failing indexserver, the HANA instance will be stopped with
- 'sacpcontrol ... StopSystem'. The hook script should wait maximum 25 seconds 
-on the sapcontrol command to return. 
-./" A takeover might be initiated even if the HANA secondary site is not in sync.
-./" This may \fBcause data loss\fP. The RA SAPHanaController parameter
-./" AUTOMATED_REGISTER=false needs to be set, see manual page ocf_suse_SAPHanaController(7).
+ 'sacpcontrol ... StopSystem'. This action is recommended for scale-out. 
+The hook script should wait maximum 25 seconds on the sapcontrol command to
+return. 
 .br
 The section ha_dr_provider_suschksrv is needed on all HANA nodes.
 The HANA has to be stopped before the file can be changed.
@@ -189,7 +186,7 @@ provider = susChkSrv
 .br
 path = /usr/share/SAPHanaSR-ScaleOut/
 .br
-execution_order = 2 
+execution_order = 2
 .br
 action_on_lost = stop
 .br
@@ -242,9 +239,9 @@ Example SID is HA1.
 .PP
 Example SID is HA1. To be executed on the respective HANA master nameserver.
 .br
-If the HANA nameserver process is killed, in some cases hook script actions do not
-make it into the nameserver tracefile. In such cases the hook script´s own tracefile
-might help, see respective example.
+If the HANA nameserver process is killed, in some cases hook script actions do
+not make it into the nameserver tracefile. In such cases the hook script´s own
+tracefile might help, see respective example.
 .PP
 .RS 2
 # su - ha1adm
@@ -272,7 +269,8 @@ Example SID is HA1. To be executed on both sites' master nameservers.
 .PP
 \fB*\fP Example for checking the hook script tracefile for actions.
 .PP
-Example SID is HA1. To be executed on both sites' master nameservers.
+Example SID is HA1. To be executed on all nodes. All incident are logged on the
+nodes where it happens.
 .PP
 .RS 2
 # su - ha1adm
