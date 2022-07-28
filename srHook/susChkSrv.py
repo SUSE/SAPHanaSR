@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.3"
+SRHookVersion = "0.4.4"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -236,7 +236,7 @@ try:
                 logTimestamp( episode, msg )
                 self.tracer.info( msg )
                 tout_cmd=""
-                action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --case fenceMe --sid={0}".format(low_sid)
+                action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --sid={0} --case fenceMe".format(low_sid)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd )))
                 # DONE add fence code here
             if ( isLostIndexserver and ( self.action_on_lost == "kill" )):
