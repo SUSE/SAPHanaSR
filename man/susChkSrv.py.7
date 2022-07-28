@@ -29,13 +29,13 @@ indexserver to restart locally.
 See also SAPHanaSR(7) or SAPHanaSR-ScaleOut(7). 
 
 The hook script susChkSrv.py is called on any srServiceStateChanged() event.
-The hook script checks for 
-isIndexserver and serviceRestart and serviceWasActiveBefore and hostActive and databaseActive.
+The script checks for 
+ 'isIndexserver and serviceRestart and serviceWasActiveBefore and hostActive and databaseActive'.
 If it finds the correct entries, it executes the predefined action. As soon as
 the HANA landscapeHostConfiguration status changes to 1, the Linux cluster will
-take action. The action depends on the RA´s configuration parameters
-PREFER_SITE_TAKEOVER and AUTOMATED_REGISTER, see manual page ocf_suse_SAPHana(7) or
-ocf_suse_SAPHanaController(7).
+take action. The action depends on HANA system replication status and the RA´s
+configuration parameters PREFER_SITE_TAKEOVER and AUTOMATED_REGISTER, see manual
+page ocf_suse_SAPHana(7) or ocf_suse_SAPHanaController(7).
 
 Customising of HANA daemon timeout parameters might be needed for adapting the
 solution to a given environment. Please refer to SAP HANA documentation.
@@ -64,12 +64,12 @@ Action to be processed when a lost indexserver is identified.
 .br
 - ignore: do nothing, just write to tracefiles.
 .br
-- stop: do 'sapcontrol ... StopSystem'
+- stop: do 'sapcontrol ... StopSystem'.
 .br
 - kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
 - fence: do 'stonith_admin --reboot=<host>'. This needs a Linux cluster STONITH
-method.
+method and sudo permission.
 .br
 .\" TODO: - suicide: do 'systemctl reboot'. Do NOT use this!
 .\" .br
@@ -158,11 +158,11 @@ The HANA has to be stopped before the file can be changed.
 .RS 2
 [ha_dr_provider_suschksrv]
 .br
-provider = suschksrv
+provider = susChkSrv
 .br
-path = /usr/share/SAPHanaSR
+path = /usr/share/SAPHanaSR/
 .br
-execution_order = 2
+execution_order = 3 
 .RE
 .PP
 \fB*\fP Example for entry in SAP HANA scale-out global configuration
@@ -185,17 +185,17 @@ No HANA host auto-failover.
 .RS 2
 [ha_dr_provider_suschksrv]
 .br
-provider = suschksrv
+provider = susChkSrv
 .br
-path = /usr/share/SAPHanaSR-ScaleOut
+path = /usr/share/SAPHanaSR-ScaleOut/
 .br
-execution_order = 2
+execution_order = 2 
 .br
 action_on_lost = stop
 .br
 stop_timeout = 25
-.\" ignore_srhook = yes
 .\" .br
+.\" ignore_srhook = yes
 .RE
 .PP
 \fB*\fP Example for entry in SAP HANA daemon configuration
