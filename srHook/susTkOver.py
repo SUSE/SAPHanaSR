@@ -31,7 +31,7 @@ except ImportError as e:
     print("Module HADRBase not found - running outside of SAP HANA? - {0}".format(e))
 
 # parameter section
-fhSRHookVersion = "0.160.1"
+fhSRHookVersion = "0.160.2"
 TIME_OUT_DFLT = 30
 RC_TOB = 50277
 
@@ -74,9 +74,8 @@ try:
                 # run pre takeover code
                 # run pre-check, return != 0 in case of error => will abort takeover
                 my_sid = os.environ.get('SAPSYSTEMNAME')
-                low_sid = my_sid.lower()
                 tout_cmd = "timeout {0}s".format(self.time_out)
-                maint_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --case checkTakeover --sid={0}".format(low_sid)
+                maint_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --sid={0} --case=checkTakeover".format(my_sid)
 
                 self.tracer.info("{0}.{1}() maint_cmd is: {2}, tout_cmd is: {3}".format(self.__class__.__name__, method, maint_cmd, tout_cmd))
                 cmdrc = os.WEXITSTATUS(os.system(tout_cmd + " " + maint_cmd))

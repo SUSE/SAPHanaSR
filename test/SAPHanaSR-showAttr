@@ -8,7 +8,7 @@
 
 use strict;
 
-my $Version="0.22.2022.02.10";
+my $Version="0.23.2022.07.22";
 #
 ##################################################################
 #
@@ -37,6 +37,7 @@ my $help;
 my $version;
 my $cibFile="";
 my $format="tables";
+my $path2table=0;
 
 sub init()
 {
@@ -46,6 +47,7 @@ sub init()
                               "format=s" => \$format,
                           "version" => \$version,
                           "help" => \$help,
+                          "path2table" => \$path2table,
 		 );
    return 0;
 }
@@ -74,23 +76,32 @@ sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  return $a > $b ? $a : $b;
 }
 
-if ( 0 == @sids ) {
-    my $sid_ino_list;
-       ( $sid_ino_list ) = get_sid_and_InstNr();
-       @sids = split(",", $sid_ino_list);
-}
+if ( $path2table ) {
+    path_to_table("NIX", \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName);
+    print_host_attr(\%Global, \%GName, "Global", "", $format);
+    print_host_attr(\%Resource, \%RName, "Resource", "", $format);
+    print_host_attr(\%Site,   \%SName, "Sites",  "", $format);
+    print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy, $format);
+    exit 44;
+} else {
+    if ( 0 == @sids ) {
+        my $sid_ino_list;
+           ( $sid_ino_list ) = get_sid_and_InstNr();
+           @sids = split(",", $sid_ino_list);
+    }
 
-foreach my $sid (@sids) {
-    ( $sid, $ino ) = split(":", $sid);
-    $sid=lc("$sid");
-    %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=(); %Resource=(); %RName=();
-    get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName);
-    if ( keys(%Host) == 0 ) {
-        printf "No attributes found for SID=%s\n", $sid;
-    } else {
-	    print_host_attr(\%Global, \%GName, "Global", "", $format);
-	    print_host_attr(\%Resource, \%RName, "Resource", "", $format);
-	    print_host_attr(\%Site,   \%SName, "Sites",  "", $format);
-        print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy, $format);
+    foreach my $sid (@sids) {
+        ( $sid, $ino ) = split(":", $sid);
+        $sid=lc("$sid");
+        %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=(); %Resource=(); %RName=();
+        get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName);
+        if ( keys(%Host) == 0 ) {
+            printf "No attributes found for SID=%s\n", $sid;
+        } else {
+            print_host_attr(\%Global, \%GName, "Global", "", $format);
+            print_host_attr(\%Resource, \%RName, "Resource", "", $format);
+            print_host_attr(\%Site,   \%SName, "Sites",  "", $format);
+            print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy, $format);
+        }
     }
 }

@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR-hookHelper 8 "27 May 2022" "" "SAPHanaSR"
+.TH SAPHanaSR-hookHelper 8 "29 Jul 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-hookHelper - generic helper for SAP HANA HADR provider hook scripts
@@ -8,12 +8,13 @@ SAPHanaSR-hookHelper - generic helper for SAP HANA HADR provider hook scripts
 .SH SYNOPSIS
 \fBSAPHanaSR-hookHelper\fR [ --help | --version ]
 .br
-\fBSAPHanaSR-hookHelper\fR --SID=\fISID\fR --case=\fIuse_case\fR
+\fBSAPHanaSR-hookHelper\fR --sid=\fISID\fR --case=\fIuse_case\fR
 .\"
 .SH DESCRIPTION
 \fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HADR provider hook scripts.
 .br
-For now it only checks the maintenance mode of the multi-state resource, as descibed in manual page SAPHanaSR_maitenance_examples(7).
+For now it only checks the maintenance mode of the multi-state resource, as
+descibed in manual page SAPHanaSR_maitenance_examples(7).
 .\"
 .SH OPTIONS
 .TP 4
@@ -31,49 +32,82 @@ use this SID
 .\"
 .SH SUPPORTED PARAMETERS
 The script supports the following paramters:
-.TP
+.TP 4
 SAP SID to handle.
-.TP
-Use case. At the moment only 'checkTakeover' is supported. 
+.TP 4
+Use case. At the moment 'checkTakeover' and 'fenceMe' are supported.
+- checkTakeover : check whether a HANA takeover is running, allow or deny admin action.
+.br
+- fenceMe : fence local node by calling crm.
 .\"
 .SH RETURN CODES
 .TP
 \fB0\fR
-take-over requested by cluster, permit takeover.
+takeover requested by cluster, permit takeover.
 .TP
 \fB1\fR
 not from SAPHanaSR-hookHelper, but passed from called sudo.
 .TP
 \fB4\fR
-sr_takeover attribute not found or not set to 'T' and multi-state resource is NOT in maintenance, block take-over.
+sr_takeover attribute not found or not set to 'T' and multi-state resource is NOT in maintenance, block takeover.
 .TP
 \fB5\fR
-multi-state resource in maintenance, permit take-over.
+multi-state resource in maintenance, permit takeover.
 .TP
 \fB6\fR
-cluster not available, permit take-over.
+cluster not available, permit takeover.
 .TP
 \fB7\fR
-given SID not configured in the cluster, block take-over.
+given SID not configured in the cluster, block takeover.
+.TP
+\fB42\fR
+node fenced on request.
 .TP
 \fB99\fR
-unknown cluster command error, permit take-over.
+unknown cluster command error, permit takeover.
 .\"
 .SH EXAMPLES
-* Example for checking the system log for when SAPHanaSR-hookHelper has been called:
+* Example for checking the system log for when SAPHanaSR-hookHelper has been called.
 .PP
-.RS 4 
+.RS 2
 # grep sudo.*SAPHanaSR-hookHelper /var/log/messages
 .RE
 .PP
+* Example for generic sudo permissions in /etc/sudoers.d/SAPHanaSR .
+.PP
+Example SID is HA1. See also manual pages susTkOver.py(7), susChkSrv.py(7) and
+sudoers(5).
+.PP
+.RS 2
+# SAPHanaSR and SAPHanaSR-ScaleOut need for HADR provider hook scripts
+.PP
+Cmnd_Alias HOOK_HELPER  = /usr/sbin/SAPHanaSR-hookHelper --sid=HA1 --case=*
+.br
+ha1adm ALL=(ALL) NOPASSWD: HOOK_HELPER
+.RE
+.PP
+* Example for checking the Linux cluster STONITH setup and logs.
+.PP
+This steps are useful with use case 'fenceMe'.
+First the STONITH method for the local node is shown. Then the last successful
+fencing action is looked up. Finally the Linux cluster log is checked for STONITH
+requests. See also manual pages stonith_admin(8) and susChkSrv.py(7).
+.PP
+.RS 2
+# stonith_admin -l $(crm_node -n)
+.br
+# stonith_admin -h $(crm_node -n)
+.br
+# grep Requesting.*fencing  /var/log/pacemaker/pacemaker.log
+.RE
 .\"
 .SH FILES
 .TP 4
 /usr/sbin/SAPHanaSR-hookHelper
 the program itself
 .TP 4
-/usr/share/SAPHanaSR/susTkOver.py
-a calling HADR provider hook script
+/usr/share/SAPHanaSR/susTkOver.py , /usr/share/SAPHanaSR/susChkSrv.py
+calling HADR provider hook scripts
 .TP 4
 /tmp/SAPHanaSR_SRHhelper.XXXXXX
 temporary file, for internal use only
@@ -90,11 +124,12 @@ open a request for the component BC-OP-LNX-SUSE. Please report any other feedbac
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , 
 \fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
-\fBsusTkOver.py\fP(7) ,
+\fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_suse_SAPHanaController\fP(7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
-\fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), 
+\fBcrm\fP(8) , \fBcrm_attribute\fP(8) , \fBstonith_admin\fP(8) ,
+\fBsudo\fP(8) , \fBsudoers\fP(5), 
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap
 .\"
