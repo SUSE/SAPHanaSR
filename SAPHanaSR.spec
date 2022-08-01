@@ -40,6 +40,7 @@ Requires:       perl
 Requires:       crmsh
 Requires:       crmsh-scripts >= 2.2.0
 Requires:       python3
+Requires:       /usr/bin/xmllint
 BuildRequires:  resource-agents
 BuildRequires:  crmsh
 BuildRequires:  crmsh-scripts
