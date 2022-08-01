@@ -59,20 +59,23 @@ Mandatory. Depending on path delivered within RPM package. Please change only if
 Mandatory. Order might depend on other hook scripts.
 .TP
 \fBaction_on_lost = [ ignore | stop | kill | fence ]\fP
-.\" TODO: \fBaction_on_lost = [ ignore | stop | kill | fence | suicide ]\fP
+.\" TODO \fBaction_on_lost = [ ignore | stop | kill | fence | suicide ]\fP
 Action to be processed when a lost indexserver is identified.
 .br
-- ignore: do nothing, just write to tracefiles.
+- \fBignore\fP: do nothing, just write to tracefiles.
 .br
-- stop: do 'sapcontrol ... StopSystem'.
-.\" TODO: This is recommended for scale-out. ?
+- \fBstop\fP: do 'sapcontrol ... StopSystem'.
+.\" TODO This is recommended for scale-out. ?
+If this is combined with SAPHana RA parameter 'AUTOMATED_REGISTER=true', HANA
+needs to release all OS resources prior to the automated registering. See also
+manual page ocf_suse_SAPHana(7) or ocf_suse_SAPHanaController(7).
 .br
-- kill: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
+- \fBkill\fP: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'. 
 .br
-- fence: do 'crm node fence <host>'. This needs a Linux cluster STONITH method
+- \fBfence\fP: do 'crm node fence <host>'. This needs a Linux cluster STONITH method
 and sudo permission.
 .br
-.\" TODO: - suicide: do 'systemctl reboot'. Do NOT use this!
+.\" TODO - suicide: do 'systemctl reboot'. Do NOT use this!
 .\" .br
 Optional. Default is ignore.
 .TP
@@ -80,7 +83,7 @@ Optional. Default is ignore.
 Signal to be used with 'HDB kill-<signal>'.
 .br
 Optional. Default is 9.
-.\" TODO:
+.\" TODO
 .\" .TP
 .\" \fBignore_srhook = [ yes | no ]\fP
 .\" Initiate takeover even if HANA system replication (srHook) is not in sync.
@@ -102,7 +105,7 @@ Optional. Default is 9.
 \fBstop_timeout = [ INTEGER ]\fP
 How many seconds to wait for 'sapcontrol ... StopSystem' to return?
 Should be greater than value of daemon.ini parameter 'forcedtimeout'.
-.\" TODO: what is "forcedtimeout" ?
+.\" TODO what is "forcedtimeout" ?
 .br
 Optional. Default is 20 seconds.
 .TP
@@ -172,9 +175,12 @@ execution_order = 3
 In case of a failing indexserver, the HANA instance will be stopped with
  'sacpcontrol ... StopSystem'. HANA timeouts might be adapted to speed up the
 stop. 
-.\" TODO: This action is recommended for scale-out. ?
+If this is combined with SAPHanaController parameter 'AUTOMATED_REGISTER=true',
+HANA needs to release all OS resources prior to the automated registering.
+.\" TODO This action is recommended for scale-out. ?
+.br
 The hook script should wait maximum 25 seconds on the sapcontrol command to
-return.
+return. 
 .br
 The section ha_dr_provider_suschksrv is needed on all HANA nodes.
 The HANA has to be stopped before the file can be changed.
@@ -332,14 +338,20 @@ memory and on disk (in persistence).
 .PP
 4. HANA daemon timeout TODO
 .PP
+.\" TODO check below:
 5. The hook script runs on the HANA master nameserver.
 .PP
 6. HANA scale-out is supported only with exactly one master nameserver. HANA
 host auto-failover is not supported. Thus no standby nodes.
 .PP
-7. A Linux cluster STONITH method for all nodes.
+7. A Linux cluster STONITH method for all nodes is needed, particularly if
+susChkSrv.py parameter 'action_on_lost=fence' is set.
 .PP
-8. If the hook provider should be pre-compiled, the particular Python version
+8. If susChkSrv.py parameter 'action_on_lost=stop' is set and the RA SAPHana or
+SAPHanaController parameter 'AUTOMATED_REGISTER=true' is set, it depends on HANA
+to release all OS resources prior to the registering attempt.
+.PP
+9. If the hook provider should be pre-compiled, the particular Python version
 that comes with SAP HANA has to be used.
 .\"
 .SH BUGS
