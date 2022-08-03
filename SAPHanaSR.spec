@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.160.1
+Version:        0.161.1
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -40,6 +40,7 @@ Requires:       perl
 Requires:       crmsh
 Requires:       crmsh-scripts >= 2.2.0
 Requires:       python3
+Requires:       /usr/bin/xmllint
 BuildRequires:  resource-agents
 BuildRequires:  crmsh
 BuildRequires:  crmsh-scripts
@@ -100,6 +101,7 @@ install -m 0755 ra/* %{buildroot}/usr/lib/ocf/resource.d/suse/
 install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name}/samples
