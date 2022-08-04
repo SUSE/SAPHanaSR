@@ -947,7 +947,33 @@ function sht_stop_clone() {
         hanaPrim="-"
     fi
     # bsc#1198127
-    hanaANSWER=$(HANA_CALL --timeout 300 --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+    # we do not use our usual HANA_CALL_TIMEOUT for this call of
+    # 'landscapeHostConfiguration.py', but a much longer one, because if the
+    # timeout is reached, the node will be fenced. So it is a critical call
+    # and should get reasonable time to succeed.
+    # But it will be configurable by the cluster config (action timeout), if a
+    # system needs more time than we expected. The minimum used timeout is 300s
+    #
+    # timeOut = max(300, 50%(actionTimeOut))
+    # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action
+    # in ms
+    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
+    local stdTimeOut=300
+    local actTimeOutPercent=50
+    if [ -z "$actionTimeOut" ]; then
+        actionTimeOut="$stdTimeOut"
+    else
+        # actionTimeOut in seconds
+        ((actionTimeOut = actionTimeOut/1000))
+    fi
+    # 50%(actionTimeOut)
+    ((timeout = actionTimeOut * actTimeOutPercent/100))
+    # max(300, 50%(actionTimeOut))
+    if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
+        timeout=$stdTimeOut
+    fi
+
+    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
     if [ "$hanalrc" -ge 124 ]; then
         # timeout of HANA_CALL, set role to '1:P:-:-:-:-' to get the
         # saphana_demote_clone to fail and stop the resource
