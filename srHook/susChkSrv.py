@@ -259,6 +259,16 @@ try:
                 action_cmd = "sapcontrol -nr {} -function StopSystem".format(self.ino)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
                 # DONE HDB stop is only valid for Scale-Up but does not need the instance number
+            if ( isLostIndexserver and ( self.action_on_lost == "firstStopThenKill" )):
+                # this is lab code only. Do not use it in customer or partner systems.
+                # this code could be removed at any time without notice
+                # the code does not promise that it will be part of any product later
+                msg = "LOST: firstStopThenKill instance. action_on_lost={}".format(self.action_on_lost)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
+                tout_cmd="timeout {}".format(self.stop_timeout)
+                action_cmd = "/usr/sbin/SAPHanaSR-hookHelper --sid={} --ino={} --case=firstStopThenKill".format(mySID, self.ino)
+                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 msg = "LOST: set cluster attribute. action_on_lost={} is currently not implemented".format(self.action_on_lost)
                 logTimestamp(episode, msg )
