@@ -81,7 +81,7 @@ try:
             if self.config.hasKey("action_on_lost"):
                 self.action_on_lost = self.config.get("action_on_lost")
                 #isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
-                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop"] )
+                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "firstStopThenKill"] )
                 if ( not (isValidAction )):
                     msg = "Invalid action_on_lost {}. Fallback to 'ignore'".format(self.action_on_lost)
                     logTimestamp( episode, msg )
