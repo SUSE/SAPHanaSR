@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.4"
+SRHookVersion = "0.7.1"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -266,9 +266,8 @@ try:
                 msg = "LOST: firstStopThenKill instance. action_on_lost={}".format(self.action_on_lost)
                 logTimestamp(episode, msg )
                 self.tracer.info( msg )
-                tout_cmd="timeout {}".format(self.stop_timeout)
                 action_cmd = "/usr/sbin/SAPHanaSR-hookHelper --sid={} --ino={} --case=firstStopThenKill".format(mySID, self.ino)
-                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
+                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {}".format( "5", action_cmd )))
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 msg = "LOST: set cluster attribute. action_on_lost={} is currently not implemented".format(self.action_on_lost)
                 logTimestamp(episode, msg )
