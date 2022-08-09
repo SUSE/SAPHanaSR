@@ -29,7 +29,7 @@ usage() {
     echo -e "\\t--sid=<SID>: SID (like HA1) of the SAP system"
     echo -e "\\t--ino=<InstanceNumber>: instance number (like 10) of the SAP instance"
     echo -e "\\t--case=<use case>: the use case for the hook helper"
-    echo -e "\\t                   at the moment only 'checkTakeover' is supported"
+    echo -e "\\t                   at the moment only 'checkTakeover' and 'fenceMe' is supported"
     echo -e "\\t--version: show script version"
     echo -e "\\t--help:    show help"
     exit 1
@@ -135,7 +135,7 @@ stopSystemAndWait() {
 ##### main
 
 # variables
-version="202208091103"
+version="202208091454"
 exe="$0"
 cmd=$(basename "$exe")
 
@@ -242,37 +242,42 @@ case "$USECASE" in
      # this action needs to run as <sid>adm - do not call it as root
      # this action is lab code only and can be removed without any notice
      # this code is for lab only and can be removed without any notice - do not use at customer or partner systems
-     # this code does not primise that it will be part of any product later
+     # this code does not promise that it will be part of any product later
      #
+     logger -t SAPHanaSR-hookHelper "firstStopThenKill: try to stop SAP instance $InstanceNumber"
      stopSystemAndWait "$InstanceNumber" "60"; rc="$?"
      if [ "$rc" -ne 0 ]; then
          # TODO use function for logging
-         logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber is not stopped in time - need to kill the instance"
+         logger -t SAPHanaSR-hookHelper "firstStopThenKill: SAP instance $InstanceNumber is not stopped in time - need to kill the instance"
          HDB kill-9
-         logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber killed with signal 9"
+         # the following logger message will most likely not find the way to the system log, as the SAPHanaSR-hookHelper process will be killed also
+         logger -t SAPHanaSR-hookHelper "firstStopThenKill: SAP instance $InstanceNumber killed with signal 9"
      else
          # TODO use function for logging
-         logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber is already down - no need to kill the instance"
+         logger -t SAPHanaSR-hookHelper "firstStopThenKill: SAP instance $InstanceNumber is already down - no need to kill the instance"
      fi
      rc=0
+     ;;
 "firstStopThenFence" )
      #
      # this action needs to run as <sid>adm - do not call it as root
      # this action is lab code only and can be removed without any notice
      # this code is for lab only and can be removed without any notice - do not use at customer or partner systems
-     # this code does not primise that it will be part of any product later
+     # this code does not promise that it will be part of any product later
      #
      stopSystemAndWait "$InstanceNumber" "60"; rc="$?"
      if [ "$rc" -ne 0 ]; then
          # TODO use function for logging
          logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber is not stopped in time - need to fence the node"
          sudo /usr/sbin/SAPHanaSR-hookHelper --sid="$SID" --case="fenceMe"
+         # the following logger message will most likely not find the way to the system log, as the node will be already fenced
          logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber killed with signal 9"
      else
          # TODO use function for logging
          logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber is already down - no need to fence the node"
      fi
      rc=0
+     ;;
 #"nextUsecase")
 #    chk_next_case; rc=$?
 #    ;;
