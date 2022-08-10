@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.7.5"
+SRHookVersion = "0.7.6"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -169,6 +169,9 @@ try:
             eventKnown = False
             isLostIndexserver = False
 
+            #
+            # TODO: Do we need to filter-out events with status=="starting" and previousStatus=="starting" ?
+            #
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
                 msg = "LOST: indexserver event looks like a lost indexserver (status={})".format(status)
                 logTimestamp( episode, msg )
