@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.4"
+SRHookVersion = "0.4.5"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -170,7 +170,7 @@ try:
             isLostIndexserver = False
 
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
-                msg = "LOST: indexserver event looks like a lost indexserver"
+                msg = "LOST: indexserver event looks like a lost indexserver (serviceRestart={})".format(serviceRestart)
                 logTimestamp( episode, msg )
                 self.tracer.info( msg ) 
                 isLostIndexserver = True
