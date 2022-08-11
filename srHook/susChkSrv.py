@@ -276,6 +276,9 @@ try:
                 action_cmd = "/usr/sbin/SAPHanaSR-hookHelper --sid={} --ino={} --case=firstStopThenKill".format(mySID, self.ino)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {}".format("5", action_cmd)))
             if (isLostIndexserver and self.action_on_lost == "attr"):
+                # this is lab code only. Do not use it in customer or partner systems.
+                # this code could be removed at any time without notice
+                # the code does not promise that it will be part of any product later
                 msg = "LOST: set cluster attribute. action_on_lost={} is currently not implemented".format(self.action_on_lost)
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
