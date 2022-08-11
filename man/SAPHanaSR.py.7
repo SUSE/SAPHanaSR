@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR.py 7 "22 Apr 2022" "" "SAPHanaSR"
+.TH SAPHanaSR.py 7 "12 Aug 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
@@ -101,9 +101,25 @@ execution_order = 1
 [trace]
 .br
 ha_dr_saphanasr = info
+.PP
+* Example for entry in SAP HANA 2.0 global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini to enable multi-target aware third site.
+.br
+This entry is needed to allow ocf_suse_SAPHana(7) parameter AUTOMATED_REGISTER=true in multi-target environments.
+The HANA has to be stopped before the files can be edited.
+Do not copy the file between nodes. Please check SAP HANA documentation for details.
+.PP
+.RS 2
+[system_replication]
+.br
+ ...
+.br
+register_secondaries_on_takeover = true
+.br
+ ...
 .RE
 .PP
-* Example for creating the optional SAPHanaSR python object file manually.
+* Example for creating the optional SAPHanaSR python object file manually. This object file will not be updated with RPM package updates.
 .PP
 .RS 2
 # mkdir -p /hana/shared/srhook
@@ -221,18 +237,24 @@ the internal cache for srHook status changes while Linux cluster is down, file i
 .\"
 .SH REQUIREMENTS 
 1. SAP HANA 2.0 SPS04 or later provides the HA/DR provider hook method
-srConnectionChanegd() with multi-target aware parameters.
+srConnectionChanged() with multi-target aware parameters.
 SAP HANA 1.0 does not provide them.
 The multi-target aware parameters are needed for the SAPHanaSR scale-up
 package.
 .PP
-2. The user ${sid}adm needs execution permission as user root for the command crm_attribute. 
+2. No other HADR provider hook script should be configured for the
+srConnectionChanged() method. Hook scripts for other methods, provided in
+SAPHanaSR, can be used in parallel to SAPHanaSR.py, if not documented
+contradictingly.
 .PP
-3. The hook provider needs to be added to the HANA global configuration,
+3. The user ${sid}adm needs execution permission as user root for the command
+crm_attribute. 
+.PP
+4. The hook provider needs to be added to the HANA global configuration,
 in memory and on disk (in persistence).
 .PP
-4. If the hook provider should be pre-compiled, the particular Python version that comes with SAP HANA
-has to be used.
+5. If the hook provider should be pre-compiled, the particular Python version
+that comes with SAP HANA has to be used.
 .\"
 .SH BUGS
 In case of any problem, please use your favourite SAP support process to open

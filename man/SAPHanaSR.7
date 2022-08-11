@@ -10,8 +10,8 @@ SAPHanaSR \- Tools for automating SAP HANA system replication in scale-up setups
 .\"
 \fBOverview\fR
 .PP
-The SAPHanaSR package provides resource agents (RA) and tools for setting
-up and managing automation of SAP HANA system replication (SR) in scale-up setups.
+The SAPHanaSR package provides resource agents (RA) and tools for setting up
+and managing automation of SAP HANA system replication (SR) in scale-up setups.
 .pp
 System replication will help to replicate the database data from one site to
 another site in order to compensate for database failures. With this mode of
@@ -26,13 +26,21 @@ monitor the SAP HANA databases on landscape host configuration level.
 For this monitoring the resource agent relies on interfaces provided by SAP.
 As long as the HANA landscape status is not "ERROR" the Linux cluster will not
 act. The main purpose of the Linux cluster is to handle the takeover to the
-other site. Only if the HANA landscape status indicates that HANA can not recover
-from the failure and the replication is in sync, then Linux will act.
+other site. Only if the HANA landscape status indicates that HANA can not
+recover from the failure and the replication is in sync, then Linux will act.
 .PP
 An important task of the resource agent is to check the synchronisation status
 of the two SAP HANA databases. If the synchronisation is not "SOK", then the
-cluster avoids to takeover to the secondary side, if the primary fails. This is
+cluster avoids to takeover to the secondary side, if the primary fails. This is 
 to improve the data consistency.
+.PP
+Besides the resource agents, the package contains HADR provider hook scripts.
+This hook scripts are called by HANA at specific events. One important event is
+when system replication gets lost. The related hook script informs the HA
+cluster immediately, without waiting for the next RA monitor. This ensures data 
+consistency even in corner cases. Another use case for hook scripts is allowing
+manual takeover if the HANA resource is in maintenance mode, but blocking manual
+takeover otherwise. This prevents from dual-primary situations.
 .PP
 Note: To automate SAP HANA SR in scale-out setups, please use the package
 SAPHanaSR-ScaleOut.
@@ -129,12 +137,11 @@ usually is two.
 .PP
 The HANA consists of two sites with one node each.
 .br
-Note: A third site can be added, with another system replication (aka replication
-chaining). This will be tolerated by the cluster. Nevertheless, this additional
-pieces are not managed by the cluster. E.g. if the direction of system replication
-between the two cluster nodes changes, the third site must be disconnected before
-hand. So, such a replication chaining does not allow to use the AUTOMATED_REGISTER
-feature of SAPHanaSR.
+Note: A third HANA site can be added, with another system replication (aka
+multi-target replication ). This will be tolerated by the cluster. Nevertheless,
+this additional pieces are not managed by the cluster. Therefor in multi-target 
+setups, the AUTOMATED_REGISTER feature needs the register_secondaries_on_takeover
+feature of HANA.
 .PP
 A common STONITH mechanism is set up for all nodes across all the sites.
 .PP

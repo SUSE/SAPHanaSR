@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName="susChkSrv"
-SRHookVersion = "0.4.4"
+SRHookVersion = "0.7.6"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -81,7 +81,7 @@ try:
             if self.config.hasKey("action_on_lost"):
                 self.action_on_lost = self.config.get("action_on_lost")
                 #isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "attr"] )
-                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop"] )
+                isValidAction = ( self.action_on_lost in ["ignore", "fence", "kill", "stop", "firstStopThenKill"] )
                 if ( not (isValidAction )):
                     msg = "Invalid action_on_lost {}. Fallback to 'ignore'".format(self.action_on_lost)
                     logTimestamp( episode, msg )
@@ -169,8 +169,11 @@ try:
             eventKnown = False
             isLostIndexserver = False
 
+            #
+            # TODO: Do we need to filter-out events with status=="starting" and previousStatus=="starting" ?
+            #
             if ( isIndexserver and serviceRestart and daemonActive and databaseActive ) :
-                msg = "LOST: indexserver event looks like a lost indexserver"
+                msg = "LOST: indexserver event looks like a lost indexserver (status={})".format(status)
                 logTimestamp( episode, msg )
                 self.tracer.info( msg ) 
                 isLostIndexserver = True
@@ -197,10 +200,12 @@ try:
                 logTimestamp(episode, msg )
                 eventKnown = True
             if ( isIndexserver and serviceStopping and daemonActive and databaseStop ) :
+                msg = "STOP: indexserver event looks like graceful tenant stop"
                 logTimestamp(episode, msg )
                 self.tracer.info( msg )
                 eventKnown = True
             if ( isIndexserver and serviceDown and daemonActive and databaseStop ) :
+                msg = "STOP: indexserver event looks like graceful tenant stop (indexserver stopped)"
                 logTimestamp(episode, msg )
                 self.tracer.info( msg )
                 eventKnown = True
@@ -259,6 +264,15 @@ try:
                 action_cmd = "sapcontrol -nr {} -function StopSystem".format(self.ino)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format( "5", tout_cmd, action_cmd )))
                 # DONE HDB stop is only valid for Scale-Up but does not need the instance number
+            if ( isLostIndexserver and ( self.action_on_lost == "firstStopThenKill" )):
+                # this is lab code only. Do not use it in customer or partner systems.
+                # this code could be removed at any time without notice
+                # the code does not promise that it will be part of any product later
+                msg = "LOST: firstStopThenKill instance. action_on_lost={}".format(self.action_on_lost)
+                logTimestamp(episode, msg )
+                self.tracer.info( msg )
+                action_cmd = "/usr/sbin/SAPHanaSR-hookHelper --sid={} --ino={} --case=firstStopThenKill".format(mySID, self.ino)
+                cmdrc = os.WEXITSTATUS(os.system("sleep {}; {}".format( "5", action_cmd )))
             if ( isLostIndexserver and ( self.action_on_lost == "attr" )):
                 msg = "LOST: set cluster attribute. action_on_lost={} is currently not implemented".format(self.action_on_lost)
                 logTimestamp(episode, msg )
