@@ -41,7 +41,7 @@ except ImportError as e:
 
 # hook section
 SRHookName = "susChkSrv"
-SRHookVersion = "0.7.6"
+SRHookVersion = "0.7.7"
 # parameter section
 TIME_OUT_DFLT = 20
 
