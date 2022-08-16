@@ -1,0 +1,359 @@
+= SAPHanaSR - susChkSrv HA/DR provider - beta version
+
+== Installing and configure the susChkSrv provider beta software version
+
+This section describes how to install and set up the new *susChkSrv* hook
+provider to cover lost hdbindexserver processes from scratch. If you already have
+installed the alfa version of the susChkSrv provider, please read the section
+'Migrating susChkSrv provider from alfa to beta software version'.
+
+This guide assumes you already have set up your cluster using a "official"
+version of SAPHanaSR. The SAP HANA databases are in system replication and
+already integrated in the SUSE cluster.
+
+=== Updating the SAPHanaSR software package
+
+To test the functionality of the new hook script susChkSrv.py you need to
+update the package SAPHanaSR. The beta software package is not signed with
+the official SUSE package build keys. The package is not published via update
+channels but supplied directly for selected customers and partners.
+
+NOTE: Before you update to the test package, please make sure you have the newest
+"official" SAPHanaSR package installed on your system. If not update the SAPHanaSR
+package first. At the moment of writing this document the current SAPHanaSR package
+version is 0.160.1.
+
+NOTE: The version of the SAPHanaSR test package will be 0.161.1 or 0.161.1_TEST.
+The release number (in the example 150200.4.47.1) will be different for newer builds.
+
+----
+ # rpm -Fvh SAPHanaSR-0.161.1_TEST-150200.4.47.1.noarch.rpm
+----
+
+=== Enabling the new HA/DR provider hook script
+==== Enabling the HA/DR provider
+
+In SAP HANA global.ini the section [ha_dr_provider_suschksrv] needs to be added:
+
+.Section ha_dr_provider_suschksrv in global.ini
+====
+----
+[ha_dr_provider_suschksrv]
+provider = susChkSrv
+path = /usr/share/SAPHanaSR/
+execution_order = 3
+action_on_lost = kill
+----
+====
+
+Then the HA/DR provider hook script needs to be reloaded. The config change and
+reload have to be done at both sites. The hook action on lost hdbindexserver
+process is controlled by parameter "action_on_lost = [ ignore | stop | kill |
+fence ]".
+
+The related actions are:
+
+* *ignore*: do nothing
+* *stop*: sapcontrol ... StopSystem
+* *kill*: HDB kill-9
+* *fence*: crm node fence ...
+
+That action should return faster than the hook script stop_timeout. Default is
+20 seconds, i.e. "stop_timeout = 20".
+
+.Procedure for enabling the hook script
+====
+----
+# su - <sid>adm
+~> cdcoc; cp global.ini global.ini.BAK
+~> vi global.ini
+...
+~> grep -A4 "^\[ha_dr_provider_suschksrv\]" global.ini
+[ha_dr_provider_suschksrv]
+provider = susChkSrv
+path = /usr/share/SAPHanaSR/
+execution_order = 3
+action_on_lost = kill
+
+~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
+----
+====
+
+==== Checking the HA/DR provider related SAP HANA trace entries
+
+.Check HA/DR provider trace entries
+====
+----
+~> cdtrace; grep "HADR.*load.*susChkSrv" nameserver_*.trc | tail -3
+...
+... loading HA/DR Provider 'susChkSrv' from /usr/share/SAPHanaSR/
+
+~> grep "ha_dr_susChkSrv.*init" nameserver_*.trc | tail -3
+...
+... susChkSrv.init() version 0.3.1, parameter info: stop_timeout=20 action_on_lost=kill
+~> exit
+----
+====
+
+NOTE: The grep shows what has been logged.
+
+
+==== Enabling the node fencing.
+
+In the OS, sudo root permission have to be given to <sid>adm for
+SAPHanaSR-hookHelper:
+
+----
+<sid>adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper --sid=<SID> --case=fenceMe
+----
+
+.Procedure for giving that sudo permission looks like:
+====
+----
+# cp /etc/sudoers.d/SAPHanaSR /etc/sudoers.d/SAPHanaSR.BAK
+# echo "ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper --sid=HA1 --case=fenceMe" >>/etc/sudoers.d/SAPHanaSR
+----
+====
+
+NOTE: Please use your correct <sid>adm and <SID>.
+
+==== Checking the sudo permission for the hook script.
+----
+# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/sbin/SAPHanaSR-hookHelper"
+----
+NOTE: Please use your correct <sid>adm.
+
+=== Extracting hook script entries from HANA tracefiles
+
+The hook script entries can be extracted from HANA nameserver tracefiles on the
+respective node.
+
+.Extracting hook script runtimes on the master nameserver:
+====
+----
+# su - <sid>adm
+~> cdtrace; egrep 'susChk.*(LOST:|STOP:|START:|DOWN:|TAKEOVER:|init|load|fail)' nameserver_*.trc | tail -20
+...
+... susChkSrv.py(00152) : START: indexserver event looks like graceful tenant start
+...
+... susChkSrv.py(00140) : STOP: indexserver event looks like graceful instance stop
+...
+... susChkSrv.py(00144) : DOWN: indexserver event looks like graceful tenant stop
+...
+... susChkSrv.py(00134) : TAKEOVER: indexserver event looks like a takeover event
+...
+... susChkSrv.py(00129) : LOST: indexserver event looks like a lost indexserver
+... susChkSrv.py(00174) : LOST: kill instance. action_on_lost=kill
+~> exit
+----
+====
+
+=== Disabling the new HA/DR provider hook script
+
+==== Disabling the HA/DR provider completely
+
+The new HA/DR provider hook script might be disabled after the tests.
+
+In the SAP HANA global.ini configuration file the section [ha_dr_provider_suschksrv]
+needs to be removed. Then the HA/DR provider hook script needs to be reloaded.
+The config change and reload have to be done at both sites.
+
+==== Setting the HA/DR provider action to ignore
+
+As an alternative the HA/DR provider could be keep loaded into SAP HANA, but the
+hook script should neither kill nor stop SAP HANA in an indexsever lost event.
+
+In this case change the parameter 'action_on_lost' to value 'ignore'. With that
+action the event is only mentioned in the trace file, but no action as kill or
+stop is being started.
+
+After changing the value in global.ini the HA/DR provider needs to be reloaded
+as documented in section 2.1.
+
+.Procedure for changing the hook script action to "ignore"
+====
+----
+# su - <sid>adm
+~> cdcoc; cp global.ini global.ini.BAK2
+~> vi global.ini
+...
+~> grep -A4 "^\[ha_dr_provider_suschksrv\]" global.ini
+[ha_dr_provider_suschksrv]
+provider = susChkSrv
+path = /usr/share/SAPHanaSR/
+execution_order = 2
+action_on_lost = ignore
+
+~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
+----
+====
+
+.Checking the HA/DR provider related HANA trace entries
+====
+----
+~> cdtrace; grep "HADR.*load.*susChkSrv" nameserver_*.trc | tail -3
+...
+... loading HA/DR Provider 'susChkSrv' from /usr/share/SAPHanaSR/
+~> grep "ha_dr_susChkSrv.*init" nameserver_*.trc | tail -3
+...
+... susChkSrv.init() version 0.3.1, parameter info: stop_timeout=20 action_on_lost=ignore
+~> exit
+----
+====
+
+NOTE: The grep shows what has been logged. The action_on_lost is logged as set
+to "ignore".
+
+== Migrating susChkSrv from alfa to beta software version
+
+The susChkSrv alfa version was shipped as a tar ball and was using alfa-specific
+directories for the hook script. The beta software version is now shipped in rpm
+package format and uses the final directories. If you have the alfa version
+already installed on your system you need to migrate from the alfa to the beta
+software.
+
+This section describes how to migrate from alfa to beta software version
+successfully.
+
+NOTE: The command *cs_clusterstate -i* is part of package ClusterTools2 and helps
+to check, if the cluster is currently in an idle state.
+
+. The maintenance procedure begins with setting the multi-state resource in
+maintenance mode.
++
+----
+ # crm resource maintenance msl_SAPHana_HA1_HDB10 on
+ # cs_clusterstate -i
+----
++
+. Now we update the SAPHanaSR package on both cluster nodes as user root.
++
+NOTE: Before you update to the test package, please make sure you have the newest
+"official" SAPHanaSR package installed on your system. If not update the SAPHanaSR
+package first. At the moment of writing this document the current SAPHanaSR package
+version is 0.160.1.
++
+NOTE: The version of the SAPHanaSR test package will be 0.161.1 or 0.161.1_TEST.
+The release number (in the example 150200.4.47.1) will be different for newer builds.
++
+----
+ # rpm -Fvh SAPHanaSR-0.161.1_TEST-150200.4.47.1.noarch.rpm
+----
++
+. Changing the SAP HANA global.ini to use the new beta hook script on both cluster
+nodes. This step includes a downtime for SAP HANA as we need to reconfigure the
+hook definition in the global.ini file. In section *[ha_dr_provider_suschksrv]*
+change the path from *'/usr/share/SAPHanaSR-alfa/'* to *'/usr/share/SAPHanaSR/'*
++
+The HDB start should be first done on the primary otherwise the secondary
+startup will "hang" until the primary gets available.
++
+.Configure SAP HANA to load susChkSrv from the new path of the beta version
+====
+----
+ # su - ha1adm
+ # HDB stop
+ # cdcoc
+ # # edit the global.ini and change the path in section [ha_dr_provider_suschksrv]
+ # #    from '/usr/share/SAPHanaSR-alfa/' to '/usr/share/SAPHanaSR/'
+ # HDB start
+ # cdtrace
+----
+====
++
+NOTE: After the edit the global.ini section *[ha_dr_provider_suschksrv]* should
+look like the following example.
++
+.ha_dr_provider_suschksrv
+====
+----
+ [ha_dr_provider_suschksrv]
+ provider = susChkSrv
+ path = /usr/share/SAPHanaSR/
+ execution_order = 3
+ action_on_lost = stop
+----
+====
++
+. As last migration step we optionally delete the outdated alfa version files.
+This has to be done on both nodes. This step is helpful not to get confused
+about different versions of susChkSrv.
++
+----
+  rm -rf /usr/share/SAPHanaSR-alfa
+----
++
+. The maintenance procedure ends with refreshing the multi-state resource and
+setting it back in operation mode (end the maintenance mode).
++
+----
+ # crm resource refresh msl_SAPHana_HA1_HDB10
+ # crm resource maintenance msl_SAPHana_HA1_HDB10 off
+ # cs_clusterstate -i
+----
+
+== Requirements and limits
+
+This hook script is a beta version for testing purpose.
+It must not be used on production systems.
+
+The hook script has the following requirements and limits:
+
+. SAP HANA 2.0 SPS05 or later provides the HA/DR provider hook method
+   srServiceStateChanged() with needed parameters.
+
+. The user <sid>adm needs execution permission as user root for the command
+   SAPHanaSR-hookHelper.
+
+. The hook provider needs to be added to the SAP HANA global configuration, in
+   memory and on disk (in persistence).
+
+. The hook script action_on_lost should return faster than the stop_timeout.
+
+. The hook script runs on the HANA master nameserver.
++
+. The beta version of the susChkSrv HA/DR provider is currently only released for
+SAP HANA scale-up system replication.
+//. SAP HANA scale-out is supported only with exactly one master nameserver.
+//  SAP HANA host auto-failover is not supported. Thus no standby nodes.
++
+. A Linux cluster STONITH method for all nodes.
+
+. If an SAP HANA takeover attempt was blocked before, the hook script may report
+a later occuring indexserver recovery as a successful takeover.
+
+////
+notes for going back from rpm to alfa
+
+* Begin the maintenance procedure
+** # crm resource maintenance msl_SAPHana_HA1_HDB10 on
+** # cs_clusterstate -i
+
+* Going back to an official package version
+** zypper --non-interactive se -t package --details -x SAPHanaSR
+  => we get an older "official" package version available to installed like 0.160.1-150000.4.20.1
+** zypper --non-interactive in --oldpackage SAPHanaSR-0.160.1-150000.4.20.1
+
+* Re-Extracting the alfa-code and checking for the changed hook helper
+** # tar -xf SAPHanaSR-alfa-4.tgz  -C /
+** # rpm -V SAPHanaSR
+
+* Changing the SAP HANA global.ini back to alfa
+** su - ha1adm
+** HDB stop
+** cdcoc
+** In section [ha_dr_provider_suschksrv] change the path from '/usr/share/SAPHanaSR/' to '/usr/share/SAPHanaSR-alfa/'
+   => in the lab you could also use the file 'global.ini.alfa'
+** HDB start
+
+* Check the hook is loaded successfully and the correct version is loaded
+** cdtrace
+** grep susChkSrv.init nameserver_suschksrv.trc | tail -2
+   => check for that the event time is the current time for the last entry and check for the changed versions (here 0.7.7 => 0.4.4)
+
+* End the maintenance procedure
+** # crm resource refresh msl_SAPHana_HA1_HDB10
+** # crm resource maintenance msl_SAPHana_HA1_HDB10 off
+
+
+////
