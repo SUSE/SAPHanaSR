@@ -3,7 +3,7 @@
 
 use Getopt::Long;
 
-my $Version="202208191305";
+my $Version="202208191320";
 my $add = 0;
 my $remove = 0;
 my $show = 0;
@@ -43,6 +43,7 @@ sub add_update_provider
     my $value="";
     my $layer="SYSTEM";
     my $file="global.ini";
+    my $last_cmd="";
     while (<>) {
         chomp;
         if ($_ =~ /^\[([^]]*)\]$/) {
@@ -54,9 +55,13 @@ sub add_update_provider
             # <key> = <value>
             $key = "$1";
             $value = "$2";
-            printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s=%s\n", $layer, $file, $section, $key, $value );
+           
+            $last_cmd=sprintf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s=%s\n", $layer, $file, $section, $key, $value );
+            # printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s=%s\n", $layer, $file, $section, $key, $value );
+            system($last_cmd);
         }
     }
+    # TODO: re-start the last command with reconfigure
 }
 
 #
@@ -81,9 +86,12 @@ sub remove_provider
             # <key> = <value>
             $key = "$1";
             # $value = "$2";
-            printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s\n", $layer, $file, $section, $key );
+            $last_cmd=sprintf("HDBSettings.sh setParameter.py -unset=%s/%s/%s/%s\n", $layer, $file, $section, $key );
+            #printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s\n", $layer, $file, $section, $key );
+            system($last_cmd);
         }
     }
+    # TODO: re-start the last command with reconfigure
 }
 
 #
