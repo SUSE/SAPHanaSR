@@ -1,0 +1,102 @@
+#!/usr/bin/perl
+# TODO: add cmd line options later
+
+use Getopt::Long;
+
+my $Version="202208191142";
+my $add = 0;
+my $remove = 0;
+my $show = 0;
+my $coc = "/usr/sap/$SAPSYSTEMNAME/SYS/global/hdb/custom/config";
+
+sub init()
+{
+	my $result = GetOptions ("provider=s" => \$provider,
+                             "add" => \$add,
+                             "remove" => \$remove,
+                             "show" => \$show,
+                             "version" => \$version,
+                             "help" => \$help,
+		 );
+   return 0;
+}
+
+init();
+
+if ( $add + $remove + $show ne 1 ) {
+    printf("Specify exactly ONE action out of add, remove or show\n");
+    printf("add=%s remove=%s show=%s\n", $add, $remove, $show);
+    exit 2;
+}
+
+#
+# add_update_provider
+# read provider section from stdin and send it to SAP HANA
+#
+sub add_update_provider
+{
+    my $section="";
+    my $key="";
+    my $value="";
+    my $layer="SYSTEM";
+    my $file="global.ini";
+    while (<>) {
+        chomp;
+        if ($_ =~ /^\[([^]]*)\]$/) {
+            # section entry found (no whitespace allowed before and after)
+            # [<section>]    
+            $section = $1;
+        } elsif ($_ =~ /(\w*)\W*=\W(.*)/) {
+            # key = value entry found
+            # <key> = <value>
+            $key = "$1";
+            $value = "$2";
+            printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s=%s\n", $layer, $file, $section, $key, $value );
+        }
+    }
+}
+
+#
+# remove_provider
+# read provider section entries from stdin and send UNSET to SAP HANA
+#
+sub remove_provider
+{
+    my $section="";
+    my $key="";
+    # my $value="";
+    my $layer="SYSTEM";
+    my $file="global.ini";
+    while (<>) {
+        chomp;
+        if ($_ =~ /^\[([^]]*)\]$/) {
+            # section entry found (no whitespace allowed before and after)
+            # [<section>]    
+            $section = $1;
+        } elsif ($_ =~ /(\w*)\W*=\W(.*)/) {
+            # key = value entry found
+            # <key> = <value>
+            $key = "$1";
+            # $value = "$2";
+            printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s\n", $layer, $file, $section, $key );
+        }
+    }
+}
+
+#
+# show_provider
+# display section for defined provider section
+#
+sub show_provider
+{
+    my $section=shift;
+    system('( cd $coc; awk "/\[$section\]/,/^$/" global.ini )');
+}
+
+if ( $add ) {
+    add_update_provider();
+} elsif ( $remove ) {
+    remove_provider();
+} elsif ( $show ) {
+    show_provider "ha_dr_provider_$provider";
+}
