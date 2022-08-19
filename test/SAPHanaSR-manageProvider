@@ -3,7 +3,7 @@
 
 use Getopt::Long;
 
-my $Version="202208191150";
+my $Version="202208191305";
 my $add = 0;
 my $remove = 0;
 my $show = 0;
@@ -93,10 +93,21 @@ sub remove_provider
 sub show_provider
 {
     my $section=shift;
-    printf("coc: $coc\n");
-    printf("system: ( awk '/\[$section\]/,/^$/' $coc/global.ini )\n");
-    system("( bash -xc awk '/\[$section\]/,/^$/' $coc/global.ini )");
-    # system('( awk "/\[$section\]/,/^$/" $coc/global.ini )');
+
+    open GLOBALINI, "<", "$coc/global.ini";
+    my $printSection = 0;
+    while(<GLOBALINI>) { 
+        chomp;
+        if ($_ =~ /\[$section\]/) { 
+            $printSection = 1; 
+        } elsif ($_ =~ /^$/) {
+            $printSection = 0;
+        }
+        if ($printSection == 1) {
+            printf("%s\n",$_)
+        }
+    }
+    close GLOBALINI;
 }
 
 if ( $add ) {
