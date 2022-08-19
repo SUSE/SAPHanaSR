@@ -3,15 +3,16 @@
 
 use Getopt::Long;
 
-my $Version="202208191142";
+my $Version="202208191150";
 my $add = 0;
 my $remove = 0;
 my $show = 0;
-my $coc = "/usr/sap/$SAPSYSTEMNAME/SYS/global/hdb/custom/config";
+my $sid="";
 
 sub init()
 {
 	my $result = GetOptions ("provider=s" => \$provider,
+		             "sid=s" => \$sid,
                              "add" => \$add,
                              "remove" => \$remove,
                              "show" => \$show,
@@ -22,6 +23,8 @@ sub init()
 }
 
 init();
+
+my $coc = "/usr/sap/$sid/SYS/global/hdb/custom/config";
 
 if ( $add + $remove + $show ne 1 ) {
     printf("Specify exactly ONE action out of add, remove or show\n");
@@ -90,7 +93,10 @@ sub remove_provider
 sub show_provider
 {
     my $section=shift;
-    system('( cd $coc; awk "/\[$section\]/,/^$/" global.ini )');
+    printf("coc: $coc\n");
+    printf("system: ( awk '/\[$section\]/,/^$/' $coc/global.ini )\n");
+    system("( bash -xc awk '/\[$section\]/,/^$/' $coc/global.ini )");
+    # system('( awk "/\[$section\]/,/^$/" $coc/global.ini )');
 }
 
 if ( $add ) {
