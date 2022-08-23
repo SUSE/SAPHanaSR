@@ -1,20 +1,30 @@
 = SAPHanaSR - susChkSrv HA/DR provider - beta version
 
-== Installing and configure the susChkSrv provider beta software version
+== Installing and configure the susChkSrv provider beta software
 
 This section describes how to install and set up the new *susChkSrv* hook
 provider to cover lost hdbindexserver processes from scratch. If you already have
 installed the alfa version of the susChkSrv provider, please read the section
 'Migrating susChkSrv provider from alfa to beta software version'.
 
-This guide assumes you already have set up your cluster using a "official"
+This guide assumes you already have set up your cluster using an "official"
 version of SAPHanaSR. The SAP HANA databases are in system replication and
-already integrated in the SUSE cluster.
+already integrated into the SUSE cluster.
+
+=== Preparing the cluster resource for maintenance
+
+.Set the multi state resource in maintenance mode
+====
+----
+# crm resource maintenance msl_SAPHana_HA1_HDB10 on
+# cs_clusterstate -i
+----
+====
 
 === Updating the SAPHanaSR software package
 
 To test the functionality of the new hook script susChkSrv.py you need to
-update the package SAPHanaSR. The beta software package is not signed with
+update the package SAPHanaSR on all cluster nodes. The beta software package is not signed with
 the official SUSE package build keys. The package is not published via update
 channels but supplied directly for selected customers and partners.
 
@@ -63,18 +73,47 @@ That action should return faster than the hook script stop_timeout. Default is
 
 .Procedure for enabling the hook script
 ====
+This procedure needs to be done on the primary and secondary SAP HANA database
+instance. The Linux user <sid>adm is used to process these changes in the
+SAP HANA configuration files.
+
 ----
 # su - <sid>adm
 ~> cdcoc; cp global.ini global.ini.BAK
-~> vi global.ini
-...
-~> grep -A4 "^\[ha_dr_provider_suschksrv\]" global.ini
+~> vi global.ini.susChkSrv
+----
+
+Create a file with the following content. You need to adjust the parameter
+'action_on_lost' to your preferred action (e.g. 'stop').
+
+----
 [ha_dr_provider_suschksrv]
 provider = susChkSrv
 path = /usr/share/SAPHanaSR/
 execution_order = 3
 action_on_lost = kill
 
+[trace]
+ha_dr_suschksrv = info
+----
+
+Import the template file into the global.ini of SAP HANA. This could be done
+online and offline.
+
+----
+~> cdcoc
+~> /usr/sbin/SAPHanaSR-manageProvider --add --reconfigure global.ini.susChkSrv
+----
+
+Check the imported HADR provider sections.
+
+----
+~> /usr/sbin/SAPHanaSR-manageProvider --show --provider=suschksrv
+----
+
+Reload the HADR providers.
+
+----
 ~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
 ----
 ====
@@ -97,6 +136,16 @@ action_on_lost = kill
 
 NOTE: The grep shows what has been logged.
 
+==== End the resource maintenance mode
+
+.Unset the multi state resource maintenance mode
+====
+----
+# crm resource refresh msl_SAPHana_HA1_HDB10
+# crm resource maintenance msl_SAPHana_HA1_HDB10 off
+# cs_clusterstate -i
+----
+====
 
 ==== Enabling the node fencing.
 
@@ -158,6 +207,24 @@ In the SAP HANA global.ini configuration file the section [ha_dr_provider_suschk
 needs to be removed. Then the HA/DR provider hook script needs to be reloaded.
 The config change and reload have to be done at both sites.
 
+You can use SAPHanaSR-manageProvider to remove a HADR provider which has been
+added using a template file before. Alternatively you could use
+'SAPHanaSR-manageProvider --show...' to create a template file to delete the
+HADR provider.
+
+.Deleting the HADR provider using SAPHanaSR-manageProvider
+====
+----
+cdcoc
+/usr/sbin/SAPHanaSR-manageProvider --show --provider=suschksrv > \
+    global.ini.susChkSrv
+cat global.ini.susChkSrv
+/usr/sbin/SAPHanaSR-manageProvider --remove --reconfigure \
+   global.ini.susChkSrv
+/usr/sbin/SAPHanaSR-manageProvider --show --provider=suschksrv
+----
+====
+
 ==== Setting the HA/DR provider action to ignore
 
 As an alternative the HA/DR provider could be keep loaded into SAP HANA, but the
@@ -175,15 +242,36 @@ as documented in section 2.1.
 ----
 # su - <sid>adm
 ~> cdcoc; cp global.ini global.ini.BAK2
-~> vi global.ini
-...
-~> grep -A4 "^\[ha_dr_provider_suschksrv\]" global.ini
-[ha_dr_provider_suschksrv]
-provider = susChkSrv
-path = /usr/share/SAPHanaSR/
-execution_order = 2
-action_on_lost = ignore
+~> vi global.ini.susChSrvIgnore
+----
 
+Create a file with the following content. As we already have a configured HADR
+provider we only need to add the parameters to be changed to the template
+file.
+
+----
+[ha_dr_provider_suschksrv]
+action_on_lost = ignore
+----
+
+Import the template file into the global.ini of SAP HANA. This could be done
+online and offline.
+
+----
+~> cdcoc
+~> /usr/sbin/SAPHanaSR-manageProvider --add --reconfigure \
+   global.ini.susChkSrvIgnore
+----
+
+Check the imported HADR provider sections.
+
+----
+~> /usr/sbin/SAPHanaSR-manageProvider --show --provider=suschksrv
+----
+
+Reload the HADR providers.
+
+----
 ~> date; hdbnsutil -reloadHADRProviders; echo rc: $?
 ----
 ====
