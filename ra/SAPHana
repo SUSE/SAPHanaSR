@@ -675,7 +675,7 @@ function HANA_CALL()
     fi
     case $timeOut in
         0 | inf )
-                  output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                  output=$($pre_cmd "$pre_script; $cmd"); rc=$?
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
@@ -683,7 +683,7 @@ function HANA_CALL()
                   cmd_out_log=/tmp/HANA_CALL_CMD_RA_OUT_${errExt}
                   cmd_err_log=/tmp/HANA_CALL_CMD_RA_${errExt}
 
-                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
+                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
                   output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
                   suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
@@ -695,7 +695,7 @@ function HANA_CALL()
                       if [ "$cmdErr" == "NA" ]; then
                           # seems something was going wrong with the 'pre_cmd' (su)
                           super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
-                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc=$?
                       fi
                   fi
                   #
@@ -706,7 +706,7 @@ function HANA_CALL()
                   fi
                   if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
                       local second_output=""
-                      second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
+                      second_output=$($pre_cmd "$pre_script; $onTimeOut");
                   fi
                  ;;
     esac
@@ -1223,7 +1223,7 @@ function check_for_primary() {
                 # fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode})
-                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 # first try to get the value of 'actual_mode' from the global.ini
                 ini_mode=$(echo "$node_full_status" | awk -F= '$1=="actual_mode" {print $2}')
                 # if 'actual_mode' is not available, fallback to 'mode'
@@ -1288,8 +1288,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # TODO: Limit the runtime of systemReplicationStatus.py
     # SAP_CALL
-    # FULL_SR_STATUS=$(su - $sidadm -c "python $DIR_EXECUTABLE/python_support/systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
-    FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
+    FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "cdpy; python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     #
@@ -1428,12 +1427,12 @@ function get_hana_landscape_status()
     # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # DONE: Limit the runtime of landscapeHostConfiguration.py
-    HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+    HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
     if [ $rc -eq 124 ]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
         sleep 20
-        HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+        HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
         if [ $rc -eq 124 ]; then
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
@@ -2640,7 +2639,7 @@ function saphana_monitor_secondary()
             local hanaOut1=""
             # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
             # DONE: PRIO 3: Should we default to logreplay for SAP HANA >= SPS11 ?
-            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
+            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "cdpy; python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
             hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
             hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
             set_hana_attribute "${NODENAME}" "$hanaOM" "${ATTR_NAME_HANA_OPERATION_MODE[@]}"
