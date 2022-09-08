@@ -54,17 +54,15 @@ SH=/bin/sh
 #
 # function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
 # params:   LOG_MESSAGE
-# globals:  SUPER_LOG_PATH, SAPHanaFilter
+# globals:  SAPHanaFilter
 function super_ocf_log() {
     local level="$1"
     local message="$2"
     local skip=1
     local mtype=""
-    local search=0
     local shf="${SAPHanaFilter:-all}"
     #ocf_log "info" "super_ocf_log: f:$shf l:$level m:$message"
     # message levels: (dbg)|info|warn|err|error
-    #
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC
     case "$level" in
         dbg | debug | warn | err | error ) skip=0
@@ -79,12 +77,7 @@ function super_ocf_log() {
             * ) mtype=${message%% *}
                 mtype=${mtype%:}
                 mtype=${mtype#fh}
-                echo "$shf"|  grep -iq ${mtype}; search=$?
-                if [ $search -eq 0 ]; then
-                     skip=0
-                else
-                    skip=1
-                fi
+                [[ ${shf} == *${mtype}* ]] && skip=0 || skip=1
             ;;
         esac
         ;;
@@ -1131,7 +1124,8 @@ sidadm=""
 InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
-SAPHanaFilter="ra-act-dec-lpa"
+SAPHanaFilter="RA-ACT-DEC-LPA"
+
 
 if [ $# -ne 1 ]
 then
