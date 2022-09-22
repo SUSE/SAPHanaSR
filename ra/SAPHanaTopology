@@ -54,17 +54,15 @@ SH=/bin/sh
 #
 # function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
 # params:   LOG_MESSAGE
-# globals:  SUPER_LOG_PATH, SAPHanaFilter
+# globals:  SAPHanaFilter
 function super_ocf_log() {
     local level="$1"
     local message="$2"
     local skip=1
     local mtype=""
-    local search=0
     local shf="${SAPHanaFilter:-all}"
     #ocf_log "info" "super_ocf_log: f:$shf l:$level m:$message"
     # message levels: (dbg)|info|warn|err|error
-    #
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC
     case "$level" in
         dbg | debug | warn | err | error ) skip=0
@@ -76,15 +74,10 @@ function super_ocf_log() {
             none )
                 skip=1
                 ;;
-            * ) mtype=${message%% *}
+            * ) mtype=${message:0:4}
+                mtype=${mtype%% *}
                 mtype=${mtype%:}
-                mtype=${mtype#fh}
-                echo "$shf"|  grep -iq ${mtype}; search=$?
-                if [ $search -eq 0 ]; then
-                     skip=0
-                else
-                    skip=1
-                fi
+                [[ ${shf} == *${mtype}* ]] && skip=0 || skip=1
             ;;
         esac
         ;;
@@ -425,7 +418,7 @@ function HANA_CALL()
     fi
     case $timeOut in
         0 | inf )
-                  output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                  output=$($pre_cmd "$pre_script; $cmd"); rc=$?
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
@@ -433,7 +426,7 @@ function HANA_CALL()
                   cmd_out_log=/tmp/HANA_CALL_CMD_TOP_OUT_${errExt}
                   cmd_err_log=/tmp/HANA_CALL_CMD_TOP_${errExt}
 
-                  output=$(timeout "$timeOut" $pre_cmd "($pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
+                  output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
                   output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
                   suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
@@ -445,7 +438,7 @@ function HANA_CALL()
                       if [ "$cmdErr" == "NA" ]; then
                           # seems something was going wrong with the 'pre_cmd' (su)
                           super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
-                          output=$(timeout "$timeOut" $pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $cmd"); rc=$?
+                          output=$(timeout "$timeOut" $pre_cmd "$pre_script; $cmd"); rc=$?
                       fi
                   fi
                   #
@@ -456,7 +449,7 @@ function HANA_CALL()
                   fi
                   if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
                       local second_output=""
-                      second_output=$($pre_cmd "$pre_script; /usr/sap/$SID/$InstanceName/HDBSettings.sh $onTimeOut");
+                      second_output=$($pre_cmd "$pre_script; $onTimeOut");
                   fi
                  ;;
     esac
@@ -558,17 +551,21 @@ function sht_init() {
     # get HANA version
     #
     local ges_ver
-    ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
-    hdbver=${ges_ver%.*.*}
+    ges_ver=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
+    #fallback
+    [[ -z ${ges_ver:-} ]] && ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
+    #Version xx.yy.zzz
+    [[ ${ges_ver} =~ [0-9]+(\.[0-9]+){2} ]] && hdbver=${BASH_REMATCH[0]}
+
     #
     # since rev 111.00 we should use a new hdbnsutil option to get the -sr_state
     # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
     #
-    hdbState="hdbnsutil -sr_state"
-    hdbMap="hdbnsutil -sr_state"
-    if version "$hdbver" ">=" "1.00.111"; then
-        hdbState="hdbnsutil -sr_stateConfiguration"
-        hdbMap="hdbnsutil -sr_stateHostMapping"
+    hdbState="hdbnsutil -sr_stateConfiguration"
+    hdbMap="hdbnsutil -sr_stateHostMapping"
+    if version "$hdbver" "<" "1.00.111"; then
+        hdbState="hdbnsutil -sr_state"
+        hdbMap="hdbnsutil -sr_state"
     fi
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
@@ -582,7 +579,7 @@ function sht_init() {
             gP ) # call getParameter (gP)
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "HDBSettings.sh getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$srmode" ]; then
@@ -1014,7 +1011,9 @@ function sht_monitor_clone() {
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG: PROBE ONLY"
         sht_monitor; rc=$?
-        local hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
+        local hana_version
+        hana_version=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
+        [[ -z ${hana_version:-} ]] && hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
             | awk -F':' '$1=="  version" {print $2}; ' | tr -d '[:space:]')
         if [[ -n $hana_version ]]; then
             set_hana_attribute "${NODENAME}" "$hana_version" ${ATTR_NAME_HANA_VERSION[@]}
@@ -1077,11 +1076,11 @@ function sht_monitor_clone() {
     #
     setRole=true
     if version "$hdbver" ">=" "1.00.100"; then
-        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
         # retry command, if a timeout occurred
         if [ "$hanalrc" -ge 124 ]; then
             super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
-            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
             # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
             if [ "$hanalrc" -ge 124 ]; then
                 super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
@@ -1100,11 +1099,11 @@ function sht_monitor_clone() {
         #
         # old code for backward compatibility
         #
-        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
         # retry command, if a timeout occurred
         if [ "$hanalrc" -ge 124 ]; then
             super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
-            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
             # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
             if [ "$hanalrc" -ge 124 ]; then
                 super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
@@ -1172,7 +1171,8 @@ sidadm=""
 InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
-SAPHanaFilter="ra-act-dec-lpa"
+declare -u SAPHanaFilter='ra-act-dec-lpa'
+
 
 if [ $# -ne 1 ]
 then
