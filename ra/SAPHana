@@ -678,7 +678,7 @@ function HANA_CALL()
                   cmd_out_log=/tmp/HANA_CALL_CMD_RA_OUT_${errExt}
                   cmd_err_log=/tmp/HANA_CALL_CMD_RA_${errExt}
 
-                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
+                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $pre_script;$cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
                   output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
                   suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
@@ -690,7 +690,7 @@ function HANA_CALL()
                       if [ "$cmdErr" == "NA" ]; then
                           # seems something was going wrong with the 'pre_cmd' (su)
                           super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
-                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc=$?
+                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $pre_script;$cmd"); rc=$?
                       fi
                   fi
                   #
@@ -2731,16 +2731,16 @@ function saphana_monitor_clone() {
             if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
                 hanaPrim="P"
                 super_ocf_log debug "DBG: HANA IS PRIMARY"
-                sht_monitor; rc=$?
+                #sht_monitor; rc=$?
             else
                 if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
                     hanaPrim="S"
                     super_ocf_log debug "DBG: HANA IS SECONDARY"
-                    sht_monitor; rc=$?
+                    #sht_monitor; rc=$?
                 elif [ $primary_status -eq $HANA_STATE_STANDALONE  ]; then
                     hanaPrim="N"
                     super_ocf_log debug "DBG: HANA IS STANDALONE"
-                    sht_monitor; rc=$?
+                   # sht_monitor; rc=$?
                 else
                     # bsc#1027098 Do not mark HANA instance as failed, if "only" the HANA state could not be detected
                     hanaPrim=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]} | awk -F: '{ print $2}')
@@ -2748,16 +2748,16 @@ function saphana_monitor_clone() {
                         hanaPrim="-"
                     fi
                     super_ocf_log warn "ACT: sht_monitor_clone: HANA_STATE_DEFECT (primary/secondary state could not be detected at this point of time)"
-                    sht_monitor; rc=$?
+                    #sht_monitor; rc=$?
                 fi
             fi
             setRole=true
             if version "$hdbver" ">=" "1.00.100"; then
-                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
                 # retry command, if a timeout occurred
                 if [ "$hanalrc" -ge 124 ]; then
                     super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
-                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
                     # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
                     if [ "$hanalrc" -ge 124 ]; then
                         super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
@@ -2776,11 +2776,11 @@ function saphana_monitor_clone() {
                 #
                 # old code for backward compatibility
                 #
-                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
                 # retry command, if a timeout occurred
                 if [ "$hanalrc" -ge 124 ]; then
                     super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
-                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
                     # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
                     if [ "$hanalrc" -ge 124 ]; then
                         super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
