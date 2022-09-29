@@ -78,8 +78,8 @@ function super_ocf_log() {
     local message="$2"
     local skip=1
     local mtype=""
+    local search=0
     local shf="${SAPHanaFilter:-all}"
-    #ocf_log "info" "super_ocf_log: f:$shf l:$level m:$message"
     # message levels: (dbg)|info|warn|err|error
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC|DBG2...
     case "$level" in
@@ -92,10 +92,15 @@ function super_ocf_log() {
             none )
                 skip=1
                 ;;
-            * ) mtype=${message:0:4}
-                mtype=${mtype%% *}
+            * ) mtype=${message%% *}
                 mtype=${mtype%:}
-                [[ ${shf} == *${mtype}* ]] && skip=0 || skip=1
+                mtype=${mtype#fh}
+                echo "$shf"|  grep -iq ${mtype}; search=$?
+                if [ $search -eq 0 ]; then
+                     skip=0
+                else
+                    skip=1
+                fi
             ;;
         esac
         ;;
@@ -117,9 +122,7 @@ function saphana_usage() {
     methods=$(echo $methods | tr ' ' '|')
     cat <<-EOF
     usage: $0 ($methods)
-
     $0 manages two SAP HANA databases (scale-up) in system replication.
-
     The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
     The 'stop'         operation stops the HANA instance
     The 'status'       operation reports whether the HANA instance is running
@@ -130,7 +133,6 @@ function saphana_usage() {
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
     The 'reload'       operation allows to adapt resource parameters
-
 EOF
     return $rc
 }
@@ -158,24 +160,19 @@ function saphana_meta_data() {
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHana" version="$SAPHanaVersion">
 <version>1.0</version>
-
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
 The SAPHanaSR resource agent manages two SAP HANA database systems which are configured
 in system replication. SAPHana supports Scale-Up scenarios.
-
 Managing the two SAP HANA database systems means that the resource agent controls the start/stop of the
 instances. In addition the resource agent is able to monitor the SAP HANA databases to check their
 availability on landscape host configuration level. For this monitoring the resource agent relies on interfaces
 provided by SAP. A third task of the resource agent is to also check the synchronisation status
 of the two SAP HANA databases. If the synchronisation is not "SOK", then the cluster avoids to
 failover to the secondary side, if the primary fails. This is to improve the data consistency.
-
 The resource agent uses the following four interfaces provided by SAP:
-
 1. sapcontrol/sapstartsrv
    The interface sapcontrol/sapstartsrv is used to start/stop a HANA database instance/system
-
 2. landscapeHostConfiguration
    The interface is used to monitor a HANA system. The python script is named landscapeHostConfiguration.py.
    landscapeHostConfiguration.py has some detailed output about HANA system status
@@ -183,23 +180,19 @@ The resource agent uses the following four interfaces provided by SAP:
    status is reported by the return code of the script:
    0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
    The SAPHana resource agent will interpret return codes 0 as FATAL, 1 as not-running or ERROR and and returncodes 2+3+4 as RUNNING.
-
 3. hdbnsutil
    The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
    (primary/secondary) of a SAP HANA database instance. A second task of the interface is the possibility to run a
    system replication takeover (sr_takeover) or to register a former primary to a newer one (sr_register).
-
 4. hdbsql / systemReplicationStatus
    Interface is SQL query into HANA (system replication table).  The hdbsql query will be replaced by a python script
    "systemReplicationStatus.py" in SAP HANA SPS8 or 9.
    As long as we need to use hdbsql you need to set up secure store users for linux user root to be able to
    access the SAP HANA database. You need to configure a secure store user key "SAPHANA${SID}SR" which can connect the SAP
    HANA database:
-
 5. saphostctrl
    The interface saphostctrl uses the function ListInstances to figure out the virtual host name of the
    SAP HANA instance. This is the hostname used during the HANA installation.
-
 </longdesc>
 <parameters>
     <parameter name="SID" unique="0" required="1">
@@ -276,7 +269,6 @@ The resource agent uses the following four interfaces provided by SAP:
         <content type="string" default="" />
     </parameter>
 </parameters>
-
 <actions>
     <action name="start"   timeout="3600" />
     <action name="stop"    timeout="3600" />
@@ -657,7 +649,7 @@ function HANA_CALL()
 
     if [ $use_su -eq 1 ]; then
         pre_cmd="su - ${sid}adm -c"
-        pre_script="true"
+        [[ $cmd == python* ]] && pre_script='cdpy' || pre_script='true'
     else
         # as root user we need the library path to the SAP kernel to be able to call sapcontrol
         # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
@@ -678,7 +670,7 @@ function HANA_CALL()
                   cmd_out_log=/tmp/HANA_CALL_CMD_RA_OUT_${errExt}
                   cmd_err_log=/tmp/HANA_CALL_CMD_RA_${errExt}
 
-                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $pre_script;$cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
+                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
                   output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
                   suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
@@ -690,7 +682,7 @@ function HANA_CALL()
                       if [ "$cmdErr" == "NA" ]; then
                           # seems something was going wrong with the 'pre_cmd' (su)
                           super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
-                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $pre_script;$cmd"); rc=$?
+                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc=$?
                       fi
                   fi
                   #
@@ -1225,7 +1217,7 @@ function check_for_primary() {
                 # fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode})
-                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 # first try to get the value of 'actual_mode' from the global.ini
                 ini_mode=$(echo "$node_full_status" | awk -F= '$1=="actual_mode" {print $2}')
                 # if 'actual_mode' is not available, fallback to 'mode'
@@ -1290,7 +1282,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # TODO: Limit the runtime of systemReplicationStatus.py
     # SAP_CALL
-    FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "cdpy; python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
+    FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     super_ocf_log info "FLOW $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     #
@@ -1429,12 +1421,12 @@ function get_hana_landscape_status()
     # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py
     # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
     # DONE: Limit the runtime of landscapeHostConfiguration.py
-    HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+    HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
     if [ $rc -eq 124 ]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
         sleep 20
-        HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+        HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
         if [ $rc -eq 124 ]; then
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
@@ -2641,7 +2633,7 @@ function saphana_monitor_secondary()
             local hanaOut1=""
             # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
             # DONE: PRIO 3: Should we default to logreplay for SAP HANA >= SPS11 ?
-            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "cdpy; python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
+            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
             hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
             hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
             set_hana_attribute "${NODENAME}" "$hanaOM" "${ATTR_NAME_HANA_OPERATION_MODE[@]}"
@@ -2724,7 +2716,7 @@ function saphana_monitor_clone() {
             elif [ $myMaster -eq -1 ]; then
                set_crm_master 5
             fi
-            # If entire cluster is put to maintenance mode and Leaving Cluster from Maintenance mode after restart of the 
+            # If entire cluster is put to maintenance mode then Leaving Cluster from Maintenance mode after stop and start of the 
             # Cluster service will restart the HanaDB on primary node, To overcome that if we include a check for primary status
             # and Set the hana_Role attribute during the probe then DB will not restart if that is already running as primary.
             #==============================================================================
@@ -2753,11 +2745,11 @@ function saphana_monitor_clone() {
             fi
             setRole=true
             if version "$hdbver" ">=" "1.00.100"; then
-                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
                 # retry command, if a timeout occurred
                 if [ "$hanalrc" -ge 124 ]; then
                     super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
-                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
                     # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
                     if [ "$hanalrc" -ge 124 ]; then
                         super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
@@ -2776,11 +2768,11 @@ function saphana_monitor_clone() {
                 #
                 # old code for backward compatibility
                 #
-                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
                 # retry command, if a timeout occurred
                 if [ "$hanalrc" -ge 124 ]; then
                     super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
-                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
                     # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
                     if [ "$hanalrc" -ge 124 ]; then
                         super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
@@ -2941,7 +2933,8 @@ SAPSTARTSRV=""
 SAPCONTROL=""
 DIR_PROFILE=""
 SAPSTARTPROFILE=""
-declare -u SAPHanaFilter='ra-act-dec-lpa'
+SAPHanaFilter="ra-act-dec-lpa"
+
 
 
 if [ $# -ne 1 ]
