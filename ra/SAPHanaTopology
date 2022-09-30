@@ -100,7 +100,7 @@ function super_ocf_log() {
 # globals:  $0(r)
 #
 function sht_usage() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     methods=$(sht_methods)
     methods=$(echo $methods | tr ' ' '|')
@@ -128,7 +128,7 @@ function sht_usage() {
 # globals:  -
 #
 function sht_meta_data() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
 	cat <<END
 <?xml version="1.0"?>
@@ -216,7 +216,7 @@ return $rc
 #
 function get_hana_attribute()
 {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local attr_node=$1
     local attr_name=$2
@@ -234,7 +234,7 @@ function get_hana_attribute()
             crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
     esac
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -245,7 +245,7 @@ function get_hana_attribute()
 #
 function set_hana_attribute()
 {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local attr_node=$1
     local attr_value=$2
     local attr_name=$3
@@ -272,7 +272,7 @@ function set_hana_attribute()
         super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_node} still be ${attr_value}"
         rc=0
     fi
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -283,7 +283,7 @@ function set_hana_attribute()
 # methods: What methods/operations do we support?
 #
 function sht_methods() {
-  super_ocf_log info "FLOW $FUNCNAME ($*)"
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
   local rc=0
   cat <<-!
     start
@@ -358,7 +358,7 @@ function version() {
 #   Special EXIT of RA, if clone is missconfigured
 #
 function is_clone() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     #
     # is a clone config?
@@ -376,7 +376,7 @@ function is_clone() {
     else
         rc=1;
     fi
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -478,7 +478,7 @@ function HANA_CALL()
 #
 
 function sht_init() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local myInstanceName=""
     local rc=$OCF_SUCCESS
     local hdbANSWER=""
@@ -674,7 +674,7 @@ function sht_init() {
         done
         super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"
     fi
-    super_ocf_log info "FLOW $FUNCNAME rc=$OCF_SUCCESS"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
 }
 
@@ -684,25 +684,25 @@ function sht_init() {
 # globals:  srmode(r), HANA_STATE_PRIMARY(r), HANA_STATE_SECONDARY(r), HANA_STATE_DEFECT(r), HANA_STATE_STANDALONE(r)
 #
 function check_for_primary() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     super_ocf_log debug "DBG: check_for_primary: srmode=$srmode"
     case "$srmode" in
        primary )
-              super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_PRIMARY"
+              super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_PRIMARY"
               rc=$HANA_STATE_PRIMARY;;
        syncmem | sync | async )
-              super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_SECONDARY"
+              super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_SECONDARY"
               rc=$HANA_STATE_SECONDARY;;
        none ) # have seen that mode on second side BEFEORE we registered it as replica
-              super_ocf_log info "FLOW $FUNCNAME rc=HANA_STATE_STANDALONE"
+              super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_STANDALONE"
               rc=$HANA_STATE_STANDALONE;;
        * )
           dump=$( echo $srmode | hexdump -C );
           super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
           rc=$HANA_STATE_DEFECT
    esac;
-   super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+   super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
    return $rc
 }
 
@@ -809,7 +809,7 @@ function check_saphostagent()
 # sht_start : Start the SAP HANA instance
 #
 function sht_start() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
 
     local rc=$OCF_NOT_RUNNING
     local output=""
@@ -828,7 +828,7 @@ function sht_start() {
 
     rc=$OCF_SUCCESS
 
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -839,7 +839,7 @@ function sht_start() {
 # sht_stop: Stop the SAP HANA Topology Resource
 #
 function sht_stop() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local output=""
     local rc=0
     if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON ]; then
@@ -848,7 +848,7 @@ function sht_stop() {
     rm $HA_RSCTMP/SAPHana/SAPTopologyON.${SID}
     rc=$OCF_SUCCESS
 
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -860,7 +860,7 @@ function sht_stop() {
 # sht_monitor: Can the given SAP instance do anything useful?
 #
 function sht_monitor() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     # check for old status file
     if [ -f $HA_RSCTMP/SAPHana/SAPTopologyON ]; then
@@ -872,7 +872,7 @@ function sht_monitor() {
     else
         rc=$OCF_NOT_RUNNING
     fi
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -884,7 +884,7 @@ function sht_monitor() {
 # sht_status: Lightweight check of SAP instance only with OS tools
 #
 function sht_status() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
 
     sht_monitor; rc=$?
@@ -899,7 +899,7 @@ function sht_status() {
 # sht_validate: Check the symantic of the input parameters
 #
 function sht_validate() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=$OCF_SUCCESS
     if [ $(echo "$SID" | grep -c '^[A-Z][A-Z0-9][A-Z0-9]$') -ne 1 ]
     then
@@ -913,7 +913,7 @@ function sht_validate() {
         rc=$OCF_ERR_ARGS
     fi
 
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -924,7 +924,7 @@ function sht_validate() {
 # sht_start_clone
 #
 function sht_start_clone() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=$OCF_NOT_RUNNING
     sht_start; rc=$?
     return $rc
@@ -937,7 +937,7 @@ function sht_start_clone() {
 # sht_stop_clone
 #
 function sht_stop_clone() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
@@ -961,7 +961,7 @@ function sht_stop_clone() {
 # sht_monitor_clone
 #
 function sht_monitor_clone() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     #
 	local rc=$OCF_ERR_GENERIC
 	local promoted=0
@@ -1102,7 +1102,7 @@ function sht_monitor_clone() {
     esac
     #
     fi # end ocf_is_NOT_probe
-    super_ocf_log info "FLOW $FUNCNAME rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
@@ -1113,7 +1113,7 @@ function sht_monitor_clone() {
 # sht_notify: Handle master scoring - to make sure a slave gets the next master
 #
 function sht_notify() {
-    super_ocf_log info "FLOW $FUNCNAME ($*)"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     super_ocf_log info "RA ==== end action $ACTION$CLACT (${n_type}/${n_op})===="
     return $rc
