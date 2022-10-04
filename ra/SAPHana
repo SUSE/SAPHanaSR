@@ -2724,6 +2724,78 @@ function saphana_monitor_clone() {
             elif [ $myMaster -eq -1 ]; then
                set_crm_master 5
             fi
+            # If entire cluster is put to maintenance mode then Leaving Cluster from Maintenance mode after stop and start of the 
+            # Cluster service will restart the HanaDB on primary node, To overcome that if we include a check for primary status
+            # and Set the hana_Role attribute during the probe then DB will not restart if that is already running as primary.
+            if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+                hanaPrim="P"
+                super_ocf_log debug "DBG: HANA IS PRIMARY"
+                #sht_monitor; rc=$?
+            else
+                if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
+                    hanaPrim="S"
+                    super_ocf_log debug "DBG: HANA IS SECONDARY"
+                    #sht_monitor; rc=$?
+                elif [ $primary_status -eq $HANA_STATE_STANDALONE  ]; then
+                    hanaPrim="N"
+                    super_ocf_log debug "DBG: HANA IS STANDALONE"
+                   # sht_monitor; rc=$?
+                else
+                    # bsc#1027098 Do not mark HANA instance as failed, if "only" the HANA state could not be detected
+                    hanaPrim=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_ROLES[@]} | awk -F: '{ print $2}')
+                    if [ "$hanaPrim" = "" ]; then
+                        hanaPrim="-"
+                    fi
+                    super_ocf_log warn "ACT: sht_monitor_clone: HANA_STATE_DEFECT (primary/secondary state could not be detected at this point of time)"
+                    #sht_monitor; rc=$?
+                fi
+            fi
+            setRole=true
+            if version "$hdbver" ">=" "1.00.100"; then
+                # added "true" infront of cdpy as inner timeout is not working directly in HANA_CALL function
+                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "true; cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                # retry command, if a timeout occurred
+                if [ "$hanalrc" -ge 124 ]; then
+                    super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "true; cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                    # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
+                    if [ "$hanalrc" -ge 124 ]; then
+                        super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
+                        setRole=false
+                    fi
+                fi
+
+                # TODO: PRIO9: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
+                hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+                    awk -F= '$1 == "nameServerConfigRole"    {f1=$2}
+                            $1 == "nameServerActualRole"    {f2=$2}
+                            $1 == "indexServerConfigRole"   {f3=$2}
+                            $1 == "indexServerActualRole"   {f4=$2}
+                            END { printf "%s:%s:%s:%s\n", f1, f2, f3,f4 }')
+            else
+                #
+                # old code for backward compatibility
+                #
+                hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "true; cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+                # retry command, if a timeout occurred
+                if [ "$hanalrc" -ge 124 ]; then
+                    super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "true; cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+                    # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
+                    if [ "$hanalrc" -ge 124 ]; then
+                        super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
+                        setRole=false
+                    fi
+                fi
+                hanarole=$(echo "$hanaANSWER" | tr -d ' ' | awk -F'|' '$2 == host {  printf "%s:%s:%s:%s\n",$10,$11,$12,$13 }  ' host=${vName})
+            fi
+            #if [ -z "$MAPPING" ]; then
+            #   super_ocf_log info "ACT: Did not find remote Host at this moment"
+            #fi
+            # FH TODO PRIO3: TRY TO GET RID OF "ATTR_NAME_HANA_REMOTEHOST"
+            if $setRole; then
+                set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+            fi            
         else
             saphana_check_local_instance
         fi
