@@ -1,0 +1,160 @@
+#!/usr/bin/perl
+# TODO: add cmd line options later
+
+use Getopt::Long;
+
+my $Version = "202208191803";
+my $add = 0;
+my $remove = 0;
+my $show = 0;
+my $reconfigure = 0;
+
+my $user = $ENV{USER};
+my $sid = $ENV{SAPSYSTEMNAME};
+
+sub init()
+{
+	my $result = GetOptions ("provider=s" => \$provider,
+		             "sid=s" => \$sid,
+                             "add" => \$add,
+                             "remove" => \$remove,
+                             "show" => \$show,
+                             "reconfigure" => \$reconfigure,
+                             "version" => \$version,
+                             "help" => \$help,
+		 );
+   return 0;
+}
+
+init();
+
+
+if ( $help ) {
+   printf "SAPHanaSR-manageProvider --add    [--sid=<SID>] [--reconfigure] <template-file>\n";
+   printf "SAPHanaSR-manageProvider --remove [--sid=<SID>] [--reconfigure] <template-file>\n";
+   printf "SAPHanaSR-manageProvider --show   [--sid=<SID>] --provider=<provider>\n";
+   printf "";
+   exit 0;
+}
+if ( $version ) {
+   printf "%s\n", $Version;
+   exit 0;
+}
+
+my $coc = "/usr/sap/$sid/SYS/global/hdb/custom/config";
+
+if ( $add + $remove + $show ne 1 ) {
+    printf("Specify exactly ONE action out of add, remove or show\n");
+    printf("add=%s remove=%s show=%s\n", $add, $remove, $show);
+    exit 2;
+}
+if ( $sid eq "" ) {
+    printf("Could not autodetect SID, please specify SID using option --sid=<SID>\n");
+    exit 2;
+}
+
+my $sidLC = lc($sid);
+my $expectedUser = sprintf("%sadm", $sidLC);
+if ( $user ne "$expectedUser" ) {
+    printf("Needs to called as user %s\n", $expectedUser);
+    exit 2;
+}
+
+#
+# add_update_provider
+# read provider section from stdin and send it to SAP HANA
+#
+sub add_update_provider
+{
+    my $section="";
+    my $key="";
+    my $value="";
+    my $layer="SYSTEM";
+    my $file="global.ini";
+    my $last_cmd="HDBSettings.sh setParameter.py";
+    while (<>) {
+        chomp;
+        if ($_ =~ /^\[([^]]*)\]$/) {
+            # section entry found (no whitespace allowed before and after)
+            # [<section>]
+            $section = $1;
+        } elsif ($_ =~ /(\w*)\W*=\W(.*)/) {
+            # key = value entry found
+            # <key> = <value>
+            $key = "$1";
+            $value = "$2";
+           
+            $last_cmd=sprintf("%s -set=%s/%s/%s/%s=%s", $last_cmd, $layer, $file, $section, $key, $value );
+            # printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s=%s\n", $layer, $file, $section, $key, $value );
+        }
+    }
+    if ( $reconfigure ) {
+         $last_cmd=sprintf("%s --reconfigure", $last_cmd);
+    }
+    system($last_cmd);
+}
+
+#
+# remove_provider
+# read provider section entries from stdin and send UNSET to SAP HANA
+#
+sub remove_provider
+{
+    my $section="";
+    my $key="";
+    # my $value="";
+    my $layer="SYSTEM";
+    my $file="global.ini";
+    my $last_cmd="HDBSettings.sh setParameter.py";
+    while (<>) {
+        chomp;
+        if ($_ =~ /^\[([^]]*)\]$/) {
+            # section entry found (no whitespace allowed before and after)
+            # [<section>]
+            $section = $1;
+        } elsif ($_ =~ /(\w*)\W*=\W(.*)/) {
+            # key = value entry found
+            # <key> = <value>
+            $key = "$1";
+            # $value = "$2";
+            $last_cmd=sprintf("%s -unset=%s/%s/%s/%s", $last_cmd, $layer, $file, $section, $key );
+            #printf("HDBSettings.sh setParameter.py -set=%s/%s/%s/%s\n", $layer, $file, $section, $key );
+        }
+    }
+    if ( $reconfigure ) {
+         $last_cmd=sprintf("%s --reconfigure", $last_cmd);
+    }
+    system($last_cmd);
+}
+
+#
+# show_provider
+# display section for defined provider section
+#
+sub show_provider
+{
+    my $section=shift;
+
+    open GLOBALINI, "<", "$coc/global.ini";
+    my $printSection = 0;
+    while(<GLOBALINI>) {
+        chomp;
+        if ($_ =~ /\[$section\]/) {
+            $printSection = 1;
+        } elsif ($_ =~ /^$/) {
+            $printSection = 0;
+        }
+        if ($printSection == 1) {
+            printf("%s\n",$_)
+        }
+    }
+    close GLOBALINI;
+}
+
+if ( $add ) {
+    add_update_provider();
+} elsif ( $remove ) {
+    remove_provider();
+} elsif ( $show ) {
+    show_provider "ha_dr_provider_$provider";
+}

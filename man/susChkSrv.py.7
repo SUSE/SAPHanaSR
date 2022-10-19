@@ -1,0 +1,394 @@
+.\" Version: 0.160.0
+.\"
+.TH susChkSrv.py 7 "09 Aug 2022" "" "SAPHanaSR"
+.\"
+.SH NAME
+susChkSrv.py \- Provider for SAP HANA srHook method srServiceStateChanged().
+.PP
+.SH DESCRIPTION
+susChkSrv.py can be used to provide a script for the SAP HANA srHook method
+srServiceStateChanged().
+
+The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which
+is called at important points of the host auto-failover and system replication
+takeover processes. These so called hooks can be used for arbitrary operations
+that need to be executed. The method srServiceStateChanged() is called when
+HANA processes are failing, starting or stopping.
+
+Purpose of susChkSrv.py is to detect failing HANA indexserver processes and
+trigger a fast takeover to the secondary site. With regular configuration of an
+HANA database, the resource agent (RA) for HANA in a Linux cluster does not
+trigger a takeover to the secondary site when:
+.br
+- A software failure causes one or more HANA processes to be restarted in place
+by the HANA daemon (hdbdaemon).
+.br
+- A hardware error (e.g. SIGBUS from an uncorrectable memory error) causes the
+indexserver to restart locally.
+.br
+See also SAPHanaSR(7) or SAPHanaSR-ScaleOut(7).
+
+The hook script susChkSrv.py is called on any srServiceStateChanged() event.
+The script checks for
+ 'isIndexserver and serviceRestart and serviceWasActiveBefore and hostActive and databaseActive'.
+If it finds the correct entries, it executes the predefined action. As soon as
+the HANA landscapeHostConfiguration status changes to 1, the Linux cluster will
+take action. The action depends on HANA system replication status and the RA´s
+configuration parameters PREFER_SITE_TAKEOVER and AUTOMATED_REGISTER, see manual
+page ocf_suse_SAPHana(7) or ocf_suse_SAPHanaController(7).
+
+Customising of HANA daemon timeout parameters might be needed for adapting the
+solution to a given environment. Please refer to SAP HANA documentation.
+
+This hook script needs to be installed, configured and activated on all HANA
+nodes.
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+* The "HA/DR providers" API accepts the following parameters for the
+ha_dr_provider_suschksrv section in global.ini:
+.TP
+\fB[ha_dr_provider_suschksrv]\fP
+.TP
+\fBprovider = susChkSrv\fP
+Mandatory. Must not be changed.
+.TP
+\fBpath = [ /usr/share/SAPHanaSR | /usr/share/SAPHanaSR-ScaleOut ]\fP
+Mandatory. Depending on path delivered within RPM package. Please change only if requested.
+.TP
+\fBexecution_order = [ INTEGER ]\fP
+Mandatory. Order might depend on other hook scripts.
+.TP
+\fBaction_on_lost = [ ignore | stop | kill | fence ]\fP
+.\" TODO \fBaction_on_lost = [ ignore | stop | kill | fence | suicide ]\fP
+Action to be processed when a lost indexserver is identified.
+.br
+- \fBignore\fP: do nothing, just write to tracefiles.
+.br
+- \fBstop\fP: do 'sapcontrol ... StopSystem'.
+.\" TODO This is recommended for scale-out. ?
+If this is combined with SAPHana RA parameter 'AUTOMATED_REGISTER=true', HANA
+needs to release all OS resources prior to the automated registering. See also
+manual page ocf_suse_SAPHana(7) or ocf_suse_SAPHanaController(7).
+.br
+- \fBkill\fP: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'.
+.br
+- \fBfence\fP: do 'crm node fence <host>'. This needs a Linux cluster STONITH method
+and sudo permission.
+.br
+.\" TODO - suicide: do 'systemctl reboot'. Do NOT use this!
+.\" .br
+Optional. Default is ignore.
+.TP
+\fBkill_signal = [ INTEGER ]\fP
+Signal to be used with 'HDB kill-<signal>'.
+.br
+Optional. Default is 9.
+.\" TODO
+.\" .TP
+.\" \fBignore_srhook = [ yes | no ]\fP
+.\" Initiate takeover even if HANA system replication (srHook) is not in sync.
+.\" .br
+.\" Advanced. Default is no. Please use only if requested.
+.\" .TP
+.\" \fBmonitor_services = [ <service>,<service>,... ]\fP
+.\" HANA services (processes) to look at.
+.\" Represented by dictionary entry "service_name".
+.\" .br
+.\" Optional. Default is service "indexserver".
+.\" .TP
+.\" \fBmonitor_tenants = [ <tenant>,<tenant>,... ]\fP
+.\" HANA tenants to look at.
+.\" Represented by dictionary entry "database".
+.\" .br
+.\" Optional. Default is tenant TODO.
+.TP
+\fBstop_timeout = [ INTEGER ]\fP
+How many seconds to wait for 'sapcontrol ... StopSystem' to return?
+Should be greater than value of daemon.ini parameter 'forcedtimeout'.
+.\" TODO what is "forcedtimeout" ?
+.br
+Optional. Default is 20 seconds.
+.TP
+* The "HA/DR providers" API accepts the following parameter for the trace section in globnal.ini:
+.TP
+\fB[trace]\fP
+.TP
+\fBha_dr_suschksrv = [ info | debug ]\fP
+Optional. Default is info. Will be added automatically if not set.
+.PP
+* The HANA daemon TODO for the daemon section of daemon.ini:
+.\" TODO check the below values with SAP
+.TP
+\fB[daemon]\fP
+.TP
+\fBterminationtimeout = [ INTEGER ]\fP
+TODO Should be 45000.
+.br
+Optional. Timeout in milliseconds. Default is TODO.
+.TP
+\fBforcedterminationtimeout = [ INTEGER ]\fP
+TODO Should be 15000.
+.br
+Optional. Timeout in milliseconds. Default is TODO.
+.PP
+* The HANA daemon TODO for the indexserver.<tenant> section of daemon.ini:
+.\" TODO check the below values with cloud partner
+.TP
+\fB[indexserver.<tenant>]\fP
+.TP
+\fBgracetime = [ INTEGER ]\fP
+TODO Should be 6000.
+.br
+Optional. Timeout in milliseconds. Default is 2000.
+.PP
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.PP
+.\"
+.SH EXAMPLES
+.PP
+\fB*\fP Example for minimal entry in SAP HANA scale-up global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+.PP
+In case of a failing indexserver, the event is logged. No action is performed.
+The section ha_dr_provider_suschksrv is needed on all HANA nodes.
+The HANA has to be stopped before the file can be changed.
+.PP
+.RS 2
+[ha_dr_provider_suschksrv]
+.br
+provider = susChkSrv
+.br
+path = /usr/share/SAPHanaSR/
+.br
+execution_order = 3
+.RE
+.PP
+\fB*\fP Example for entry in SAP HANA scale-out global configuration
+/hana/shared/HA1/global/hdb/custom/config/global.ini
+.PP
+In case of a failing indexserver, the HANA instance will be stopped with
+ 'sacpcontrol ... StopSystem'. HANA timeouts might be adapted to speed up the
+stop.
+If this is combined with SAPHanaController parameter 'AUTOMATED_REGISTER=true',
+HANA needs to release all OS resources prior to the automated registering.
+.\" TODO This action is recommended for scale-out. ?
+.br
+The hook script should wait maximum 25 seconds on the sapcontrol command to
+return.
+.br
+The section ha_dr_provider_suschksrv is needed on all HANA nodes.
+The HANA has to be stopped before the file can be changed.
+.br
+Note: HANA scale-out is supported only with exactly one master nameserver.
+No HANA host auto-failover.
+.PP
+.RS 2
+[ha_dr_provider_suschksrv]
+.br
+provider = susChkSrv
+.br
+path = /usr/share/SAPHanaSR-ScaleOut/
+.br
+execution_order = 2
+.br
+action_on_lost = stop
+.br
+stop_timeout = 25
+.RE
+.PP
+\fB*\fP Example for entry in SAP HANA daemon configuration
+/hana/shared/HA1/global/hdb/custom/config/daemon.ini
+.PP
+TODO
+Example SID is HA1, tenant is HA1.
+.br
+The sections daemon and indexserver.HA1 are needed on all HANA nodes.
+The HANA has to be stopped before the file can be changed.
+.PP
+.RS 2
+[daemon]
+.br
+terminationtimeout = 45000
+.br
+forcedterminationtimeout = 15000
+.PP
+[indexserver.HA1]
+.br
+gracetime = 6000
+.RE
+.PP
+\fB*\fP Example for sudo permissions in /etc/sudoers.d/SAPHanaSR .
+.PP
+SID is HA1. See also manual page SAPHanaSR-hookHelper(8).
+.PP
+.RS 2
+# SAPHanaSR and SAPHanaSR-ScaleOut need for susChkSrv
+.br
+ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper --sid=HA1 --case=fenceMe
+.RE
+.PP
+\fB*\fP Example for looking up the sudo permission for the hook script.
+.PP
+All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
+Example SID is HA1.
+.PP
+.RS 2
+# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/sbin/SAPHanaSR-hookHelper"
+.RE
+.PP
+\fB*\fP Example for checking the HANA tracefiles for srServiceStateChanged() events.
+.PP
+Example SID is HA1. To be executed on the respective HANA master nameserver.
+.br
+If the HANA nameserver process is killed, in some cases hook script actions do
+not make it into the nameserver tracefile. In such cases the hook script´s own
+tracefile might help, see respective example.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> grep susChkSrv.*srServiceStateChanged nameserver_*.trc
+.br
+~> grep -C2 Executed.*StopSystem nameserver_*.trc
+.RE
+.PP
+\fB*\fP Example for checking the HANA tracefiles for when the hook script has been loaded.
+.PP
+Example SID is HA1. To be executed on both sites' master nameservers.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> grep HADR.*load.*susChkSrv nameserver_*.trc
+.br
+~> grep susChkSrv.init nameserver_*.trc
+.RE
+.PP
+\fB*\fP Example for checking the hook script tracefile for actions.
+.PP
+Example SID is HA1. To be executed on all nodes. All incidents are logged on
+the node where it happens.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> egrep '(LOST:|STOP:|START:|DOWN:|init|load|fail)' nameserver_suschksrv.trc
+.RE
+.PP
+\fB*\fP Example for checking the hook script tracefile for node fencing actions.
+.PP
+Example SID is HA1. To be executed on both sites' master nameservers. See also
+manual page SAPHanaSR-hookHelper(8).
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdtrace
+.br
+~> grep fence.node nameserver_suschksrv.trc
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR/susChkSrv.py or /usr/share/SAPHanaSR-ScaleOut/susChkSrv.py
+the hook provider, delivered with the RPM
+.TP
+/usr/sbin/SAPHanaSR-hookHelper
+the external script for node fencing
+.TP
+/etc/sudoers, /etc/sudoers.d/*
+the sudo permissions configuration
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+the on-disk representation of HANA global system configuration
+.TP
+/hana/shared/$SID/global/hdb/custom/config/daemon.ini
+the on-disk representation of HANA daemon configuration
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace
+path to HANA tracefiles
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace/nameserver_suschksrv.trc
+HADR provider hook script tracefile
+.PP
+.\"
+.SH REQUIREMENTS
+1. SAP HANA 2.0 SPS05 or later provides the HA/DR provider hook method
+srServiceStateChanged() with needed parameters.
+.PP
+2. No other HADR provider hook script should be configured for the
+srServiceStateChanged() method. Hook scripts for other methods, provided in
+SAPHanaSR and SAPHanaSR-ScaleOut, can be used in parallel to susChkSrv.py, if
+not documented contradictingly.
+.PP
+3. The user ${sid}adm needs execution permission as user root for the command
+SAPHanaSR-hookHelper.
+.PP
+4. The hook provider needs to be added to the HANA global configuration, in
+memory and on disk (in persistence).
+.PP
+5. HANA daemon timeout TODO
+.PP
+6. The hook script runs in the HANA nameserver. It runs on the node where the event
+srServiceStateChanged() occurs.
+.PP
+7. HANA scale-out is supported only with exactly one master nameserver. HANA
+host auto-failover is not supported. Thus no standby nodes.
+.PP
+8. A Linux cluster STONITH method for all nodes is needed, particularly if
+susChkSrv.py parameter 'action_on_lost=fence' is set.
+.PP
+9. If susChkSrv.py parameter 'action_on_lost=stop' is set and the RA SAPHana or
+SAPHanaController parameter 'AUTOMATED_REGISTER=true' is set, it depends on HANA
+to release all OS resources prior to the registering attempt.
+.PP
+10. If the hook provider should be pre-compiled, the particular Python version
+that comes with SAP HANA has to be used.
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,  \fBSAPHanaSR.py\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBSAPHanaSR-hookHelper\fP(8) ,
+\fBcrm\fP(8) , \fBpython3\fP(8) ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/42668af650f84f9384a3337bcd373692/e2064c4aa47f443ab6a107f9ab7f5edd.html?version=2.0.01
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5df2e766549a405e95de4c5d7f2efc2d.html?locale=en-US
+.br
+SAP note 2177064
+.PP
+.\"
+.SH AUTHORS
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2022 SUSE LLC
+.br
+susChkSrv.py comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

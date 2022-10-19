@@ -27,7 +27,7 @@
 #
 #######################################################################
 # DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
-SAPHanaTopologyVersion="0.160.1"
+SAPHanaTopologyVersion="0.161.1"
 #
 # Initialization:
 timeB=$(date '+%s')
@@ -935,6 +935,7 @@ function sht_start_clone() {
 function sht_stop_clone() {
     super_ocf_log info "FLOW $FUNCNAME ($*)"
     local rc=0
+    local tout=0
     check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         hanaPrim="P"
@@ -945,8 +946,54 @@ function sht_stop_clone() {
     else
         hanaPrim="-"
     fi
-    set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]}
-    sht_stop; rc=$?
+    # bsc#1198127
+    # we do not use our usual HANA_CALL_TIMEOUT for this call of
+    # 'landscapeHostConfiguration.py', but a much longer one, because if the
+    # timeout is reached, the node will be fenced. So it is a critical call
+    # and should get reasonable time to succeed.
+    # But it will be configurable by the cluster config (action timeout), if a
+    # system needs more time than we expected. The minimum used timeout is 300s
+    #
+    # timeOut = max(300, 50%(actionTimeOut))
+    # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action
+    # in ms
+    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
+    local stdTimeOut=300
+    local actTimeOutPercent=50
+    if [ -z "$actionTimeOut" ]; then
+        actionTimeOut="$stdTimeOut"
+    else
+        # actionTimeOut in seconds
+        ((actionTimeOut = actionTimeOut/1000))
+    fi
+    # 50%(actionTimeOut)
+    ((timeout = actionTimeOut * actTimeOutPercent/100))
+    # max(300, 50%(actionTimeOut))
+    if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
+        timeout=$stdTimeOut
+    fi
+
+    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+    if [ "$hanalrc" -ge 124 ]; then
+        # timeout of HANA_CALL, set role to '1:P:-:-:-:-' to get the
+        # saphana_demote_clone to fail and stop the resource
+        set_hana_attribute "${NODENAME}" "1:$hanaPrim:-:-:-:-" ${ATTR_NAME_HANA_ROLES[@]}
+        # and exit with 1 to let the stop fail
+        tout=1
+    else
+        hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+            awk -F= '$1 == "nameServerConfigRole"    {f1=$2}
+                     $1 == "nameServerActualRole"    {f2=$2}
+                     $1 == "indexServerConfigRole"   {f3=$2}
+                     $1 == "indexServerActualRole"   {f4=$2}
+                     END { printf "%s:%s:%s:%s\n", f1, f2, f3,f4 }')
+        set_hana_attribute "${NODENAME}" "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+    fi
+    sht_stop; rc=$? # till now it returns everytime $OCF_SUCCESS
+    if [ "$tout" -eq 1 ]; then
+        # timeout of landscapeHostConfiguration.py - let stop fail
+	rc=$OCF_ERR_GENERIC
+    fi
     return $rc
 }
 
