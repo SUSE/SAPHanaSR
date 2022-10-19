@@ -405,7 +405,7 @@ function HANA_CALL()
 
     if [ $use_su -eq 1 ]; then
         pre_cmd="su - ${sid}adm -c"
-        pre_script="true"
+        [[ $cmd == python* ]] && pre_script="cd $DIR_EXECUTABLE/python_support" || pre_script='true'
     else
         # as root user we need the library path to the SAP kernel to be able to call sapcontrol
         # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
@@ -579,7 +579,7 @@ function sht_init() {
             gP ) # call getParameter (gP)
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$srmode" ]; then
@@ -1029,11 +1029,11 @@ function sht_monitor_clone() {
     #
     setRole=true
     if version "$hdbver" ">=" "1.00.100"; then
-        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
         # retry command, if a timeout occurred
         if [ "$hanalrc" -ge 124 ]; then
             super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
-            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
             # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
             if [ "$hanalrc" -ge 124 ]; then
                 super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
@@ -1052,11 +1052,11 @@ function sht_monitor_clone() {
         #
         # old code for backward compatibility
         #
-        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
         # retry command, if a timeout occurred
         if [ "$hanalrc" -ge 124 ]; then
             super_ocf_log warn "HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'. Retrying..."
-            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "cdpy; python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
             # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
             if [ "$hanalrc" -ge 124 ]; then
                 super_ocf_log err "HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py'."
