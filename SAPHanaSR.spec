@@ -21,13 +21,14 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.161.1
+Version:        0.161.1_BF
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
 BuildArch:      noarch
 
 Source0:        %{name}-%{version}.tgz
+Patch1:         0001-bsc-1192963.patch
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
@@ -73,6 +74,7 @@ This subpackage includes the Setup Guide for getting SAP HANA system replication
 
 %prep
 tar xf %{S:0}
+%patch1 -p1
 
 %if 0%{?sle_version} >= 120100
     %define crmscr_path /usr/share/crmsh/scripts/
@@ -110,7 +112,9 @@ install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
 
 # documentation
-install -m 0444 doc/* %{buildroot}/%{_docdir}/%{name}
+install -m 0444 doc/LICENSE %{buildroot}/%{_docdir}/%{name}
+install -m 0444 doc/README %{buildroot}/%{_docdir}/%{name}
+install -m 0444 doc/SAPHanaSR-Setup-Guide.pdf %{buildroot}/%{_docdir}/%{name}
 
 # manual pages
 install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
@@ -123,6 +127,7 @@ install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
+install -m 0555 test/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # crm/hawk wizard files
@@ -149,14 +154,12 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 /usr/share/%{name}
 %dir /usr/lib/%{name}
 /usr/lib/%{name}/SAPHanaSRTools.pm
-%dir %{_docdir}/%{name}
-%doc %{_docdir}/%{name}/README
-%doc %{_docdir}/%{name}/LICENSE
 /usr/sbin/SAPHanaSR-monitor
 /usr/sbin/SAPHanaSR-showAttr
 /usr/sbin/SAPHanaSR-replay-archive
 /usr/sbin/SAPHanaSR-filter
 /usr/sbin/SAPHanaSR-hookHelper
+/usr/sbin/SAPHanaSR-manageProvider
 
 # HAWK2 wizard for SLES 12 SP1+
 %if 0%{?sle_version} >= 120100
