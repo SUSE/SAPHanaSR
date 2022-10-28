@@ -1,0 +1,362 @@
+.\" Version: 0.160.1
+.\"
+.TH SAPHanaSR 7 "27 Jun 2022" "" "SAPHanaSR_basic_cluster"
+.\"
+.SH NAME
+SAPHanaSR_basic_cluster \- SAP HANA System Replication scale-up basic cluster configuration.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+The SAP HANA System Replication scale-up scenario needs a certain basic
+cluster configuration. Besides this necessary settings, some additional
+configurations might match specific needs.
+.\"
+.\" \fB* Corosync Basics\fR
+.\"
+.\".PP
+
+\fB* CRM Basics\fR
+
+\fBdefault-resource-stickiness = 1000\fR
+
+The crm basic parameter default-resource-stickiness defines the 'stickiness'
+score a resource gets on the node where it is currently running. This prevents
+the cluster from moving resources around whithout an urgent need during a
+cluster transition. The correct value depends on number of resources, colocation
+rules and resource groups. Particularly additional groups colocated to the
+HANA primary master resource can affect cluster decisions. 
+Too high value might prevent not only unwanted but also useful actions.
+This is because SAPHanaSR uses an internal scoring table for placing the HANA
+roles on the right nodes.
+.br
+Mandatory, default 1.
+
+\fBfailure-timeout = 86400\fR
+
+The crm basic parameter failure-timeout defines how long failed actions will
+be kept in the CIB. After that time the failure record will be deleted. The
+time is measured in seconds. See also migration-threshold below.
+.br
+Optional, no default.
+
+\fBmigration-threshold = 5000\fR
+
+The crm basic parameter migration-threshold defines how many errors on a
+resource can be detected before this resource will be migrated to another node.
+See also \fBfailure-timeout\fR.
+.br
+Mandatory, default 3.
+
+\fBrecord-pending = true\fR
+
+The op_default record-pending defines, whether the intention of an action
+upon the resource is recorded in the Cluster Information Base (CIB).
+Setting this parameter to 'true' allows the user to see pending actions like
+ 'starting' and 'stopping' in \fBcrm_mon\fR and \fBHawk\fR.
+.br
+Optional, default false.
+
+.PP
+\fBpcmk_delay_max = 30\fR
+
+The sbd stonith parameter pcmk_delay_max defines an upper limit for waiting
+before a fencing/stonith request will be triggerd.
+This parameter should prevent the cluster from unwanted double fencing in case
+of spilt-brain. A value around 30 seconds is required in two-node clusters,
+except priority fencing is used.
+.br
+Mandatory, default 5.
+
+.PP
+\fBpriority-fencing-delay = 30\fR
+
+The optional crm property priority-fencing-delay specified delay for the
+fencings that are targeting the lost nodes with the highest total resource
+priority in case we do not have the majority of the nodes in our cluster
+partition, so that the more significant nodes potentially win any fencing
+match, which is especially meaningful under split-brain of 2-node cluster.
+A promoted resource instance takes the base priority + 1 on calculation if
+the base priority is not 0. Any delay that are introduced by pcmk_delay_max
+configured for the corresponding fencing resources will be added to this
+delay. A meta attribute priority=100 or alike for the ASCS resource is needed
+to make this work. See ocf_suse_SAPHana(7).
+The delay should be significantly greater than, or safely twice,
+pcmk_delay_max.
+.br
+Optional, no default.
+
+.PP
+\fB* systemd Basics\fR
+
+\fBsaphostagent.service enabled\fR
+.br
+\fBSAP${SID}_${INO}.service enabled\fR
+
+In case systemd-style init is used for the HANA database, the services
+saphostagent and SAP${SID}_${INO} need to be enabled and running inside the SAP
+slice. The instance profile Autostart feature needs to be off.
+The service saptune is highly recommended, see manual page saptune(8).
+
+.PP
+.\"
+.SH EXAMPLES
+
+\fB* crm basic configuration\fR
+
+Below is an example crm basic configuration for SAPHanaSR. Shown are
+specific parameters which are needed. Some general parameters are left out.
+
+The following example is for SLE-HA 12 SP4 and 15 SP1 with disk-based SBD:
+.PP
+.RS 2
+.br
+property cib-bootstrap-options: \\
+.br
+ have-watchdog=true \\
+.br
+ cluster-infrastructure=corosync \\
+.br
+ cluster-name=hacluster \\
+.br
+ stonith-enabled=true \\
+.br
+ placement-strategy=balanced \\
+.br
+ stonith-timeout=144 \\
+.br
+rsc_defaults rsc-options: \\
+.br
+.\" TODO resource-stickiness=120 or 1000?
+ resource-stickiness=1000 \\
+.br
+ migration-threshold=3 \\
+.br
+ failure-timeout=86400
+.br
+op_defaults op-options: \\
+.br
+ timeout=600 \\
+.br
+ record-pending=true
+.RE
+.PP
+
+\fB* crm simple SBD stonith configuration\fR
+
+To complete the SBD setup, it is necessary to activate SBD as STONITH/fencing
+mechanism in the CIB. The SBD is normally used for SAPHanaSR scale-up instead
+of any other fencing/stonith mechanism. Example for a basic disk-based SBD
+resource:
+.PP
+.RS 2
+primitive rsc_stonith_sbd stonith:external/sbd \\
+.br
+ params pcmk_delay_max="30"
+.RE
+.PP
+
+\fB* crm priority fencing SBD stonith configuration\fR
+
+.\" TODO priority fencing for two-node cluster, rsc_SAPHana_... meta priority=100
+Example for a priority fencing disk-based SBD resource.
+.PP
+.RS 2
+.br
+primitive rsc_stonith_sbd stonith:external/sbd \\
+.br
+ params pcmk_delay_base=15
+.br
+property cib-bootstrap-options: \
+.br
+ priority-fencing-delay=30 \ 
+.RE
+.PP
+
+\fB* crm simple IP address resource configuration\fR
+
+Let the Linux cluster manage one IP address and move that address along
+with the HANA primary master nameserver.
+.PP
+.RS 2
+.br
+primitive rsc_ip_SLE_HDB00 IPAddr2 \\
+.br
+ op monitor interval=10 timeout=20 \\
+.br
+ params ip=192.168.178.188
+.br
+colocation col_ip_with_SLE_HDB00 \\
+.br
+ 2000: rsc_ip_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Master
+.RE
+.PP
+.\" TODO seamless maintenance IP location
+
+\fB* crm IP address for active/active read-enabled resource configuration\fR
+
+Let the Linux cluster manage an additional IP address and move that address
+along with the HANA secondary master nameserver.
+.\" TODO multi-node see below
+.PP
+.RS 2
+.br
+primitive rsc_ip_ro_SLE_HDB00 IPAddr2 \\
+.br
+ op monitor interval=10 timeout=20 \\
+.br
+ params ip=192.168.178.199
+.br
+colocation col_ip_ro_with_secondary_SLE_HDB00 \\
+.br
+ 2000: rsc_ip_ro_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Slave
+.br
+location loc_ip_ro_not_master_SLE_HDB00 \\
+.br
+ rsc_ip_ro_SLE_HDB00 \\
+.br
+ rule -inf: hana_sle_roles ne master1:master:worker:master
+.\" TODO works this for multi-node:  rule 8000: score eq 100
+.RE
+.PP
+
+\fB* crm grouped IP address resource configuration\fR
+
+Let the Linux cluster manage one IP address and move that address along
+with the HANA primary master nameserver. An auxiliary resource is needed
+for specific public cloud purpose.
+
+You should not bind resource to the HANA master role. This would change the
+effective resource scoring and might prevent the cluster from taking expected
+actions. If, for any reason, you need to bind additional resource to the
+HANA resource, you need to reduce that additional resource´s stickiness to 1.
+.PP
+.RS 2
+.br
+primitive rsc_ip_SLE_HDB00 IPAddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.188 cidr_netmask=32
+.br
+primitive rsc_lb_SLE_HDB00 azure-lb \\
+.br
+ params port=62502
+.br
+group grp_ip_SLE_HDB00 rsc_lb_SLE_HDB00 rsc_ip_SLE_HDB00 \\
+.br
+ meta resource-stickiness=1
+.br
+colocation col_ip_with_SLE_HDB00 \\
+.br
+ 8000: grp_ip_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Master
+.RE
+.PP
+
+\fB* crm MailTo resource configuration\fR
+
+The HANA landscape status is stored inside CIB as attribute hana_<sid>_roles.
+A healthy HANA master looks like "4:P:master1:master:worker:master".
+First field is the HANA landscape status. If that status goes to 3 or 2,
+something has happened to HANA, but the cluster will not perform a takeover.
+Status 1 will trigger a takeover, status 0 indicates an undefined fatal failure.
+See man page ocf_suse_SAPHana(7) and ocf_heartbeat_MailTo(7). 
+
+You could define a MailTo resource that informs you as soon as attribute
+hana_<sid>_roles deviates from above ideal:
+.PP
+.RS 2
+primitive rsc_mailto_HA1_HDB10 MailTo \\
+.br
+ params email="root@localhost" subject="hana_ha1_roles changed" \\
+.br
+ op monitor timeout=10 interval=30 depth=0 \\
+.br
+location loc_mailto_HA1_HDB10_with_prim rsc_mailto_HA1_HDB10 \\
+.br
+ rule hana_ha1_roles eq 4:P:master1:master:worker:master
+.RE
+.PP
+
+\fB* check how resource stickiness affects promotion scoring\fR
+
+SAPHanaSR uses an internal scoring table. The promotion scores for HANA
+primary and secondary master are in a certain range. The scores used by the
+Linux cluster should be in the same range.
+.PP
+.RS 2
+.br
+# SAPHanaSR-showAttr | grep master.:master
+.br
+# crm_simulate -Ls | grep promotion
+.RE
+.PP
+
+\fB* cleanup SDB stonith resource after write failure\fR
+
+In rare cases the SBD stonith resource failes writing to the block device.
+After the root cause has been found and fixed, the failure message can be
+cleaned.
+.PP
+.RS 2
+.br
+# stonith_admin --cleanup --history=<originator_node>
+.RE
+.PP
+
+\fB* check systemd services for the HANA database\fR
+
+In case systemd-style init is used for the HANA database, the services can be
+checked. Example SID is HA1, instance number is 10.
+.PP
+.RS 2
+.br
+# systemctl list-unit-files | grep -i sap
+.br
+# systemctl status SAPHA1_10.service
+.br
+# systemd-cgls -u SAP.slice
+.br
+# systemd-cgls -u SAPHA1_10.service
+.\" TODO check Autostart not set.
+
+.PP
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
+\fBocf_heartbeat_IPAddr2\fP(7) , \fBocf_heartbeat_Filesystem\fP(7) ,
+\fBocf_heartbeat_MailTo\fP(7) ,
+\fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) ,
+\fBcrm_no_quorum_policy\fP(7) , \fBcrm\fP(8) , \fBcrm_simulate\fP(8) ,
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-showAttr\fP(7) ,
+\fBcorosync.conf\fP(5) , \fBvotequorum\fP(5) ,
+\fBnfs\fP(5) , \fBmount\fP(8) , \fBsystemctl\fP(1) , \fBsystemd-cgls\fP(1) ,
+\fBha_related_suse_tids\fP(7) , \fBha_related_sap_notes\fP(7) ,
+.br
+https://documentation.suse.com/sbp/all/?context=sles-sap ,
+.br
+https://documentation.suse.com/sles-sap/ ,
+.br
+https://www.suse.com/support/kb/ ,
+.br
+https://www.clusterlabs.org
+.PP
+.SH AUTHORS
+.br
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2018 SUSE Linux GmbH, Germany.
+.br
+(c) 2019-2022 SUSE LLC
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
