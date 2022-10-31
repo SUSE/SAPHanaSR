@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Helper script for HA/DR hooks
-# currently the only use case is 'checkTakeover' for the TakeOver Hook
+# currently implemented use case are 'checkTakeover' and 'fenceMe'
 
 # For now we only check the maintenance mode of the multi-state ressource (as descibed in the official supported maintenance procedure described in man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools.
 
@@ -25,16 +25,17 @@
 
 # USAGE
 usage() {
-    echo "USAGE:    $0 --sid=<SID> --case <use case>"
-    echo -e "\\t--sid=<SID>: SID of the SAP system"
-    echo -e "\\t--case <use case>: the use case for the hook helper"
-    echo -e "\\t                   at the moment only 'checkTakeover' is supported"
+    echo "USAGE:    $0 --sid=<SID> [--ino=<InstanceNumber>] --case <use case>"
+    echo -e "\\t--sid=<SID>: SID (like HA1) of the SAP system"
+    echo -e "\\t--ino=<InstanceNumber>: instance number (like 10) of the SAP instance"
+    echo -e "\\t--case=<use case>: the use case for the hook helper"
+    echo -e "\\t                   at the moment only 'checkTakeover' and 'fenceMe' is supported"
     echo -e "\\t--version: show script version"
     echo -e "\\t--help:    show help"
     exit 1
 }
 
-# check the exitence and the value of the takeover attribute
+# check the existence and the value of the takeover attribute
 chk_takeover_attr() {
     sra_attr="hana_${ASID}_sra"
     sra_value=$(/usr/sbin/crm_attribute -n "$sra_attr" -G -t reboot -q 2>/dev/null); rc=$?
@@ -97,12 +98,44 @@ chk_msres_maintenance() {
     echo "$mmaint"
 }
 
+# This function needs to run already as <sid>adm
+# this code is for lab only and can be removed without any notice - do not use at customer or partner systems
+#
+# stopSystem <InstanceNumber>
+# - just sends the command to stop the system and return
+stopSystem() {
+    local InstanceNr="$1"
+    local SAPCONTROL="sapcontrol"
+    # simulate slow stop by sleeping for a while
+    # TODO: shoulbd be 2*TimeToWaitMax of stopSystemAndWait()
+    sleep 120
+    $SAPCONTROL -nr "$InstanceNr" -function StopSystem
+    return 0
+}
+
+# This function needs to run already as <sid>adm
+# this code is for lab only and can be removed without any notice - do not use at customer or partner systems
+#
+# stopSystemAndWait <InstanceNumber> <TimeToWaitMax>
+# - calls stopSystem()
+# - waits for a stopped instance for a while and return, if instance is now stopped
+#
+stopSystemAndWait() {
+    local InstanceNr="$1" TimeOut="$2"
+    local SAPCONTROL="sapcontrol"
+    # send stopSystem to background and wait already (to early) to allow timeout
+    stopSystem "$InstanceNr"&
+    # WaitforStopped returns 0 for a stopped instance and 2 for an still running instance
+    $SAPCONTROL -nr "$InstanceNr" -function WaitforStopped "$TimeOut" 1; rc=$?
+    return "$rc"
+}
+
 # end function definition
 
 ##### main
 
 # variables
-version="202205231723"
+version="202208091454"
 exe="$0"
 cmd=$(basename "$exe")
 
@@ -119,12 +152,19 @@ else
         --sid=?*)
             SID=${1#*=}
             ;;
+        --sid)
+            SID="$2"
+            shift
+            ;;
+        --ino=?*)
+            InstanceNumber=${1#*=}
+            ;;
+        --ino )
+            InstanceNumber="$2"
+            shift
+            ;;
         --case=?*)
             USECASE=${1#*=}
-          ;;
-        --sid)
-          SID="$2"
-          shift
           ;;
         --case)
             USECASE="$2"
@@ -191,6 +231,53 @@ case "$USECASE" in
         fi
     fi
     ;;
+"fenceMe" )
+     nodeName=$(crm_node -n)
+     #stonith_admin --reboot="$nodeName"
+     crm --force node fence "$nodeName"
+     rc=42 # if fence is working this rc should never been send back
+     ;;
+"firstStopThenKill" )
+     #
+     # this action needs to run as <sid>adm - do not call it as root
+     # this action is lab code only and can be removed without any notice
+     # this code is for lab only and can be removed without any notice - do not use at customer or partner systems
+     # this code does not promise that it will be part of any product later
+     #
+     logger -t SAPHanaSR-hookHelper "firstStopThenKill: try to stop SAP instance $InstanceNumber"
+     stopSystemAndWait "$InstanceNumber" "60"; rc="$?"
+     if [ "$rc" -ne 0 ]; then
+         # TODO use function for logging
+         logger -t SAPHanaSR-hookHelper "firstStopThenKill: SAP instance $InstanceNumber is not stopped in time - need to kill the instance"
+         HDB kill-9
+         # the following logger message will most likely not find the way to the system log, as the SAPHanaSR-hookHelper process will be killed also
+         logger -t SAPHanaSR-hookHelper "firstStopThenKill: SAP instance $InstanceNumber killed with signal 9"
+     else
+         # TODO use function for logging
+         logger -t SAPHanaSR-hookHelper "firstStopThenKill: SAP instance $InstanceNumber is already down - no need to kill the instance"
+     fi
+     rc=0
+     ;;
+"firstStopThenFence" )
+     #
+     # this action needs to run as <sid>adm - do not call it as root
+     # this action is lab code only and can be removed without any notice
+     # this code is for lab only and can be removed without any notice - do not use at customer or partner systems
+     # this code does not promise that it will be part of any product later
+     #
+     stopSystemAndWait "$InstanceNumber" "60"; rc="$?"
+     if [ "$rc" -ne 0 ]; then
+         # TODO use function for logging
+         logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber is not stopped in time - need to fence the node"
+         sudo /usr/sbin/SAPHanaSR-hookHelper --sid="$SID" --case="fenceMe"
+         # the following logger message will most likely not find the way to the system log, as the node will be already fenced
+         logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber killed with signal 9"
+     else
+         # TODO use function for logging
+         logger -t SAPHanaSR-hookHelper "sap instance $InstanceNumber is already down - no need to fence the node"
+     fi
+     rc=0
+     ;;
 #"nextUsecase")
 #    chk_next_case; rc=$?
 #    ;;

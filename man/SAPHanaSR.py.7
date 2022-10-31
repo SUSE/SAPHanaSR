@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR.py 7 "22 Apr 2022" "" "SAPHanaSR"
+.TH SAPHanaSR.py 7 "12 Aug 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
@@ -10,8 +10,8 @@ SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
 SAPHanaSR.py can be used to provide a script for the SAP HANA srHook method
 srConnectionChanged().
 
-The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which 
-is called at important points of the host auto-failover and system replication 
+The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which
+is called at important points of the host auto-failover and system replication
 takeover process. These so called hooks can be used for arbitrary operations that
 need to be executed. The method srConnectionChanged() is called on the master
 nameserver as soon as one of the replicating services loses or establishes
@@ -26,7 +26,7 @@ This hook script needs to be configured and activated on all HANA nodes.
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
-* The "HA/DR providers" API accepts the following parameters for the 
+* The "HA/DR providers" API accepts the following parameters for the
 ha_dr_provider_SAPHanaSR section:
 .TP
 \fB[ha_dr_provider_saphanasr]\fP
@@ -49,7 +49,7 @@ Optional. Will be added automatically if not set.
 .PP
 * The he SAPHanaController and SAPHana RA recognize the effecting system
 replication status via attributes in the CIB´s SAPHanaSR properties section.
-The SAP System Indentifier (sid) is given in lower case: 
+The SAP System Indentifier (sid) is given in lower case:
 .TP
 \fBhana_${sid}_site_srHook_${site} = [ SOK | SFAIL | SWAIT ]\fP
 .TP
@@ -68,10 +68,10 @@ Usage, syntax or execution errors.
 .PP
 * Example for entry in sudo permissions /etc/sudoers
 .PP
-.RS 2 
+.RS 2
 # SAPHanaSR (Scale-Up) needs for srHook
 .br
-ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_ha1_site_srHook_* 
+ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_ha1_site_srHook_*
 .RE
 .PP
 * Example for looking up the sudo permission for the srHook script.
@@ -80,7 +80,7 @@ All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
 Example SID is HA1.
 .PP
 .RS 2
-# sudo -U ha1adm -l | grep "NOPASSWD.*crm_attribute.*hana_ha1" 
+# sudo -U ha1adm -l | grep "NOPASSWD.*crm_attribute.*hana_ha1"
 .RE
 .PP
 * Example for entry in SAP HANA global configuration
@@ -89,7 +89,7 @@ Example SID is HA1.
 This file is needed at both sites. The HANA has to be stopped before the files
 can be edited.
 .PP
-.RS 2 
+.RS 2
 [ha_dr_provider_saphanasr]
 .br
 provider = SAPHanaSR
@@ -101,9 +101,25 @@ execution_order = 1
 [trace]
 .br
 ha_dr_saphanasr = info
+.PP
+* Example for entry in SAP HANA 2.0 global configuration
+/hana/shared/$SID/global/hdb/custom/config/global.ini to enable multi-target aware third site.
+.br
+This entry is needed to allow ocf_suse_SAPHana(7) parameter AUTOMATED_REGISTER=true in multi-target environments.
+The HANA has to be stopped before the files can be edited.
+Do not copy the file between nodes. Please check SAP HANA documentation for details.
+.PP
+.RS 2
+[system_replication]
+.br
+ ...
+.br
+register_secondaries_on_takeover = true
+.br
+ ...
 .RE
 .PP
-* Example for creating the optional SAPHanaSR python object file manually.
+* Example for creating the optional SAPHanaSR python object file manually. This object file will not be updated with RPM package updates.
 .PP
 .RS 2
 # mkdir -p /hana/shared/srhook
@@ -139,7 +155,7 @@ ha_dr_saphanasr = info
 # exit
 .RE
 .PP
-* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on both site's master nameservers.
+* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on both sites' master nameservers.
 .PP
 .RS 2
 # su - sleadm
@@ -213,26 +229,32 @@ the on-disk representation of HANA global system configuration
 the sudo permissions configuration
 .TP
 /usr/sap/$SID/HDB$nr/$HOST/trace
-path to HANA trace files
+path to HANA tracefiles
 .TP
 /usr/sap/$SID/HDB$nr/.crm_attribute.$SITE
 the internal cache for srHook status changes while Linux cluster is down, file is owned by ${SID}adm and must never be touched
 .PP
 .\"
-.SH REQUIREMENTS 
+.SH REQUIREMENTS
 1. SAP HANA 2.0 SPS04 or later provides the HA/DR provider hook method
-srConnectionChanegd() with multi-target aware parameters.
+srConnectionChanged() with multi-target aware parameters.
 SAP HANA 1.0 does not provide them.
 The multi-target aware parameters are needed for the SAPHanaSR scale-up
 package.
 .PP
-2. The user ${sid}adm needs execution permission as user root for the command crm_attribute. 
+2. No other HADR provider hook script should be configured for the
+srConnectionChanged() method. Hook scripts for other methods, provided in
+SAPHanaSR, can be used in parallel to SAPHanaSR.py, if not documented
+contradictingly.
 .PP
-3. The hook provider needs to be added to the HANA global configuration,
+3. The user ${sid}adm needs execution permission as user root for the command
+crm_attribute.
+.PP
+4. The hook provider needs to be added to the HANA global configuration,
 in memory and on disk (in persistence).
 .PP
-4. If the hook provider should be pre-compiled, the particular Python version that comes with SAP HANA
-has to be used.
+5. If the hook provider should be pre-compiled, the particular Python version
+that comes with SAP HANA has to be used.
 .\"
 .SH BUGS
 In case of any problem, please use your favourite SAP support process to open
@@ -243,7 +265,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) ,
-\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBsusCostOpt.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP (7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-hookHelper\fP(8)
 \fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
