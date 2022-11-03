@@ -1,5 +1,5 @@
 """
-# SAPHana
+# susChkSrv.py
 # Author:       Fabian Herschel, June 2022
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2022 SUSE LLC
