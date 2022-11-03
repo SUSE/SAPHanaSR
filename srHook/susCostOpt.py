@@ -1,8 +1,13 @@
 """
+# susCostOpt.py
+# Authors:      Angela Briel, Fabian Herschel, June 2022
+# License:      GNU General Public License (GPL)
 # Copyright:    (c) 2022 SUSE LLC
 
 susCostOpt
-prepared SQL statements to remove memory allocation limit and the switch-off of the pre-load of column tables after takeover from primary to the secondary site in case of a cost optimized scenario
+purpose: reconfigures the SAP HANA instance during the postTakeover event to allow the
+new primary to consume the needed resources. Currently the hook reconfigures the
+global allocation limit and the pre-load of column tables.
 
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
     [ha_dr_provider_susCostOpt]
