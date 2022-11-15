@@ -1268,7 +1268,7 @@ function check_for_primary() {
 
 # function: analyze_hana_sync_statusSRS
 # params:   -
-# globals:  DIR_EXECUTABLE(r), FULL_SR_STATUS(w), remoteNode
+# globals:  DIR_EXECUTABLE(r), FULL_SR_STATUS(w), remoteNode, remSR_name
 #
 # systemReplicationStatus.py return-codes:
 #    NoHSR        = 10
@@ -1290,7 +1290,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: Limit the runtime of systemReplicationStatus.py
     # SAP_CALL
     FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
-    super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
+    super_ocf_log info "DEC ${FUNCNAME[0]} systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     #
     # TODO: PRIO2: Here we might also need to filter additional sites (if multi tier should be supported)
@@ -1298,7 +1298,7 @@ function analyze_hana_sync_statusSRS()
     #
     if [ $srRc -eq 15 ]; then
        # Fix for a HANA BUG, where a non-working SR resulted in RC 15:
-       if grep -q "ACTIVE" <<< "$FULL_SR_STATUS"; then
+       if [[ $FULL_SR_STATUS == *ACTIVE* ]]; then
           super_ocf_log info "FLOW ${FUNCNAME[0]} SOK"
           set_hana_attribute "$remoteNode" "SOK" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
           super_ocf_log info "ACT site=$sr_name, setting SOK for secondary (1)"
