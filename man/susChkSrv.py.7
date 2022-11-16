@@ -1,6 +1,6 @@
 .\" Version: 0.160.0
 .\"
-.TH susChkSrv.py 7 "02 Nov 2022" "" "SAPHanaSR"
+.TH susChkSrv.py 7 "11 Nov 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 susChkSrv.py \- Provider for SAP HANA srHook method srServiceStateChanged().
@@ -173,6 +173,33 @@ path = /usr/share/SAPHanaSR/
 execution_order = 3
 .RE
 .PP
+\fB*\fP Example for entry in SAP HANA scale-up global configuration
+/hana/shared/HA1/global/hdb/custom/config/global.ini
+.PP
+In case of a failing indexserver, the complete node will get fenced by
+calling 'crm node fence ...'. 
+Unlike fence actions from inside the Linux HA cluster, this hook script fence
+action will be issued even when the cluster is in maintenance and stonith is
+temporarily disabled. The fence request then is queued until the cluster is set
+back into active state. See example below for removing queued fence actions. 
+.br
+The section ha_dr_provider_suschksrv is needed on all HANA nodes.
+The HANA has to be stopped before the file can be changed.
+Alterntively use SAPHanaSR-manageProvider for applying an HA/DR provider hook
+configuration, see manual page SAPHanaSR-manageProvider(8).
+.PP
+.RS 2
+[ha_dr_provider_suschksrv]
+.br
+provider = susChkSrv
+.br
+path = /usr/share/SAPHanaSR/
+.br
+execution_order = 2
+.br
+action_on_lost = fence
+.RE
+.PP
 \fB*\fP Example for entry in SAP HANA scale-out global configuration
 /hana/shared/HA1/global/hdb/custom/config/global.ini
 .PP
@@ -291,7 +318,7 @@ the node where it happens.
 ~> egrep '(LOST:|STOP:|START:|DOWN:|init|load|fail)' nameserver_suschksrv.trc
 .RE
 .PP
-\fB*\fP Example for checking the hook script tracefile for node fencing actions.
+\fB*\fP Example for checking the hook script tracefile for node fence actions.
 .PP
 Example SID is HA1. To be executed on both sites' master nameservers. See also
 manual page SAPHanaSR-hookHelper(8).
@@ -302,6 +329,26 @@ manual page SAPHanaSR-hookHelper(8).
 ~> cdtrace
 .br
 ~> grep fence.node nameserver_suschksrv.trc
+.RE
+.PP
+\fB*\fP Example for revoking a queued fence request from the Linux cluster.
+.PP
+This could be done if an HANA indexserver failure has triggerd an node fence
+action while the Linux cluster is in maintenance. Before revoking a fence request,
+be sure it has been issued by the HA/DR provider hook script. See example above
+for checking the hook script tracefile for node fence actions.
+Example node is node2. To be executed on that node.
+See also manual pages SAPHanaSR-hookHelper(8) and crm_attribute(8).
+.br
+Note: This removes the node attribute terminate=true from the Linux cluster CIB.
+It does not touch any fencing device.
+.PP
+.RS 2
+# grep Requesting.*fencing.*node.'node2' /var/log/pacemaker/pacemaker.log
+.br
+# crm_attribute -t status -N 'node2' -D -n terminate
+.br
+# crm_attribute -t status -N 'node2' -G -n terminate
 .RE
 .PP
 .\"
@@ -372,7 +419,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,  \fBSAPHanaSR.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_suse_SAPHanaController\fP(7) , \fBSAPHanaSR-hookHelper\fP(8) ,
-\fBSAPHanaSR-manageProvider\fP(8) , \fBcrm\fP(8) , \fBpython3\fP(8) ,
+\fBSAPHanaSR-manageProvider\fP(8) , \fBcrm\fP(8) , \fBcrm_attribute\fP(8) ,
+\fBpython3\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
 .br
