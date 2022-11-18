@@ -286,7 +286,7 @@ while (<$CIB>) {
    #    # insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
    #    insertAttribute($sid, $refHH, $refHN, $1, "node_status", $2);
    #}
-   if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+))"/ ) {
+   if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+)|(terminate))"/) {
       $name=$1;
       # Bug 1192963 - L3: SAPHanaSR-monitor not reporting correctly
       #  - catch also ids: id="host15-instance_attributes-hana_ha1_srmode"
