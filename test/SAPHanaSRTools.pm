@@ -6,7 +6,7 @@
 # Copyright:    (c) 2017-2022 SUSE LLC
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.24.2022.02.02
+# Version: 0.26.2022.11.22
 #
 ##################################################################
 
@@ -291,8 +291,8 @@ while (<$CIB>) {
       # Bug 1192963 - L3: SAPHanaSR-monitor not reporting correctly
       #  - catch also ids: id="host15-instance_attributes-hana_ha1_srmode"
       #
-      if (( $_ =~ /id=.((.*)-instance_attributes)-([a-zA-Z0-9\_\-]+)/ ) 
-         || ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ )) { 
+      if (( $_ =~ /id=.((.*)-instance_attributes)-([a-zA-Z0-9\_\-]+)/ )
+         || ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ )) {
          # found attribute in nodes forever and reboot store
          $host=$2;
          if (defined $id2uname{$host}) {
@@ -362,7 +362,7 @@ close CIB;
 # path_to_table
 # converts output in path form (<table>/<object>i/<key>="<value>") into hashes which can be output by print_host_attr()
 # table could (for first) be one of ['Global','Resource','Sites','Hosts']
-sub path_to_table 
+sub path_to_table
 {
     my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN ) = @_;
     #
