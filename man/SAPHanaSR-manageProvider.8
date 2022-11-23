@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR-manageProvider 8 "19 Aug 2022" "" "SAPHanaSR"
+.TH SAPHanaSR-manageProvider 8 "22 Nov 2022" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-manageProvider \- adds, updates, removes or shows HADR provider sections for SAP HANA
@@ -12,12 +12,17 @@ SAPHanaSR-manageProvider \- adds, updates, removes or shows HADR provider sectio
 .br
 \fBSAPHanaSR-manageProvider\fR [ --sid=SID ] [--reconfigure] --remove <template-file>
 .br
-\fBSAPHanaSR-manageProvider\fR [ --sid=SID ] [--reconfigure] --show --provider=<provider>
+\fBSAPHanaSR-manageProvider\fR [ --sid=SID ] --show --provider=<provider>
 .\"
 .SH DESCRIPTION
 SAPHanaSR-manageProvider allows to add (and update), to remove and show SAP HANA
-HADR provider sections. This is possible online and offline. It is possible on 
+HADR provider sections. This is possible online and offline. It is possible on
 the primary as well as on the secondary.
+.br
+The provider section name is case sensitive. Usually all lowercase is used for
+the section name. The provider hook script names are camelCase.
+.br
+This script needs to be run as <sid>adm user.
 .PP
 .SH OPTIONS
 .TP 4
@@ -27,9 +32,21 @@ show help.
 \fB --version\fR
 show version.
 .TP 4
-\fB --add ...\fR
-Add the section given in the template-file.
+\fB --add\fR <template-file>
+add the section given in the template file to configuration.
 .TP 4
+\fB --remove\fR <template-file>
+remove the section given in the template file from configuration.
+.TP 4
+\fB --reconfigure\fR
+not implemented yet, use 'hdbnsutil -reloadHADRProviders' instead.
+.TP 4
+\fB --show --provider\fR=<provider>
+show the section for given provider from configuration.
+.TP 4
+\fB --sid\fR=<SID>
+use SAP system ID <SID>. Should be autodetected, if there is only one SAP HANA
+instance installed on the local cluster node. 
 .\"
 .SH RETURN CODES
 .B 0
@@ -39,37 +56,91 @@ Successful program execution.
 Usage, syntax or execution errors.
 .\"
 .SH EXAMPLES
-.TP 4
-# SAPHanaSR-manageProvider --show --provider=suschksrv
-shows the global.ini section ha_dr_provider_suschksrv, if available
-.TP 4
-# SAPHanaSR-manageProvider --add ...
-adds... 
-.TP 4
-# SAPHanaSR-manageProvider --remove ...
-remove ...
-.TP 4
-# SAPHanaSR-manageProvider --show ...
-show ...
+.PP
+\fB*\fR Show the global.ini section ha_dr_provider_suschksrv, if available.
+
+Example SID is HA1, the HADR provider script is susChkSrv.py. See also manual
+page susChkSrv.py(7).
+.PP
+.RS 2
+# su - ha1adm -c "/usr/sbin/SAPHanaSR-manageProvider --show --provider=suschksrv"
+.RE
+.PP
+\fB*\fR Add section and activate the provider hook script SAPHanaSR.py.
+
+Example SID is HA1, the HADR provider hook script is SAPHanaSR.py. See also
+manual page SAPHanaSR.py(7).
+.br
+Note: 'hdbnsutil -reloadHADRProviders' loads everything from global.ini.
+.PP
+.RS 2
+# cat /usr/share/SAPHanaSR/globa.ini
+.br
+# su - ha1adm -c "/usr/sbin/SAPHanaSR-manageProvider --add /usr/share/SAPHanaSR/globa.ini"
+.br
+# su - ha1adm -c "hdbnsutil -reloadHADRProviders; echo rc=$?"
+.br
+# su - ha1adm -c "cdtrace; grep SAPHanaSR.init nameserver_*.trc" 
+.RE
+.PP
+.\" \fB*\fR Replace section ha_dr_provider_SAPHanaSR by ha_dr_provider_saphanasrmultitarget.
+.\"
+.\" TODO
+.\" .RS 2
+.\" ~> SAPHanaSR-manageProvider --remove SAPHanaSR
+.\" .br
+.\" TODO
+.\" .br
+.\" ~> SAPHanaSR-manageProvider --add saphanasrmultitarget TODO
+.\" .RE
+.\" .PP
+\fB*\fR Change timeout for HADR provider hook script susTkOver.py.
+
+Example SID is HA1, timeout is changed from 35 to 30. The configuration is
+changed and applied to the running hook script. See also manual page
+susTkOver.py(7). 
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> /usr/sbin/SAPHanaSR-manageProvider --show --provider=sustkover >sustkover.old
+.br
+~> sed s/sustkover_timeout\\ =\\ 35/sustkover_timeout\\ =\\ 30/g <sustkover.old >sustkover.new
+.br
+~> /usr/sbin/SAPHanaSR-manageProvider --add --provider=sustkover sustkover.new 
+.br
+~> hdbnsutil -reloadHADRProviders
+.br
+~> cdtrace; grep susTkOver.init namerserver_*.trc
 .\"
 .SH FILES
-.TP
+.TP 4
 /usr/sbin/SAPHanaSR-manageProvider
 the program itself.
-.TP
+.TP 4
+/usr/sap/<SID>/SYS/global/hdb/custom/config/global.ini
+the global.ini configuration on disk. Do not edit directly.
+.TP 4
+/usr/sap/<SID>/HDB<INO>/<VIRT_HOST>/trace/
+directory with HANA trace files.
+.TP 4
+/usr/share/SAPHanaSR/samples/ , /usr/share/SAPHanaSR-ScaleOut/samples/
+directory with samples of HADR provider sections. 
+.TP 4
 setParameter.py
 the SAP python script to interact with global.ini.
 .\"
 .SH BUGS
 Command hangs, if it needs an input file and you do not specify the file.
+.br
+\-\-reconfiure does not work yet.
 .\"
 .SH SEE ALSO
-\fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaTopology\fP(7) ,
-\fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR-replay-archive\fP(8) , \fBSAPHanaSR-filter\fP(8) ,
-\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR_maintenance_examples\fP(7) ,
-\fBSAPHanaSR-manageAttr\fP(8) ,
-\fBcrm_simulate\fP(8) , \fBcrm_report\fP(8) , \fBcibadmin\fP(8) , \fBcrm_mon\fP(8) ,
-\fBcs_convert_time\fP(8) , \fBcs_clusterstate\fP(8) , \fBcs_show_hana_info\fP(8) , \fBcs_show_scores\fP(8) ,
+\fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR\fP(7) ,
+\fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) , \fBsusCostOpt.py\fP(7) ,
+\fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
+\fBSAPHanaSR_maintenance_examples\fP(7) ,
+\fBSAPHanaSR-manageAttr\fP(8) , \fBcs_show_hana_info\fP(8) ,
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap ,
 .br
@@ -77,9 +148,9 @@ https://documentation.suse.com/sles-sap/ ,
 .br
 https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
 .br
-https://www.susecon.com/doc/2016/sessions/TUT90846.pdf ,
+https://www.susecon.com/archive-2020.html ,
 .br
-https://www.susecon.com/archive-2020.html
+https://www.susecon.com/archive-2021.html
 .\"
 .SH AUTHORS
 F.Herschel, L.Pinne.
