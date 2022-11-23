@@ -7,7 +7,8 @@ use Getopt::Long;
 my @search;
 my $cibTime;
 my $key; my $value;
-my %lastVal;
+my %lastVal=();
+my %currVal=();
 my $previous;
 my $p;
 my $filterDouble=0;
@@ -36,6 +37,7 @@ if ( $help ) {
    printf "";
    exit 0;
 }
+
 if ( $version ) {
    printf "%s\n", $Version;
    exit 0;
@@ -51,8 +53,34 @@ while ( <> ) {
         # lines like: a/b/c="d e f"
         $key="$1"; $value="$2";
         if ( $key eq "Global/global/cib-time" ) {
+            #
+            # new cib reached
+            # now list all "lost" entries, if their key was matching the serach criteria
+            #
+            foreach my $search ( @search ) {
+                # list empty keys for filterDouble, if value was in list of last keys
+                foreach my $lastKey ( keys(%lastVal)) {
+                    if ( ($lastKey =~ $search) && (! defined $currVal{$lastKey})) {
+                        if ( $filterDouble ) {
+                            if ( $showFormerValues  ) {
+                                $formerString=sprintf("; (%s)", $lastVal{$lastKey});
+                            } else {
+                                $formerString="";
+                            }
+                            printf "%s; %s=%s%s\n", $cibTime, $lastKey, "", $formerString;
+                        }
+                        delete $lastVal{$lastKey};
+                    }
+                }
+		    }
             $cibTime=$value;
+            %currVal = (); # empty current Hash
+            $currVal{$key} = $cibTime;
         } else {
+            $currVal{$key} = $value;
+            #
+            # first list all new entries, if matching the serach criteria
+            #
             foreach my $search ( @search ) {
                 if ( $key =~ $search ) {
                     if ( defined $lastVal{$key} ) {
@@ -65,15 +93,15 @@ while ( <> ) {
                             $p=0;
                         }
                     } else {
-                            # new value and empty hash slot, store and mark line to be printed
-                            $previous="";
-                            $lastVal{$key}=$value;
-                            $p=0;
+                        # new value and empty hash slot, store and mark line to be printed
+                        $previous="";
+                        $lastVal{$key}=$value;
+                        $p=0;
                     }
                     if ( $showFormerValues  && $previous ) {
-                       $formerString=sprintf("; (%s)", $previous);
+                        $formerString=sprintf("; (%s)", $previous);
                     } else {
-                       $formerString = "";
+                        $formerString = "";
                     }
                     if ( (! $filterDouble ) || ( $p == 0 )) {
                         printf "%s; %s=%s%s\n", $cibTime, $key, $value, $formerString;
