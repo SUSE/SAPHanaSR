@@ -21,14 +21,13 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.161.1_BF
+Version:        0.162.0
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
 BuildArch:      noarch
 
 Source0:        %{name}-%{version}.tgz
-Patch1:         0001-bsc-1192963.patch
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
@@ -74,7 +73,6 @@ This subpackage includes the Setup Guide for getting SAP HANA system replication
 
 %prep
 tar xf %{S:0}
-%patch1 -p1
 
 %if 0%{?sle_version} >= 120100
     %define crmscr_path /usr/share/crmsh/scripts/
