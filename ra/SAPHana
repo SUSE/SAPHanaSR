@@ -771,6 +771,24 @@ function set_SRHOOK()
 }
 
 #
+# function set_SRHOOK_PRIM - sets the site specific Hook SR status
+# params: site-name, value
+# globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# locals:  ATTR[@], my_sync, get_sr_name
+# SAPHanaSR Scale-Up already uses multi-target aware SR Hook attribute there is not global fallback attribute
+#
+function set_SRHOOK_PRIM()
+{
+    # to be backward compatible only set the site attribute, if the local or remote site attribute is already used (set) in the past
+    lastSrHook=$(get_SRHOOK_plain "$sr_name")
+    lastRemSrHook=$(get_SRHOOK_plain "$remSR_name")
+    if [ -n "${lastSrHook}${lastRemSrHook}" ]; then
+        # reset srHook attribute to PRIM as we found either local or remore srHook attribute
+        set_SRHOOK "$sr_name" "PRIM"
+    fi
+}
+
+#
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
@@ -2475,6 +2493,7 @@ function saphana_monitor_primary()
                 else
                     rc=$OCF_SUCCESS
                 fi
+	            set_SRHOOK_PRIM
                 my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"
                 scoring_crm_master "$my_role" "$my_sync"
@@ -2819,12 +2838,7 @@ function saphana_promote_clone() {
     fi
     local lastSrHook
     if [ $rc -eq $OCF_SUCCESS ]; then
-        lastSrHook=$(get_SRHOOK_plain "$sr_name")
-        if [ -n "$lastSrHook" ]; then
-            # TODO: Should we do this also, if the attribute is empty? If set, only if non-PRIM
-            # reset old srHook attribute to PRIM as we are starting right now
-            set_SRHOOK "$sr_name" "PRIM"
-        fi
+	    set_SRHOOK_PRIM
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
