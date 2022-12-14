@@ -476,7 +476,7 @@ function sht_init() {
     local hdbANSWER=""
     local siteID
     local siteNAME
-    local chkMethod=""
+    local chkMethod=''
     SYSTEMCTL="/usr/bin/systemctl"
     systemd_unit_name="saphostagent.service"
     HOSTEXECNAME=saphostexec
@@ -575,21 +575,17 @@ function sht_init() {
         #super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
         #srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
         case "$chkMethod" in
-            gP ) # call getParameter (gP)
-                local gpKeys=""
+            gP ) # call getParameter (gP) - fallback for 'hdbnsutil' failing 3 times.
+                local gpKeys=''
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
                 # if 'actual_mode' is not available, fallback to 'mode'
-                if [ -z "$srmode" ]; then
-                    srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
-                fi
+                [[ "$hdbANSWER" =~ (actual_mode|mode)=([^$'\n']+) ]] && srmode=${BASH_REMATCH[2]}
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
-                # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
                 ;;
         esac
         case "$srmode" in
@@ -607,12 +603,11 @@ function sht_init() {
     siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
     siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     site=$siteNAME
+
+    ## REDUNDANT? , see above gP
     if [ -z "$srmode" ]; then
-        srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
         # if 'actual_mode' is not available, fallback to 'mode'
-        if [ -z "$srmode" ]; then
-            srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
-        fi
+        [[ "$hdbANSWER" =~ (actual_mode|mode)=([^$'\n']+) ]] && srmode=${BASH_REMATCH[2]}
     fi
     #
     # for rev >= 111 we use the new mapping query
