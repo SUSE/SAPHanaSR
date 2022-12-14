@@ -1254,26 +1254,28 @@ function check_for_primary() {
                 [[ "$node_full_status" =~ mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
                 ;;
-       case "$node_status" in
-           primary )
-               rc=$HANA_STATE_PRIMARY
-               break;;
-           syncmem | sync | async )
-               rc=$HANA_STATE_SECONDARY
-               break;;
-           none ) # have seen that mode on second side BEFEORE we registered it as replica
-               rc=$HANA_STATE_STANDALONE
-               break;;
-           * )
-               super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
-               dump=$( echo $node_status | hexdump -C );
-               super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
-               # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
-               # SAP_CALL
-               super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
-               # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
-       esac;
-       sleep 2
+        esac
+        case "$node_status" in
+            primary )
+                rc=$HANA_STATE_PRIMARY
+                break;;
+            syncmem | sync | async )
+                rc=$HANA_STATE_SECONDARY
+                break;;
+            none ) # have seen that mode on second side BEFEORE we registered it as replica
+                rc=$HANA_STATE_STANDALONE
+                break;;
+            * )
+                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                dump=$( echo $node_status | hexdump -C );
+                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
+                ((i++))
+                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
+                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+
+                # lets pause a bit to give hdbnsutil a chance to answer next time
+                sleep 2
+                ;;
         esac
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
