@@ -474,7 +474,6 @@ function sht_init() {
     local myInstanceName=""
     local rc=$OCF_SUCCESS
     local hdbANSWER=""
-    local siteID
     local siteNAME
     local chkMethod=''
     SYSTEMCTL="/usr/bin/systemctl"
@@ -561,10 +560,8 @@ function sht_init() {
     # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
     #
     hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
     if version "$hdbver" "<" "1.00.111"; then
         hdbState="hdbnsutil -sr_state"
-        hdbMap="hdbnsutil -sr_state"
     fi
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
@@ -599,20 +596,22 @@ function sht_init() {
               ;;
         esac
     done
-    # TODO PRIO3: Implement a file lookup, if we did not get a result
-    siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
-    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
-    site=$siteNAME
 
     ## REDUNDANT? , see above gP
     if [ -z "$srmode" ]; then
         # if 'actual_mode' is not available, fallback to 'mode'
         [[ "$hdbANSWER" =~ (actual_mode|mode)=([^$'\n']+) ]] && srmode=${BASH_REMATCH[2]}
     fi
+
+    # TODO PRIO3: Implement a file lookup, if we did not get a result
+    [[ "$hdbANSWER" =~ site.name=([^$'\n']+) ]] && siteNAME=${BASH_REMATCH[1]}
+    site=$siteNAME
+
     #
     # for rev >= 111 we use the new mapping query
     #
     if version "$hdbver" ">=" "1.00.111"; then
+        hdbMap="hdbnsutil -sr_stateHostMapping"
         hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
     fi
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
