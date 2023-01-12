@@ -392,10 +392,10 @@ function HANA_CALL()
                   #
                   if [ $rc -eq 124 ]; then
                       super_ocf_log warn "RA: HANA_CALL timed out after $timeOut seconds running command '$cmd'"
-                  fi
-                  if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
-                      local second_output=""
-                      second_output=$($pre_cmd "$pre_script; $onTimeOut");
+                      if [ -n "$onTimeOut" ]; then
+                          local second_output=""
+                          second_output=$($pre_cmd "$pre_script; $onTimeOut");
+                      fi
                   fi
                  ;;
     esac
@@ -438,7 +438,7 @@ function sht_init() {
     myInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
     HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
-    super_ocf_log debug "DBG2: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
@@ -487,8 +487,12 @@ function sht_init() {
     fi
 
     if [ -z "$DIR_EXECUTABLE" ]; then
-        super_ocf_log err "DEC: Can not determine DIR_EXECUTABLE. Please set this parameter. -> OCF_ERR_CONFIGURED"
-        rc=$OCF_ERR_CONFIGURED
+        # TODO PRUI XX: For infra stability - is OCF_NOT_RUNNING or OCF_ERR_CONFIGURED the better option?
+        # How does OCF_ERR_CONFIFURED affect the other clone instances?
+        # scale-out: rc is/was OCF_NOT_RUNNING; scale-up: rc is/was OCF_ERR_CONFIGURED
+        # select OCF_NOT_RUNNING for now
+        super_ocf_log err "DEC: Can not determine DIR_EXECUTABLE. Please set this parameter. -> OCF_NOT_RUNNING"
+        rc=$OCF_NOT_RUNNING
     fi
 
     if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
@@ -653,6 +657,9 @@ function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     super_ocf_log debug "DBG: check_for_primary: srmode=$srmode"
+    # TODO PRIO1: scale-out did call the following code part 3 times and returns for primary, *sync* and none
+    #             need to check, if that really is/was helpful here - for now going the scale-up way and 
+    #             check it only once. (repeat-loop for sr_stateConfiguration
     case "$srmode" in
        primary )
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_PRIMARY"
@@ -661,12 +668,21 @@ function check_for_primary() {
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_SECONDARY"
               rc=$HANA_STATE_SECONDARY;;
        none ) # have seen that mode on second side BEFEORE we registered it as replica
+              # TODO: PRIO1: Should we set SFAIL?
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_STANDALONE"
               rc=$HANA_STATE_STANDALONE;;
        * )
+          # TODO: PRIO3: Should we set SFAIL?
+          # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
           dump=$( echo $srmode | hexdump -C );
           super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
           rc=$HANA_STATE_DEFECT
+          # scale-out have had a new re-try code line here: would be needed for the repeat-loop
+          #### SAP-CALL
+          #node_full_status=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "hdbnsutil -sr_stateConfiguration --sapcontrol=1" 2>/dev/null )
+          #srmode=$(echo "$node_full_status" | awk -F= '$1=="mode" {print $2}')
+          #super_ocf_log info "DEC: check_for_primary: loop=$i: srmode=$srmode"
+          # TODO: PRIO5: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
    esac;
    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
    return $rc
@@ -1011,7 +1027,7 @@ function sht_stop_clone() {
         timeout=$stdTimeOut
     fi
 
-    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
     if [ "$hanalrc" -ge 124 ]; then
         # timeout of HANA_CALL, set role to '1:P:-:-:-:-'
         # scale-out was: timeout of HANA_CALL, set role to '$nNsConf:shtdown:shtdown:shtdown'
@@ -1020,13 +1036,19 @@ function sht_stop_clone() {
         # and exit with 1 to let the stop fail
         tout=1
     else
+        # TODO PRIO1: differ scale-up and scale-out by the output format
         hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
-            awk -F= '$1 == "nameServerConfigRole"    {f1=$2}
-                     $1 == "nameServerActualRole"    {f2=$2}
-                     $1 == "indexServerConfigRole"   {f3=$2}
-                     $1 == "indexServerActualRole"   {f4=$2}
-                     END { printf "%s:%s:%s:%s\n", f1, f2, f3,f4 }')
-        set_hana_attribute "${NODENAME}" "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+            awk -F= '
+            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
+            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
+            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
+            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
+            $1 == "nameServerConfigRole"  {nsCR=$2}
+            $1 == "nameServerActualRole"  {nsAR=$2}
+            $1 == "indexServerConfigRole" {isCR=$2}
+            $1 == "indexServerActualRole" {isAR=$2}
+            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName=$vName )
+        set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     sht_stop; rc=$? # till now it returns everytime $OCF_SUCCESS
     if [ "$tout" -eq 1 ]; then
@@ -1106,19 +1128,20 @@ function sht_monitor_clone() {
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
     fi
     if [ -n "$vName" ]; then
-       set_hana_attribute ${NODENAME} "$vName" ${ATTR_NAME_HANA_VHOST[@]}
+       # TODO PRIO1: ceck which version to be used (scale-up, scale-out)
+       # scale-out: set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
+       # scale-up:  set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}"
+       set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
     else
-       vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
+       # TODO PRIO1: ceck which version to be used (scale-up, scale-out)
+       # scale-out: vName=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
+       # scale-up:  vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
+       vName=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
     fi
-    #site=$(get_site_name)
-    #### SAP-CALL
-    # SAP_CALL
-    #hanaANSWER=$(su - $sidadm -c "python exe/python_support/landscapeHostConfiguration.py" 2>/dev/null); hanalrc="$?"
-    #
-    # since rev 09x SAP has added the --sapcontrol option for the landscapeHostConfiguration interface
-    # we begin to use --sapcontrol with rev 100
-    # since rev 120 we need to use the --sapcontrol, because SAP changed the tool output
-    #
+    # last fallback, if neither the HANA call NOR the Attribute "knows" the vName - try the local hostname
+    if [ -z "$vName" ]; then
+       vName=${NODENAME}
+    fi
     setRole=true
     hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
     # landscape timeout - retry command
@@ -1131,26 +1154,39 @@ function sht_monitor_clone() {
             super_ocf_log err "RA: HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
                 setRole=false
         fi
-
-        # TODO: PRIO1: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
-        hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
-            awk -F= '$1 == "nameServerConfigRole"    {f1=$2}
-                     $1 == "nameServerActualRole"    {f2=$2}
-                     $1 == "indexServerConfigRole"   {f3=$2}
-                     $1 == "indexServerActualRole"   {f4=$2}
-                     END { printf "%s:%s:%s:%s\n", f1, f2, f3,f4 }')
-    if [ -n "$hanaRemoteHost" ]; then
-        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
     fi
+    # TODO PRIO1: check, if we still need the attribute ATTR_NAME_HANA_REMOTEHOST to be set as we decide on site level
+    #    if [ -n "$hanaRemoteHost" ]; then
+    #        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
+    #    fi
+    # TODO: PRIO1: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
+    # TODO: PRIO1: Could we differ between scale-up and scale-out by the line format (k=v vs host/h/k=v)
+    #
+    # scan with and without host prefix to allow also single instances (scaleup) for smaller test environments
+    #
+    hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+            awk -F= '
+            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
+            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
+            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
+            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
+            $1 == "nameServerConfigRole"  {nsCR=$2}
+            $1 == "nameServerActualRole"  {nsAR=$2}
+            $1 == "indexServerConfigRole" {isCR=$2}
+            $1 == "indexServerActualRole" {isAR=$2}
+            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName=$vName )
     if $setRole; then
-        set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+        # TODO PRIO1: going to scale-out way to do it, if also ok for scale-up
+        # scale-out: set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+        # scale-up: set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+        set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     if [ -n "$site" ]; then
         set_hana_attribute ${NODENAME} "$site" ${ATTR_NAME_HANA_SITE[@]}
     fi
     case "$hanaPrim" in
         P ) ;;
-        S ) # only secondary may propargate its sync status
+        S ) # only secondary may propagate its sync status
         case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
            *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
            *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;
@@ -1162,7 +1198,7 @@ function sht_monitor_clone() {
         done
         ;;
     esac
-    #
+    #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     fi # end ocf_is_NOT_probe
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
@@ -1194,7 +1230,7 @@ InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
 declare -u SAPHanaFilter='ra-act-dec-lpa'
-
+NODENAME=$(crm_node -n)
 
 if [ $# -ne 1 ]
 then
