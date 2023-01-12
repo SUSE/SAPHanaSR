@@ -1,13 +1,10 @@
 #!/bin/bash
 #
-# SAPHana
+# SAPHanaController
 #
 # Description:  Manages two SAP HANA Databases in System Replication
-#               Planned: do also manage scale-out scenarios
-#               currently the SAPHana is dependent of the analysis of
+#               SAPHanaController is dependent of the analysis of
 #               SAPHanaTopology
-#               For supported scenarios please read the README file provided
-#               in the same software package (rpm)
 #
 ##############################################################################
 #
@@ -16,7 +13,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-# Copyright:    (c) 2015-2022 SUSE LLC
+# Copyright:    (c) 2015-2023 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -29,9 +26,7 @@
 #   OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
-#   new instance parameter for the RA
 #   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
-#   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
 #
 # HANA must support the following commands:
 #     hdbnsutil -sr_stateConfiguration (unsure, if this means >= SPS110, SPS111 or SPS10x)
@@ -41,7 +36,9 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaVersion="0.162.0"
+SAPHanaControllerVersion="1.001.1"
+# Resource Agent Generation
+RAG="2.0"
 #
 # Initialization:
 timeB=$(date '+%s')
@@ -52,6 +49,12 @@ timeB=$(date '+%s')
 #
 #######################################################################
 #
+# KNOWN PROBLEMS TO BE FIXED:
+# P001 - Setup with scale-out and PREFER_SITE_TAKEOVER=true, AUTOMATED_REGISTER=true. If you kill a primary instance it could happen that the primary sets itself to lpt=10 and the secondary will be set to SFAIL and lpt=10 this results in a WAITING4LPA situation. ==> A down/dying primary may never set SFAIL for a secondary!
+# P002 - in the swarm non master-nameserver nodes may never set the lpt=date
+# P003 - in the swarm non master nodes may NOT do a full master-walk
+# P004 - Monitor on "dying" primary and failing systemReplicationStatus script set secondary to SFAIL, so local restart was processed instead of takeover
+# DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
 log_attributes=false
 if ocf_is_true "$log_attributes"; then
     log_attr_file="/var/log/fhATTRIBUTES"
@@ -79,7 +82,6 @@ function super_ocf_log() {
     local skip=1
     local mtype=""
     local shf="${SAPHanaFilter:-all}"
-    #ocf_log "info" "super_ocf_log: f:$shf l:$level m:$message"
     # message levels: (dbg)|info|warn|err|error
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC|DBG2...
     case "$level" in
@@ -117,7 +119,7 @@ function saphana_usage() {
     cat <<-EOF
     usage: $0 ($methods)
 
-    $0 manages two SAP HANA databases (scale-up) in system replication.
+    $0 manages two SAP HANA databases in system replication.
 
     The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
     The 'stop'         operation stops the HANA instance
@@ -151,17 +153,18 @@ function backup_global_and_nameserver() {
 function saphana_meta_data() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-#
+# TODO PRIO2: Description including parameters to be reviewed for scale-out
+# TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
     cat <<END
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
-<resource-agent name="SAPHana" version="$SAPHanaVersion">
+<resource-agent name="SAPHanaController" version="$SAPHanaControllerVersion">
 <version>1.0</version>
 
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
 The SAPHanaSR resource agent manages two SAP HANA database systems which are configured
-in system replication. SAPHana supports Scale-Up scenarios.
+in system replication. SAPHanaController supports Scale-Up and Scale-Out scenarios.
 
 Managing the two SAP HANA database systems means that the resource agent controls the start/stop of the
 instances. In addition the resource agent is able to monitor the SAP HANA databases to check their
@@ -181,7 +184,7 @@ The resource agent uses the following four interfaces provided by SAP:
    and node roles. For our monitor the overall status is relevant. This overall
    status is reported by the return code of the script:
    0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
-   The SAPHana resource agent will interpret return codes 0 as FATAL, 1 as not-running or ERROR and and returncodes 2+3+4 as RUNNING.
+   The SAPHanaController resource agent will interpret return codes 0 as FATAL, 1 as not-running or ERROR and and return codes 2+3+4 as RUNNING.
 
 3. hdbnsutil
    The interface hdbnsutil is used to check the "topology" of the system replication as well as the current configuration
@@ -212,13 +215,13 @@ The resource agent uses the following four interfaces provided by SAP:
         <content type="string" default="" />
     </parameter>
     <parameter name="PREFER_SITE_TAKEOVER" unique="0" required="0">
-        <longdesc lang="en">Should cluster/RA prefer to switchover to secondary instance instead of restarting primary locally? Default="false"
+        <longdesc lang="en">Should cluster/RA prefer to switchover to secondary site instead of restarting primary site locally? Default="true"
         no: Do prefer restart locally
         yes: Do prefer takeover to remote site
         never: Do never run a sr_takeover (promote) at the secondary side. THIS VALUE IS CURRENTLY NOT SUPPORTED.
         </longdesc>
         <shortdesc lang="en">Local or site recover preferred?</shortdesc>
-        <content type="string" default="false" />
+        <content type="string" default="true" />
     </parameter>
     <parameter name="REMOVE_SAP_SOCKETS" unique="0" required="0">
         <longdesc lang="en">Should the RA remove the unix domain sockets related to sapstartsrv before (re-)starting sapstartsrv ? Default="true"
@@ -252,7 +255,7 @@ The resource agent uses the following four interfaces provided by SAP:
           If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
           of your cluster resources.
         </longdesc>
-        <content type="string" default="60" />
+        <content type="string" default="120" />
     </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
         <longdesc lang="en">The full qualified path where to find sapstartsrv and sapcontrol. Specify this parameter, if you have changed the SAP kernel directory location after the default SAP installation.</longdesc>
@@ -267,11 +270,6 @@ The resource agent uses the following four interfaces provided by SAP:
     <parameter name="INSTANCE_PROFILE" unique="1" required="0">
         <longdesc lang="en">The name of the SAP HANA instance profile. Specify this parameter, if you have changed the name of the SAP HANA instance profile after the default SAP installation. Normally you do not need to set this parameter.</longdesc>
         <shortdesc lang="en">HANA instance profile name</shortdesc>
-        <content type="string" default="" />
-    </parameter>
-    <parameter name="SAPHanaFilter" unique="0" required="0">
-        <shortdesc lang="en">OUTDATED PARAMETER</shortdesc>
-        <longdesc lang="en">OUTDATED PARAMETER</longdesc>
         <content type="string" default="" />
     </parameter>
 </parameters>
@@ -359,6 +357,7 @@ function version() {
 }
 
 #
+# TODO PRIO1: cecl, if we still need that function
 # function: remoteHost2remoteNode - convert a SAP remoteHost to the cluster node name
 # params:   remoteHost
 # globals:  ATTR_NAME_HANA_VHOST[*]
@@ -385,7 +384,7 @@ function remoteHost2remoteNode()
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
-
+#
 # function: get_action_timeout
 # output:  action timeout
 #
@@ -397,6 +396,7 @@ function get_action_timeout() {
     local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
     local stdTimeOut="$HANA_STD_ACTION_TIMEOUT"
     local actTimeOutPercent=95 # 95% to left 5% for the rest of the resource agent action
+    local hanaAction="$1"
     if [ -z "$actionTimeOut" ]; then
         actionTimeOut="$stdTimeOut"
     else
@@ -409,8 +409,10 @@ function get_action_timeout() {
     # max(3600, 95%(actionTimeOut))
     if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
         timeout=$stdTimeOut
+        super_ocf_log info "DEC: SAP HANA $hanaAction timeout is '$stdTimeOut'"
+    else
+        super_ocf_log info "DEC: SAP HANA $hanaAction timeout is '$timeout', was default '$stdTimeOut'"
     fi
-    super_ocf_log info "actionTimeout: action timeout was '$actionTimeOut', now changed to '$timeout'"
     super_ocf_log info "FLOW $FUNCNAME"
     echo $timeout
 }
@@ -435,12 +437,14 @@ function is_clone() {
        #
        # yes it is a clone config - check, if its configured well
        #
+       # TODO PRIO1: scale-up was also checking '[ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ]'
         if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] || \
-            [ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ] || \
             [ "$OCF_RESKEY_CRM_meta_master_node_max" -ne 1 ] || \
             [ "$OCF_RESKEY_CRM_meta_master_max" -ne 1 ]; then
-                super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
-                exit $OCF_ERR_CONFIGURED
+                # scale-up was: super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
+                super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1,master_node_max=1,master_max=1)"
+                # TODO PRIO1: check which is the correct return code (scale-up was: OCF_ERR_CONFIGURED)
+                exit $OCF_NOT_RUNNING
         fi
         rc=0;
     else
@@ -550,8 +554,8 @@ function assert() {
 }
 
 #
-# function: set_crm_master - set the crm master score of the local node
-# params:   SCORE
+# function: set_crm_master - set the crm master score of the local or remote node
+# params:   SCORE  [NODE]
 # globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
 #
 function set_crm_master()
@@ -559,18 +563,22 @@ function set_crm_master()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local score=0
+    local node=""
     if [ -n "$1" ]; then
         score=$1
     fi
+    if [ -n "$2" ]; then
+        node="-N $2"
+    fi
     # DONE: PRIO2: Only adjust master if value is really different (try to check that)
-    oldscore=$(${HA_SBIN_DIR}/crm_master -G -q -l reboot)
+    oldscore=$(${HA_SBIN_DIR}/crm_master "$node" -G -q -l reboot)
     if [ "$oldscore" != "$score" ]; then
        dstr=$(date)
        if ocf_is_true "$log_attributes"; then
-           echo "$dstr: SAPHana: crm_master -v $score -l reboot " >> $log_attr_file
+           echo "$dstr: SAPHanaController: crm_master $node -v $score -l reboot " >> $log_attr_file
        fi
-       super_ocf_log debug "DBG: SET crm master: $score (old: $oldscore)"
-       ${HA_SBIN_DIR}/crm_master -v $score -l reboot; rc=$?
+       super_ocf_log debug "DBG: SET crm master: $node $score (old: $oldscore)"
+       ${HA_SBIN_DIR}/crm_master $node -v $score -l reboot; rc=$?
     else
        super_ocf_log debug "DBG: LET crm master: $score"
        rc=0
@@ -758,7 +766,7 @@ function get_SRHOOK()
 # params: site-name, value
 # globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name
-# SAPHanaSR Scale-Up already uses multi-target aware SR Hook attribute there is not global fallback attribute
+# SAPHanaSR ANGI already uses multi-target aware SR Hook attribute there is not global fallback attribute
 #
 function set_SRHOOK()
 {
@@ -816,7 +824,7 @@ function saphana_init() {
     SIDInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
     export SAPSYSTEMNAME=$SID
-    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-60}"
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid=$(echo "$SID" | tr [:upper:] [:lower:])
     sidadm="${sid}adm"
@@ -847,15 +855,26 @@ function saphana_init() {
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
     RemoveSAPSockets="${CF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
+    # TODO PRIO1: LPT attribute to be renamed to hana naming scheme
+    # TODO PRIO1: Attribute definition and initialization to done in a separate function
     LPA_ATTR=("lpa_${sid}_lpt" "forever")
     super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG: OCF: $ocf_env"
     #
-    ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
-    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at"   "reboot") # Not used so far
-    ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UKNOWN?, DEMOTED, PROMOTED
-    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
+    # TODO PRIO1: check, which attributes can be dropped (like ATTR_NAME_HANA_REMOTEHOST?)
+    #ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
+    #ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at"   "reboot") # Not used so far
+    # attributes used to control the update from single-target replication
+    # to mutli-target replication.
+    # node specific, set, if the NewResourceAgent is running on the system
+    # contains the resource agent generation ($RAG)
+    ATTR_NAME_HANA_GRA=("hana_${sid}_gra" "forever")
+    # attribute containing the current running srHook generation
+    # node specific
+    ATTR_NAME_HANA_SRHOOK_GEN=("hana_${sid}_gsh" "reboot")
+    ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
+    #ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
     ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
@@ -867,15 +886,45 @@ function saphana_init() {
     #
     # new "central" attributes
     #
+    # TODO PRIO1: decide which attributes to be moved to site-specific
+    # new "central" attribute, containing the summarized status, if all
+    # cluster nodes are already updated to the new RA or if there are still
+    # nodes left running the old RA version
+    # expected value "ok" - "nok", if there still old RAs running in the cluster
+    ATTR_NAME_HANA_UPD_STATE=("hana_${sid}_glob_upd" "props")
+    # attribut showing, if migration from global to site specific hook should
+    # be done - customer choice
+    ATTR_NAME_HANA_multiTargetSupport=("hana_${sid}_glob_mts" "props")
+    #
+    ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
+    ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
+    ATTR_NAME_HANA_SEC_SYNC_STATUS=("hana_${sid}_glob_sync_state" "props")       # SOK, SFAIL
+    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
+    ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
+    #
+    # For MULTI-TARGET we need a site-specific attribute not a global one
+    # but for compatibility we need to recognize the old global attribute too
+    ATTR_NAME_HANA_GLOB_SRHOOK=("hana_${sid}_glob_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
+    ATTR_NAME_HANA_OPERATION_MODE=("hana_${sid}_glob_op_mode" "props" "logreplay")
     #
     # SITE based attributes
     #
+    # TODO PRIO1: check, if also for scale-up LPT is now moved to site-specific (like scale-out)
+    LPA_ATTR=("hana_${sid}_site_lpt" "props")
+    #
+    # for MULTI-TARGET the ra needs a per-site attribute - not only a global one
+    #
     ATTR_NAME_HANA_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
+    ATTR_NAME_HANA_LSS=("hana_${sid}_site_lss" "props")
+    ATTR_NAME_HANA_SRR=("hana_${sid}_site_srr" "props")
+    ATTR_NAME_HANA_MNS=("hana_${sid}_site_mns" "props")
+
     #
     # TODO: PRIO4: Table for non-preferred-site-takeover
     #
+    # TODO PRIO1: Scoring tables to moved to separate functions
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER=(
        "[234]*:P:[^:]*:master .*     150"
        "[234]*:P:master       .*     140"
@@ -1235,7 +1284,7 @@ function check_for_primary() {
     # TODO: PRIO 3: Check beginning from which SPS does SAP support HDBSettings.sh?
     # DONE: Limit the runtime of hdbnsutil and use getParameter.py as fallback
     # DONE: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
-    # TODO:        This might also solve some problems when we could not figure-out the local or remote site name (site_name,site_id from global.ini)
+    #         This might also solve some problems when we could not figure-out the local or remote site name (site_name,site_id from global.ini)
     local chkMethod=""
     local ini_mode=""
     for chkMethod in  hU hU hU gP; do
@@ -1268,19 +1317,20 @@ function check_for_primary() {
            syncmem | sync | async )
                rc=$HANA_STATE_SECONDARY
                break;;
-           none ) # have seen that mode on second side BEFEORE we registered it as replica
+           none ) # have seen that mode on second side BEFORE we registered it as replica
                rc=$HANA_STATE_STANDALONE
                break;;
            * )
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
                dump=$( echo $node_status | hexdump -C );
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
-               # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
+               # TODO PRIO2: Limit the runtime of hdbnsutil and use getParameter.py as fallback
                # SAP_CALL
                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
-       sleep 2
+       # TODO PRIO1: sleep 20 (scale-out) or (scale-up)
+       sleep 20
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
