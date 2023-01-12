@@ -1028,13 +1028,15 @@ function sht_stop_clone() {
     fi
 
     hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+    # TODO PRIO1: check, if this shoulf be '-ge 124' or '-eq 124'
     if [ "$hanalrc" -ge 124 ]; then
         # timeout of HANA_CALL, set role to '1:P:-:-:-:-'
         # scale-out was: timeout of HANA_CALL, set role to '$nNsConf:shtdown:shtdown:shtdown'
         # to get the saphana_demote_clone to fail and stop the resource
+        # TODO PRIO1: Use shell function instead of tr to separate the string
         nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
         read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
-        set_hana_attribute "${NODENAME}" "$nNsConf:shtdown:shtdown:shtdown" "${ATTR_NAME_HANA_ROLES[@]}"
+        set_hana_attribute "${NODENAME}" "$nNsConf:-:-:-" "${ATTR_NAME_HANA_ROLES[@]}"
         # and exit with 1 to let the stop fail
         tout=1
     else
@@ -1183,7 +1185,7 @@ function sht_monitor_clone() {
         # scale-up: set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
         set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
-
+    # TODO PRIO1: set nodes site attribute and for the site the attributes LSS, SRR
     # TODO PRIO2: COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
     # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
     super_ocf_log info "DEC: site=$site; hanalrc=$hanalrc"
@@ -1199,8 +1201,19 @@ function sht_monitor_clone() {
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status
-        set_hana_attribute "X" "$srmode" "${ATTR_NAME_HANA_SRMODE2[@]}"
-          ;;
+            # TODO PRIO1: check, if we set the right attribute here as srmode should be site-specific
+            set_hana_attribute "X" "$srmode" "${ATTR_NAME_HANA_SRMODE2[@]}"
+            # from scale-up (set sr_mode for all cluster nodes but not for sites
+            #case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
+            #   *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
+            #   *openais* ) nodelist=$(crm_node -l | awk '/member/ {print $2}');;
+            #   *cman*    ) nodelist=$(crm_node -l);;
+            #esac
+
+            #for n in ${nodelist}; do
+            #   set_hana_attribute ${n} "$srmode" ${ATTR_NAME_HANA_SRMODE[@]}
+            #done
+            ;;
     esac
     #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     fi # end ocf_is_NOT_probe
