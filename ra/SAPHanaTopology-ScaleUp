@@ -609,6 +609,8 @@ function sht_init() {
     siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
     siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     site=$siteNAME
+    # from scale-up: only set srmode, if it is still empty
+    # from scale-up: first search for 'actual_mode', then for 'mode' as key
     if [ -z "$srmode" ]; then
         srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
         # if 'actual_mode' is not available, fallback to 'mode'
@@ -616,14 +618,30 @@ function sht_init() {
             srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
         fi
     fi
-    #
-    # for rev >= 111 we use the new mapping query
-    #
-    if version "$hdbver" ">=" "1.00.111"; then
-        hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
-    fi
-    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
+    # now get the host mapping of the SR
+    hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
+    # TODO PRIO1: which version is better? could we use the same code for scale-up and scale-out?
+    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
+    # scale-out: MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
+    # scale-up:  MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
+    #
+    # TODO PRIO1: Which code is the better scale-up or scale-out ?
+    #
+    ########### BEGIN SCALE OUT CODE
+    #
+    # filter all non-cluster mappings
+    #
+    # TODO PRIO2: as we might not need remoteHost (per node) any longer, could we completely drop the scanning of the output?
+    #             which parts could be omitted?
+    #hanaRemoteHost=$MAPPING
+    super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING"
+    #super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    #super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    #super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
+    ########### END SCALE OUT CODE
+    #
+    ########### BEGIN SCALE OUT CODE
     if [ -n "$MAPPING" ]; then
         # we have a mapping from HANA, lets use it
         #
@@ -668,6 +686,7 @@ function sht_init() {
         done
         super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"
     fi
+    ########### END SCALE OUT CODE
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
 }

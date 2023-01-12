@@ -558,12 +558,29 @@ function sht_init() {
         esac
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    siteID=$(echo "$hdbANSWER" | awk -F= '/site id/ {print $2}')
-    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site name/ {print $2}')
+    siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
+    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     site=$siteNAME
-    srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
+    # from scale-up: only set srmode, if it is still empty
+    # from scale-up: first search for 'actual_mode', then for 'mode' as key
+    if [ -z "$srmode" ]; then
+        srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+        # if 'actual_mode' is not available, fallback to 'mode'
+        if [ -z "$srmode" ]; then
+            srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+        fi
+    fi
+    # now get the host mapping of the SR
+    hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
+    # TODO PRIO1: which version is better? could we use the same code for scale-up and scale-out?
     MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
+    # scale-out: MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
+    # scale-up:  MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
+    #
+    # TODO PRIO1: Which code is the better scale-up or scale-out ?
+    #
+    ########### BEGIN SCALE OUT CODE
     #
     # filter all non-cluster mappings
     #
@@ -574,6 +591,54 @@ function sht_init() {
     #super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     #super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     #super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
+    ########### END SCALE OUT CODE
+    #
+    ########### BEGIN SCALE OUT CODE
+    if [ -n "$MAPPING" ]; then
+        # we have a mapping from HANA, lets use it
+        #
+        # filter all non-cluster mappings
+        #
+        local hanaVHost=""
+        local n1=""
+        hanaRemoteHost=""
+        for n1 in $nodelist; do
+              hanaVHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+              for n2 in $MAPPING; do
+                 if [ "$hanaVHost" == "$n2" ]; then
+                    hanaRemoteHost="$hanaVHost"
+                 fi;
+              done;
+        done
+        super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+        super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
+    else
+        # HANA DID NOT TOLD THE MAPPING, LETS TRY TO USE THE SITE ATTRIBUTES
+        local n1=""
+        local hanaSite=""
+        for n1 in $nodelist; do
+            # TODO: PRIO9 - For multi tier with more than 2 chain/star members IN the cluster we might need to be
+            #       able to catch more than one remoteHost
+            #       currently having more than 2 HANA in a chain/star members IN the cluster is not allowed, the third must be external
+            if [ "$NODENAME" != "$n1" ]; then
+                hanaSite=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_SITE[@]})
+                #
+                # only, if a hanaSite is found use that node - this allows majority makers
+                #
+                if [ -n "$hanaSite" ]; then
+                    hanaRemoteHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+                    #
+                    # only if vhost is NOT set use the nodename instead
+                    #
+                    if [ -z "$hanaRemoteHost" ]; then
+                   hanaRemoteHost="$n1"
+                    fi
+                fi
+            fi
+        done
+        super_ocf_log info "DEC: site=$site, mode=$srmode, hanaRemoteHost=$hanaRemoteHost - found by remote site ($hanaSite)"
+    fi
+    ########### END SCALE OUT CODE
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
 }
@@ -618,7 +683,6 @@ function check_for_primary() {
    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_DEFECT"
    return $HANA_STATE_DEFECT
 }
-
 
 # chk4systemdsupport - check, if SAP systemd support is available
 # check for the existence of the SAP Host Agent related unit file
@@ -1218,6 +1282,9 @@ case "$ACTION" in
     validate-all)
         sht_validate
         ra_rc=$?
+        ;;
+    reload )
+        ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
         sht_methods
