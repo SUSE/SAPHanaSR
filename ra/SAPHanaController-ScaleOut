@@ -456,7 +456,8 @@ function is_clone() {
 
 #
 # function: get_hana_attribute
-# params:   NODE ATTR [STORE]
+# params:   OBJECT ATTR [STORE]
+#           OBJECT could be a node name, a site name or global
 # globals:  -
 # output:   attribute value
 #
@@ -464,7 +465,7 @@ function get_hana_attribute()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-    local attr_node=$1
+    local attr_obj=$1
     local attr_name=$2
     local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
     local attr_default=${4:-}
@@ -474,9 +475,9 @@ function get_hana_attribute()
     case "$attr_store" in
         reboot | forever )
             if ocf_is_true "$log_attributes"; then
-                echo "$dstr: SAPHanaController: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
+                echo "$dstr: SAPHanaController: crm_attribute -N ${attr_obj} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
             fi
-            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
+            crm_attribute -N ${attr_obj} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
         props )
             if ocf_is_true "$log_attributes"; then
@@ -491,29 +492,30 @@ function get_hana_attribute()
 
 #
 # function: set_hana_attribute - set the multi-state status of a node
-# params:   NODE VALUE ATTR [STORE [DEFAULT]]
+# params:   OBJECT VALUE ATTR [STORE [DEFAULT]]
+#           OBJECT could be a node name, a site name or global
 # globals:  -
 #
 function set_hana_attribute()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local attr_node=$1
+    local attr_obj=$1
     local attr_value=$2
     local attr_name=$3
     local attr_store=${4:-reboot} # DONE: PRIO5 get this (optional) from parameter
     local attr_default=${5:-}
     local rc=1
     local attr_old=""
-    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store $attr_default); get_rc=$?
+    attr_old=$(get_hana_attribute $attr_obj $attr_name $attr_store $attr_default); get_rc=$?
     if [ "$attr_old" != "$attr_value" ]; then
-        super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
+        super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_obj} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         dstr=$(date)
         case "$attr_store" in
             reboot | forever )
                 if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHanaController: crm_attribute -N $attr_node -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> $log_attr_file
+                    echo "$dstr: SAPHanaController: crm_attribute -N $attr_obj -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> $log_attr_file
                 fi
-                crm_attribute -N $attr_node -v "$attr_value" -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
+                crm_attribute -N $attr_obj -v "$attr_value" -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
                 ;;
             props )
                 if ocf_is_true "$log_attributes"; then
@@ -523,11 +525,40 @@ function set_hana_attribute()
                 ;;
         esac
     else
-        super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_node} still be ${attr_value}"
+        super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_obj} still be ${attr_value}"
         rc=0
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
+}
+
+# set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE>
+function set_hana_site_attribute()
+{
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+    local attr_obj="$1"
+    local attr_value=$2
+    local attr_name="${3}_${attr_obj}"
+    local attr_store=${4:-props} # site attributes are always props, non node attributes
+    local attr_default=${5:-}
+    set_hana_attribute "$attr_obj" "$attr_value" "$attr_name" "$attr_store" "$attr_default"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return 0
+}
+
+# get_hana_site_attribute <site> <ATTRIBUTE-TEMPLATE>
+function get_hana_site_attribute()
+{
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+    local attr_obj="$1"
+    local attr_name="${2}_${attr_obj}"
+    local attr_store=${3:-props} # site attributes are always props, non node attributes
+    local attr_default=${4:-}
+    get_hana_attribute "$attr_obj" "$attr_name" "$attr_store" "$attr_default"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return 0
 }
 
 #
@@ -1132,6 +1163,9 @@ function saphana_init() {
     done
     # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
     # TODO PRIO1: NG function to set/get site specific attributes
+    # get_hana_site_attribute <site> <ATTRIBUTE-TEMPLATE> <???>
+    # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE> <???>
+
     ATTR=(${ATTR_NAME_HANA_MNS[@]}); ATTR[0]="${ATTR[0]}_$remSR_name"
     rem_mns=$(get_hana_attribute "X" "${ATTR[@]}")
     remoteHost=$rem_mns
