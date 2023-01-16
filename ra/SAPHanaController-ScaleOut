@@ -729,6 +729,7 @@ function get_SRHOOK_plain()
 {
     local -a ATTR my_sync
     local get_sr_name="$1"
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
     my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
     super_ocf_log info "DEC: ${ATTR[0]}=$my_sync"
@@ -745,15 +746,17 @@ function get_SRHOOK_plain()
 #
 function get_SRHOOK()
 {
-    local -a ATTR my_sync old_sync
+    local -a ATTR my_sync
     local get_sr_name="$1"
+    # We assume for NG, that SR attributes are site specific
     # first check, if the new, site specific hook attribute is available
     # if yes, use this as 'my_sync', else check for old, global hook attribute
     # as the first fallback. If not available, our last resort is the
     # global sync state attribute
-    ATTR=(${ATTR_NAME_HANA_SRHOOK[@]}); ATTR[0]="${ATTR[0]}_$get_sr_name"
+    # TODO PRIO1: NG function to set/get site specific attributes
+    ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
     my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
-    super_ocf_log info "RA: SRHOOK0=$my_sync"
+    super_ocf_log info "DEC: ${ATTR[0]}=$my_sync"
     if [ -z "$my_sync" ]; then
         # no new, site specific hook attribute found, try the old, global
         # hook attribute as fallback
@@ -770,7 +773,7 @@ function get_SRHOOK()
     if [ -z "$my_sync" ]; then
         my_sync="SFAIL"
     fi
-    super_ocf_log info "RA: SRHOOK3=$my_sync"
+    super_ocf_log info "DEC: Finally get_SRHOOK()=$my_sync"
     echo "$my_sync"
     return 0
 }
@@ -787,6 +790,7 @@ function set_SRHOOK()
     local -a ATTR my_sync old_sync
     local get_sr_name="$1"
     local value="$2"
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
     set_hana_attribute "X" "$value" "${ATTR[@]}"
     return 0
@@ -876,7 +880,8 @@ function saphana_init() {
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG: OCF: $ocf_env"
     #
-    # TODO PRIO1: check, which attributes can be dropped (like ATTR_NAME_HANA_REMOTEHOST?)
+    # TODO PRIO1: NG check, which attributes can be dropped (like ATTR_NAME_HANA_REMOTEHOST?)
+    # TODO PRIO1: NG sort attributes to node, site, global area
     #ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
     #ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at"   "reboot") # Not used so far
     # attributes used to control the update from single-target replication
@@ -891,6 +896,8 @@ function saphana_init() {
     #ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
+    # TODO PRIO1: NG ATTR_NAME_HANA_SRMODE to be moved to site spezific
+    # ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
     # TODO: PRIO0: Name of attribute
@@ -912,6 +919,7 @@ function saphana_init() {
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
     ATTR_NAME_HANA_SEC_SYNC_STATUS=("hana_${sid}_glob_sync_state" "props")       # SOK, SFAIL
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
+    # TODO PRIO1: NG ATTR_NAME_HANA_SRMODE2 to be moved to site specific
     ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
     #
     # For MULTI-TARGET we need a site-specific attribute not a global one
@@ -1123,6 +1131,7 @@ function saphana_init() {
         fi
     done
     # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_MNS[@]}); ATTR[0]="${ATTR[0]}_$remSR_name"
     rem_mns=$(get_hana_attribute "X" "${ATTR[@]}")
     remoteHost=$rem_mns
@@ -1590,6 +1599,7 @@ function saphana_start() {
                                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
                                 END { printf "%s\n", hostActive;  } ' vName=$vName )
                     set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+    # TODO PRIO1: NG function to set/get site specific attributes
                     ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                     set_hana_attribute ${NODENAME} "$hanalrc" "${ATTR[@]}"
                     sleep 5
@@ -1771,8 +1781,10 @@ function saphana_start_primary()
        lpa_advice="skip"
        rc=$OCF_ERR_GENERIC
     fi
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
     my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
     my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
     # saphana_start_primary - set SR attribute of primary to "PRIM"
@@ -1801,6 +1813,7 @@ function saphana_start_primary()
                     rc=$?
                     LPTloc=$(date '+%s')
                     lpa_set_lpt $LPTloc "$sr_name"
+    # TODO PRIO1: NG function to set/get site specific attributes
                     ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                     my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
                     ;;
@@ -1907,8 +1920,10 @@ check_for_primary_master()
     #
     # get actual list of cluster members
     #
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$remSR_name"
     rem_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$remSR_name"
     rem_srr=$(get_hana_attribute "X" "${ATTR[@]}")
 
@@ -2091,6 +2106,7 @@ function lpa_get_lpt() {
     local mysite=$1
     local lpt=""
     local -a ATTR
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=( "${LPA_ATTR[@]}" )
     ATTR[0]="${LPA_ATTR[0]}_${mysite}"
     super_ocf_log debug "DBG: ${FUNCNAME[0]} get_hana_attribute X " "${ATTR[@]}"
@@ -2119,6 +2135,7 @@ function lpa_set_lpt() {
     local clpt=-1
     local mysite=$2
     local -a ATTR
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${LPA_ATTR[@]})
     ATTR[0]="${LPA_ATTR[0]}_${mysite}"
     super_ocf_log debug "DBG: ${FUNCNAME[0]} (set_hana_attribute X \"$lpt\"" "${ATTR[@]}" ")"
@@ -2440,6 +2457,7 @@ function master_walk() {
     else
         the_master=$active_master
     fi
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_MNS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
     set_hana_attribute "X" "$the_master" "${ATTR[@]}"
 
@@ -2831,8 +2849,10 @@ function saphana_monitor_primary()
                         # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
                         #        It may be that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here"
+    # TODO PRIO1: NG function to set/get site specific attributes
                         ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                         my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
                         ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                         my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
                         my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
@@ -2856,8 +2876,10 @@ function saphana_monitor_primary()
             fi
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
+    # TODO PRIO1: NG function to set/get site specific attributes
             ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
             my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
             ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
             my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
             my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
@@ -2884,8 +2906,10 @@ function saphana_monitor_primary()
                         rc=$OCF_SUCCESS
                     fi
                 fi
+    # TODO PRIO1: NG function to set/get site specific attributes
                 ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                 my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
                 ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                 my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
                 my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
@@ -2935,8 +2959,10 @@ function saphana_monitor_primary()
                             esac
                         ;;
                 esac
+    # TODO PRIO1: NG function to set/get site specific attributes
                 ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$remSR_name"
                 rem_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
                 ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$remSR_name"
                 rem_srr=$(get_hana_attribute "X" "${ATTR[@]}")
                 # TODO PRIO1: change from remoteHost to remoteMNS
@@ -3093,8 +3119,10 @@ function saphana_monitor_secondary()
                 SOK ) # This is a possible node to promote, when primary is missing
                     lpa_set_lpt  30 "$sr_name"
                     super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
+    # TODO PRIO1: NG function to set/get site specific attributes
                     ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                     my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
                     ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
                     my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
                     my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
@@ -3156,8 +3184,10 @@ function saphana_monitor_clone() {
     local nState=""
     local primary_status="$HANA_STATE_DEFECT"
 
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
     my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
     ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
     my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
     my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
@@ -3297,8 +3327,10 @@ function saphana_monitor_clone() {
               #
               # for self-scoring always use the local sites SR-attribute
               #
+    # TODO PRIO1: NG function to set/get site specific attributes
               ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
               my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
+    # TODO PRIO1: NG function to set/get site specific attributes
               ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
               my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
               my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
