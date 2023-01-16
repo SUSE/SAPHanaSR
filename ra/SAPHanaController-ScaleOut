@@ -753,18 +753,14 @@ function HANA_CALL()
 #
 # function get_SRHOOK_plain
 # fetches site specific Hook SR status ONLY
-# globals: ATTR_NAME_HANA_SRHOOK[@](r)
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name
 #
 function get_SRHOOK_plain()
 {
-    local -a ATTR my_sync
+    local my_sync
     local get_sr_name="$1"
-    # TODO PRIO1: NG function to set/get site specific attributes
-    ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
-    my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
-    super_ocf_log info "DEC: ${ATTR[0]}=$my_sync"
-    echo "$my_sync"
+    get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}"
     return 0
 }
 
@@ -772,25 +768,24 @@ function get_SRHOOK_plain()
 # function get_SRHOOK
 # fetches site specific Hook SR status or (as fallback) the polling-attribute
 # params: site-name site-host
-# globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name, get_sr_host
 #
 function get_SRHOOK()
 {
-    local -a ATTR my_sync
+    local -a my_sync
     local get_sr_name="$1"
     # We assume for NG, that SR attributes are site specific
     # first check, if the new, site specific hook attribute is available
     # if yes, use this as 'my_sync', else check for old, global hook attribute
     # as the first fallback. If not available, our last resort is the
     # global sync state attribute
-    # TODO PRIO1: NG function to set/get site specific attributes
-    ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
-    my_sync=$(get_hana_attribute "X" "${ATTR[@]}")
-    super_ocf_log info "DEC: ${ATTR[0]}=$my_sync"
+    my_sync=$(get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}")
+    super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]}=$my_sync"
     if [ -z "$my_sync" ]; then
         # no new, site specific hook attribute found, try the old, global
         # hook attribute as fallback
+        # TODO PRIO1: NG ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
         my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_GLOB_SRHOOK[@]}")
         super_ocf_log info "RA: SRHOOK1=$my_sync"
     fi
@@ -812,25 +807,23 @@ function get_SRHOOK()
 #
 # function set_SRHOOK - sets the site specific Hook SR status
 # params: site-name, value
-# globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name
 # SAPHanaSR ANGI already uses multi-target aware SR Hook attribute there is not global fallback attribute
 #
 function set_SRHOOK()
 {
-    local -a ATTR my_sync old_sync
+    local -a my_sync old_sync
     local get_sr_name="$1"
     local value="$2"
-    # TODO PRIO1: NG function to set/get site specific attributes
-    ATTR=("${ATTR_NAME_HANA_SRHOOK[@]}"); ATTR[0]="${ATTR[0]}_$get_sr_name"
-    set_hana_attribute "X" "$value" "${ATTR[@]}"
+    set_hana_site_attribute "$get_sr_name" "$value" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}"
     return 0
 }
 
 #
 # function set_SRHOOK_PRIM - sets the site specific Hook SR status
 # params: site-name, value
-# globals: ATTR_NAME_HANA_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # locals:  ATTR[@], my_sync, get_sr_name
 # SAPHanaSR Scale-Up already uses multi-target aware SR Hook attribute there is not global fallback attribute
 #
@@ -955,6 +948,7 @@ function saphana_init() {
     #
     # For MULTI-TARGET we need a site-specific attribute not a global one
     # but for compatibility we need to recognize the old global attribute too
+        # TODO PRIO1: NG ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
     ATTR_NAME_HANA_GLOB_SRHOOK=("hana_${sid}_glob_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
@@ -967,7 +961,7 @@ function saphana_init() {
     #
     # for MULTI-TARGET the ra needs a per-site attribute - not only a global one
     #
-    ATTR_NAME_HANA_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
+    ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SRR=("hana_${sid}_site_srr" "props")
     ATTR_NAME_HANA_MNS=("hana_${sid}_site_mns" "props")
@@ -1136,6 +1130,7 @@ function saphana_init() {
         if ocf_is_true "$multiTargetSupport"; then
             super_ocf_log info "RA: multiTargetSupport attribute is set to 'true'"
             if [ "$srHook_gen" == "2.0" ]; then
+        # TODO PRIO1: NG ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
                 old_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_GLOB_SRHOOK[@]}")
                 if [ -n "$old_sync" ]; then
                     # old, global attribute still exists
@@ -2987,7 +2982,7 @@ function saphana_monitor_primary()
                                         # a new event comes up. This is why we transfer the 'polled' attribute to the Hook attribute.
                                         my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}")
                                         set_SRHOOK "$remSR_name" "$my_sync"
-                                        super_ocf_log info "DEC: ${ATTR_NAME_HANA_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SEC_SYNC_STATUS[0]} ($my_sync)"
+                                        super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SEC_SYNC_STATUS[0]} ($my_sync)"
                                     fi
                                     ;;
                             esac
