@@ -543,6 +543,8 @@ function assert() {
     if ocf_is_probe; then
         default_exit=$OCF_NOT_RUNNING
     else
+        # TODO PRIO1: NG scale-up was OCF_ERR_CONFIGURED, scale-out OCF_NOT_RUNNING - which is the better option?
+        # for noe we use the scale-out solution; check with upstream documentation, if OCF_NOT_RUNNING is better reaction here
         default_exit=$OCF_NOT_RUNNING
     fi
     if [ "$ACTION" = "stop" ]; then
@@ -1410,27 +1412,38 @@ function analyze_hana_sync_statusSRS()
        else
           # ok we should be careful and set secondary to SFAIL
           super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
+          # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+          # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+          # super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
           set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
           super_ocf_log debug "DBG: site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
           # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
+          # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+          # old scale-up code: lpa_set_lpt 10 "$remoteNode"
           super_ocf_log debug "DBG: 001 * lpa_set_lpt 10 $remSR_name"
           lpa_set_lpt 10 "$remSR_name"
           rc=1
        fi
     else
-       super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
-       set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
-       super_ocf_log debug "DBG: site=$sr_name, setting SFAIL for secondary (2) - srRc=$srRc"
-       # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
-       super_ocf_log debug "DBG: 002 * lpa_set_lpt 10 $remSR_name"
-       lpa_set_lpt 10 "$remSR_name"
-       rc=1;
+        super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
+        # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+        # TODO PRIO1: NG for scale-out this attribute should move to site attributes (not global)
+        # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+        set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+        super_ocf_log info "ACT: site=$sr_name, setting SFAIL for secondary (2) - srRc=$srRc"
+        # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
+        # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+        # old scale-up code: lpa_set_lpt 10 "$remoteNode"
+        super_ocf_log debug "DBG: 002 * lpa_set_lpt 10 $remSR_name"
+        lpa_set_lpt 10 "$remSR_name"
+        rc=1;
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} PRIM+LPA"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
+# analyze_hana_sync_statusSQL removed
 
 #
 # function: get_hana_landscape_status - figure out hana landscape status
@@ -1441,12 +1454,13 @@ function get_hana_landscape_status()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-    hana_LSS_Out=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
+    hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
     if [ $rc -eq 124 ]; then
+        # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
         super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds"
         sleep 20
-        hana_LSS_Out=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
+        hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
         if [ $rc -eq 124 ]; then
            super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"

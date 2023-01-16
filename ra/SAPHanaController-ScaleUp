@@ -474,13 +474,13 @@ function get_hana_attribute()
     case "$attr_store" in
         reboot | forever )
             if ocf_is_true "$log_attributes"; then
-                echo "$dstr: SAPHana: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
+                echo "$dstr: SAPHanaController: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
             fi
             crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
         props )
             if ocf_is_true "$log_attributes"; then
-                echo "$dstr: SAPHana: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> $log_attr_file
+                echo "$dstr: SAPHanaController: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> $log_attr_file
             fi
             crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>$log_attr_file; rc=$?
             ;;
@@ -511,13 +511,13 @@ function set_hana_attribute()
         case "$attr_store" in
             reboot | forever )
                 if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHana: crm_attribute -N $attr_node -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> $log_attr_file
+                    echo "$dstr: SAPHanaController: crm_attribute -N $attr_node -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> $log_attr_file
                 fi
                 crm_attribute -N $attr_node -v "$attr_value" -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
                 ;;
             props )
                 if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHana: crm_attribute -v \"$attr_value\" -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> $log_attr_file
+                    echo "$dstr: SAPHanaController: crm_attribute -v \"$attr_value\" -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> $log_attr_file
                 fi
                 crm_attribute -v "$attr_value" -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>$log_attr_file; rc=$?
                 ;;
@@ -543,7 +543,9 @@ function assert() {
     if ocf_is_probe; then
         default_exit=$OCF_NOT_RUNNING
     else
-        default_exit=$OCF_ERR_CONFIGURED
+        # TODO PRIO1: NG scale-up was OCF_ERR_CONFIGURED, scale-out OCF_NOT_RUNNING - which is the better option?
+        # for noe we use the scale-out solution; check with upstream documentation, if OCF_NOT_RUNNING is better reaction here
+        default_exit=$OCF_NOT_RUNNING
     fi
     if [ "$ACTION" = "stop" ]; then
         cleanup_instance
@@ -1329,7 +1331,7 @@ function check_for_primary() {
                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
        esac;
-       # TODO PRIO1: sleep 20 (scale-out) or (scale-up)
+       # TODO PRIO1: sleep 20 (scale-out) or 2 (scale-up)
        sleep 20
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1391,120 +1393,57 @@ function analyze_hana_sync_statusSRS()
        else
           # ok we should be careful and set secondary to SFAIL
           super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
-          set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-          super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
+          # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+          # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+          # super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
+          set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+          super_ocf_log debug "DBG: site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
           # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
-          lpa_set_lpt 10 "$remoteNode"
+          # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+          # old scale-up code: lpa_set_lpt 10 "$remoteNode"
+          super_ocf_log debug "DBG: 001 * lpa_set_lpt 10 $remSR_name"
+          lpa_set_lpt 10 "$remSR_name"
           rc=1
        fi
     else
-       super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
-       set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-       super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (2) - srRc=$srRc"
-       # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
-       lpa_set_lpt 10 "$remoteNode"
-       rc=1;
+        super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
+        # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+        # TODO PRIO1: NG for scale-out this attribute should move to site attributes (not global)
+        # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+        set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+        super_ocf_log info "ACT: site=$sr_name, setting SFAIL for secondary (2) - srRc=$srRc"
+        # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
+        # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
+        # old scale-up code: lpa_set_lpt 10 "$remoteNode"
+        super_ocf_log debug "DBG: 002 * lpa_set_lpt 10 $remSR_name"
+        lpa_set_lpt 10 "$remSR_name"
+        rc=1;
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} PRIM+LPA"
-    super_ocf_log info "DBG PRIM"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
 
-#
-####
-#### OLD HDBSQL STUFF FOR SPS6,7,8 AND SCALE-UP ONLY
-####
-# function: analyze_hana_sync_statusSQL - query and check hana system replication status
-# params:   -
-# globals:  DIR_EXECUTABLE(r), remoteHost(r)
-# get the HANA sync status
-#
-function analyze_hana_sync_statusSQL()
-{
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local -a clusterNodes=()
-    local cl=""
-    local vHost=""
-    local n=""
-    local hana_sync_status="" what_does_the_chamelion_say=""
-    local secUser="SLEHALOC"
-    local chkusr;
-    local rc=0
-    local sqlrc=0
-# local query_state='select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION'
-# select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION where SITE_NAME='"SITE1"'"
-    local query_state="select distinct REPLICATION_STATUS from SYS.M_SERVICE_REPLICATION where SITE_NAME='"${sr_name}"'"
-    local query_secondaries='select distinct  SECONDARY_HOST from SYS.M_SERVICE_REPLICATION'
-    local query_failed_secondaries="select distinct SECONDARY_HOST from SYS.M_SERVICE_REPLICATION  where SECONDARY_SITE_NAME = (select distinct  SECONDARY_SITE_NAME from SYS.M_SERVICE_REPLICATION WHERE REPLICATION_STATUS != 'ACTIVE')"
-    local all_cluster_hosts all_secondary_hosts all_broken_secondaries
-#
-#####################################################################################################
-#
-# select distinct SITE_NAME, HOST, REPLICATION_STATUS, SECONDARY_SITE_NAME, SECONDARY_HOST from SYS.M_SERVICE_REPLICATION
-#
-# ===> "Walldorf", "sap-app-8"  "ACTIVE", "Rot",  "sap-app-5"
-#      "Rot",      "sap-app-5", "ACTIVE", "oslo", "sap-app-7"
-#
-#####################################################################################################
-#
-    secUser=$(check_secstore_users SAPHANA${SID}SR SLEHALOC RHELHALOC) ; chkusr=$?
-    if [ $chkusr -ne 0 ]; then
-        super_ocf_log err  "ACT: Secure store users are missing (see best practice manual how to setup the users)"
-        rc=$OCF_ERR_CONFIGURED
-    fi
-    hana_sync_status=$(timeout $hdbSrQueryTimeout $DIR_EXECUTABLE/hdbsql -a -x -U $secUser  $query_state); sqlrc=$?
-    hana_sync_status=$(echo $hana_sync_status | dequote)
-    super_ocf_log debug "DBG: hdbsql rc=$sqlrc hana_sync_status=\"$hana_sync_status\""
-    if [ "$sqlrc" -eq 0 -a "$hana_sync_status" != "" ]; then
-        #
-        # UNKNOWN, ACTIVE, ERROR, INITIALIZING
-        #
-        if [ "${hana_sync_status}" == "ACTIVE" ]; then
-            # TODO PRIO1: REMOVE remoteNode dependency - set SOK
-            set_hana_attribute "$remoteNode" "SOK" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-        else
-            super_ocf_log warn "ACT: HANA SYNC STATUS is: ${hana_sync_status}"
-            # TODO PRIO1: REMOVE remoteNode dependency - set SFAIL
-            set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-        fi
-    else
-        case "$sqlrc" in
-            19 )
-                # return codes 19: license error -> set SFAIL!
-                # DONE: PRIO1: We should NOT set SFAIL, if HDB is exactly broken now
-                #       When HDB breaks during monitor this could prevent a prositive remote failover
-                super_ocf_log warn "ACT: Was not able to fetch HANA SYNC STATUS - set sync status to SFAIL for ALL OTHER cluster hosts"
-                for n in $otherNodes; do
-                    set_hana_attribute "$n" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-                done
-                ;;
-        esac
-    fi
-    return $rc
-}
+# analyze_hana_sync_statusSQL removed
 
 #
 # function: get_hana_landscape_status - figure out hana landscape status
 # params:   -
-# globals:  sidadm(r), DIR_EXECUTABLE(r)
+# globals:  sidadm(r), DIR_EXECUTABLE(r), hana_LSS_Out(w)
 #
 function get_hana_landscape_status()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-    #
-    # TODO: Get rid of the su by using a new interface:
-    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh landscapeHostConfiguration.py
-    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # DONE: Limit the runtime of landscapeHostConfiguration.py
-    HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+    hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
     if [ $rc -eq 124 ]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
+        super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds"
         sleep 20
-        HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py" 1>/dev/null 2>/dev/null; rc=$?
+        hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
         if [ $rc -eq 124 ]; then
+           super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
         fi
