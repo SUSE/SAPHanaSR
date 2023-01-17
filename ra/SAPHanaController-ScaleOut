@@ -1119,6 +1119,17 @@ function saphana_init_get_hana_version()
     [[ ${ges_ver} =~ [0-9]+(\.[0-9]+){2} ]] && hdbver=${BASH_REMATCH[0]}
 }
 
+function saphana_init_sap_commands()
+{
+    # TODO PRIO2: NG also set --sapcontrol=1 here
+    hdbState="hdbnsutil -sr_stateConfiguration"
+    hdbMap="hdbnsutil -sr_stateHostMapping"
+    local standbyFilter=""
+    if [ $ACTION = "stop" ]; then
+       standbyFilter="--standbyFilter=off"
+    fi
+}
+
 #
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
@@ -1262,13 +1273,11 @@ function saphana_init() {
     # get HANA version
     #
     saphana_init_get_hana_version
+    #
+    # set sap commands
+    #
+    saphana_init_sap_commands
 
-    hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
-    local standbyFilter=""
-    if [ $ACTION = "stop" ]; then
-       standbyFilter="--standbyFilter=off"
-    fi
     # TODO PRIO2: Only, if scale-out do the master_walk
     if is_master_nameserver; then
        master_walk $standbyFilter
@@ -1466,6 +1475,9 @@ function cleanup_instance() {
 function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=$HANA_STATE_DEFECT
+    local ini_mode=""
+    local chkMethod=""
+    # TODO PRIO2: use sap commands from saphana_init_sap_commands()
     node_full_status=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "hdbnsutil -sr_stateConfiguration --sapcontrol=1" 2>/dev/null )
     node_status=$(echo "$node_full_status" | awk -F= '$1=="mode" {print $2}')
     super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
@@ -1488,7 +1500,6 @@ function check_for_primary() {
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
            hU | * )
-                # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState" 2>/dev/null )
                 node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
@@ -1538,7 +1549,11 @@ function analyze_hana_sync_statusSRS()
     if [ -n "$remSR_name" ]; then
        siteParam="--site=$remSR_name"
     fi
-    FULL_SR_STATUS=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
+    # TODO PRIO2: NG scale-up has 5s here (static); scale-out used HANA_CALL_TIMEOUT  - review 
+    # TODO PRIO2: NG define "python systemReplicationStatus.py" in saphana_init_sap_commands()?
+    # TODO PRIO2: NG reaction, if timeout occurs? Should we set SFAIL?
+    FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
+    super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     #
     # TODO: PRIO2: Here we might also need to filter additional sites (if multi tier should be supported)
@@ -1628,45 +1643,33 @@ function register_hana_secondary()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=2;
     local remoteInstance="";
+    local newParameter=1
     local remoteHanaHost="";
+    # TODO PRIO1: NG scale-up is normally always the_master_nameserver
     if is_the_master_nameserver; then
         remoteInstance=$InstanceNr
-
-        ges_ver=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
-        #fallback
-        [[ -z ${ges_ver:-} ]] && ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
-        #Version xx.yy.zzz
-        [[ ${ges_ver} =~ [0-9]+(\.[0-9]+){2} ]] && hdbver=${BASH_REMATCH[0]}
-
-        if version "$hdbver" ">=" "1.00.110"; then
-            newParameter=1
-        fi
-
         if ocf_is_true ${AUTOMATED_REGISTER}; then
-           #
-           # before we could register we stop HANA on all nodes of the swarm (maybe some still running)
-           saphana_stop
-           # TODO: PRIO1 change from remoteHost to remoteMSN (remote MasterNameServer)
-           # TODO: PRIO2 How to get the remoteHost without cluster attribute remoteHost - could we use the master-list attribute?
-           local hanaOM=""
-           local hanaRM=""
-           if [ $newParameter -eq 1 ]; then
-               hanaOM=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_OPERATION_MODE[@]}")
-               if [ -n "$hanaOM" ]; then
-                   hanaOM="--operationMode=$hanaOM"
-               fi
-               hanaRM="--replicationMode=$sr_mode"
-           else
-               hanaOM=""
-               hanaRM="--mode=$sr_mode"
-           fi
-           set_hana_attribute "$NODENAME" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
+            # for scale-up we normally should not need that, but for scale-out:
+            # before we could register we stop HANA on all nodes of the swarm (maybe some still running)
+            saphana_stop
+            # TODO: PRIO1 change from remoteHost to remoteMSN (remote MasterNameServer)
+            # TODO: PRIO2 How to get the remoteHost without cluster attribute remoteHost - could we use the master-list attribute?
+            local hanaOM=""
+            local hanaRM=""
+            hanaOM=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_OPERATION_MODE[@]}")
+            if [ -n "$hanaOM" ]; then
+                hanaOM="--operationMode=$hanaOM"
+            fi
+            hanaRM="--replicationMode=$sr_mode"
+            # TODO PRIO2: NG do we still need ATTR_NAME_HANA_SEC?
+            set_hana_attribute "$NODENAME" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
            remoteHanaHost=$(get_hana_attribute "$remoteHost" "${ATTR_NAME_HANA_VHOST[@]}")
            if [ -z "$remoteHanaHost" ]; then
                remoteHanaHost=$remoteHost
            fi
            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"
            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
+           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"; rc=$?
            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
         else
@@ -2773,15 +2776,15 @@ function saphana_stop_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local primary_status="x"
-    set_hana_attribute ${NODENAME} "UNDEFINED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+    set_hana_attribute "${NODENAME}" "UNDEFINED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     super_ocf_log debug "DBG: SET UNDEFINED"
-    check_for_primary; primary_status=$?
-    if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+    check_for_primary; primary_status="$?"
+    if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
         super_ocf_log debug "DBG: 008 * lpa_set_lpt 10 $sr_name"
         lpa_set_lpt  10 "$sr_name"
     fi
-    saphana_stop; rc=$?
-    return $rc
+    saphana_stop; rc="$?"
+    return "$rc"
 }
 
 function recover_site_attributes_from_file()
@@ -2801,7 +2804,7 @@ function recover_site_attributes_from_file()
                 #
                 # get site name from site attribute-name
                 #
-                site=${srATTR#hana_${sid}_site_srHook_}
+                site="${srATTR#hana_${sid}_site_srHook_}"
                 super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event ($srATTR=$srVALUE)"
                 #
                 # DONE: PRIO0 - add check for srATTR name here
@@ -2958,7 +2961,7 @@ function saphana_monitor_primary()
                                      lpa_set_lpt 20 "$sr_name"
                                  fi
                                  #
-                                 # DOWNSCORING CRM_MASTER TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NOT TO RISK CANCELLATION OF THE MONITOR
+                                 # DOWNSCORING CRM_MASTER TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NO TO RISK CANCELLATION OF THE MONITOR
                                  #
                                  set_crm_master 5
                                  ;;
@@ -2971,7 +2974,7 @@ function saphana_monitor_primary()
                         esac
                     else
                         # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
-                        #        It may be that for the local restart we only need to decrease the secondaries promotion score
+                        #        It maybe that for the local restart we only need to decrease the secondaries promotion score
                         #super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here"
                         #
                         # get local-site(s) LSS, SRR and nodes ROLES
@@ -3236,7 +3239,6 @@ function saphana_monitor_secondary()
             local hanaOM=""
             local hanaOut1=""
             # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
-            # TODO: DONE 3: Should we default to logreplay for SAP HANA >= SPS11 ?
             hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
             hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
             hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
@@ -3497,17 +3499,17 @@ function saphana_monitor_clone() {
 #    In a multi-state configuration get Master being the primary OR by running hana takeover
 #
 function saphana_promote_clone() {
-  super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-  local rc="$OCF_ERR_GENERIC";
-  local hana_sync;
-  local primary_status="$HANA_STATE_DEFECT";
-  #
-  # first check, if we WILL be PRIMARY (checking HANA status)
-  #
-  set_hana_attribute ${NODENAME} "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-  check_for_primary; primary_status=$?
-  #
-  if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc="$OCF_ERR_GENERIC";
+    local hana_sync;
+    local primary_status="$HANA_STATE_DEFECT";
+    #
+    # first check, if we WILL be PRIMARY (checking HANA status)
+    #
+    set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+    check_for_primary; primary_status=$?
+    #
+    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
      #
      # as we are already planned to be PRIMARY we only mark the node as PROMOTED
      #

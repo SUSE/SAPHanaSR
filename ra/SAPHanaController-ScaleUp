@@ -1119,6 +1119,17 @@ function saphana_init_get_hana_version()
     [[ ${ges_ver} =~ [0-9]+(\.[0-9]+){2} ]] && hdbver=${BASH_REMATCH[0]}
 }
 
+function saphana_init_sap_commands()
+{
+    # TODO PRIO2: NG also set --sapcontrol=1 here
+    hdbState="hdbnsutil -sr_stateConfiguration"
+    hdbMap="hdbnsutil -sr_stateHostMapping"
+    local standbyFilter=""
+    if [ $ACTION = "stop" ]; then
+       standbyFilter="--standbyFilter=off"
+    fi
+}
+
 #
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
@@ -1262,13 +1273,11 @@ function saphana_init() {
     # get HANA version
     #
     saphana_init_get_hana_version
+    #
+    # set sap commands
+    #
+    saphana_init_sap_commands
 
-    hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
-    local standbyFilter=""
-    if [ $ACTION = "stop" ]; then
-       standbyFilter="--standbyFilter=off"
-    fi
     # TODO PRIO2: Only, if scale-out do the master_walk
     if is_master_nameserver; then
        master_walk $standbyFilter
@@ -1466,12 +1475,10 @@ function cleanup_instance() {
 function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=$HANA_STATE_DEFECT
-    # TODO: PRIO 3: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # DONE: Limit the runtime of hdbnsutil and use getParameter.py as fallback
-    # DONE: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
-    #         This might also solve some problems when we could not figure-out the local or remote site name (site_name,site_id from global.ini)
-    local chkMethod=""
     local ini_mode=""
+    local chkMethod=""
+    # TODO PRIO2: use sap commands from saphana_init_sap_commands()
+    node_full_status=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "hdbnsutil -sr_stateConfiguration --sapcontrol=1" 2>/dev/null )
     for chkMethod in  hU hU hU gP; do
        case "$chkMethod" in
            gP )
@@ -1489,7 +1496,6 @@ function check_for_primary() {
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
            hU | * )
-                # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState" 2>/dev/null )
                 node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
@@ -1539,11 +1545,9 @@ function analyze_hana_sync_statusSRS()
     if [ -n "$remSR_name" ]; then
        siteParam="--site=$remSR_name"
     fi
-    # TODO: Get rid of the su by using a new interface:
-    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh systemReplicationStatus.py $siteParam
-    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-    # TODO: Limit the runtime of systemReplicationStatus.py
-    # SAP_CALL
+    # TODO PRIO2: NG scale-up has 5s here (static); scale-out used HANA_CALL_TIMEOUT  - review 
+    # TODO PRIO2: NG define "python systemReplicationStatus.py" in saphana_init_sap_commands()?
+    # TODO PRIO2: NG reaction, if timeout occurs? Should we set SFAIL?
     FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC $FUNCNAME systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} systemReplicationStatus.py (to site '$remSR_name')-> $srRc"
@@ -1637,7 +1641,7 @@ function get_hana_landscape_status()
 #
 # function: register_hana_secondary - register local hana as secondary to the other site
 # params:   -
-# globals:  sidadm(r), remoteHost(r), InstanceNr(r), sr_mode(r), sr_name(r), hdbver(r)
+# globals:  sidadm(r), remoteHost(r), InstanceNr(r), sr_mode(r), sr_name(r)
 # register_hana_secondary
 #
 function register_hana_secondary()
@@ -1645,31 +1649,32 @@ function register_hana_secondary()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=2;
     local remoteInstance="";
-    local newParameter=0
+    local newParameter=1
     remoteInstance=$InstanceNr
+    # TODO PRIO1: NG scale-up is normally always the_master_nameserver
+    if is_the_master_nameserver; then
+        remoteInstance=$InstanceNr
+        if ocf_is_true ${AUTOMATED_REGISTER}; then
+            # for scale-up we normally should not need that, but for scale-out:
+            # before we could register we stop HANA on all nodes of the swarm (maybe some still running)
+            saphana_stop
+            # TODO: PRIO1 change from remoteHost to remoteMSN (remote MasterNameServer)
+            # TODO: PRIO2 How to get the remoteHost without cluster attribute remoteHost - could we use the master-list attribute?
+            local hanaOM=""
+            local hanaRM=""
+            hanaOM=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_OPERATION_MODE[@]}")
+            if [ -n "$hanaOM" ]; then
+                hanaOM="--operationMode=$hanaOM"
+            fi
+            hanaRM="--replicationMode=$sr_mode"
+            # TODO PRIO2: NG do we still need ATTR_NAME_HANA_SEC?
+            super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"
 
-
-    if version "$hdbver" ">=" "1.00.110"; then
-        newParameter=1
-    fi
-
-    if ocf_is_true ${AUTOMATED_REGISTER}; then
-       # TODO: Get rid of the su by using a new interface:
-       # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_register ...
-       # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-       # TODO: Limit the runtime of hdbnsutil -sr_register ????
-       if [ $newParameter -eq 1 ]; then
-           local hanaOM=""
-           hanaOM=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_OPERATION_MODE[@]}")
-           if [ -n "$hanaOM" ]; then
-               hanaOM="--operationMode=$hanaOM"
-           fi
-           super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"
            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"; rc=$?
+           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"; rc=$?
            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-       else
+        else
            super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
@@ -2403,6 +2408,223 @@ function lpa_check_lpt_status() {
     return $rc
 }
 
+# function: master_walk - find master node(s)
+# params:   -
+# globals:  srmode(r), the_master(w), masters[@](w), nr_site_node(w), nr_site_worker(w), nr_site_standby(w)
+function master_walk() {
+ #
+ # TODO: PRIO1: EXCLUDE NON ONLINE CLUSTER NODES (offline/unclean/standby/maintenance)
+ #
+ # * crm node list se03 is online, se01 is standby+maintenance, se02 is offline
+ # se01group1:
+ #       standby: on
+ #       maintenance: on
+ # se02group1: (offline)
+ # se03group1:
+ # * crm_node -l
+ # 1084752138 se01group1 member
+ # 1084752148 se02group1 lost
+ # 1084752154 se03group1 member
+ # ====> othernodes contains only members (for openais)
+ # * crm_attribute ...
+ #
+ # se01group1:~ # crm_attribute -N se01group1 -n standby -G -l forever -q
+ # on
+ # (rc=0)
+ # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q
+ # Error performing operation: No such device or address
+ # (rc=250)
+ # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q -d off
+ # off
+ #
+ #
+ # ==> First exclude non-members (maybe done already) by
+ #       'list of nodes | grep member'
+ # ==> then query the attributes 'standby' and 'maintenance
+ # OR:
+ # look at the scores:
+ #
+ # master_walk now also counts available nodes (same site) in the
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+
+    local active_master="" master1="" master2="" master3=""
+    local nSite="" nRole=""
+    local best_cold_master="" rest=""
+    local standbyFilter=1
+    nr_site_node=0     # is counting any node reporting a role like 'worker' or 'standby'
+    nr_site_worker=0   # is counting 'configured' worker nodes
+    nr_site_standby=0  # is counting 'configured' standby nodes
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --standbyFilter=off ) standbyFilter=0;;
+        esac
+        shift
+    done
+    #
+    # 2:S:master1:slave:worker:standby  MAINZ
+    # 4:P:master1:master:worker:master  KOELN
+    # 4:P:master2:slave:worker:slave    KOELN
+    # 4:P:slave:slave:worker:slave      KOELN
+    super_ocf_log debug "DBG: master walk"
+    # walk over all known cluster nodes
+    super_ocf_log debug "DBG: master walk for $srmode"
+    for node in $NODENAME "${otherNodes[@]}"; do
+        super_ocf_log debug "DBG: master walk node $node"
+        nSite=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_SITE[@]}")
+        if [ "$site" = "$nSite" ]; then
+            # node of same site found
+            nStdBy=$(crm_attribute -N ${node} -n standby     -G -l forever -q -d off)
+            nMaint=$(crm_attribute -N ${node} -n maintenance -G -l forever -q -d off)
+            if [ "$nMaint" = "on" ]; then
+                super_ocf_log debug "DBG: Filter node by cluster node maintenance mode"
+            elif [ "$nStdBy" = "on" -a "$standbyFilter" = "1" ]; then
+                super_ocf_log debug "DBG: Filter node by cluster node standby mode"
+            else
+                nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}")
+                IFS=: read nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
+                super_ocf_log debug "DBG: site $site $nNsConf:$nNsCurr"
+                case "$nNsConf:$nNsCurr" in
+                    master1:master  ) master1=$node; active_master=$node
+                        super_ocf_log debug "DBG: roles $nRole match master1:master"
+                    ;;
+                    master2:master  ) master2=$node; active_master=$node
+                        super_ocf_log debug "DBG: roles $nRole match master2:master"
+                    ;;
+                    master3:master  ) master3=$node; active_master=$node
+                        super_ocf_log debug "DBG: roles $nRole match master3:master"
+                    ;;
+                    master1:*       ) master1=$node;
+                        super_ocf_log debug "DBG: roles $nRole match master1:STAR"
+                    ;;
+                    master2:*       ) master2=$node;
+                        super_ocf_log debug "DBG: roles $nRole match master2:STAR"
+                    ;;
+                    master3:*       ) master3=$node;
+                        super_ocf_log debug "DBG: roles $nRole match master3:STAR"
+                    ;;
+                    *:shtdown       )
+                        super_ocf_log debug "DBG: roles $nRole ignore node (down)"
+                    ;;
+                    * )
+                        super_ocf_log debug "DBG: roles $nRole NO match"
+                    ;;
+                esac
+                case "$nIsConf" in
+                    worker )  (( nr_site_worker++ ))
+                              (( nr_site_node++ ))
+                              ;;
+                    standby ) (( nr_site_standby++ ))
+                              (( nr_site_node++ ))
+                              ;;
+                esac
+                super_ocf_log debug "DBG: $site: $nRole"
+            fi
+        fi
+    done
+    if [ -z "$active_master" ]; then
+        masters=( $master1 $master2 $master3 )
+        best_cold_master=${masters[0]}
+        the_master=$best_cold_master
+    else
+        the_master=$active_master
+    fi
+    #
+    # set MSN local-site attribute
+    #
+    set_hana_site_attribute "$sr_name" "$the_master" "${ATTR_NAME_HANA_SITE_MNS[@]}" 
+
+    super_ocf_log info "DEC: ===> master_walk: priorities for site $site master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
+    super_ocf_log info "DEC: ===> master_walk: the_master=$the_master;"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} the_master=$the_master rc=0"
+}
+
+# function: is_active_nameserver_slave
+# params:   -
+# rc:       0: yes its an active nameserver slave (running)
+#           2: yes it is a configured but lost slave
+#           1: else
+# globals:
+#
+# true, if the node has an active (runnig) master nameserver slave role
+#
+is_active_nameserver_slave()
+{
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+  local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
+  nRole=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
+  read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+  case "$nNsConf:$nNsCurr" in
+      slave:slave )
+	 # configured as slave and actual role also detected as slave
+         rc=0
+         ;;
+      * )
+         rc=1
+         ;;
+  esac
+  super_ocf_log info "DEC: is_active_nameserver_slave rc=$rc"
+  super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+  return $rc
+}
+
+# function: is_lost_nameserver_slave
+# params:   -
+# rc:       0: yes it is a configured but lost slave
+#           1: else
+# globals:
+#
+# true, if the node has an active (runnig) master nameserver slave role
+#
+is_lost_nameserver_slave()
+{
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+  local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
+  nRole=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+  IFS=: read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+  case "$nNsConf:$nNsCurr" in
+      slave: )
+	 # configured as slave but actual role could not be figured out - treat as is_lost_nameserver_slave
+         rc=0
+	 ;;
+      * )
+         rc=1
+         ;;
+  esac
+  super_ocf_log info "DEC: is_lost_nameserver_slave ($nNsConf:$nNsCurr) rc=$rc"
+  super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+  return $rc
+}
+
+# function: is_master_nameserver
+# params:   -
+# rc:       0: yes its a master nameserver
+#           1: else
+# globals:
+#
+# true, if the node has an active or configured master nameserver role
+#
+function is_master_nameserver()
+{
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
+    nRole=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
+    read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+    case "$nNsConf:$nNsCurr" in
+        master[123]:master )
+           rc=0
+           ;;
+        master[123]:* )
+           rc=0
+           ;;
+        * )
+           rc=1
+           ;;
+    esac
+    super_ocf_log info "DEC: is_master_nameserver  rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return $rc
+}
+
 # function: is_the_master_nameserver
 # params:   -
 # rc:       0: yes, local node is THE master nameserver
@@ -2459,7 +2681,8 @@ function saphana_stop_clone() {
     super_ocf_log debug "DBG: SET UNDEFINED"
     check_for_primary; primary_status="$?"
     if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
-        lpa_set_lpt  10 "$NODENAME"
+        super_ocf_log debug "DBG: 008 * lpa_set_lpt 10 $sr_name"
+        lpa_set_lpt  10 "$sr_name"
     fi
     saphana_stop; rc="$?"
     return "$rc"
@@ -2544,6 +2767,22 @@ function saphana_monitor_primary()
             DEMOTED )
                 promoted=0;
                 ;;
+            # TODO: PRIO5: Implement WAITING4LPA WAITING4REG WAITING4PRIM WAITING4NODES
+            # WAITING4LPA WAITING4REG WAITING4PRIM WAITING4NODES
+            # TODO: PRIO1: Implement WAITING4NODES in the same way as for secondary:
+#        1 ) # ERROR
+#            super_ocf_log debug "DBG: 012 * lpa_set_lpt 10 $sr_name"
+#            lpa_set_lpt  10 "$sr_name"
+#            # Hide this error, if we still in WAITING4NODES
+#            case "$promote_attr" in
+#                WAITING4NODES ) # hide error 
+#                                rc=$OCF_SUCCESS
+#                                ;;
+#                * )
+#                                rc=$OCF_NOT_RUNNING
+#                                ;;
+#            esac
+#            ;;
             WAITING* )
                 # DONE: lpa_check_lpt_status to come out of here :)
                 # DONE: PRIO2: CHECK IF THE FIX FOR COMING OUT OF WAITING IS CORRECT
@@ -2552,7 +2791,7 @@ function saphana_monitor_primary()
                     # seems admin already decided that for us? -> we are running - set DEMOTED
                     promoted=0;
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc "$NODENAME"
+                    lpa_set_lpt $LPTloc "$sr_name"
                 fi
                 lpa_check_lpt_status; lparc=$?
                 # DONE: PRIO1: Need to differ lpa_check_lpt_status return codes
@@ -2636,7 +2875,8 @@ function saphana_monitor_primary()
                             SOK | PRIM )
                                  super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
                                  if check_for_primary_master; then
-                                     lpa_set_lpt 20 "$NODENAME"
+                                     super_ocf_log info "DEC: PreferSiteTakeover lpa_set_lpt 20 $sr_name"
+                                     lpa_set_lpt 20 "$sr_name"
                                  fi
                                  #
                                  # DOWNSCORING CRM_MASTER TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NO TO RISK CANCELLATION OF THE MONITOR
@@ -2864,7 +3104,8 @@ function saphana_monitor_secondary()
         0 ) # FATAL
             # DONE: PRIO1: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
-            lpa_set_lpt  10 "$NODENAME"
+            super_ocf_log debug "DBG: 011 * lpa_set_lpt 10 $sr_name"
+            lpa_set_lpt  10 "$sr_name"
             rc=$OCF_ERR_GENERIC
             ;;
         1 ) # ERROR
@@ -2894,7 +3135,6 @@ function saphana_monitor_secondary()
             local hanaOM=""
             local hanaOut1=""
             # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
-            # DONE: PRIO 3: Should we default to logreplay for SAP HANA >= SPS11 ?
             hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
             hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
             hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
