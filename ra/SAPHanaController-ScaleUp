@@ -1650,7 +1650,7 @@ function register_hana_secondary()
     local rc=2;
     local remoteInstance="";
     local newParameter=1
-    remoteInstance=$InstanceNr
+    local remoteHanaHost="";
     # TODO PRIO1: NG scale-up is normally always the_master_nameserver
     if is_the_master_nameserver; then
         remoteInstance=$InstanceNr
@@ -1668,23 +1668,24 @@ function register_hana_secondary()
             fi
             hanaRM="--replicationMode=$sr_mode"
             # TODO PRIO2: NG do we still need ATTR_NAME_HANA_SEC?
-            super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --replicationMode=$sr_mode $hanaOM --name=$sr_name"
-
-           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
-           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"; rc=$?
-           set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+            set_hana_attribute "$NODENAME" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
+            remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MSN[@]}")
+            # TODO PRIO2: NG only start resgister, if all variables are set
+            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"
+            #
+            # set status "R" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
+            #
+            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
+            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"; rc=$?
+            #
+            # resset status "-" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
+            #
+            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
         else
-           super_ocf_log info "ACT: REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"
-           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
-           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHost --remoteInstance=$remoteInstance --mode=$sr_mode --name=$sr_name"; rc=$?
-           set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-       fi
-       # backup_global_and_nameserver
-    else
-       super_ocf_log info "ACT: SAPHANA DROP REGISTER because AUTOMATED_REGISTER is set to FALSE"
-       rc=1
+           super_ocf_log info "ACT: SAP HANA DROP REGISTER because AUTOMATED_REGISTER is set to FALSE"
+           rc=1
+        fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc;

@@ -1663,17 +1663,21 @@ function register_hana_secondary()
             hanaRM="--replicationMode=$sr_mode"
             # TODO PRIO2: NG do we still need ATTR_NAME_HANA_SEC?
             set_hana_attribute "$NODENAME" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
-           remoteHanaHost=$(get_hana_attribute "$remoteHost" "${ATTR_NAME_HANA_VHOST[@]}")
-           if [ -z "$remoteHanaHost" ]; then
-               remoteHanaHost=$remoteHost
-           fi
-           super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"
-           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
-           set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-           HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"; rc=$?
-           set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+            remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MSN[@]}")
+            # TODO PRIO2: NG only start resgister, if all variables are set
+            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"
+            #
+            # set status "R" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
+            #
+            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
+            set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$sr_name"; rc=$?
+            #
+            # resset status "-" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
+            #
+            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
         else
-           super_ocf_log info "ACT: SAP HANA: DROP REGISTER because AUTOMATED_REGISTER is set to FALSE"
+           super_ocf_log info "ACT: SAP HANA DROP REGISTER because AUTOMATED_REGISTER is set to FALSE"
            rc=1
         fi
     fi
@@ -1702,6 +1706,7 @@ function saphana_start() {
     local rc=$OCF_NOT_RUNNING
     local output=""
     local loopcount=0
+    local lastSrHook
     check_sapstartsrv
     rc=$?
     #
