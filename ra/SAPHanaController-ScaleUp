@@ -1942,21 +1942,22 @@ function saphana_start_primary()
             ;;
         wait )  # process a WAIT
             case "$lss" in
-                2 | 3 | 4 ) # as we ARE up we just keep it up
+                2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
                     # TODO: PRIO3: I now change from "just keep it up to take that down"
-# TODO: PRIO1 differ lpt_advice!!
-# 2 => DOWN
-# 3 => KEEP
+                    # TODO: PRIO3: differ lpt_advice, if rc=3 will get implemted
+                    # 2 => DOWN
+                    # 3 => KEEP
                     # TODO: PRIO3: OCF_SUCCESS, OCF_NOT_RUNNING or OCF_ERR_xxxx ?
+                    # lpa_dec
+                    super_ocf_log err "LPA: Timestamp (lpt) attribute inconsistency detected"
                     set_crm_master -9000
                     #scoring_crm_master "$my_role" "$my_sync"
                     rc="$OCF_ERR_GENERIC"
                     ;;
                 1 ) # we are down, so we should wait --> followup in next monitor
-                    # DONE: PRIO3: Check, if WAITING is correct here
+                    super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
                     if ocf_is_true "$AUTOMATED_REGISTER" ; then
                         super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
-                        super_ocf_log info "RA: landscape: DOWN, LPA: wait ==> keep waiting"
                         set_hana_attribute "${NODENAME}" "WAITING4LPA" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                         set_crm_master -9000
                         rc="$OCF_SUCCESS"
@@ -1981,6 +1982,7 @@ function saphana_start_primary()
 
 #
 # check_for_primary_master
+# checks for a "remote" primary master
 # params: -
 # globals: ATTR_NAME_HANA_ROLES[@], NODENAME
 #
@@ -2062,20 +2064,23 @@ function saphana_start_secondary()
     ####### LPA - begin
     #
     lpa_push_lpt 10
-    lpa_set_lpt  10 "$NODENAME"
+    super_ocf_log debug "DBG: 005 * lpa_set_lpt 10 $sr_name"
+    lpa_set_lpt  10 "$sr_name"
     #
     ####### LPA - end
     #
     #
     # we would be secondary
     # we first need to check, if there are Master Nodes, because the Secondary only starts
-    # successfully, if the Primary is available. Therefor we mark the Secondary as "WAITING"
+    # successfully, if the Primary is available. Therefore we mark the Secondary as "WAITING"
     # DONE: PRIO3: wait_for_primary_master 10 is just a test value: 10 loops x10 seconds, then go to WAITING
     # DONE: PRIO3: rename 'wait_for_primary_master' to match better the use case ("wait_some_time")
     #
     super_ocf_log debug "DBG: wait for promoted side"
     # TODO: PRIO3: Check if setting SFAIL during secondary start is ok
-    set_hana_attribute "${NODENAME}" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+    set_hana_site_attribute "$sr_name" "SFAIL" "${ATTR_NAME_HANA_SYNC_SYNC_STATUS[@]}"
+    # TODO PRIO2: NG check, if we keep attribute ATTR_NAME_HANA_SEC
+    set_hana_attribute "${NODENAME}" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
     if wait_for_primary_master 10; then
        saphana_start; rc=$?
        if [ $rc -ne $OCF_SUCCESS ]; then
@@ -2088,7 +2093,8 @@ function saphana_start_secondary()
                rc=$OCF_SUCCESS
            fi
        else
-           lpa_set_lpt  10 "$NODENAME"
+           super_ocf_log debug "DBG: 006 * lpa_set_lpt 10 $sr_name"
+           lpa_set_lpt  10 "$sr_name"
        fi
     else
        super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
@@ -2162,18 +2168,18 @@ function saphana_check_local_instance()
 
 #
 # function: lpa_get_lpt - get lpt from cluster
-# params:   NODE
+# params:   SITE
 # output:   LPT
 # rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
-# globals:  LPA_ATTR_*,
+# globals:  ATTR_NAME_HANA_SITE_LPA_*,
 #
 function lpa_get_lpt() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=1
-    local node=$1
+    local mysite=$1
     local lpt=""
-    # TODO PRIO1: NG function to set/get site specific attributes
-    lpt=$(get_hana_attribute ${node} ${LPA_ATTR[@]})
+    super_ocf_log debug "DBG: ${FUNCNAME[0]} get_hana_attribute X " "${ATTR_NAME_HANA_SITE_LPA[@]}"
+    lpt=$(get_hana_site_attribute "${mysite}" "${ATTR_NAME_HANA_SITE_LPA[@]}")
     if [ -n "$lpt" ]; then
         rc=0
         echo $lpt
@@ -2186,8 +2192,8 @@ function lpa_get_lpt() {
 
 #
 # function: lpa_set_lpt - set lpt in cluster
-# params:   LPT [node]
-# globals:  LPA_ATTR(r), NODENAME(r),
+# params:   LPT [site]
+# globals:  ATTR_NAME_HANA_SITE_LPA(r), NODENAME(r),
 # rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
 #
 function lpa_set_lpt() {
@@ -2196,18 +2202,18 @@ function lpa_set_lpt() {
     local crm_rc=1
     local lpt=$1
     local clpt=-1
-    local node=$2
-    # TODO PRIO1: NG function to set/get site specific attributes
-    set_hana_attribute ${node} "$lpt" ${LPA_ATTR[@]}; crm_rc=$?
-    if [ -n "$node" ]; then
-        clpt=$(lpa_get_lpt "$NODENAME")
+    local mysite=$2
+    if [ -n "$mysite" ]; then
+        set_hana_site_attribute "${mysite}" "$lpt" "${ATTR_NAME_HANA_SITE_LPA[@]}"; crm_rc=$?
+        clpt=$(lpa_get_lpt "$mysite")
         if [ "$lpt" != "$clpt" ]; then
+            super_ocf_log error "LPA: lpa_set_lpt failed for lpt=$lpt and mysite=$mysite"
             rc=2
         else
             rc=0
         fi
     else
-       super_ocf_log info "DEC: lpa_set_lpt - ignore to change value for empty node name"
+       super_ocf_log info "DEC: lpa_set_lpt - ignore changing lpt due to lost site name"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
@@ -2223,12 +2229,11 @@ function lpa_set_lpt() {
 function lpa_pull_lpt() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=1
-    local lpt=""
-    local readrest=0
-    local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
-    if [ -f $lpa_file ]; then
-        read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
-    fi
+    local lpt=-1
+    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${NODENAME}
+    local -a lpt_file_words
+    lpt_file_words=( $( head -1 $lpa_file ) )
+    lpt=${lpt_file_words[0]}
     if [ -n "$lpt" ]; then
         rc=0
         echo $lpt
@@ -2286,7 +2291,7 @@ function lpa_init_lpt() {
     local hana_state=$1
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
     mkdir -p $LPA_DIRECTORY
-    LPTloc=$(lpa_get_lpt "${NODENAME}") || LPTloc=$(lpa_pull_lpt) || \
+    LPTloc=$(lpa_get_lpt "${sr_name}") || LPTloc=$(lpa_pull_lpt) || \
         if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
             # init primary
             LPTloc=20
@@ -2298,7 +2303,7 @@ function lpa_init_lpt() {
         else
             rc=2
         fi
-    lpa_set_lpt $LPTloc "$NODENAME"
+    lpa_set_lpt $LPTloc "$sr_name"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
@@ -2332,10 +2337,10 @@ function lpa_init_lpt() {
 #               LPTlocal > LPTremore ===> rc=0 (start)
 #               LPTRemote > LPTlocal ===> rc=1 (register)
 #            Stalemate in all other cases ==> STALEMATE-HANDLING ===> rc=2 (wait4gab)
-#    LPTRemote is not initialized or node not kown in cluster (crm_mon -l) (0)
+#    LPTRemote is not initialized or node/site not known to the cluster (0)
 #    TODO: PRIO1: Need to introduce a return-code 3 for remote sides lpa not ready
 #        THEN:
-#            WAIT ==> like STALEMATE-HANDLING ===> rc=2 (wait)
+#            WAIT ==> LOST REMOTE HANDLING ===> rc=3 (wait4other)
 #
 function lpa_check_lpt_status() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
@@ -2349,7 +2354,7 @@ function lpa_check_lpt_status() {
     #
     # First GET LPT from ATTR-FILE-DEFAULT
     #
-    LPTloc=$(lpa_get_lpt "$NODENAME"); lparc=$?   # ATTR
+    LPTloc=$(lpa_get_lpt "$sr_name"); lparc=$?   # ATTR
     if [ "$lparc" -ne 0 ]; then
         # as a fallback try to fetch the value from external status file
         LPTloc=$(lpa_pull_lpt);                 # FILE
@@ -2357,12 +2362,12 @@ function lpa_check_lpt_status() {
         if [ -z "$LPTloc" -o "$LPTloc" -eq -1 -o "$lparc" -ne 0 ]; then
             # last option - try to initialize as PRIMARY
             lpa_push_lpt 20
-            lpa_set_lpt  20 "$NODENAME"
+            lpa_set_lpt  20 "$sr_name"
             LPTloc=20                           # DEFAULT
         fi
     fi
-    # TODO PRIO1: REMOVE remoteNode dependency - lpa_get_lpt
-    LPTrem=$(lpa_get_lpt $remoteNode); lparc=$?
+    LPTrem=$(lpa_get_lpt $remSR_name); lparc=$?
+    super_ocf_log info "LPA: LPTloc=$LPTloc LPTrem=$LPTrem"
     if [ $lparc -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
         super_ocf_log debug "DBG: LPA: LPTloc=$LPTloc, LPTrem undefined ==> WAIT"
@@ -2407,7 +2412,10 @@ function is_the_master_nameserver()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-    # always true for scale-up
+    # TODO PRIO1: NG always true for scale-up, for scale-out we need to check the_master
+    if [ "$the_master" = "$NODENAME" ]; then
+        rc=0
+    fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
