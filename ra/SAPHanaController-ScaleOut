@@ -3126,13 +3126,13 @@ function saphana_monitor_secondary()
                 SOK ) # This is a possible node to promote, when primary is missing
                     lpa_set_lpt  30 "$sr_name"
                     super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
-    # TODO PRIO1: NG function to set/get site specific attributes
-                    ATTR=(${ATTR_NAME_HANA_SITE_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-                    my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
-    # TODO PRIO1: NG function to set/get site specific attributes
-                    ATTR=(${ATTR_NAME_HANA_SITE_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-                    my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
-                    my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+                    #
+                    # get local site(s) LSS, SRR and nodes ROLES
+                    # TODO PRIO1: reduce number of queries in LSS, SRR and ROLES
+                    #
+                    my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+                    my_srr=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+                    my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
                     #
                     # for scoring using the scoring table we need a combined value of <landscape-status>:<sytem-replication-role>:<landscape-host-role>
                     #
@@ -3190,14 +3190,13 @@ function saphana_monitor_clone() {
     local init_attribute=0
     local nState=""
     local primary_status="$HANA_STATE_DEFECT"
-
-    # TODO PRIO1: NG function to set/get site specific attributes
-    ATTR=(${ATTR_NAME_HANA_SITE_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-    my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
-    # TODO PRIO1: NG function to set/get site specific attributes
-    ATTR=(${ATTR_NAME_HANA_SITE_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-    my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
-    my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+    #
+    # get local site(s) LSS, SRR and nodes ROLES
+    # TODO PRIO1: reduce number of queries in LSS, SRR and ROLES
+    #
+    my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+    my_srr=$(get_hana_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+    my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
 
     my_role="${my_lss}:${my_srr}:${my_role}"
 
@@ -3334,13 +3333,13 @@ function saphana_monitor_clone() {
               #
               # for self-scoring always use the local sites SR-attribute
               #
-    # TODO PRIO1: NG function to set/get site specific attributes
-              ATTR=(${ATTR_NAME_HANA_SITE_LSS[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-              my_lss=$(get_hana_attribute "X" "${ATTR[@]}")
-    # TODO PRIO1: NG function to set/get site specific attributes
-              ATTR=(${ATTR_NAME_HANA_SITE_SRR[@]}); ATTR[0]="${ATTR[0]}_$sr_name"
-              my_srr=$(get_hana_attribute "X" "${ATTR[@]}")
-              my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+            #
+            # get local site(s) LSS, SRR and nodes ROLES and SRHOOK
+            # TODO PRIO1: reduce number of queries in LSS, SRR and ROLES
+            #
+              my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+              my_srr=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+              my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
               my_sync=$(get_SRHOOK "$sr_name")
               #
               # for scoring using the scoring table we need a combined value of <landscape-status>:<sytem-replication-role>:<landscape-host-role>
