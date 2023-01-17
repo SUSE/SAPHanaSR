@@ -769,31 +769,22 @@ function get_SRHOOK_plain()
 # fetches site specific Hook SR status or (as fallback) the polling-attribute
 # params: site-name site-host
 # globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
-# locals:  ATTR[@], my_sync, get_sr_name, get_sr_host
+# locals:  my_sync, get_sr_name
 #
 function get_SRHOOK()
 {
     local my_sync
     local get_sr_name="$1"
     # We assume for NG, that SR attributes are site specific
-    # first check, if the new, site specific hook attribute is available
-    # if yes, use this as 'my_sync', else check for old, global hook attribute
-    # as the first fallback. If not available, our last resort is the
-    # global sync state attribute
     my_sync=$(get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}")
-    super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]}=$my_sync"
-    if [ -z "$my_sync" ]; then
-        # no new, site specific hook attribute found, try the old, global
-        # hook attribute as fallback
-        # TODO PRIO1: NG ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
-        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_GLOB_SRHOOK[@]}")
-        super_ocf_log info "RA: SRHOOK1=$my_sync"
-    fi
-    # no new, site specific hook attribute found, but also no old, global
-    # hook attribute found, so use global sync state attribute as fallback
+    #
+    # fallback to polling attribute, if hook attribute is unset or SWAIT
+    #
     if [ -z "$my_sync" ] || [ "$my_sync" = "SWAIT" ]; then
-        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}")
-        super_ocf_log info "RA: SRHOOK2=$my_sync"
+        super_ocf_log info "RA: hook attribute is empty or 'SWAIT': SRHOOK=$my_sync"
+        # TODO PRIO1: move old polling attributes to ATTR_NAME_HANA_SITE_SYNC_STATUS
+        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+        super_ocf_log info "RA: fallback to polling attribute SRHOOK=$my_sync"
     fi
     # still unable to determine any SR attribute, so be pessimistic
     if [ -z "$my_sync" ]; then
@@ -842,6 +833,8 @@ function set_SRHOOK_PRIM()
 
 saphana_init_scoring_tables() {
     # TODO PRIO1: scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
+    #
+    # TODO PRIO4: Table for non-preferred-site-takeover
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU=(
        "[234]*:P:[^:]*:master .*     150"
        "[234]*:P:master       .*     140"
@@ -920,69 +913,8 @@ saphana_init_scoring_tables() {
     )
 }
 
-#
-# function: saphana_init - initialize variables for the resource agent
-# params:   InstanceName
-# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
-# globals:  sr_name(w), remoteHost(w), otherNodes(w), remSR_name(w)
-# TODO PRIO1: replace ATTR_NAME_HANA_SEC_SYNC_STATUS+ATTR_NAME_HANA_SYNC_STATUS by site specific attribute
-# globals:  ATTR_NAME_HANA_*SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
-# globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
-# globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w)
-# globals:  NODENAME(w), vNAME(w), hdbver(w),
-# saphana_init : Define global variables with default values, if optional parameters are not set
-#
-function saphana_init() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=$OCF_SUCCESS
-    local clN
-    SYSTEMCTL="/usr/bin/systemctl"
-    # local site
-    # two parameter models (for transition only)
-    # OLD: InstanceName
-    # NEW: SID InstanceNumber
-    NODENAME=$(crm_node -n)
-    SID=$OCF_RESKEY_SID
-    InstanceNr=$OCF_RESKEY_InstanceNumber
-    SIDInstanceName="${SID}_HDB${InstanceNr}"
-    InstanceName="HDB${InstanceNr}"
-    export SAPSYSTEMNAME=$SID
-    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
-    super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
-    sid=$(echo "$SID" | tr [:upper:] [:lower:])
-    sidadm="${sid}adm"
-    # TODO PRIO3: Do we need a parameter for the RA to be able to adjust hdbSrQueryTimeout?
-    hdbSrQueryTimeout=180
-    # DONE: PRIO4: SAPVIRHOST might be different to NODENAME
-    # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API? Answer: Yes
-    # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-    # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
-    if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
-        vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-            | awk '$4 == SID && $6 == SYSNR { print $8 }' SID=$SID SYSNR=$InstanceNr 2>/dev/null )
-        super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
-    else
-        super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
-    fi
-    if [ -z "$vName" ]; then
-       #
-       # if saphostctrl does not know the answer, try to fallback to attribute provided by SAPHanaTopology
-       #
-       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "$NODENAME");
-    fi
-    if [ -z "$vName" ]; then # last fallback if we are not able to figure out the virtual host name
-       vName="$NODENAME"
-    fi
-    SAPVIRHOST=${vName}
-    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
-    AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
-    RemoveSAPSockets="${CF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
-    LPA_DIRECTORY=/var/lib/SAPHanaRA
-    # TODO PRIO1: Attribute definition and initialization to done in a separate function
-    super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
-    ocf_env=$(env | grep 'OCF_RESKEY_CRM')
-    super_ocf_log debug "DBG: OCF: $ocf_env"
-    #
+saphana_init_attribute_definitions()
+{
     # TODO PRIO1: NG check, which attributes can be dropped (like ATTR_NAME_HANA_REMOTEHOST?)
     # TODO PRIO1: NG sort attributes to node, site, global area
     #ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
@@ -1003,8 +935,8 @@ function saphana_init() {
     # ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
-    # TODO: PRIO0: Name of attribute
-    ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot")   # Marks, if cluster in a phase requesting  a takeover (T?) or registration (R?)
+    ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
+    ATTR_NAME_HANA_SRACTION_HISTORY=("hana_${sid}_srah" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     #
     # new "central" attributes
     #
@@ -1031,7 +963,7 @@ function saphana_init() {
     ATTR_NAME_HANA_GLOB_SRHOOK=("hana_${sid}_glob_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
-    ATTR_NAME_HANA_OPERATION_MODE=("hana_${sid}_glob_op_mode" "props" "logreplay")
+    ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay")
     #
     # SITE based attributes
     #
@@ -1044,47 +976,11 @@ function saphana_init() {
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
     ATTR_NAME_HANA_SITE_MNS=("hana_${sid}_site_mns" "props")
+}
 
-    #
-    # TODO: PRIO4: Table for non-preferred-site-takeover
-    #
-    # TODO PRIO1: Scoring tables to moved to separate functions
-    saphana_init_scoring_tables
-    if ocf_is_true $PreferSiteTakeover; then
-        SCORING_TABLE=("${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}")
-    else
-        case "$PreferSiteTakeover" in
-            never|NEVER|Never )
-                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_NEVER[@]}")
-                ;;
-            * )
-                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_LOCAL_RESTART[@]}")
-                ;;
-        esac
-    fi
-    #
-    DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
-    super_ocf_log debug "DBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
-    #
-    # Determine list of other cluster nodes and store in otherNodes variable
-    otherNodes=()
-    case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-       *corosync* ) otherNodes=($(crm_node -l | awk '{ if ($2 != me) { print $2 }}' me="${NODENAME}"));;
-       *openais* ) otherNodes=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me="${NODENAME}"));;
-       *cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
-    esac
-    #
-    #
-
-    #  ATTR_NAME_HANA_SITE
-    site=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_SITE[@]}");
-    sr_name=${site%%:*}  # first field of site (separator :)
-    sr_id=${site#*:}     # rest of site (separator :)
-    sr_mode=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SRMODE2[@]}")
-    if [ -z "$sr_mode" ]; then
-        sr_mode="sync"
-    fi
-    #
+function saphana_init_handle_update()
+{
+    # TODO PRIO2: check, if we still need this
     # handle RA update state
     node_updated=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_GRA[@]}")
     onode_site=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SITE[@]}")
@@ -1179,6 +1075,12 @@ function saphana_init() {
             fi
         fi
     fi
+}
+
+function saphana_init_get_remote_site()
+{
+    # TODO PRIO2: NG allow multiple remote sites later
+    #
     #
     # get remote site name
     # PRIO1: WHAT TO DO, IF remSite could not be fetched?
@@ -1205,6 +1107,127 @@ function saphana_init() {
     remoteHost=$rem_mns
     super_ocf_log debug "DBG: remoteHost is $remoteHost"
     remoteNode=$rem_mns
+}
+
+function saphana_init_get_hana_version()
+{
+    local ges_ver
+    ges_ver=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
+    #fallback
+    [[ -z ${ges_ver:-} ]] && ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
+    #Version xx.yy.zzz
+    [[ ${ges_ver} =~ [0-9]+(\.[0-9]+){2} ]] && hdbver=${BASH_REMATCH[0]}
+}
+
+#
+# function: saphana_init - initialize variables for the resource agent
+# params:   InstanceName
+# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
+# globals:  sr_name(w), remoteHost(w), otherNodes(w), remSR_name(w)
+# TODO PRIO1: replace ATTR_NAME_HANA_SEC_SYNC_STATUS+ATTR_NAME_HANA_SYNC_STATUS by site specific attribute
+# globals:  ATTR_NAME_HANA_*SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
+# globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
+# globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w)
+# globals:  NODENAME(w), vNAME(w), hdbver(w),
+# saphana_init : Define global variables with default values, if optional parameters are not set
+#
+function saphana_init() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=$OCF_SUCCESS
+    local clN
+    SYSTEMCTL="/usr/bin/systemctl"
+    # local site
+    # two parameter models (for transition only)
+    # OLD: InstanceName
+    # NEW: SID InstanceNumber
+    NODENAME=$(crm_node -n)
+    SID=$OCF_RESKEY_SID
+    InstanceNr=$OCF_RESKEY_InstanceNumber
+    SIDInstanceName="${SID}_HDB${InstanceNr}"
+    InstanceName="HDB${InstanceNr}"
+    export SAPSYSTEMNAME=$SID
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
+    super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    sid=$(echo "$SID" | tr [:upper:] [:lower:])
+    sidadm="${sid}adm"
+    # TODO PRIO3: Do we need a parameter for the RA to be able to adjust hdbSrQueryTimeout?
+    hdbSrQueryTimeout=180
+    # DONE: PRIO4: SAPVIRHOST might be different to NODENAME
+    # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API? Answer: Yes
+    # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+    # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
+    if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
+        vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
+            | awk '$4 == SID && $6 == SYSNR { print $8 }' SID=$SID SYSNR=$InstanceNr 2>/dev/null )
+        super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
+    else
+        super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
+    fi
+    if [ -z "$vName" ]; then
+       #
+       # if saphostctrl does not know the answer, try to fallback to attribute provided by SAPHanaTopology
+       #
+       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "$NODENAME");
+    fi
+    if [ -z "$vName" ]; then # last fallback if we are not able to figure out the virtual host name
+       vName="$NODENAME"
+    fi
+    SAPVIRHOST=${vName}
+    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
+    AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
+    RemoveSAPSockets="${CF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
+    LPA_DIRECTORY=/var/lib/SAPHanaRA
+    #
+    # init attribute defiitions
+    #
+    saphana_init_attribute_definitions
+    super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
+    ocf_env=$(env | grep 'OCF_RESKEY_CRM')
+    super_ocf_log debug "DBG: OCF: $ocf_env"
+    #
+    # init scoring tables
+    #
+    saphana_init_scoring_tables
+    # TODO PRIO1: scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
+    if ocf_is_true $PreferSiteTakeover; then
+        SCORING_TABLE=("${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}")
+    else
+        case "$PreferSiteTakeover" in
+            never|NEVER|Never )
+                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_NEVER[@]}")
+                ;;
+            * )
+                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_LOCAL_RESTART[@]}")
+                ;;
+        esac
+    fi
+    #
+    DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
+    super_ocf_log debug "DBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
+    #
+    # Determine list of other cluster nodes and store in otherNodes variable
+    otherNodes=()
+    case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
+       *corosync* ) otherNodes=($(crm_node -l | awk '{ if ($2 != me) { print $2 }}' me="${NODENAME}"));;
+       *openais* ) otherNodes=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me="${NODENAME}"));;
+       *cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
+    esac
+    #
+    # optionally init RA update
+    #
+    # saphana_init_handle_update
+    #
+    # get remote site 
+    #
+    saphana_init_get_remote_site
+    #  ATTR_NAME_HANA_SITE
+    site=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SITE[@]}");
+    sr_name=${site%%:*}  # first field of site (separator :)
+    sr_id=${site#*:}     # rest of site (separator :)
+    sr_mode=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SRMODE2[@]}")
+    if [ -z "$sr_mode" ]; then
+        sr_mode="sync"
+    fi
     super_ocf_log info "TOP: sr_name=$sr_name, remSR_name=$remSR_name"
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
@@ -1235,12 +1258,18 @@ function saphana_init() {
         #
         SAPSTARTPROFILE="$(ls -1 $DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_*})"
     fi
-    #PATH=${PATH}:${DIR_EXECUTABLE}; export PATH
+    #
+    # get HANA version
+    #
+    saphana_init_get_hana_version
 
+    hdbState="hdbnsutil -sr_stateConfiguration"
+    hdbMap="hdbnsutil -sr_stateHostMapping"
     local standbyFilter=""
     if [ $ACTION = "stop" ]; then
        standbyFilter="--standbyFilter=off"
     fi
+    # TODO PRIO2: Only, if scale-out do the master_walk
     if is_master_nameserver; then
        master_walk $standbyFilter
     elif is_active_nameserver_slave; then
@@ -1249,9 +1278,6 @@ function saphana_init() {
        master_walk $standbyFilter
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
-    #############################
-    # DONE: PRIO9: To be able to call landscapeHostConfig.py without su (so as root)
-    #############################
     return $OCF_SUCCESS
 }
 
@@ -1274,6 +1300,53 @@ function chk4systemdsupport() {
         fi
     fi
     return $rc
+}
+
+#
+# handle_unix_domain_sockets
+# params: -
+# globals: OCF_RESKEY_REMOVE_SAP_SOCKETS
+#
+function handle_unix_domain_sockets() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]}"
+
+    if ocf_is_true "$RemoveSAPSockets"; then
+        # previous and new default handling
+        # removing the unix domain socket files as they might have
+        # wrong permissions or ownership
+        # they will be recreated by sapstartsrv during next start
+        rm -f /tmp/.sapstream5"${InstanceNr}"13
+        rm -f /tmp/.sapstream5"${InstanceNr}"14
+    else
+        # try to change permission and ownership of the unix domain socket files
+        for sockFile in /tmp/.sapstream5"${InstanceNr}"13 /tmp/.sapstream5"${InstanceNr}"14; do
+            sockError=false
+            if [ -S "$sockFile" ]; then
+                if ! chown "${sid}"adm "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+                if ! chgrp sapsys "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+                if chmod 700 "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+            else
+                if [ -f "$sockFile" ]; then
+                    super_ocf_log error "RA: file '$sockFile' still exists, but is NO longer a socket."
+                    super_ocf_log info "DEC: remove file '$sockFile' to give sapstartsrv a chance to create it the right way during next start"
+                    sockError=true
+                else
+                    super_ocf_log info "RA: file '$sockFile' not found. Nothing to do, let sapstartsrv create a new one during start"
+                fi
+            fi
+            if ocf_is_true $sockError; then
+                # fallback - if there are Errors, remove unix domain socket as
+                # last resort
+                rm -f "$sockFile"
+            fi
+        done
+    fi
 }
 
 #
@@ -1306,11 +1379,11 @@ function check_sapstartsrv() {
         fi
     else
         # no SAP systemd unit available, continue with old code...
-        if [ ! -S /tmp/.sapstream5${InstanceNr}13 ]; then
+        if [ ! -S "/tmp/.sapstream5${InstanceNr}13" ]; then
             super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
             restart=1
         else
-            output=$($SAPCONTROL -nr $InstanceNr -function ParameterValue INSTANCE_NAME -format script)
+            output=$($SAPCONTROL -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
             if [ $? -eq 0 ]
             then
                 runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
@@ -1319,7 +1392,7 @@ function check_sapstartsrv() {
                     super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
                     restart=1
                 else
-                    output=$($SAPCONTROL -nr $InstanceNr -function AccessCheck Start)
+                    output=$($SAPCONTROL -nr "$InstanceNr" -function AccessCheck Start)
                     if [ $? -ne 0 ]; then
                         super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 /tmp/.sapstream5${InstanceNr}13))"
                         super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
@@ -1340,17 +1413,14 @@ function check_sapstartsrv() {
             else
                 assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
             fi
-            [ ! -r $SAPSTARTPROFILE ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
+            [ ! -r "$SAPSTARTPROFILE" ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
             pkill -9 -f "sapstartsrv.*$runninginst"
-            # removing the unix domain socket files as they might have wrong permissions
-            # or ownership - they will be recreated by sapstartsrv during next start
-            # TODO: PRIO2: Check, if we need to delete the socket files
-            rm -f /tmp/.sapstream5${InstanceNr}13
-            rm -f /tmp/.sapstream5${InstanceNr}14
+
+            handle_unix_domain_sockets
             (
               export PATH="$DIR_EXECUTABLE${PATH:+:}$PATH"
               export LD_LIBRARY_PATH="$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
-              $SAPSTARTSRV pf=$SAPSTARTPROFILE -D -u $sidadm
+              $SAPSTARTSRV pf="$SAPSTARTPROFILE" -D -u "$sidadm"
             )
             # now make sure the daemon has been started and is able to respond
             local srvrc=1
@@ -1452,7 +1522,7 @@ function check_for_primary() {
 
 # function: analyze_hana_sync_statusSRS
 # params:   -
-# globals:  DIR_EXECUTABLE(r), FULL_SR_STATUS(w)
+# globals:  DIR_EXECUTABLE(r), FULL_SR_STATUS(w), remoteNode
 #
 # systemReplicationStatus.py return-codes:
 #    NoHSR        = 10
