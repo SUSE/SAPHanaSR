@@ -1749,6 +1749,73 @@ function saphana_start() {
 }
 
 #
+# saphana_stopSystem [stopMode]
+# stopMode: StopSystem|Stop
+#
+function saphana_stopSystem() {
+    local rc=0 rcWfS=0
+    local stopMode="StopSystem"
+    if [ $# -eq 1 ]; then
+        stopMode="$1"
+    fi
+    check_sapstartsrv; rc="$?"
+    if [ "$rc" -eq "$OCF_SUCCESS" ]; then
+        ## TODO: PRIO 1: Only stop System, if I am the last master!
+        ## TODO: PRIO 2: Do we need a "last-man-switch-off-the-light" detection?
+        output=$($SAPCONTROL -nr "$InstanceNr" -function "$stopMode")
+        rc=$?
+         super_ocf_log info "ACT: SAP HANA STOP: Stopping System $SID-$InstanceName: $output"
+    fi
+    if [ "$rc" -eq 0 ]; then
+        HANA_ACTION_TIMEOUT=$(get_saphana_waitfor_timeout WaitforStopped)
+        output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped $HANA_ACTION_TIMEOUT 1); rcWfS="$?"
+        while true; do
+            #
+            # If the master-nameserver dies and does not have a failover candidate but there are still running worker nodes
+            #    WaitforStopped terminates to early and does not wait till the worker nodes are down.
+            #    So we need to wait till the last "partial" node is down.
+            # TODO: PRIO1: differ return codes for WaitforStarted from the Number-Of-Partial-Nodes
+            #
+            rcWfS=0
+            hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null);
+            hAPart=$(echo "$hanaANSWER" | tr -d ' ' | \
+            awk -F= '
+               BEGIN { partials=0 }
+                $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive "-" $2; if ( $2 == "partial" ) { partials=1 } }
+                    END { printf "%s:%s\n", hostActive, partials;  } ' vName=$vName )
+            hanaHostActive="${hAPart%:*}"
+            partials="${hAPart#*:}"
+            if [ "$partials" -eq 0 ]; then
+                # terminate wait-for-all-nodes-down if no partial nodes are left any more
+                break;
+            else
+                sleep 5
+                timeNow=$(date '+%s')
+                (( timeStop = timeNow - timeB ))
+                (( timeRemain = HANA_ACTION_TIMEOUT - timeStop ))
+                if [ "$timeRemain" -le 0 ]; then
+                    # terminate wait-for-all-nodes-down if time-to-stop in sum expired HANA_ACTION_TIMEOUT
+                    rcWfS=1
+                    break;
+                fi
+            fi
+        done
+	    # DONE PRIO1: RC restore!!
+        if [ "$rcWfS" -eq 0 ]; then
+            super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName stopped: $output"
+            rc="$OCF_SUCCESS"
+        else
+            super_ocf_log err "ACT: SAP HANA: System $SID-$InstanceName stop failed: $output, rc=$rc"
+            rc="$OCF_ERR_GENERIC"
+        fi
+    else
+        super_ocf_log err "ACT: SAP HANA: System $SID-$InstanceName stop failed: $output, rc=$rc"
+        rc="$OCF_ERR_GENERIC"
+    fi
+    return "$rc"
+}
+
+#
 # function: saphana_stop - stop a hana instance
 # params:   -
 # globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
