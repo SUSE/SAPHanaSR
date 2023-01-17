@@ -2142,7 +2142,14 @@ function saphana_start_secondary()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local sqlrc;
-    set_crm_master 0
+    case "$PreferSiteTakeover" in
+        never | NEVER | Never )
+            set_crm_master -INFINITY
+            ;;
+        * )
+            set_crm_master 0
+            ;;
+    esac
     #
     ####### LPA - begin
     #
@@ -3277,10 +3284,18 @@ function saphana_monitor_secondary()
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
                 SFAIL ) # This is currently NOT a possible node to promote
+                    super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $sr_name"
+                    lpa_set_lpt  10 "$sr_name"
                     super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
                     set_crm_master -INFINITY
                     ;;
-                * )     # Unknown sync status
+                SNA ) # This is a never-takeover-node
+                    super_ocf_log debug "DBG: 013b * lpa_set_lpt 10 $sr_name"
+                    lpa_set_lpt  10 "$sr_name"
+                    super_ocf_log info "DEC: secondary with sync status n/a ==> EXCLUDE as possible takeover node"
+                    set_crm_master -INFINITY
+                    ;;
+                * ) # Unknown sync status
                     super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
                     my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
                     my_sync=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
@@ -3295,6 +3310,112 @@ function saphana_monitor_secondary()
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
+}
+
+function saphana_monitor_clone_not_msn()
+{
+    nState=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
+    # TODO: PRIO2: Check, if we need to (re) start a failed SAP HANA instance in a swarm
+    if ! saphana_check_local_instance; then
+        #
+        # local instance is not THE master nameserver and is currently stopped
+        #
+        # IF LS>=2 AND ROLE STANDBY "RESTART" INSTANCE
+        get_hana_landscape_status; lss=$?
+        if [ $lss -gt 2 ]; then
+            super_ocf_log info "DEC: local instance is down landscape is up (lss=$lss)"
+            rc=$OCF_NOT_RUNNING
+        else
+            #
+            # local instance AND landscape are down
+            #
+            super_ocf_log info "DEC: local instance AND landscape are down (lss=$lss)"
+            case "$nState" in
+                DEMOTED )
+                            super_ocf_log info "DEC: DEMOTED => OCF_SUCCESS"
+                            rc=$OCF_SUCCESS;;          # landscape is down and local instance is down -> report SUCCESS
+                PROMOTED )
+                            super_ocf_log info "DEC: PROMOTED => OCF_FAILED_MASTER"
+                            rc=$OCF_FAILED_MASTER;;   # same, but for MASTER -> report FAILED_MASTER
+                UNDEFINED )
+                            super_ocf_log info "DEC: UNDEFINED => OCF_NOT_RUNNING"
+                            rc=$OCF_NOT_RUNNING;;    # same is DEMOTED, but target should be down -> report NOT_RUNNING
+                * )
+                            super_ocf_log info "DEC: <<UNKNOWN>> => OCF_NOT_RUNNING"
+                            rc=$OCF_NOT_RUNNING;;
+            esac
+        fi
+        #
+    else
+        #
+        # local instance not THE master nameserver, but up-and-running
+        #
+        super_ocf_log info "DEC: the_master=<<$the_master>>"
+        if [ -z "$the_master"  ]; then
+            #
+            # code for missing ALL master nameserver candidates
+            #
+            if is_active_nameserver_slave || is_lost_nameserver_slave; then
+                #
+                # missing ALL master nameserver candidates, but local instance still running -> we need to trigger the cluster to take us down
+                #
+                super_ocf_log info "DEC: left-over instance ???"
+                get_hana_landscape_status; lss=$?
+                if [ $lss -le 1 ]; then
+                    #
+                    # landscape already reports down / error but local instance is up and running
+                    # we are a left-over active instance without master nameserver nodes - report an error to the cluster to get this instance stopped
+                    #
+                    super_ocf_log info "DEC: left-over instance and lss=$lss - report generic error for lost instance"
+                    rc=$OCF_ERR_GENERIC
+                else
+                    #
+                    # landscape still reports a running swarm AND local instance is up and running
+                    # we are a left-over active instance without master nameserver nodes - wait till landscape status falls down to error
+                    #
+                    super_ocf_log info "DEC: left-over instance and lss=$lss - wait till lss falls down to error and SAP HANA did a final decision"
+                    rc=$OCF_SUCCESS
+                fi
+            else
+                #
+                # missing ALL master nameserver candidates AND local instance is also stopped -> just inform the cluster we are down
+                #
+                super_ocf_log info "DEC: left-over instance but already down"
+                rc=$OCF_NOT_RUNNING
+            fi
+        else
+          #
+          # code, if we still have ANY master nameserver candidates
+          #
+          # for self-scoring always use the local sites SR-attribute
+          #
+        #
+        # get local site(s) LSS, SRR and nodes ROLES and SRHOOK
+        # TODO PRIO1: reduce number of queries in LSS, SRR and ROLES
+        #
+          my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+          my_srr=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+          my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+          my_sync=$(get_SRHOOK "$sr_name")
+          #
+          # for scoring using the scoring table we need a combined value of <landscape-status>:<sytem-replication-role>:<landscape-host-role>
+          #
+          my_hana_role="${my_lss}:${my_srr}:${my_role}"
+          super_ocf_log info "DEC: scoring $my_hana_role : $my_sync"
+          scoring_crm_master "$my_hana_role" "$my_sync"
+          # TODO: PRIO2: So far we do NOT monitor the swarm, if we are NOT the master nameserver
+          #              This reflects the situation that swarm members get be started (as resource)
+          #              before the master nameserver runs the StartSystem command
+          #           => However we need to check, if it could happen that NO started (warm) master nameserver
+          #              is available and we miss to monitor the degraded HANA on another node
+          case "$nState" in
+              DEMOTED ) rc=$OCF_SUCCESS;;              # local instance is up -> report SUCCESS
+              PROMOTED ) rc=$OCF_RUNNING_MASTER;;      # same but state is MASTER -> report RUNNING_MASTER
+              UNDEFINED ) rc=$OCF_NOT_RUNNING;;        # same but state is DOWN -> report NOT_RUNNING
+              * ) rc=$OCF_NOT_RUNNING;;
+          esac
+        fi
+    fi
 }
 
 #
@@ -3316,6 +3437,8 @@ function saphana_monitor_clone() {
     local rc="$OCF_ERR_GENERIC"
     local promoted=0
     local init_attribute=0
+    local nState=""
+    local primary_status="$HANA_STATE_DEFECT"
     local lpaRc=0
     local mRc=0
     local myMaster=-1
@@ -3329,33 +3452,48 @@ function saphana_monitor_clone() {
 
     my_role="${my_lss}:${my_srr}:${my_role}"
 
+    #
+    # reset possible left SRACTION_HISTORY
+    #
     set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-
-	if ocf_is_probe; then
-		super_ocf_log debug "DBG: PROBE ONLY"
-	else
-		super_ocf_log debug "DBG: REGULAR MONITOR"
-	fi
-	#
-	# First check, if we are PRIMARY or SECONDARY
-	#
-	check_for_primary; primary_status=$?
-    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-        # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
-        # TODO: PRIO1: Maybe we need a lpa-check here to
-        if ocf_is_probe; then
-            myMaster=$(get_crm_master); mRc=$?
-            if [ $mRc -ne 0 ]; then
-               set_crm_master 5
-            elif [ $myMaster -eq -1 ]; then
-               set_crm_master 5
+    if ocf_is_probe; then
+        super_ocf_log debug "DBG: PROBE ONLY"
+        # TODO PRIO1: NG could check the Master status in a probe - after a refresh this status should be lost?
+        #
+        # check during probe, if this instance is *NOT* running as master
+        # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
+        #
+        master_node_name=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE"  | awk '$7 == "Master" { print $6 }')
+        if [ "$master_node_name" != "$NODENAME" ]; then
+            if [ "$my_lss" -ge 2 ]; then
+                # we are in a probe, hana is running and we need to reset the clone_state
+                # TODO PRIO5: Only reset attribute, if it is currently set to "PROMOTED"?
+                set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
             fi
-        else
-            saphana_check_local_instance
         fi
-        saphana_monitor_primary; rc=$?
     else
-        if [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
+        super_ocf_log debug "DBG: REGULAR MONITOR"
+    fi
+    if is_the_master_nameserver; then
+        #
+        # First check, if we are PRIMARY or SECONDARY
+        #
+        check_for_primary; primary_status=$?
+        if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+            # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
+            # TODO: PRIO1: Maybe we need a lpa-check here to
+            if ocf_is_probe; then
+                myMaster=$(get_crm_master); mRc=$?
+                if [ $mRc -ne 0 ]; then
+                   set_crm_master 5
+                elif [ $myMaster -eq -1 ]; then
+                   set_crm_master 5
+                fi
+            else
+                saphana_check_local_instance
+            fi
+            saphana_monitor_primary; rc=$?
+        elif [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
             if ! ocf_is_probe; then
                 saphana_check_local_instance
             fi
@@ -3366,8 +3504,30 @@ function saphana_monitor_clone() {
             #
             super_ocf_log warn "ACT: saphana_monitor_clone: HANA_STATE_DEFECT"
             # TODO: PRIO2: Or only set_crm_master -INFINITY ?
-            rc=$OCF_ERR_GENERIC
+            # TODO: PRIO9: Currently pacemaker-remote nodes does not support 'reboot' attributes
+            # DONE: PRIO1: OCF_ERR_GENERIC is quite fatal, if "only" hdbnsutil has a small problem
+            nState=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
+            if saphana_check_local_instance; then
+                case "$nState" in
+                        DEMOTED )   rc=$OCF_SUCCESS;;
+                        PROMOTED )  rc=$OCF_RUNNING_MASTER;;
+                        UNDEFINED ) rc=$OCF_NOT_RUNNING;;
+                        * )         rc=$OCF_NOT_RUNNING;;
+                    esac
+            else
+	            case "$nState" in
+                        DEMOTED )   rc=$OCF_NOT_RUNNING;;
+                        PROMOTED )  rc=$OCF_NOT_RUNNING;; ## TODO: PRIO 3: FAILED_MASTER?
+                        UNDEFINED ) rc=$OCF_NOT_RUNNING;;
+                        * )         rc=$OCF_NOT_RUNNING;;
+                esac
+            fi
         fi
+    else
+        #
+        # instance is not THE master nameserver
+        #
+        saphana_monitor_clone_not_msn
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
