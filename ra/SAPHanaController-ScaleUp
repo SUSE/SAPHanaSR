@@ -1954,22 +1954,24 @@ function saphana_start_primary()
        rc=$OCF_ERR_GENERIC
     fi
 
-    my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
+    my_sync=$(get_SRHOOK "$sr_name")
     case "$lpa_advice" in
         start )  # process a normal START
+            set_SRHOOK "$sr_name" "PRIM"; my_sync="PRIM"
             case "$lss" in
                 2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
                     super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc "$NODENAME"
+                    lpa_set_lpt $LPTloc "$sr_name"
                     rc=$OCF_SUCCESS
                     ;;
                 1 ) # landscape says we are down, lets start and adjust scores and return code
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start instance"
+                    super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
                     saphana_start
                     rc=$?
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc "$NODENAME"
+                    lpa_set_lpt $LPTloc "$sr_name"
+                    my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]})"
                     ;;
             esac
             if [ -z "$my_role" ]; then
@@ -1979,6 +1981,7 @@ function saphana_start_primary()
             scoring_crm_master "$my_role" "$my_sync"
             ;;
         register ) # process a REGISTER
+            set_SRHOOK "$sr_name" "SREG"; my_sync="SREG"
             case "$lss" in
                 2 | 3 | 4 ) # upps we are up - but shouldn't? - we could not register with started HDB
                     # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
@@ -1990,18 +1993,24 @@ function saphana_start_primary()
                     # DONE: PRIO2: Like Action in start_secondary
                     super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
                     super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
+                    # TODO PRIO2: NG normally only needed for scale-out:
                     set_crm_master  0
+                    for m in "${masters[@]}"; do
+                        set_crm_master  0 $m
+                    done
                     if wait_for_primary_master 1; then
                         register_hana_secondary
                         check_for_primary; primary_status=$?
                         if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
                             super_ocf_log info "ACT: Register successful"
                             lpa_push_lpt 10
-                            lpa_set_lpt  10 "$NODENAME"
+                            super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $sr_name"
+                            lpa_set_lpt  10 "$sr_name"
                             set_crm_master  0
                             saphana_start_secondary
                             rc=$?
-                            lpa_set_lpt  10 "$NODENAME"
+                            super_ocf_log debug "DBG: 004 * lpa_set_lpt 10 $sr_name"
+                            lpa_set_lpt  10 "$sr_name"
                         else
                             super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
                             rc=$OCF_NOT_RUNNING
@@ -2014,6 +2023,7 @@ function saphana_start_primary()
             esac
             ;;
         wait )  # process a WAIT
+            set_SRHOOK "$sr_name" "PRIM"; my_sync="PRIM"
             case "$lss" in
                 2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
                     # TODO: PRIO3: I now change from "just keep it up to take that down"
@@ -2720,16 +2730,62 @@ function saphana_start_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local sqlrc;
-    set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-    check_for_primary; primary_status=$?
-    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-        saphana_start_primary; rc=$?
-    elif [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
-        lpa_set_lpt  10 $NODENAME
-        saphana_start_secondary; rc=$?
+    local chkusr;
+    # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
+    if is_the_master_nameserver; then
+        check_for_primary; primary_status=$?
+        #
+        # DONE: PRIO0: NOW! Insert get_hana_landscape_status HERE to check
+        #       nr_site_nodes vs. landscape-workers?
+        get_hana_landscape_status; lss=$?
+        # DONE: PRIO0: NOW! Parse hana_LSS_Out
+        #lss_worker=$(echo "$hana_LSS_Out" | tr -d ' ' | awk -F '|' '$12 == "worker" { w++ } END { print w }')
+        lss_worker=$(echo "$hana_LSS_Out" | awk '/indexServerConfigRole=worker/ { w++; } END { print w; }')
+        #
+        # Only start HANA, if there are enough nodes in the cluster to fulfill the landscape:
+        # $nr_site_node -ge $lss_worker means that we count all nodes (worker and standby) in the
+        #   cluster attributes and this number must be greater than the expected worker nodes
+        #   from the landscape.
+        # NOTE: ALL NODES MUST BE IN THE SAME HANA FAILOVER GROUP (LIKE DEFAULT)
+        #
+        if [ $nr_site_node -ge $lss_worker ]; then
+            if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+                set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                saphana_start_primary $lss; rc=$?
+            else
+                set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                super_ocf_log debug "DBG: 007 * lpa_set_lpt 10 $sr_name"
+                lpa_set_lpt  10 "$sr_name"
+                saphana_start_secondary $lss; rc=$?
+            fi
+        else
+            # saphana_start_clone - WAITING4NODES handling
+            super_ocf_log info "ACT: nr_site_worker < lss_worker- setting WAITING4NODES"
+            set_hana_attribute ${NODENAME} "WAITING4NODES" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+            rc=$OCF_SUCCESS
+        fi
     else
-        super_ocf_log error "SAP HANA is neither PRIMARY nor SECONDARY cant start this SAP HANA database for SR control."
-        rc="$OCF_NOT_RUNNING"
+        set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+        local start=0
+        local lss=0
+        local my_role=0
+        if saphana_check_local_instance; then
+            super_ocf_log info "ACT: Local SAP HANA instance already up and running"
+        else
+            # IF LS>=2 AND ROLE STANDBY "RESTART" INSTANCE
+            get_hana_landscape_status; lss=$?
+            if [ $lss -gt 2 ]; then
+                #
+                # only restart standby instances
+                #
+                my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+                echo "$my_role" | grep -q ":standby" && start=1
+                output=$($SAPCONTROL -nr $InstanceNr -function RestartInstance)
+            fi
+            #
+        fi
+        set_crm_master -INFINITY
+        rc=$OCF_SUCCESS
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc

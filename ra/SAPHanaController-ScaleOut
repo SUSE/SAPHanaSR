@@ -1941,6 +1941,7 @@ function saphana_start_primary()
         *) lpa_advice="fail" ;;
     esac
 
+    my_sync=$(get_SRHOOK "$sr_name")
     case "$lpa_advice" in
         start )  # process a normal START
             set_SRHOOK "$sr_name" "PRIM"; my_sync="PRIM"
@@ -1949,7 +1950,7 @@ function saphana_start_primary()
                     super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
                     LPTloc=$(date '+%s')
                     lpa_set_lpt $LPTloc "$sr_name"
-                    rc=$OCF_SUCCSESS
+                    rc=$OCF_SUCCESS
                     ;;
                 1 ) # landscape says we are down, lets start and adjust scores and return code
                     super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
@@ -1978,7 +1979,7 @@ function saphana_start_primary()
                     # DONE: PRIO2: Like Action in start_secondary
                     super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
                     super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
-                    # DONE: PRIO0: For all master nodes of that site
+                    # TODO PRIO2: NG normally only needed for scale-out:
                     set_crm_master  0
                     for m in "${masters[@]}"; do
                         set_crm_master  0 $m
@@ -1992,12 +1993,12 @@ function saphana_start_primary()
                             super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $sr_name"
                             lpa_set_lpt  10 "$sr_name"
                             set_crm_master  0
-                            saphana_start_secondary $lss
+                            saphana_start_secondary "$lss"
                             rc=$?
                             super_ocf_log debug "DBG: 004 * lpa_set_lpt 10 $sr_name"
                             lpa_set_lpt  10 "$sr_name"
                         else
-                            super_ocf_log err "ACT: Register failed"
+                            super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
                             rc=$OCF_NOT_RUNNING
                         fi
                     else
@@ -2712,6 +2713,7 @@ function saphana_start_clone() {
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local sqlrc;
     local chkusr;
+    # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
     if is_the_master_nameserver; then
         check_for_primary; primary_status=$?
         #
