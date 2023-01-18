@@ -1917,7 +1917,7 @@ function saphana_validate() {
 #
 function saphana_start_primary()
 {
-    # TODO PRIO2: NG shorten this function to mae it easier to read and maintain
+    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lss="$1"
@@ -2756,7 +2756,7 @@ function is_the_master_nameserver()
 #
 # function: saphana_start_clone - start a hana clone instance
 # params:   -
-# globals:  OCF_*, ATTR_NAME_*, HANA_STATE_*, NODENAME
+# globals:  TODO
 # saphana_start_clone
 #
 function saphana_start_clone() {
@@ -2893,6 +2893,7 @@ function recover_site_attributes_from_file()
 #
 function saphana_monitor_primary()
 {
+    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=$OCF_ERR_GENERIC
     local promoted=0
@@ -2924,22 +2925,6 @@ function saphana_monitor_primary()
             DEMOTED )
                 promoted=0;
                 ;;
-            # TODO: PRIO5: Implement WAITING4LPA WAITING4REG WAITING4PRIM WAITING4NODES
-            # WAITING4LPA WAITING4REG WAITING4PRIM WAITING4NODES
-            # TODO: PRIO1: Implement WAITING4NODES in the same way as for secondary:
-#        1 ) # ERROR
-#            super_ocf_log debug "DBG: 012 * lpa_set_lpt 10 $sr_name"
-#            lpa_set_lpt  10 "$sr_name"
-#            # Hide this error, if we still in WAITING4NODES
-#            case "$promote_attr" in
-#                WAITING4NODES ) # hide error 
-#                                rc=$OCF_SUCCESS
-#                                ;;
-#                * )
-#                                rc=$OCF_NOT_RUNNING
-#                                ;;
-#            esac
-#            ;;
             WAITING* )
                 # DONE: lpa_check_lpt_status to come out of here :)
                 # DONE: PRIO2: CHECK IF THE FIX FOR COMING OUT OF WAITING IS CORRECT
@@ -2951,7 +2936,6 @@ function saphana_monitor_primary()
                     lpa_set_lpt $LPTloc "$sr_name"
                 fi
                 lpa_check_lpt_status; lparc=$?
-                # DONE: PRIO1: Need to differ lpa_check_lpt_status return codes
                 case "$lparc" in
                    0 | 1 )
                         # lpa - no need to wait any longer - lets try a new start
@@ -3080,16 +3064,24 @@ function saphana_monitor_primary()
             fi
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
+            #
+            # get local-site(s) LSS, SRR and nodes ROLES; set PRIM
+            #
+            my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+            my_srr=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+            my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+            set_SRHOOK "$sr_name" "PRIM"
+            # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the
+            my_sync=$(get_SRHOOK "$remSR_name")
+            my_hana_role="${my_lss}:${my_srr}:${my_role}"
             if ocf_is_probe; then
                 if [ "$promoted" -eq 1 ]; then
                     rc=$OCF_RUNNING_MASTER
                 else
                     rc=$OCF_SUCCESS
                 fi
-	            set_SRHOOK_PRIM
-                my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-                super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"
-                scoring_crm_master "$my_role" "$my_sync"
+                super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_hana_role,$my_sync)"
+                scoring_crm_master "$my_hana_role" "$my_sync"
             else
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc "$sr_name"
@@ -3130,16 +3122,35 @@ function saphana_monitor_primary()
                 my_sync=$(get_SRHOOK "$remSR_name")
                 my_role="${my_lss}:${my_srr}:${my_role}"
                 case "$my_role" in
-                    [12]:P:*:master:*  ) # primary is down or may not anser hdbsql query so drop analyze_hana_sync_status
+                    # TODO PRIO1: scale-out pattern: [12]:P:*:*:*, scale-up pattern: [12]:P:*:master:*
+                    [12]:P:*:*:*  ) # primary is down or may not answer analyze_hana_sync_statusSRS
                         ;;
-                    [34]:P:*:*:*  ) # primary is up and should now be able to anser hdbsql query
-                        if [ -f $DIR_EXECUTABLE/python_support/systemReplicationStatus.py ]; then
-                            if [ "$promote_attr" = "PROMOTED" ]; then
-                                analyze_hana_sync_statusSRS
-                            fi
-                        else
-                            analyze_hana_sync_statusSQL
-                        fi
+                    [34]:P:*:*:*  ) # primary is up and should now be able to answer hdbsql query
+                            case "$PreferSiteTakeover" in
+                                never | NEVER | Never )
+                                    # TODO: PRIO 2: How to handle this attribute for srHOOK with NEVER?
+                                    # Currently it is NOT allowed to implement the srHook together with the (unsupported) preferSitetakeover 'never'
+                                    # DONE: PRIO0: Check, if we need also to set the HOOK value or not??
+                                    set_hana_attribute "X" "SNA" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+                                    set_SRHOOK "$remSR_name" "SNA"
+                                    ;;
+                                * )
+                                    # TODO: PRIO 5: We could limit the analyze_hana_sync_statusSRS later
+                                    #       (only call analyze_hana_sync_statusSRS, if Hook is on SWAIT)
+                                    #       currently we still poll the old method to track differences
+                                    #       of results of the SAP interfaces
+                                    analyze_hana_sync_statusSRS
+                                    if [ "$my_sync" = "SWAIT" ]; then
+                                        # DONE: PRIO0: Check, if we really should overwrite "SWAIT" or keep that value
+                                        # if we still did not got a hook time since the cluster start-up maybe the
+                                        # HANA was already in (stable) sync, so the HANA Hook would never been called till
+                                        # a new event comes up. This is why we transfer the 'polled' attribute to the Hook attribute.
+                                        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}")
+                                        set_SRHOOK "$remSR_name" "$my_sync"
+                                        super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SEC_SYNC_STATUS[0]} ($my_sync)"
+                                    fi
+                                    ;;
+                            esac
                         ;;
                 esac
                 #
@@ -3154,16 +3165,16 @@ function saphana_monitor_primary()
                 if [ "$promote_attr" = "DEMOTED" -a "$rem_clone_status" = "PROMOTED" ]; then
                    case "$rem_role" in
                        [234]:P:* ) # dual primary, but other instance marked as PROMOTED by the cluster
-                # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
-                           lpa_check_lpt_status; again_lpa_rc=$?
-                           if [ $again_lpa_rc -eq 2 ]; then
-                              super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa stalemate ==> local restart"
-                              super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $sr_name"
-                              lpa_set_lpt 10 "$sr_name"
-                              lpa_push_lpt 10
-                              rc=$OCF_NOT_RUNNING
-                           fi
-                          ;;
+                            # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
+                            lpa_check_lpt_status; again_lpa_rc=$?
+                            if [ $again_lpa_rc -eq 2 ]; then
+                               super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa stalemate ==> local restart"
+                               super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $sr_name"
+                               lpa_set_lpt 10 "$sr_name"
+                               lpa_push_lpt 10
+                               rc=$OCF_NOT_RUNNING
+                            fi
+                            ;;
                    esac
                 fi
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"

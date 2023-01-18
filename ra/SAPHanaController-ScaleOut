@@ -1917,7 +1917,7 @@ function saphana_validate() {
 #
 function saphana_start_primary()
 {
-    # TODO PRIO2: NG shorten this function to mae it easier to read and maintain
+    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lss="$1"
@@ -2756,7 +2756,7 @@ function is_the_master_nameserver()
 #
 # function: saphana_start_clone - start a hana clone instance
 # params:   -
-# globals:  OCF_*, ATTR_NAME_*, HANA_STATE_*, NODENAME, hana_LSS_Out
+# globals:  TODO
 # saphana_start_clone
 #
 function saphana_start_clone() {
@@ -2893,6 +2893,7 @@ function recover_site_attributes_from_file()
 #
 function saphana_monitor_primary()
 {
+    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=$OCF_ERR_GENERIC
     local promoted=0
@@ -2924,22 +2925,6 @@ function saphana_monitor_primary()
             DEMOTED )
                 promoted=0;
                 ;;
-            # TODO: PRIO5: Implement WAITING4LPA WAITING4REG WAITING4PRIM WAITING4NODES
-            # WAITING4LPA WAITING4REG WAITING4PRIM WAITING4NODES
-            # TODO: PRIO1: Implement WAITING4NODES in the same way as for secondary:
-#        1 ) # ERROR
-#            super_ocf_log debug "DBG: 012 * lpa_set_lpt 10 $sr_name"
-#            lpa_set_lpt  10 "$sr_name"
-#            # Hide this error, if we still in WAITING4NODES
-#            case "$promote_attr" in
-#                WAITING4NODES ) # hide error 
-#                                rc=$OCF_SUCCESS
-#                                ;;
-#                * )
-#                                rc=$OCF_NOT_RUNNING
-#                                ;;
-#            esac
-#            ;;
             WAITING* )
                 # DONE: lpa_check_lpt_status to come out of here :)
                 # DONE: PRIO2: CHECK IF THE FIX FOR COMING OUT OF WAITING IS CORRECT
@@ -2951,23 +2936,38 @@ function saphana_monitor_primary()
                     lpa_set_lpt $LPTloc "$sr_name"
                 fi
                 lpa_check_lpt_status; lparc=$?
-                # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
-                if [ $lparc -lt 2 ]; then
-                    # lpa - no need to wait any longer - lets try a new start
-                    saphana_start_clone
-                    rc=$?
-                    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-                    return $rc
-                else
-                    lpa_init_lpt $HANA_STATE_PRIMARY
-                    # still waiting for second site to report lpa-lpt
-                    if ocf_is_true "$AUTOMATED_REGISTER" ; then
-                       super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
-                    else
-                       super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
-                    fi
-                    return $OCF_SUCCESS
-                fi
+                case "$lparc" in
+                   0 | 1 )
+                        # lpa - no need to wait any longer - lets try a new start
+                        saphana_start_clone
+                        rc=$?
+                        super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+                        return $rc
+                        ;;
+                    2 )
+                        lpa_init_lpt $HANA_STATE_PRIMARY
+                        # still waiting for second site to expire
+                        if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                           super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+                        else
+                           super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
+                           super_ocf_log info "LPA: You need to manually sr_register the older primary"
+                        fi
+                        return $OCF_SUCCESS
+                    ;;
+                    3 )
+                        lpa_init_lpt $HANA_STATE_PRIMARY
+                        # still waiting for second site to report lpa-lpt
+                        super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+                        return $OCF_SUCCESS
+                    ;;
+                    4 )
+                        # lpa internal error
+                        # TODO PRIO3: Implement special handling for this issue - should we fail the ressource?
+                        super_ocf_log info "LPA: LPA reports an internal error"
+                        return $OCF_SUCCESS
+                    ;;
+                esac
                 promoted=0;
                 ;;
             UNDEFINED )
@@ -3075,8 +3075,12 @@ function saphana_monitor_primary()
             my_sync=$(get_SRHOOK "$remSR_name")
             my_hana_role="${my_lss}:${my_srr}:${my_role}"
             if ocf_is_probe; then
-                rc=$OCF_SUCCESS
-                super_ocf_log info "DEC: saphana_monitor_primary: (1) scoring_crm_master($my_hana_role,$my_sync)"
+                if [ "$promoted" -eq 1 ]; then
+                    rc=$OCF_RUNNING_MASTER
+                else
+                    rc=$OCF_SUCCESS
+                fi
+                super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_hana_role,$my_sync)"
                 scoring_crm_master "$my_hana_role" "$my_sync"
             else
                 LPTloc=$(date '+%s')
@@ -3118,7 +3122,8 @@ function saphana_monitor_primary()
                 my_sync=$(get_SRHOOK "$remSR_name")
                 my_role="${my_lss}:${my_srr}:${my_role}"
                 case "$my_role" in
-                    [12]:P:*:*:*  ) # primary is down or may not answer hdbsql query so drop analyze_hana_sync_status{SRS|SQL}
+                    # TODO PRIO1: scale-out pattern: [12]:P:*:*:*, scale-up pattern: [12]:P:*:master:*
+                    [12]:P:*:*:*  ) # primary is down or may not answer analyze_hana_sync_statusSRS
                         ;;
                     [34]:P:*:*:*  ) # primary is up and should now be able to answer hdbsql query
                             case "$PreferSiteTakeover" in
@@ -3160,16 +3165,16 @@ function saphana_monitor_primary()
                 if [ "$promote_attr" = "DEMOTED" -a "$rem_clone_status" = "PROMOTED" ]; then
                    case "$rem_role" in
                        [234]:P:* ) # dual primary, but other instance marked as PROMOTED by the cluster
-                # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
-                           lpa_check_lpt_status; again_lpa_rc=$?
-                           if [ $again_lpa_rc -eq 2 ]; then
-                              super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa stalemate ==> local restart"
-                              super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $sr_name"
-                              lpa_set_lpt 10 "$sr_name"
-                              lpa_push_lpt 10
-                              rc=$OCF_NOT_RUNNING
-                           fi
-                          ;;
+                            # TODO: PRIO1: Need to differ lpa_check_lpt_status return codes
+                            lpa_check_lpt_status; again_lpa_rc=$?
+                            if [ $again_lpa_rc -eq 2 ]; then
+                               super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa stalemate ==> local restart"
+                               super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $sr_name"
+                               lpa_set_lpt 10 "$sr_name"
+                               lpa_push_lpt 10
+                               rc=$OCF_NOT_RUNNING
+                            fi
+                            ;;
                    esac
                 fi
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"
