@@ -1477,14 +1477,13 @@ function check_for_primary() {
     local rc=$HANA_STATE_DEFECT
     local ini_mode=""
     local chkMethod=""
-    # TODO PRIO2: use sap commands from saphana_init_sap_commands()
-    node_full_status=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "hdbnsutil -sr_stateConfiguration --sapcontrol=1" 2>/dev/null )
     for chkMethod in  hU hU hU gP; do
        case "$chkMethod" in
            gP )
                 # fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode})
+                # TODO PRIO2: use sap commands from saphana_init_sap_commands()
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 # first try to get the value of 'actual_mode' from the global.ini
                 ini_mode=$(echo "$node_full_status" | awk -F= '$1=="actual_mode" {print $2}')
@@ -1496,6 +1495,7 @@ function check_for_primary() {
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
            hU | * )
+                # TODO PRIO2: use sap commands from saphana_init_sap_commands()
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState" 2>/dev/null )
                 node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
@@ -1564,7 +1564,7 @@ function analyze_hana_sync_statusSRS()
           lpa_set_lpt 30 "$remoteNode"
           rc=0;
        else
-          # ok we should be careful and set secondary to SFAIL
+          # FULL_SR_STATUS does not contain "ACTIVE", so set secondary to SFAIL
           super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
           set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
           super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (6) - srRc=$srRc lss=$lss No ACTIVES found in cmd output"
@@ -1713,36 +1713,69 @@ function saphana_start() {
     local output=""
     local loopcount=0
     local lastSrHook
-    check_sapstartsrv
-    rc=$?
+    # TODO PRIO2: check_sapstartsrv to be moved into "if is_the_master_nameserver..." ?
+    check_sapstartsrv; rc=$?
     #
     # DONE: ASK: PRIO5: For SCALE-OUT - do we need to use another call like StartSystem? Or better to use the HDB command?
     #
-    if [ $rc -eq $OCF_SUCCESS ]; then
-        lastSrHook=$(get_SRHOOK_plain "$sr_name")
-        if [ -n "$lastSrHook" ]; then
-            # reset old srHook attribute to SWAIT as we are starting right now
-            set_SRHOOK "$sr_name" "SWAIT"
+    # set_SRHOOK() removed here. saphana_start() is used for primary and secondaries but would need different attribute values
+    if is_the_master_nameserver; then
+        if [ $rc -eq $OCF_SUCCESS ]; then
+            lastSrHook=$(get_SRHOOK_plain "$sr_name")
+            if [ -n "$lastSrHook" ]; then
+                # reset old srHook attribute to SWAIT as we are starting right now
+                set_SRHOOK "$sr_name" "SWAIT"
+            fi
+            output=$($SAPCONTROL -nr $InstanceNr -function StartSystem); rc=$?
+            super_ocf_log info "ACT: SAP HANA START: Starting System $SID-$InstanceName: $output"
         fi
-        output=$($SAPCONTROL -nr $InstanceNr -function Start)
-        rc=$?
-        super_ocf_log info "ACT: Starting SAPHANA Instance $SID-$InstanceName: $output"
-    fi
-    if [ $rc -eq 0 ]
-    then
-        HANA_ACTION_TIMEOUT=$(get_action_timeout)
-        output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted $HANA_ACTION_TIMEOUT 1)
-        if [ $? -eq 0 ]
+        if [ $rc -eq 0 ]
         then
-            super_ocf_log info "ACT: SAPHANA Instance $SID-$InstanceName started: $output"
-            rc=$OCF_SUCCESS
+            # TODO PRIO1: scale-out has get_saphana_waitfor_timeout WaitforStarted, scale-up has get_action_timeout 
+            HANA_ACTION_TIMEOUT=$(get_saphana_waitfor_timeout WaitforStarted)
+            # HANA_ACTION_TIMEOUT=$(get_action_timeout)
+            output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted $HANA_ACTION_TIMEOUT 1)
+            if [ $? -eq 0 ]
+            then
+                # TODO PRIO2: scale-up did not check the landscapeHostConfiguration rc
+                for i in 1 2 3 4; do
+                    super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName started: $output"
+                    # TODO PRIO2: query lss to be moved into a function
+                    hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                    hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+                            awk -F= '
+                            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
+                            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
+                            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
+                            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
+                            $1 == "nameServerConfigRole"  {nsCR=$2}
+                            $1 == "nameServerActualRole"  {nsAR=$2}
+                            $1 == "indexServerConfigRole" {isCR=$2}
+                            $1 == "indexServerActualRole" {isAR=$2}
+                            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName=$vName )
+                    hanaHostActive=$(echo "$hanaANSWER" | tr -d ' ' | \
+                    awk -F= '
+                                $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
+                                END { printf "%s\n", hostActive;  } ' vName=$vName )
+                    set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+                    #
+                    # set LSS local-site attribute
+                    #
+                    set_hana_site_attribute "$sr_name" "${NODENAME}" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+                    sleep 5
+                done
+                rc="$OCF_SUCCESS"
+            else
+                super_ocf_log err "ACT: SAP HANA: System $SID-$InstanceName start failed: $output"
+                rc="$OCF_ERR_GENERIC"
+            fi
         else
-            super_ocf_log err "ACT: SAP HANA: Instance $SID-$InstanceName start failed: $output"
-            rc=$OCF_ERR_GENERIC
+            super_ocf_log err "ACT: SAP HANA: System $SID-$InstanceName start failed: $output"
+            rc="$OCF_ERR_GENERIC"
         fi
     else
-        super_ocf_log err "ACT: SAPHANA Instance $SID-$InstanceName start failed: $output"
-        rc=$OCF_ERR_GENERIC
+        # TODO: PRIO1: Do we need to set a clone state here?
+        rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
