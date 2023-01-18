@@ -1922,12 +1922,13 @@ function saphana_start_primary()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
-    local lss sqlrc;
+    local lss="$1"
+    local sqlrc=0;
     local rc=0
     local lpa_dec=4
     local lpa_advice=""
     #
-    # we will be a master (PRIMARY) so checking, if the is anOTHER master
+    # we will be a PRIMARY so checking, if there is anOTHER primary
     #
     super_ocf_log debug "DBG: saphana_primary - check_for_primary reports HANA_STATE_PRIMARY"
     #
@@ -2040,7 +2041,7 @@ function saphana_start_primary()
                             super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $sr_name"
                             lpa_set_lpt  10 "$sr_name"
                             set_crm_master  0
-                            saphana_start_secondary
+                            saphana_start_secondary "$lss"
                             rc=$?
                             super_ocf_log debug "DBG: 004 * lpa_set_lpt 10 $sr_name"
                             lpa_set_lpt  10 "$sr_name"
@@ -2515,7 +2516,6 @@ function lpa_check_lpt_status() {
                 super_ocf_log debug "DBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta BUT AUTOMATED_REGISTER='false' ==> WAIT"
                 rc=2
             fi
-
         else
             super_ocf_log debug "DBG: LPA: Difference between LPTloc and LPTrem is less than delta ($delta) ==> WAIT"
             # TODO: PRIO3: ADD STALEMATE-HANDLING HERE; currently admin should set one of the lpa to 20
