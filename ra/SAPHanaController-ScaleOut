@@ -1917,6 +1917,7 @@ function saphana_validate() {
 #
 function saphana_start_primary()
 {
+    # TODO PRIO2: NG shorten this function to mae it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
     local lss="$1"
@@ -1931,8 +1932,12 @@ function saphana_start_primary()
     #
     lpa_init_lpt $HANA_STATE_PRIMARY
     lpa_check_lpt_status; lpa_dec=$?
+    # TODO PRIO2: scale-out was to get lss as param; scale-up was to query lss
     # we take first lss from the parameter $1
     # get_hana_landscape_status; lss=$?
+    # TODO PRIO2: NG reduce number of queries for role, sync, lss, srr
+    my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+    my_sync=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
     # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
     if [ $lss -eq 0 ]; then
        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
@@ -1946,12 +1951,46 @@ function saphana_start_primary()
     my_srr=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
     # saphana_start_primary - set SR attribute of primary to "PRIM"
     case "$lpa_dec" in
-        0) lpa_advice="start" ;;
-        1) lpa_advice="register" ;;
-        2) lpa_advice="wait" ;;
-        3) lpa_advice="wait" ;;
-        4) lpa_advice="fail" ;;
-        *) lpa_advice="fail" ;;
+        0) # LPA says start
+            lpa_advice="start"
+            # TODO PRIO1: NG scale-out only set lpa_advice, scale-up had additionally the following code
+            # TODO: PRIO1: We need to do a special handling for remote being a 234-Secondary in SR Status SOK
+            # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
+            #   then lpa_advice="wait"
+            remoteRole=$(get_hana_attribute "$remoteNode" "${ATTR_NAME_HANA_ROLES[@]}")
+            remoteSync=$(get_SRHOOK "$remSR_name" "$remoteNode")
+            super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
+            if ocf_is_true "${PreferSiteTakeover}"; then
+                remoteStatus="$remoteRole:$remoteSync"
+                case "$remoteStatus" in
+		    [234]:S:*:SOK | [234]:S:*:PRIM )
+		        lpa_advice="wait"
+                        # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
+                        super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
+                    ;;
+                    * )
+                        super_ocf_log info "DEC: saphana_primary - remoteStatus is: $remoteStatus"
+                        ;;
+                esac
+            else
+                super_ocf_log info "DEC: saphana_primary - PreferSiteTakeover set to false"
+            fi
+            ;;
+        1)  # LPA says register!
+            lpa_advice="register"
+            ;;
+        2)  # LPA says wait for older LPA to expire
+            lpa_advice="wait"
+            ;;
+        3)  # LPA says to wait for remote LPA to be reported/announced
+            lpa_advice="wait"
+            ;;
+        4)  # LPA says something is completely wrong - FAIL resource # TODO: PRIO1: RC3 for waiting remote side to report lss
+            lpa_advice="fail"
+            ;;
+        *)  # LPA failed with an unknown status - FAIL resource
+            lpa_advice="fail"
+            ;;
     esac
 
     my_sync=$(get_SRHOOK "$sr_name")
@@ -2977,6 +3016,8 @@ function saphana_monitor_primary()
                         case "$remoteSync" in
                             SOK | PRIM )
                                  super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
+                                 # TODO PRIO1: scale-out has: 'if is_the_master_nameserver', scale-up has 'if check_for_primary_master'
+                                 #if check_for_primary_master; then
                                  if is_the_master_nameserver; then
                                      super_ocf_log info "DEC: PreferSiteTakeover lpa_set_lpt 20 $sr_name"
                                      lpa_set_lpt 20 "$sr_name"
@@ -3042,7 +3083,9 @@ function saphana_monitor_primary()
                 lpa_set_lpt $LPTloc "$sr_name"
                 lpa_push_lpt $LPTloc
                 if [ "$promoted" -eq 1 ]; then
+                    # TODO PRIO1: NG check which attribute to be set
                     set_hana_attribute "X" "$sr_name" "${ATTR_NAME_HANA_PRIM[@]}"
+                    set_hana_attribute "$NODENAME" "PRIM" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
                     rc=$OCF_RUNNING_MASTER
                 else
                     if [ "$init_attribute" -eq 1 ]; then
