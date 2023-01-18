@@ -1787,6 +1787,7 @@ function saphana_start() {
 function saphana_stopSystem() {
     local rc=0 rcWfS=0
     local stopMode="StopSystem"
+    # TODO PRIO1: NG should scale-up ALWAYS use stop mode "Stop" and never "StopSystem" ?
     if [ $# -eq 1 ]; then
         stopMode="$1"
     fi
@@ -1855,32 +1856,29 @@ function saphana_stopSystem() {
 #
 function saphana_stop() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local output=""
     local rc=0
-    check_sapstartsrv; rc=$?
-    if [ $rc -eq $OCF_SUCCESS ]; then
-    output=$($SAPCONTROL -nr $InstanceNr -function Stop)
-    rc=$?
-    super_ocf_log info "ACT: Stopping SAP Instance $SID-$InstanceName: $output"
-  fi
-  if [ $rc -eq 0 ]
-  then
-    HANA_ACTION_TIMEOUT=$(get_action_timeout)
-    output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped $HANA_ACTION_TIMEOUT 1)
-    if [ $? -eq 0 ]
-    then
-      super_ocf_log info "ACT: SAP Instance $SID-$InstanceName stopped: $output"
-      rc=$OCF_SUCCESS
+    local output=""
+    super_ocf_log info "ACT: saphana_stop"
+    if is_the_master_nameserver; then
+	    super_ocf_log info "ACT: saphana_stop: is_the_master_nameserver"
+        # Stop the entire SAP HANA site (StopSystem)
+        saphana_stopSystem; rc=$?
+    elif is_active_nameserver_slave && [ -z "$the_master" ]; then
+	    super_ocf_log info "ACT: saphana_stop: is_active_nameserver_slave and no master nameserver is available"
+        # Stop the entire SAP HANA site (StopSystem)
+        saphana_stopSystem; rc=$?
+    elif is_lost_nameserver_slave && [ -z "$the_master" ]; then
+	    super_ocf_log info "ACT: saphana_stop: is_lost_nameserver_slave and no master nameserver is available"
+        # Stop ONLY the local SAP HANA instance to avoid an isolated SAP HANA nameserver slave does shutdown the entire site
+        saphana_stopSystem Stop rc=$?
     else
-      super_ocf_log err "ACT: SAP Instance $SID-$InstanceName stop failed: $output"
-      rc=$OCF_ERR_GENERIC
+	    is_active_nameserver_slave; is_slave_rc=$?
+	    super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($the_master) NOR is_lost_nameserver_slave"
+        # TODO: PRIO1: Do we need to set a clone state here?
+        rc=$OCF_SUCCESS
     fi
-  else
-    super_ocf_log err "ACT: SAP Instance $SID-$InstanceName stop failed: $output"
-    rc=$OCF_ERR_GENERIC
-  fi
-  super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-  return $rc
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return $rc
 }
 
 #
@@ -1914,7 +1912,7 @@ function saphana_validate() {
 
 #
 # function: saphana_start_primary - handle startup of PRIMARY in M/S
-# params:
+# params: current_landsscape_status
 # globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
 #
 function saphana_start_primary()
