@@ -438,9 +438,9 @@ function is_clone() {
        # yes it is a clone config - check, if its configured well
        #
        # TODO PRIO1: scale-up was also checking '[ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ]'
-        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] || \
-            [ "$OCF_RESKEY_CRM_meta_master_node_max" -ne 1 ] || \
-            [ "$OCF_RESKEY_CRM_meta_master_max" -ne 1 ]; then
+        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" != 1 ] || \
+            [ "$OCF_RESKEY_CRM_meta_master_node_max" !=-ne 1 ] || \
+            [ "$OCF_RESKEY_CRM_meta_master_max" != 1 ]; then
                 # scale-up was: super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
                 super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1,master_node_max=1,master_max=1)"
                 # TODO PRIO1: check which is the correct return code (scale-up was: OCF_ERR_CONFIGURED)
@@ -1013,7 +1013,7 @@ function saphana_init_handle_update()
                 fi
             fi
         done
-        if [ "$nrOfNodes" -eq "$updNodes" ]; then
+        if [ "$nrOfNodes" == "$updNodes" ]; then
             updState="ok"
         else
             oldNodes=$(("$nrOfNodes" - "$updNodes"))
@@ -1561,7 +1561,7 @@ function analyze_hana_sync_statusSRS()
           super_ocf_log info "FLOW ${FUNCNAME[0]} SOK"
           set_hana_attribute "$remoteNode" "SOK" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
           super_ocf_log info "ACT site=$sr_name, setting SOK for secondary (1)"
-          lpa_set_lpt 30 "$remoteNode"
+          lpa_set_lpt 31 "$remSR_name"
           rc=0;
        else
           # FULL_SR_STATUS does not contain "ACTIVE", so set secondary to SFAIL
@@ -1792,14 +1792,14 @@ function saphana_stopSystem() {
         stopMode="$1"
     fi
     check_sapstartsrv; rc="$?"
-    if [ "$rc" -eq "$OCF_SUCCESS" ]; then
+    if [ "$rc" == "$OCF_SUCCESS" ]; then
         ## TODO: PRIO 1: Only stop System, if I am the last master!
         ## TODO: PRIO 2: Do we need a "last-man-switch-off-the-light" detection?
         output=$($SAPCONTROL -nr "$InstanceNr" -function "$stopMode")
         rc=$?
          super_ocf_log info "ACT: SAP HANA STOP: Stopping System $SID-$InstanceName: $output"
     fi
-    if [ "$rc" -eq 0 ]; then
+    if [ "$rc" == 0 ]; then
         HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStopped)
         output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped $HANA_ACTION_TIMEOUT 1); rcWfS="$?"
         while true; do
@@ -1818,7 +1818,7 @@ function saphana_stopSystem() {
                     END { printf "%s:%s\n", hostActive, partials;  } ' vName=$vName )
             hanaHostActive="${hAPart%:*}"
             partials="${hAPart#*:}"
-            if [ "$partials" -eq 0 ]; then
+            if [ "$partials" == 0 ]; then
                 # terminate wait-for-all-nodes-down if no partial nodes are left any more
                 break;
             else
@@ -1834,7 +1834,7 @@ function saphana_stopSystem() {
             fi
         done
 	    # DONE PRIO1: RC restore!!
-        if [ "$rcWfS" -eq 0 ]; then
+        if [ "$rcWfS" == 0 ]; then
             super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName stopped: $output"
             rc="$OCF_SUCCESS"
         else
@@ -2140,7 +2140,7 @@ wait_for_primary_master()
     #
     # hana_ndb_roles=primary:master1:master:worker:master
     #
-    while [ "$wait" -eq 1 ]; do
+    while [ "$wait" == 1 ]; do
         if check_for_primary_master; then
            wait=0
            rc=0
@@ -2378,7 +2378,7 @@ function lpa_push_lpt() {
     mkdir -p "$LPA_DIRECTORY"
     echo "$lpt" > $lpa_file
     clpt=$(lpa_pull_lpt); lpt_rc=$?
-    if [ "$clpt" != "$lpt" -o "$lpt_rc" -ne 0 ]; then
+    if [ "$clpt" != "$lpt" -o "$lpt_rc" != 0 ]; then
         rc=2
     else
         rc=0
@@ -2409,11 +2409,11 @@ function lpa_init_lpt() {
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
     mkdir -p $LPA_DIRECTORY
     LPTloc=$(lpa_get_lpt "${sr_name}") || LPTloc=$(lpa_pull_lpt) || \
-        if   [ "$hana_state" -eq "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
+        if   [ "$hana_state" == "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
             # init primary
             LPTloc=20
             lpa_push_lpt "20"; rc=$?
-        elif [ "$hana_state" -eq "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
+        elif [ "$hana_state" == "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
             # init secondary
             LPTloc=10
             lpa_push_lpt "10"; rc=$?
@@ -2472,11 +2472,11 @@ function lpa_check_lpt_status() {
     # First GET LPT from ATTR-FILE-DEFAULT
     #
     LPTloc=$(lpa_get_lpt "$sr_name"); lparc=$?   # ATTR
-    if [ "$lparc" -ne 0 ]; then
+    if [ "$lparc" != 0 ]; then
         # as a fallback try to fetch the value from external status file
         LPTloc=$(lpa_pull_lpt);                 # FILE
         lparc=$?
-        if [ -z "$LPTloc" -o "$LPTloc" -eq -1 -o "$lparc" -ne 0 ]; then
+        if [ -z "$LPTloc" -o "$LPTloc" != -1 -o "$lparc" != 0 ]; then
             # last option - try to initialize as PRIMARY
             lpa_push_lpt 20
             lpa_set_lpt  20 "$sr_name"
@@ -2837,7 +2837,7 @@ function saphana_stop_clone() {
     set_hana_attribute "${NODENAME}" "UNDEFINED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     super_ocf_log debug "DBG: SET UNDEFINED"
     check_for_primary; primary_status="$?"
-    if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
+    if [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
         super_ocf_log debug "DBG: 008 * lpa_set_lpt 10 $sr_name"
         lpa_set_lpt  10 "$sr_name"
     fi
@@ -2997,7 +2997,7 @@ function saphana_monitor_primary()
                 #
                 rc=$OCF_NOT_RUNNING
             else
-                if [ "$promoted" -eq 1 ]; then
+                if [ "$promoted" == 1 ]; then
                     # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
                     # DONE: PRIO2: Adjust with set_crm_master?
                     #       For Migration it would be good to decrease master score
@@ -3075,7 +3075,7 @@ function saphana_monitor_primary()
             my_sync=$(get_SRHOOK "$remSR_name")
             my_hana_role="${my_lss}:${my_srr}:${my_role}"
             if ocf_is_probe; then
-                if [ "$promoted" -eq 1 ]; then
+                if [ "$promoted" == 1 ]; then
                     rc=$OCF_RUNNING_MASTER
                 else
                     rc=$OCF_SUCCESS
@@ -3086,13 +3086,13 @@ function saphana_monitor_primary()
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc "$sr_name"
                 lpa_push_lpt $LPTloc
-                if [ "$promoted" -eq 1 ]; then
+                if [ "$promoted" == 1 ]; then
                     # TODO PRIO1: NG check which attribute to be set
                     set_hana_attribute "X" "$sr_name" "${ATTR_NAME_HANA_PRIM[@]}"
                     set_hana_attribute "$NODENAME" "PRIM" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
                     rc=$OCF_RUNNING_MASTER
                 else
-                    if [ "$init_attribute" -eq 1 ]; then
+                    if [ "$init_attribute" == 1 ]; then
                         set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                         rc=$OCF_RUNNING_MASTER
                     else
@@ -3185,7 +3185,7 @@ function saphana_monitor_primary()
             if ocf_is_probe; then
                 rc=$OCF_NOT_RUNNING
             else
-                if [ "$promoted" -eq 1 ]; then
+                if [ "$promoted" == 1 ]; then
                      rc=$OCF_FAILED_MASTER
                 else
                      rc=$OCF_NOT_RUNNING
@@ -3297,13 +3297,13 @@ function saphana_monitor_secondary()
         2 | 3 | 4 ) # WARN INFO OK
             rc=$OCF_SUCCESS
             # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
-            if [ "$promoted" -eq 1 ]; then
+            if [ "$promoted" == 1 ]; then
                 # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
                 rc=$OCF_RUNNING_MASTER
             else
                 rc=$OCF_SUCCESS
             fi
-            lpa_set_lpt  30 "$NODENAME"
+            lpa_set_lpt  30 "$sr_name"
             sync_attr=$(get_SRHOOK "$sr_name")
             local hanaOM=""
             local hanaOut1=""

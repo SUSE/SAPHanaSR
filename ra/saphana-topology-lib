@@ -306,7 +306,7 @@ function is_clone() {
        #
        # yes it is a clone config - check, if its configured well
        #
-        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" -ne 1 ] ; then
+        if [ "$OCF_RESKEY_CRM_meta_clone_node_max" != 1 ] ; then
                 super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1)"
                 exit $OCF_ERR_CONFIGURED
         fi
@@ -443,7 +443,6 @@ function sht_init() {
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG: OCF: $ocf_env"
     # TODO PRIO1: check which atributes to keep and which attributes to delete
-    ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
     ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
@@ -470,6 +469,7 @@ function sht_init() {
     #
     # TODO PRIO1: check which attributes to keep and which attributes to move from other spaces to site specific
     # TODO PRIO2: rename LPA_ATTR tomatch better into the naming scheme
+    ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_sync_state" "props")  # SOK, SFAIL, UNKNOWN?
     LPA_ATTR=("hana_${sid}_site_lpt" "props")
     ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_site_sec_sync_state" "props")   # SOK, SFAIL
     ATTR_NAME_HANA_LSS=("hana_${sid}_site_lss" "props")
@@ -1054,7 +1054,7 @@ function sht_stop_clone() {
         set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     sht_stop; rc=$? # till now it returns everytime $OCF_SUCCESS
-    if [ "$tout" -eq 1 ]; then
+    if [ "$tout" == 1 ]; then
         # timeout of landscapeHostConfiguration.py - let stop fail
         rc=$OCF_ERR_GENERIC
     fi
@@ -1148,7 +1148,7 @@ function sht_monitor_clone() {
     setRole=true
     hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
     # landscape timeout - retry command
-    if [ "$hanalrc" -eq 124 ]; then
+    if [ "$hanalrc" == 124 ]; then
         # TODO PRIO1: scale-up used '-ge 124', scale-out used '-eq 124' - check what is correct
         super_ocf_log warn "RA: HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
         hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
@@ -1188,7 +1188,9 @@ function sht_monitor_clone() {
     # TODO PRIO2: COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
     # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
     super_ocf_log info "DEC: site=$site; hanalrc=$hanalrc"
+    echo "### HERE 01 ###"
     if [ -n "$site" -a "$hanalrc" != "124" ]; then
+        echo "### HERE 02 ###"
         ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$site"
         set_hana_attribute "X" "$hanalrc" "${ATTR[@]}"
         super_ocf_log info "DEC: set_hana_attribute X $hanalrc ${ATTR[0]}"
@@ -1197,6 +1199,7 @@ function sht_monitor_clone() {
         set_hana_attribute ${NODENAME} "$site" "${ATTR_NAME_HANA_SITE[@]}"
         super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $site ${ATTR_NAME_HANA_SITE[0]}"
     fi
+    echo "### HERE 03 ###"
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status
