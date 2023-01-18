@@ -768,7 +768,7 @@ function get_SRHOOK_plain()
 # function get_SRHOOK
 # fetches site specific Hook SR status or (as fallback) the polling-attribute
 # params: site-name site-host
-# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SITE_SYNC_STATUS[@](r)
 # locals:  my_sync, get_sr_name
 #
 function get_SRHOOK()
@@ -782,8 +782,7 @@ function get_SRHOOK()
     #
     if [ -z "$my_sync" ] || [ "$my_sync" = "SWAIT" ]; then
         super_ocf_log info "RA: hook attribute is empty or 'SWAIT': SRHOOK=$my_sync"
-        # TODO PRIO1: move old polling attributes to ATTR_NAME_HANA_SITE_SYNC_STATUS
-        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+        my_sync=$(get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
         super_ocf_log info "RA: fallback to polling attribute SRHOOK=$my_sync"
     fi
     # still unable to determine any SR attribute, so be pessimistic
@@ -917,7 +916,6 @@ saphana_init_attribute_definitions()
 {
     # TODO PRIO1: NG check, which attributes can be dropped (like ATTR_NAME_HANA_REMOTEHOST?)
     # TODO PRIO1: NG sort attributes to node, site, global area
-    #ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
     #ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at"   "reboot") # Not used so far
     # attributes used to control the update from single-target replication
     # to mutli-target replication.
@@ -952,7 +950,6 @@ saphana_init_attribute_definitions()
     #
     ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
-    ATTR_NAME_HANA_SEC_SYNC_STATUS=("hana_${sid}_glob_sync_state" "props")       # SOK, SFAIL
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
     # TODO PRIO1: NG ATTR_NAME_HANA_SRMODE2 to be moved to site specific
     ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
@@ -976,6 +973,7 @@ saphana_init_attribute_definitions()
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
     ATTR_NAME_HANA_SITE_MNS=("hana_${sid}_site_mns" "props")
+    ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_syncState" "props")       # polling attribute SOK, SFAIL
 }
 
 function saphana_init_handle_update()
@@ -1559,17 +1557,17 @@ function analyze_hana_sync_statusSRS()
        # Fix for a HANA BUG, where a non-working SR resulted in RC 15:
        if grep -q "ACTIVE" <<< "$FULL_SR_STATUS"; then
           super_ocf_log info "FLOW ${FUNCNAME[0]} SOK"
-          set_hana_attribute "$remoteNode" "SOK" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-          super_ocf_log info "ACT site=$sr_name, setting SOK for secondary (1)"
+          set_hana_site_attribute "$remSR_name" "SOK" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
+          super_ocf_log info "ACT site $sr_name, setting SOK for secondary on site $remSR_name"
           lpa_set_lpt 31 "$remSR_name"
           rc=0;
        else
           # FULL_SR_STATUS does not contain "ACTIVE", so set secondary to SFAIL
           super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
-          set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-          super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (6) - srRc=$srRc lss=$lss No ACTIVES found in cmd output"
+          set_hana_site_attribute "$remSR_name" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
+          super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary on site $remSR_name - srRc=$srRc lss=$lss No ACTIVES found in cmd output"
           # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
-          lpa_set_lpt 10 "$remoteNode"
+          lpa_set_lpt 10 "$remSR_name"
        fi
     elif [ $srRc -le 11 ]; then # 11 and 10
        # if systemReplicationStatus is ERROR and landscapeHostConfiguration is down then do NOT set SFAIL
@@ -1581,9 +1579,9 @@ function analyze_hana_sync_statusSRS()
           # ok we should be careful and set secondary to SFAIL
           super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
           # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
-          # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+          # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
           # super_ocf_log info "ACT site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
-          set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+          set_hana_site_attribute "$remSR_name" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
           super_ocf_log debug "DBG: site=$sr_name, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
           # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
           # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
@@ -1596,8 +1594,8 @@ function analyze_hana_sync_statusSRS()
         super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
         # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
         # TODO PRIO1: NG for scale-out this attribute should move to site attributes (not global)
-        # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
-        set_hana_attribute "X" "SFAIL" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+        # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
+        set_hana_site_attribute "$remSR_name" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
         super_ocf_log info "ACT: site=$sr_name, setting SFAIL for secondary (2) - srRc=$srRc"
         # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
         # TODO PRIO1: NG need to decide, if scale-up should set site attributes now
@@ -1937,7 +1935,7 @@ function saphana_start_primary()
     # get_hana_landscape_status; lss=$?
     # TODO PRIO2: NG reduce number of queries for role, sync, lss, srr
     my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-    my_sync=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
+    my_sync=$(get_hana_site_attribute "${sr_name}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
     # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
     if [ $lss -eq 0 ]; then
        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
@@ -2195,7 +2193,7 @@ function saphana_start_secondary()
     #
     super_ocf_log debug "DBG: wait for promoted side"
     # TODO: PRIO3: Check if setting SFAIL during secondary start is ok
-    set_hana_site_attribute "$sr_name" "SFAIL" "${ATTR_NAME_HANA_SYNC_SYNC_STATUS[@]}"
+    set_hana_site_attribute "$sr_name" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
     # TODO PRIO2: NG check, if we keep attribute ATTR_NAME_HANA_SEC
     set_hana_attribute "${NODENAME}" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
     if wait_for_primary_master 10; then
@@ -3089,7 +3087,7 @@ function saphana_monitor_primary()
                 if [ "$promoted" == 1 ]; then
                     # TODO PRIO1: NG check which attribute to be set
                     set_hana_attribute "X" "$sr_name" "${ATTR_NAME_HANA_PRIM[@]}"
-                    set_hana_attribute "$NODENAME" "PRIM" "${ATTR_NAME_HANA_SYNC_STATUS[@]}"
+                    set_hana_site_attribute "$sr_name" "PRIM" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
                     rc=$OCF_RUNNING_MASTER
                 else
                     if [ "$init_attribute" == 1 ]; then
@@ -3131,7 +3129,7 @@ function saphana_monitor_primary()
                                     # TODO: PRIO 2: How to handle this attribute for srHOOK with NEVER?
                                     # Currently it is NOT allowed to implement the srHook together with the (unsupported) preferSitetakeover 'never'
                                     # DONE: PRIO0: Check, if we need also to set the HOOK value or not??
-                                    set_hana_attribute "X" "SNA" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}"
+                                    set_hana_site_attribute "$remSR_name" "SNA" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
                                     set_SRHOOK "$remSR_name" "SNA"
                                     ;;
                                 * )
@@ -3145,9 +3143,9 @@ function saphana_monitor_primary()
                                         # if we still did not got a hook time since the cluster start-up maybe the
                                         # HANA was already in (stable) sync, so the HANA Hook would never been called till
                                         # a new event comes up. This is why we transfer the 'polled' attribute to the Hook attribute.
-                                        my_sync=$(get_hana_attribute "X" "${ATTR_NAME_HANA_SEC_SYNC_STATUS[@]}")
+                                        my_sync=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
                                         set_SRHOOK "$remSR_name" "$my_sync"
-                                        super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SEC_SYNC_STATUS[0]} ($my_sync)"
+                                        super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SITE_SYNC_STATUS[0]} ($my_sync)"
                                     fi
                                     ;;
                             esac
@@ -3350,7 +3348,7 @@ function saphana_monitor_secondary()
                 * ) # Unknown sync status
                     super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
                     my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-                    my_sync=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
+                    my_sync=$(get_hana_site_attribute "${sr_name}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
                     super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($my_role,$my_sync)"
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
