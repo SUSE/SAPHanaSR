@@ -2105,33 +2105,22 @@ function saphana_start_primary()
 # check_for_primary_master
 # checks for a "remote" primary master
 # params: -
-# globals: ATTR_NAME_HANA_ROLES[@], NODENAME
+# globals: ATTR_NAME_HANA_SITE_SRR(r), ATTR_NAME_HANA_SITE_LSS(r), remSR_name(r)
+# rc: 0 for available primary (lss is 3 or 4); 1 otherwise
 #
 check_for_primary_master()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=1
-    local ch ch_role
     #
-    # get actual list of cluster members
+    # get landscape-status and sr-role from "remote" site
     #
-    if [ -n "$otherNodes" ]; then
-        for ch in ${otherNodes[@]}; do
-            if [ $rc -eq 1 ]; then
-                ch_role=$(get_hana_attribute "${ch}" "${ATTR_NAME_HANA_ROLES[@]}")
-                # TODO: PRIO3: check if [0-9], [234] or [34] is correct
-                # TODO: PRIO4: Do we need different checks like "any-primary-master" or "running-primary-master" ?
-                #                grep '[0-9]*:P:[^:]*:master:' <<< $ch_role && rc=0
-                #                grep '[34]:P:[^:]*:master:' <<< $ch_role && rc=0
-                #               Match "Running+Available Primary" Master -> Match field 1: 3/4, 2: P, 4: master
-                super_ocf_log debug "DBG: check_for_primary_master (3) ch_role=$ch_role"
-                awk -F: 'BEGIN { rc=1 }
-                         $1 ~ "[34]" && $2 == "P" && $4 == "master" { rc=0 }
-                         END { exit rc }' <<< $ch_role  ; rc=$?
-                super_ocf_log debug "DBG: check_for_primary_master (4) rc=$rc"
-            fi
-        done
-    fi
+    rem_lss=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+    rem_srr=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+    case "$rem_lss:$rem_srr" in
+        3:P | 4:P ) rc=0;;
+        * ) rc=1;;
+    esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
 }
