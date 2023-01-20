@@ -1229,18 +1229,16 @@ function sht_monitor_clone() {
     # TODO PRIO2: COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
     # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
     super_ocf_log info "DEC: site=$site; hanalrc=$hanalrc"
-    echo "### HERE 01 ###"
     if [ -n "$site" -a "$hanalrc" != "124" ]; then
-        echo "### HERE 02 ###"
-        ATTR=(${ATTR_NAME_HANA_LSS[@]}); ATTR[0]="${ATTR[0]}_$site"
-        set_hana_attribute "X" "$hanalrc" "${ATTR[@]}"
-        super_ocf_log info "DEC: set_hana_attribute X $hanalrc ${ATTR[0]}"
-        ATTR=(${ATTR_NAME_HANA_SRR[@]}); ATTR[0]="${ATTR[0]}_$site"
-        set_hana_attribute "X" "$hanaPrim" "${ATTR[@]}"
+        #
+        # set LSS and SRR of the local site and site of the local node
+        #
+        set_hana_site_attribute "$site" "$hanalrc" "${ATTR_NAME_HANA_LSS[@]}"
+        super_ocf_log info "DEC: set_hana_site_attribute $site $hanalrc ${ATTR_NAME_HANA_LSS[@]}"
+        set_hana_site_attribute "$site" "$hanaPrim" "${ATTR_NAME_HANA_SRR[@]}"
         set_hana_attribute ${NODENAME} "$site" "${ATTR_NAME_HANA_SITE[@]}"
         super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $site ${ATTR_NAME_HANA_SITE[0]}"
     fi
-    echo "### HERE 03 ###"
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status
