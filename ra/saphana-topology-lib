@@ -24,7 +24,7 @@
 #
 #######################################################################
 # DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
-saphana_topology_lib_version="1.001.1"
+saphana_topology_lib_version="1.001.2"
 #
 # Initialization:
 
@@ -464,6 +464,7 @@ function sht_init() {
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
     ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
+    ATTR_NAME_HANA_TOPOLOGY=("hana_${sid}_glob_topology" "props" "")   # ScaleUp ScaleOut
     #
     # SITE based attributes
     #
@@ -1167,7 +1168,7 @@ function sht_monitor_clone() {
     #
     # scan with and without host prefix to allow also single instances (scaleup) for smaller test environments
     #
-    hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+    hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
             awk -F= '
             $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
             $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
@@ -1184,6 +1185,17 @@ function sht_monitor_clone() {
         # scale-up: set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
         set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
+    #
+    # differ between ScaleUp and ScaleOut
+    # TODO PRIO2: NG Only to be done on one instance per site; or even only on the primary mns?
+    #
+    hanaScaleOutScaleUp=$(echo "${hanaANSWER//[[:blank:]]/}" | \
+                            awk -F= '
+                            $1 == "host/"vName"/nameServerConfigRole"  {SoSu="ScaleOut"}
+                            $1 == "nameServerConfigRole"  {SoSu="ScaleUp"}
+                            END { printf "%s\n", SoSu;  } ' vName=$vName )
+    # TODO PRIO2: should 'ScaleOutScaleUp' be a global or a site specific attribute?
+    set_hana_attribute "global" "$hanaScaleOutScaleUp" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
     # TODO PRIO1: set nodes site attribute and for the site the attributes LSS, SRR
     # TODO PRIO2: COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
     # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
