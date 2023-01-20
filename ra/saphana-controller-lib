@@ -36,7 +36,8 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaControllerVersion="1.001.1"
+# TODO PRIO1: NG check which commands before defining the functions needs to be done in the lib and which commands should be done in the RA
+SAPHanaControllerLibVersion="1.001.2"
 # Resource Agent Generation
 RAG="2.0"
 #
@@ -1739,8 +1740,10 @@ function saphana_start() {
                 for i in 1 2 3 4; do
                     super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName started: $output"
                     # TODO PRIO2: query lss to be moved into a function
+                    # TODO PRIO1: parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
+                    # TODO PRIO2: reduce number of landscapeHostConfiguration.py calls in the code and create a function for that (including SAPCONTROL-OK: validation)
                     hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
-                    hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
+                    hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
                             awk -F= '
                             $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
                             $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
@@ -1751,7 +1754,8 @@ function saphana_start() {
                             $1 == "indexServerConfigRole" {isCR=$2}
                             $1 == "indexServerActualRole" {isAR=$2}
                             END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName=$vName )
-                    hanaHostActive=$(echo "$hanaANSWER" | tr -d ' ' | \
+                    # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
+                    hanaHostActive=$(echo "${hanaANSWER//[[:blank:]]/}" | \
                     awk -F= '
                                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
                                 END { printf "%s\n", hostActive;  } ' vName=$vName )
@@ -1815,6 +1819,7 @@ function saphana_stopSystem() {
                BEGIN { partials=0 }
                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive "-" $2; if ( $2 == "partial" ) { partials=1 } }
                     END { printf "%s:%s\n", hostActive, partials;  } ' vName=$vName )
+            # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
             hanaHostActive="${hAPart%:*}"
             partials="${hAPart#*:}"
             if [ "$partials" == 0 ]; then
