@@ -1711,6 +1711,7 @@ function saphana_start() {
     local output=""
     local loopcount=0
     local lastSrHook
+    local lssRc
     # TODO PRIO2: check_sapstartsrv to be moved into "if is_the_master_nameserver..." ?
     check_sapstartsrv; rc=$?
     #
@@ -1738,7 +1739,7 @@ function saphana_start() {
                 for i in 1 2 3 4; do
                     super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName started: $output"
                     # TODO PRIO2: query lss to be moved into a function
-                    hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+                    hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
                     hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
                             awk -F= '
                             $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
@@ -1758,7 +1759,7 @@ function saphana_start() {
                     #
                     # set LSS local-site attribute
                     #
-                    set_hana_site_attribute "$sr_name" "${NODENAME}" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+                    set_hana_site_attribute "$sr_name" "${lssRc}" "${ATTR_NAME_HANA_SITE_LSS[@]}"
                     sleep 5
                 done
                 rc="$OCF_SUCCESS"
