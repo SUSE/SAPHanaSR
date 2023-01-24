@@ -516,12 +516,12 @@ function sht_init() {
     fi
 
     if [ -z "$DIR_EXECUTABLE" ]; then
-        # TODO PRUI XX: For infra stability - is OCF_NOT_RUNNING or OCF_ERR_CONFIGURED the better option?
-        # How does OCF_ERR_CONFIFURED affect the other clone instances?
-        # scale-out: rc is/was OCF_NOT_RUNNING; scale-up: rc is/was OCF_ERR_CONFIGURED
-        # select OCF_NOT_RUNNING for now
+        # OCF_ERR_CONFIGURED is recovery-type 'fatal' which would prevent the resource to run anywhere
+        # OCF_NOT_RUNNING is recovery-type N/A
+        # OCF_ERR_GENERIC is recovery-type 'soft' during a start action would set inf failcount and prevents local restart
+        # best option gere is OCF_ERR_GENERIC
         super_ocf_log err "DEC: Can not determine DIR_EXECUTABLE. Please set this parameter. -> OCF_NOT_RUNNING"
-        rc=$OCF_NOT_RUNNING
+        rc="$OCF_ERR_GENERIC"
     fi
 
     if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
@@ -604,68 +604,58 @@ function sht_init() {
             srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
         fi
     fi
-    # now get the host mapping of the SR
+    #
+    # now get the host mapping of the SR and detect the hostname the local node is mapped to (aka remoteHost) - for multi-target this could be more than just one ?
+    # TODO PRIO2: 
+    #
     hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
-    # TODO PRIO1: which version is better? could we use the same code for scale-up and scale-out?
-    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
-    # scale-out: MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
-    # scale-up:  MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
-    super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
+    srRemoteHosts=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
+    # TODO PRIO2: super_ocf_log: re-classify the log classes (here new class 'INFO?'
+    super_ocf_log debug "INFO: site=$site, mode=$srmode, srRemoteHosts=$srRemoteHosts"
     #
     # TODO PRIO1: Which code is the better scale-up or scale-out ?
     #
     ########### BEGIN SCALE OUT CODE
-    #
-    # filter all non-cluster mappings
-    #
-    # TODO PRIO2: as we might not need remoteHost (per node) any longer, could we completely drop the scanning of the output?
-    #             which parts could be omitted?
-    #hanaRemoteHost=$MAPPING
-    super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING"
-    #super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
-    #super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
-    #super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
-    ########### END SCALE OUT CODE
-    #
-    ########### BEGIN SCALE OUT CODE
-    if [ -n "$MAPPING" ]; then
-        # we have a mapping from HANA, lets use it
+    if [ -n "$srRemoteHosts" ]; then
         #
-        # filter all non-cluster mappings
+        # get remoteHost using the HANA mapping result
+        # filter all non-cluster mappings (for multi-target outside the cluster)
         #
         local hanaVHost=""
         local n1=""
         hanaRemoteHost=""
         for n1 in $nodelist; do
               hanaVHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
-              for n2 in $MAPPING; do
+              for n2 in $srRemoteHosts; do
                  if [ "$hanaVHost" == "$n2" ]; then
                     hanaRemoteHost="$hanaVHost"
                  fi;
               done;
         done
         super_ocf_log info "DEC: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
-        super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING, hanaRemoteHost=$hanaRemoteHost"
     else
-        # HANA DID NOT TOLD THE MAPPING, LETS TRY TO USE THE SITE ATTRIBUTES
+        #
+        # try to use site attributes to identify the remoteHost - hana mapping result was not helpful at the moment
+        # TODO PRIO1: NG this code part (non mapping) is currently broken it needs to filter on clustered sites names
+        #             but currently it only filters on "any site" and "not myself"
+        #
         local n1=""
         local hanaSite=""
         for n1 in $nodelist; do
-            # TODO: PRIO9 - For multi tier with more than 2 chain/star members IN the cluster we might need to be
-            #       able to catch more than one remoteHost
-            #       currently having more than 2 HANA in a chain/star members IN the cluster is not allowed, the third must be external
+            # TODO PRIO1: NG - multi target - For multi tier with more than 2 chain/star members IN the cluster we might need to be
+            #       able to catch more than one remoteHost currently having more than 2 HANA in a chain/star members IN the cluster is not allowed, the third must be external
             if [ "$NODENAME" != "$n1" ]; then
-                hanaSite=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_SITE[@]})
+                hanaSite=$(get_hana_attribute "${n1}" "${ATTR_NAME_HANA_SITE[@]}")
                 #
                 # only, if a hanaSite is found use that node - this allows majority makers
                 #
                 if [ -n "$hanaSite" ]; then
-                    hanaRemoteHost=$(get_hana_attribute ${n1} ${ATTR_NAME_HANA_VHOST[@]})
+                    hanaRemoteHost=$(get_hana_attribute "${n1}" "${ATTR_NAME_HANA_VHOST[@]}")
                     #
                     # only if vhost is NOT set use the nodename instead
                     #
                     if [ -z "$hanaRemoteHost" ]; then
-                   hanaRemoteHost="$n1"
+                        hanaRemoteHost="$n1"
                     fi
                 fi
             fi
@@ -1161,25 +1151,19 @@ function sht_monitor_clone() {
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
     fi
     if [ -n "$vName" ]; then
-       # TODO PRIO1: ceck which version to be used (scale-up, scale-out)
-       # scale-out: set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
-       # scale-up:  set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}"
-       set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
+       set_hana_attribute "${NODENAME}" "$vName" "${ATTR_NAME_HANA_VHOST[@]}"
     else
-       # TODO PRIO1: ceck which version to be used (scale-up, scale-out)
-       # scale-out: vName=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
-       # scale-up:  vName=$(get_hana_attribute ${NODENAME} ${ATTR_NAME_HANA_VHOST[@]})
-       vName=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
+       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
     fi
     # last fallback, if neither the HANA call NOR the Attribute "knows" the vName - try the local hostname
     if [ -z "$vName" ]; then
-       vName=${NODENAME}
+       vName="${NODENAME}"
     fi
     setRole=true
     hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
     # landscape timeout - retry command
     if [ "$hanalrc" == 124 ]; then
-        # TODO PRIO1: scale-up used '-ge 124', scale-out used '-eq 124' - check what is correct
+        # TODO PRIO1: NG - code stability scale-up used '-ge 124', scale-out used '-eq 124' - check what is correct
         super_ocf_log warn "RA: HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
         hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
         # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
@@ -1208,22 +1192,20 @@ function sht_monitor_clone() {
             $1 == "indexServerConfigRole" {isCR=$2}
             $1 == "indexServerActualRole" {isAR=$2}
             END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName=$vName )
-    if $setRole; then
-        # TODO PRIO1: going to scale-out way to do it, if also ok for scale-up
-        # scale-out: set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
-        # scale-up: set_hana_attribute ${NODENAME} "$hanalrc:$hanaPrim:$hanarole" ${ATTR_NAME_HANA_ROLES[@]}
+    if "$setRole"; then
         set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     #
     # differ between ScaleUp and ScaleOut
-    # TODO PRIO2: NG Only to be done on one instance per site; or even only on the primary mns?
+    # TODO PRIO2: NG - Only to be done on one instance per site; or even only on the primary mns?
+    # TODO PRIO2: NG - check, if currently using global space is suffiecient - we do not need to differ that for sites, right?
+    # TODO PRIO2: NG - finalize the strings (attribute values) to be used. Currently we use "ScaleOut" and "ScaleUp"
     #
     hanaScaleOutScaleUp=$(echo "${hanaANSWER//[[:blank:]]/}" | \
                             awk -F= '
                             $1 == "host/"vName"/nameServerConfigRole"  {SoSu="ScaleOut"}
                             $1 == "nameServerConfigRole"  {SoSu="ScaleUp"}
                             END { printf "%s\n", SoSu;  } ' vName=$vName )
-    # TODO PRIO2: should 'ScaleOutScaleUp' be a global or a site specific attribute?
     set_hana_attribute "global" "$hanaScaleOutScaleUp" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
     # TODO PRIO1: set nodes site attribute and for the site the attributes LSS, SRR
     # TODO PRIO2: COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
