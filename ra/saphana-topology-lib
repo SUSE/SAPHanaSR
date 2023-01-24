@@ -33,7 +33,7 @@ saphana_topology_lib_version="1.001.2"
 
 
 #######################################################################
-# TODO PRIO1: check which variable inits to be moved into a function and which to be done in the RA
+# TODO PRIO1: NG - check which variable inits to be moved into a function and which to be done in the RA
 log_attributes=false
 if ocf_is_true "$log_attributes"; then
     log_attr_file="/var/log/fhATTRIBUTES"
@@ -471,7 +471,7 @@ function sht_init() {
     sidadm="${sid}adm"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG: OCF: $ocf_env"
-    # TODO PRIO1: check which atributes to keep and which attributes to delete
+    # TODO PRIO1: NG - check which atributes to keep and which attributes to delete
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
     ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
@@ -484,7 +484,7 @@ function sht_init() {
     #
     # new "central" attributes
     #
-    # TODO PRIO1: check which attributes will stay in the global area
+    # TODO PRIO1: NG - check which attributes will stay in the global area
     #
     ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
@@ -497,8 +497,8 @@ function sht_init() {
     #
     # SITE based attributes
     #
-    # TODO PRIO1: check which attributes to keep and which attributes to move from other spaces to site specific
-    # TODO PRIO2: rename LPA_ATTR tomatch better into the naming scheme
+    # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
+    # TODO PRIO2: NG - rename LPA_ATTR tomatch better into the naming scheme
     ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_sync_state" "props")  # SOK, SFAIL, UNKNOWN?
     LPA_ATTR=("hana_${sid}_site_lpt" "props")
     ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_site_sec_sync_state" "props")   # SOK, SFAIL
@@ -606,14 +606,14 @@ function sht_init() {
     fi
     #
     # now get the host mapping of the SR and detect the hostname the local node is mapped to (aka remoteHost) - for multi-target this could be more than just one ?
-    # TODO PRIO2: 
+    # TODO PRIO2: NG - do we still need the 'remoteHost' - is the remoteMNS sufficient instead?
     #
     hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
     srRemoteHosts=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $2 == myhost && $3 != site { print $4 }' site=$site myhost=$HOSTNAME)
-    # TODO PRIO2: super_ocf_log: re-classify the log classes (here new class 'INFO?'
+    # TODO PRIO2: NG - super_ocf_log: re-classify the log classes (here new class 'INFO?'
     super_ocf_log debug "INFO: site=$site, mode=$srmode, srRemoteHosts=$srRemoteHosts"
     #
-    # TODO PRIO1: Which code is the better scale-up or scale-out ?
+    # TODO PRIO1: NG - Which code is the better scale-up or scale-out ?
     #
     ########### BEGIN SCALE OUT CODE
     if [ -n "$srRemoteHosts" ]; then
@@ -636,7 +636,7 @@ function sht_init() {
     else
         #
         # try to use site attributes to identify the remoteHost - hana mapping result was not helpful at the moment
-        # TODO PRIO1: NG this code part (non mapping) is currently broken it needs to filter on clustered sites names
+        # TODO PRIO1: NG - this code part (non mapping) is currently broken it needs to filter on clustered sites names
         #             but currently it only filters on "any site" and "not myself"
         #
         local n1=""
@@ -676,7 +676,7 @@ function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     super_ocf_log debug "DBG: check_for_primary: srmode=$srmode"
-    # TODO PRIO1: scale-out did call the following code part 3 times and returns for primary, *sync* and none
+    # TODO PRIO1: NG - scale-out did call the following code part 3 times and returns for primary, *sync* and none
     #             need to check, if that really is/was helpful here - for now going the scale-up way and 
     #             check it only once. (repeat-loop for sr_stateConfiguration
     case "$srmode" in
@@ -687,12 +687,12 @@ function check_for_primary() {
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_SECONDARY"
               rc=$HANA_STATE_SECONDARY;;
        none ) # have seen that mode on second side BEFEORE we registered it as replica
-              # TODO: PRIO1: Should we set SFAIL?
+              # TODO: PRIO1: NG - Should we set SFAIL?
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_STANDALONE"
               rc=$HANA_STATE_STANDALONE;;
        * )
-          # TODO: PRIO3: Should we set SFAIL?
-          # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+          # TODO: PRIO3: NG - Should we set SFAIL?
+          # TODO: PRIO1: NG - Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
           dump=$( echo $srmode | hexdump -C );
           super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
           rc=$HANA_STATE_DEFECT
@@ -1047,19 +1047,19 @@ function sht_stop_clone() {
     fi
 
     hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
-    # TODO PRIO1: check, if this shoulf be '-ge 124' or '-eq 124'
+    # TODO PRIO1: NG - check, if this shoulf be '-ge 124' or '-eq 124'
     if [ "$hanalrc" -ge 124 ]; then
         # timeout of HANA_CALL, set role to '1:P:-:-:-:-'
         # scale-out was: timeout of HANA_CALL, set role to '$nNsConf:shtdown:shtdown:shtdown'
         # to get the saphana_demote_clone to fail and stop the resource
-        # TODO PRIO1: Use shell function instead of tr to separate the string
+        # TODO PRIO1: NG - Use shell function instead of tr to separate the string
         nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
         read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
         set_hana_attribute "${NODENAME}" "$nNsConf:-:-:-" "${ATTR_NAME_HANA_ROLES[@]}"
         # and exit with 1 to let the stop fail
         tout=1
     else
-        # TODO PRIO1: differ scale-up and scale-out by the output format
+        # TODO PRIO1: NG - differ scale-up and scale-out by the output format
         hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
             awk -F= '
             $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
@@ -1172,12 +1172,12 @@ function sht_monitor_clone() {
                 setRole=false
         fi
     fi
-    # TODO PRIO1: check, if we still need the attribute ATTR_NAME_HANA_REMOTEHOST to be set as we decide on site level
+    # TODO PRIO1: NG - check, if we still need the attribute ATTR_NAME_HANA_REMOTEHOST to be set as we decide on site level
     #    if [ -n "$hanaRemoteHost" ]; then
     #        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
     #    fi
-    # TODO: PRIO1: Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
-    # TODO: PRIO1: Could we differ between scale-up and scale-out by the line format (k=v vs host/h/k=v)
+    # TODO: PRIO1: NG - Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
+    # TODO: PRIO1: NG - Could we differ between scale-up and scale-out by the line format (k=v vs host/h/k=v)
     #
     # scan with and without host prefix to allow also single instances (scaleup) for smaller test environments
     #
@@ -1207,8 +1207,8 @@ function sht_monitor_clone() {
                             $1 == "nameServerConfigRole"  {SoSu="ScaleUp"}
                             END { printf "%s\n", SoSu;  } ' vName=$vName )
     set_hana_attribute "global" "$hanaScaleOutScaleUp" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
-    # TODO PRIO1: set nodes site attribute and for the site the attributes LSS, SRR
-    # TODO PRIO2: COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
+    # TODO PRIO1: NG - set nodes site attribute and for the site the attributes LSS, SRR
+    # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
     # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
     super_ocf_log info "DEC: site=$site; hanalrc=$hanalrc"
     if [ -n "$site" -a "$hanalrc" != "124" ]; then
@@ -1224,7 +1224,7 @@ function sht_monitor_clone() {
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status
-            # TODO PRIO1: check, if we set the right attribute here as srmode should be site-specific
+            # TODO PRIO1: NG - check, if we set the right attribute here as srmode should be site-specific
             set_hana_attribute "X" "$srmode" "${ATTR_NAME_HANA_SRMODE2[@]}"
             # from scale-up (set sr_mode for all cluster nodes but not for sites
             #case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
