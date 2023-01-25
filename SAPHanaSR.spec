@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2022 SUSE LLC.
+# Copyright (c) 2017-2023 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -16,18 +16,19 @@
 #
 # Please submit bugfixes or comments via http://bugs.opensuse.org/
 
+%define crmscr_path /usr/share/crmsh/scripts/
+
 Name:           SAPHanaSR
 License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.162.0
+Version:        0.162.1
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
 BuildArch:      noarch
-
-Source0:        %{name}-%{version}.tgz
+Source0:        %{name}-%{version}.tar.gz
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
@@ -35,8 +36,6 @@ Requires:       pacemaker > 1.1.1
 Requires:       resource-agents
 Requires:       perl
 
-# Require crmsh-scripts on SLES 12 SP1+ for the new HAWK wizards
-%if 0%{?sle_version} >= 120100
 Requires:       crmsh
 Requires:       crmsh-scripts >= 2.2.0
 Requires:       python3
@@ -44,7 +43,6 @@ Requires:       /usr/bin/xmllint
 BuildRequires:  resource-agents
 BuildRequires:  crmsh
 BuildRequires:  crmsh-scripts
-%endif
 
 %package doc
 Summary:        Setup Guide for SAPHanaSR
@@ -65,6 +63,8 @@ http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-
 Authors:
 --------
     Fabian Herschel
+    Lars Pinne
+    Angela Briel
 
 
 %description doc
@@ -72,16 +72,10 @@ This subpackage includes the Setup Guide for getting SAP HANA system replication
 
 
 %prep
-tar xf %{S:0}
-
-%if 0%{?sle_version} >= 120100
-    %define crmscr_path /usr/share/crmsh/scripts/
-%endif
-
-
-%build
+%setup -n %{name}-%{version}
 gzip man/*
 
+%build
 
 %install
 mkdir -p %{buildroot}/usr/sbin
@@ -128,19 +122,9 @@ install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
-# crm/hawk wizard files
-%if 0%{?sle_version} >= 120100
-# SLES 12 SP1+ and HAWK2
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
 install -D -m 0644 wizard/hawk2/saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
 install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
-%else
-# older versions of SLES and HAWK1
-mkdir -p %{buildroot}/srv/www/hawk/config/wizard/templates
-mkdir -p %{buildroot}/srv/www/hawk/config/wizard/workflows
-install -m 0444 wizard/hawk1/SAPHanaSR.xml   %{buildroot}/srv/www/hawk/config/wizard/templates
-install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/wizard/workflows
-%endif
 
 
 %files
@@ -159,23 +143,12 @@ install -m 0444 wizard/hawk1/90-SAPHanaSR.xml  %{buildroot}/srv/www/hawk/config/
 /usr/sbin/SAPHanaSR-hookHelper
 /usr/sbin/SAPHanaSR-manageProvider
 
-# HAWK2 wizard for SLES 12 SP1+
-%if 0%{?sle_version} >= 120100
 %dir %{crmscr_path}/saphanasr/
 %dir %{crmscr_path}/saphanasr-su-po/
 %dir %{crmscr_path}/saphanasr-su-co/
 %{crmscr_path}/saphanasr/main.yml
 %{crmscr_path}/saphanasr-su-po/main.yml
 %{crmscr_path}/saphanasr-su-co/main.yml
-%else
-%dir /srv/www/hawk
-%dir /srv/www/hawk/config
-%dir /srv/www/hawk/config/wizard
-%dir /srv/www/hawk/config/wizard/templates
-%dir /srv/www/hawk/config/wizard/workflows
-/srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
-/srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
-%endif
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/README
 %doc %{_docdir}/%{name}/LICENSE
