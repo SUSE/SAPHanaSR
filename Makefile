@@ -12,7 +12,7 @@ FILE_LIST = doc \
 			srHook \
 	 		wizard 
 
-TAR_EXTRAS = -X test/SAPHanaSR-testDriver
+TAR_EXTRAS = --exclude=test/SAPHanaSR-testDriver
 
 PKG = SAPHanaSR
 SPECFILE = ${PKG}.spec
@@ -31,8 +31,8 @@ $(info REL is $(REL))
 endif
 
 tarball:
-	@echo -e "\e[33mMaking ${PKG}-${VERSION}.tgz\e[0m"
-	tar zcf ${PKG}-${VERSION}.tgz ${FILE_LIST} ${TAR_EXTRAS}
+	@echo -e "\e[33mMaking ${PKG}-${VERSION}.tar.gz\e[0m"
+	tar zcf ${PKG}-${VERSION}.tar.gz ${TAR_EXTRAS} ${FILE_LIST} --transform "s,^,${PKG}-${VERSION}/,"
 	@echo -e "\e[32mDone\e[0m"
 
 .ONESHELL:
@@ -50,7 +50,7 @@ copy: tarball
 	@echo -e "\e[33mCopying the SPEC file, CHANGES file and the tarball to ${OBSPROJ}\e[0m"
 	@cp SAPHanaSR.changes ${OBSPROJ}
 	@cp SAPHanaSR.spec ${OBSPROJ}
-	@cp SAPHanaSR-${VERSION}.tgz ${OBSPROJ}
+	@cp SAPHanaSR-${VERSION}.tar.gz ${OBSPROJ}
 	@rm ${CHANGESFILE}
 	@echo -e "\e[32mDone\e[0m"
 
