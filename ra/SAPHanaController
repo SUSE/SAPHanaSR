@@ -43,8 +43,8 @@ RAG="2.0"
 # Initialization:
 timeB=$(date '+%s')
 
-: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
-. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
+source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 
 #
 #######################################################################
@@ -98,10 +98,10 @@ declare -u SAPHanaFilter='ra-act-dec-lpa'
 if [ $# -ne 1 ]
 then
   saphana_usage
-  exit $OCF_ERR_ARGS
+  exit "$OCF_ERR_ARGS"
 fi
 
-ACTION=$1
+ACTION="$1"
 if [ "$ACTION" = "status" ]; then
     ACTION=monitor
 fi
@@ -109,12 +109,12 @@ fi
 # These operations don't require OCF parameters to be set
 # TODO: PRIO5: check, if notify is still not needing OCF parameters
 case "$ACTION" in
-    usage|methods)  saphana_$ACTION
-                    exit $OCF_SUCCESS;;
+    usage|methods)  saphana_"$ACTION"
+                    exit "$OCF_SUCCESS";;
     meta-data)      saphana_meta_data
-                    exit $OCF_SUCCESS;;
+                    exit "$OCF_SUCCESS";;
     notify)         #saphana_notify
-                    exit $OCF_SUCCESS;;
+                    exit "$OCF_SUCCESS";;
     *);;
 esac
 saphana_init
@@ -122,60 +122,60 @@ saphana_init
 if ! ocf_is_root
 then
     super_ocf_log err "ACT: $0 must be run as root"
-    exit $OCF_ERR_PERM
+    exit "$OCF_ERR_PERM"
 fi
 
 # parameter check
 if  [ -z "$OCF_RESKEY_SID" ]
 then
     super_ocf_log err "ACT: Please set parameter SID!"
-    exit $OCF_ERR_ARGS
+    exit "$OCF_ERR_ARGS"
 fi
 
 if  [ -z "$OCF_RESKEY_InstanceNumber" ]
 then
     super_ocf_log err "ACT: Please set parameter InstanceNumber!"
-    exit $OCF_ERR_ARGS
+    exit "$OCF_ERR_ARGS"
 fi
 
 if is_clone
 then
     CLACT=_clone
 else
-    if [ "$ACTION" = "promote" -o "$ACTION" = "demote" ]
+    if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
     then
         super_ocf_log err "ACT: $ACTION called in a non multi-state environment"
-        exit $OCF_ERR_ARGS
+        exit "$OCF_ERR_ARGS"
     fi
 fi
 
 # What kind of method was invoked?
 super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
-ra_rc=$OCF_ERR_UNIMPLEMENTED
+ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor|promote|demote) # Standard controlling actions
-        saphana_$ACTION$CLACT
-        ra_rc=$?
+        saphana_"$ACTION$CLACT"
+        ra_rc="$?"
         ;;
     validate-all)
         saphana_validate
-        ra_rc=$?
+        ra_rc="$?"
         ;;
     lpa_check)
         lpa_check_lpt_status
-        ra_rc=$?
+        ra_rc="$?"
         ;;
     reload)
-        ra_rc=$OCF_SUCCESS
+        ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
         saphana_methods
-        ra_rc=$OCF_ERR_UNIMPLEMENTED
+        ra_rc="$OCF_ERR_UNIMPLEMENTED"
         ;;
 esac
 timeE=$(date '+%s')
 (( timeR = timeE - timeB ))
 super_ocf_log debug "DBG: ==== SAPHanaFilter=$SAPHanaFilter"
 super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaControllerVersion) (${timeR}s)===="
-exit ${ra_rc}
+exit "${ra_rc}"
 # set ts=4 sw=4 sts=4 et
