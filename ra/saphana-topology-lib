@@ -432,6 +432,43 @@ function HANA_CALL()
     return $rc;
 }
 
+saphana_init_attribute_definitions()
+{
+    # TODO PRIO1: NG - check which atributes to keep and which attributes to delete
+    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
+    ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
+    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
+    ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
+    ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
+    ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
+    ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
+    ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
+    ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
+    #
+    # new "central" attributes
+    #
+    # TODO PRIO1: NG - check which attributes will stay in the global area
+    #
+    ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
+    ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
+    ATTR_NAME_HANA_SEC_SYNC_STATUS=("hana_${sid}_glob_sec_sync_state" "props")   # SOK, SFAIL
+    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_glob_sec_sync_state" "props")   # SOK, SFAIL
+    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
+    ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
+    ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
+    ATTR_NAME_HANA_TOPOLOGY=("hana_${sid}_glob_topology" "props" "")   # ScaleUp ScaleOut
+    #
+    # SITE based attributes
+    #
+    # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
+    # TODO PRIO2: NG - rename LPA_ATTR tomatch better into the naming scheme
+    ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_sync_state" "props")  # SOK, SFAIL, UNKNOWN?
+    LPA_ATTR=("hana_${sid}_site_lpt" "props")
+    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_site_sec_sync_state" "props")   # SOK, SFAIL
+    ATTR_NAME_HANA_LSS=("hana_${sid}_site_lss" "props")
+    ATTR_NAME_HANA_SRR=("hana_${sid}_site_srr" "props")
+}
+
 #
 # function: sht_init - initialize variables for the resource agent
 # params:   -
@@ -471,39 +508,10 @@ function sht_init() {
     sidadm="${sid}adm"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG: OCF: $ocf_env"
-    # TODO PRIO1: NG - check which atributes to keep and which attributes to delete
-    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
-    ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
-    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
-    ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
-    ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
-    ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
-    ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
-    ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
-    ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
     #
-    # new "central" attributes
+    # init attribute definitions
     #
-    # TODO PRIO1: NG - check which attributes will stay in the global area
-    #
-    ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
-    ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
-    ATTR_NAME_HANA_SEC_SYNC_STATUS=("hana_${sid}_glob_sec_sync_state" "props")   # SOK, SFAIL
-    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_glob_sec_sync_state" "props")   # SOK, SFAIL
-    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
-    ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
-    ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
-    ATTR_NAME_HANA_TOPOLOGY=("hana_${sid}_glob_topology" "props" "")   # ScaleUp ScaleOut
-    #
-    # SITE based attributes
-    #
-    # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
-    # TODO PRIO2: NG - rename LPA_ATTR tomatch better into the naming scheme
-    ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_sync_state" "props")  # SOK, SFAIL, UNKNOWN?
-    LPA_ATTR=("hana_${sid}_site_lpt" "props")
-    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_site_sec_sync_state" "props")   # SOK, SFAIL
-    ATTR_NAME_HANA_LSS=("hana_${sid}_site_lss" "props")
-    ATTR_NAME_HANA_SRR=("hana_${sid}_site_srr" "props")
+    saphana_init_attribute_definitions
     # optional OCF parameters, we try to guess which directories are correct
 
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
