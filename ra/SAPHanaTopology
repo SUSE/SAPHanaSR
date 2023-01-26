@@ -31,8 +31,8 @@ SAPHanaTopologyVersion="1.001.1"
 # Initialization:
 timeB=$(date '+%s')
 
-: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
-. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR=-${OCF_ROOT}/lib/heartbeat}"
+source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 
 #######################################################################
 log_attributes=false
@@ -66,29 +66,29 @@ InstanceName=""
 InstanceNr=""
 DIR_EXECUTABLE=""
 declare -u SAPHanaFilter='ra-act-dec-lpa'
-NODENAME=$(crm_node -n)
+NODENAME="$(crm_node -n)"
 
-if [ $# -ne 1 ]
+if [ "$#" != "1" ]
 then
   sht_usage
-  exit $OCF_ERR_ARGS
+  exit "$OCF_ERR_ARGS"
 fi
 
-ACTION=$1
+ACTION="$1"
 if [ "$ACTION" = "status" ]; then
     ACTION=monitor
 fi
 
 # These operations don't require OCF parameters to be set
 case "$ACTION" in
-    usage|methods)  sht_$ACTION
-                    exit $OCF_SUCCESS;;
+    usage|methods)  sht_"$ACTION"
+                    exit "$OCF_SUCCESS";;
     meta-data)      sht_meta_data
-                    exit $OCF_SUCCESS;;
+                    exit "$OCF_SUCCESS";;
     notify)         sht_notify
-                    exit $OCF_SUCCESS;;
+                    exit "$OCF_SUCCESS";;
     admin-setup)    admin-setup
-                    exit $OCF_SUCCESS;;
+                    exit "$OCF_SUCCESS";;
     *);;
 esac
 sht_init
@@ -96,53 +96,53 @@ sht_init
 if ! ocf_is_root
 then
     super_ocf_log err "ACT: $0 must be run as root"
-    exit $OCF_ERR_PERM
+    exit "$OCF_ERR_PERM"
 fi
 
 # parameter check
 if  [ -z "$OCF_RESKEY_SID" ]
 then
     super_ocf_log err "ACT: Please set parameter SID!"
-    exit $OCF_ERR_ARGS
+    exit "$OCF_ERR_ARGS"
 fi
 
 if  [ -z "$OCF_RESKEY_InstanceNumber" ]
 then
     super_ocf_log err "ACT: Please set parameter InstanceNumber!"
-    exit $OCF_ERR_ARGS
+    exit "$OCF_ERR_ARGS"
 fi
 
 if is_clone
 then
     CLACT=_clone
 else
-    if [ "$ACTION" = "promote" -o "$ACTION" = "demote" ]
+    if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
     then
         super_ocf_log err "ACT: $ACTION called in a non clone environment"
-        exit $OCF_ERR_ARGS
+        exit "$OCF_ERR_ARGS"
     fi
 fi
 
 super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
-ra_rc=$OCF_ERR_UNIMPLEMENTED
+ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor) # Standard controlling actions
-        sht_$ACTION$CLACT
-        ra_rc=$?
+        sht_"$ACTION$CLACT"
+        ra_rc="$?"
         ;;
     validate-all)
         sht_validate
-        ra_rc=$?
+        ra_rc="$?"
         ;;
     reload )
         ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
         sht_methods
-        ra_rc=$OCF_ERR_UNIMPLEMENTED
+        ra_rc="$OCF_ERR_UNIMPLEMENTED"
         ;;
 esac
-timeE=$(date '+%s')
+timeE="$(date '+%s')"
 (( timeR = timeE - timeB ))
 super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
-exit ${ra_rc}
+exit "${ra_rc}"
