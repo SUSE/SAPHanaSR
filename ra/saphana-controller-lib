@@ -914,25 +914,25 @@ saphana_init_scoring_tables() {
 
 saphana_init_attribute_definitions()
 {
-    # TODO PRIO1: NG - check, which attributes can be dropped (like ATTR_NAME_HANA_REMOTEHOST?)
+    # TODO PRIO1: NG - check which atributes to keep and which attributes to delete
     # TODO PRIO1: NG - sort attributes to node, site, global area
-    #ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at"   "reboot") # Not used so far
+    #
+    # node specific attributes
+    #
     # attributes used to control the update from single-target replication
     # to mutli-target replication.
     # node specific, set, if the NewResourceAgent is running on the system
     # contains the resource agent generation ($RAG)
     ATTR_NAME_HANA_GRA=("hana_${sid}_gra" "forever")
     # attribute containing the current running srHook generation
-    # node specific
     ATTR_NAME_HANA_SRHOOK_GEN=("hana_${sid}_gsh" "reboot")
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
-    #ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
+    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
-    # TODO PRIO1: NG - ATTR_NAME_HANA_SRMODE to be moved to site spezific
-    # ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
+    ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
     ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     ATTR_NAME_HANA_SRACTION_HISTORY=("hana_${sid}_srah" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     #
@@ -950,7 +950,6 @@ saphana_init_attribute_definitions()
     #
     ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
-    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
     # TODO PRIO1: NG - ATTR_NAME_HANA_SRMODE2 to be moved to site specific
     ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
     #
@@ -959,16 +958,14 @@ saphana_init_attribute_definitions()
     # TODO PRIO1: NG - ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
     ATTR_NAME_HANA_GLOB_SRHOOK=("hana_${sid}_glob_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
-    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
-    ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay")
+    ATTR_NAME_HANA_TOPOLOGY=("hana_${sid}_glob_topology" "props" "")   # ScaleUp ScaleOut
     #
     # SITE based attributes
     #
+    # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
     # scale-out and scale-up now use LPA as site specific attribute
     ATTR_NAME_HANA_SITE_LPA=("hana_${sid}_site_lpt" "props")
-    #
-    # for MULTI-TARGET the ra needs a per-site attribute - not only a global one
-    #
+    ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay")
     ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
@@ -1240,6 +1237,7 @@ function saphana_init() {
     super_ocf_log info "TOP: sr_name=$sr_name, remSR_name=$remSR_name"
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         if have_binary /usr/sap/$SID/$InstanceName/exe/sapstartsrv && have_binary /usr/sap/$SID/$InstanceName/exe/sapcontrol

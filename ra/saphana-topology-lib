@@ -435,38 +435,62 @@ function HANA_CALL()
 saphana_init_attribute_definitions()
 {
     # TODO PRIO1: NG - check which atributes to keep and which attributes to delete
-    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at" "reboot")   # Not really used
+    # TODO PRIO1: NG - sort attributes to node, site, global area
+    #
+    # node specific attributes
+    #
+    # attributes used to control the update from single-target replication
+    # to mutli-target replication.
+    # node specific, set, if the NewResourceAgent is running on the system
+    # contains the resource agent generation ($RAG)
+    ATTR_NAME_HANA_GRA=("hana_${sid}_gra" "forever")
+    # attribute containing the current running srHook generation
+    ATTR_NAME_HANA_SRHOOK_GEN=("hana_${sid}_gsh" "reboot")
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
     ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
-    ATTR_NAME_HANA_SRMODE=("hana_${sid}_srmode" "forever")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
     ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
+    ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
+    ATTR_NAME_HANA_SRACTION_HISTORY=("hana_${sid}_srah" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     #
     # new "central" attributes
     #
-    # TODO PRIO1: NG - check which attributes will stay in the global area
+    # TODO PRIO1: NG - decide which attributes to be moved to site-specific
+    # new "central" attribute, containing the summarized status, if all
+    # cluster nodes are already updated to the new RA or if there are still
+    # nodes left running the old RA version
+    # expected value "ok" - "nok", if there still old RAs running in the cluster
+    ATTR_NAME_HANA_UPD_STATE=("hana_${sid}_glob_upd" "props")
+    # attribut showing, if migration from global to site specific hook should
+    # be done - customer choice
+    ATTR_NAME_HANA_multiTargetSupport=("hana_${sid}_glob_mts" "props")
     #
     ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
-    ATTR_NAME_HANA_SEC_SYNC_STATUS=("hana_${sid}_glob_sec_sync_state" "props")   # SOK, SFAIL
-    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_glob_sec_sync_state" "props")   # SOK, SFAIL
-    ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_glob_primary_at"   "props")          # Not used so far
+    # TODO PRIO1: NG - ATTR_NAME_HANA_SRMODE2 to be moved to site specific
     ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
+    #
+    # For MULTI-TARGET we need a site-specific attribute not a global one
+    # but for compatibility we need to recognize the old global attribute too
+    # TODO PRIO1: NG - ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
+    ATTR_NAME_HANA_GLOB_SRHOOK=("hana_${sid}_glob_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     ATTR_NAME_HANA_TOPOLOGY=("hana_${sid}_glob_topology" "props" "")   # ScaleUp ScaleOut
     #
     # SITE based attributes
     #
     # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
-    # TODO PRIO2: NG - rename LPA_ATTR tomatch better into the naming scheme
-    ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_sync_state" "props")  # SOK, SFAIL, UNKNOWN?
-    LPA_ATTR=("hana_${sid}_site_lpt" "props")
-    ATTR_NAME_HANA_SEC_SYNC_SRHOOK=("hana_${sid}_site_sec_sync_state" "props")   # SOK, SFAIL
-    ATTR_NAME_HANA_LSS=("hana_${sid}_site_lss" "props")
-    ATTR_NAME_HANA_SRR=("hana_${sid}_site_srr" "props")
+    # scale-out and scale-up now use LPA as site specific attribute
+    ATTR_NAME_HANA_SITE_LPA=("hana_${sid}_site_lpt" "props")
+    ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay")
+    ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
+    ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
+    ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
+    ATTR_NAME_HANA_SITE_MNS=("hana_${sid}_site_mns" "props")
+    ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_srPoll" "props")       # polling attribute SOK, SFAIL
 }
 
 #
@@ -474,7 +498,7 @@ saphana_init_attribute_definitions()
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
 # globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w)
-# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_PRIMARY_AT(w), ATTR_NAME_HANA_CLONE_STATE(w)
+# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
 # globals:  NODENAME(w), hdbver(w)
 # sht_init : Define global variables with default values, if optional parameters are not set
@@ -1223,9 +1247,9 @@ function sht_monitor_clone() {
         #
         # set LSS and SRR of the local site and site of the local node
         #
-        set_hana_site_attribute "$site" "$hanalrc" "${ATTR_NAME_HANA_LSS[@]}"
-        super_ocf_log info "DEC: set_hana_site_attribute $site $hanalrc ${ATTR_NAME_HANA_LSS[@]}"
-        set_hana_site_attribute "$site" "$hanaPrim" "${ATTR_NAME_HANA_SRR[@]}"
+        set_hana_site_attribute "$site" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+        super_ocf_log info "DEC: set_hana_site_attribute $site $hanalrc ${ATTR_NAME_HANA_SITE_LSS[@]}"
+        set_hana_site_attribute "$site" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
         set_hana_attribute ${NODENAME} "$site" "${ATTR_NAME_HANA_SITE[@]}"
         super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $site ${ATTR_NAME_HANA_SITE[0]}"
     fi
