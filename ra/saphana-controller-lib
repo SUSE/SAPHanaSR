@@ -78,6 +78,38 @@ function super_ocf_log() {
     fi
 }
 
+
+#
+# function core_init - lightwight variable initialization without SAP HANA interaction
+# params: TODO raVersion timeBegin log_attributes
+# globals: -
+#
+function core_init() {
+    raVersion="$1"
+    timeBegin="$2"
+    log_attributes="$3"
+    if ocf_is_true "$log_attributes"; then
+        log_attr_file="/var/log/fhATTRIBUTES"
+    else
+        log_attr_file="/dev/null"
+    fi
+    HANA_STATE_PRIMARY=0
+    HANA_STATE_SECONDARY=1
+    HANA_STATE_STANDALONE=2
+    HANA_STATE_DEFECT=3
+    HANA_STD_ACTION_TIMEOUT=3600
+    #
+    # TODO PRIO1: NG - check. if we really could/should initialize such missing variables
+    #
+    OCF_RESKEY_CRM_meta_timeout="${OCF_RESKEY_CRM_meta_timeout:-3600}"   # cluster should always set these values
+    OCF_RESKEY_CRM_meta_clone_max="${OCF_RESKEY_CRM_meta_clone_max:-0}"  # cluster must always set this value
+    OCF_RESKEY_CRM_meta_clone_node_max="${OCF_RESKEY_CRM_meta_clone_node_max:-0}"
+    OCF_RESKEY_CRM_meta_master_max="${OCF_RESKEY_CRM_meta_master_max:-0}"
+    OCF_RESKEY_CRM_meta_master_node_max="${OCF_RESKEY_CRM_meta_master_node_max:-0}"
+    # SH=/bin/sh
+    return 0
+}
+
 #
 # function: saphana_usage - short usage info
 # params:   -
@@ -131,7 +163,7 @@ function saphana_meta_data() {
     cat <<END
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
-<resource-agent name="SAPHanaController" version="$SAPHanaControllerVersion">
+<resource-agent name="SAPHanaController" version="$raVersion">
 <version>1.0</version>
 
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
@@ -1120,11 +1152,11 @@ function saphana_init() {
     # OLD: InstanceName
     # NEW: SID InstanceNumber
     NODENAME=$(crm_node -n)
-    SID=$OCF_RESKEY_SID
-    InstanceNr=$OCF_RESKEY_InstanceNumber
-    SIDInstanceName="${SID}_HDB${InstanceNr}"
+    SID="${OCF_RESKEY_SID:-}"
+    InstanceNr="${OCF_RESKEY_InstanceNumber:-}"
     InstanceName="HDB${InstanceNr}"
-    export SAPSYSTEMNAME=$SID
+    SIDInstanceName="${SID}_${InstanceName}"
+    export SAPSYSTEMNAME="$SID"
     HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid="${SID,,}"
@@ -1798,7 +1830,7 @@ function saphana_stopSystem() {
             else
                 sleep 5
                 timeNow=$(date '+%s')
-                (( timeStop = timeNow - timeB ))
+                (( timeStop = timeNow - timeBegin ))
                 (( timeRemain = HANA_ACTION_TIMEOUT - timeStop ))
                 if [ "$timeRemain" -le 0 ]; then
                     # terminate wait-for-all-nodes-down if time-to-stop in sum expired HANA_ACTION_TIMEOUT
@@ -2512,41 +2544,41 @@ function lpa_check_lpt_status() {
 
 # function: master_walk - find master node(s)
 # params:   -
-# globals:  srmode(r), the_master(w), masters[@](w), nr_site_node(w), nr_site_worker(w), nr_site_standby(w)
+# globals:  the_master(w), masters[@](w), nr_site_node(w), nr_site_worker(w), nr_site_standby(w)
 function master_walk() {
- #
- # TODO: PRIO1: NG - EXCLUDE NON ONLINE CLUSTER NODES (offline/unclean/standby/maintenance)
- #
- # * crm node list se03 is online, se01 is standby+maintenance, se02 is offline
- # se01group1:
- #       standby: on
- #       maintenance: on
- # se02group1: (offline)
- # se03group1:
- # * crm_node -l
- # 1084752138 se01group1 member
- # 1084752148 se02group1 lost
- # 1084752154 se03group1 member
- # ====> othernodes contains only members (for openais)
- # * crm_attribute ...
- #
- # se01group1:~ # crm_attribute -N se01group1 -n standby -G -l forever -q
- # on
- # (rc=0)
- # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q
- # Error performing operation: No such device or address
- # (rc=250)
- # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q -d off
- # off
- #
- #
- # ==> First exclude non-members (maybe done already) by
- #       'list of nodes | grep member'
- # ==> then query the attributes 'standby' and 'maintenance
- # OR:
- # look at the scores:
- #
- # master_walk now also counts available nodes (same site) in the
+    #
+    # TODO: PRIO1: NG - EXCLUDE NON ONLINE CLUSTER NODES (offline/unclean/standby/maintenance)
+    #
+    # * crm node list se03 is online, se01 is standby+maintenance, se02 is offline
+    # se01group1:
+    #       standby: on
+    #       maintenance: on
+    # se02group1: (offline)
+    # se03group1:
+    # * crm_node -l
+    # 1084752138 se01group1 member
+    # 1084752148 se02group1 lost
+    # 1084752154 se03group1 member
+    # ====> othernodes contains only members (for openais)
+    # * crm_attribute ...
+    #
+    # se01group1:~ # crm_attribute -N se01group1 -n standby -G -l forever -q
+    # on
+    # (rc=0)
+    # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q
+    # Error performing operation: No such device or address
+    # (rc=250)
+    # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q -d off
+    # off
+    #
+    #
+    # ==> First exclude non-members (maybe done already) by
+    #       'list of nodes | grep member'
+    # ==> then query the attributes 'standby' and 'maintenance
+    # OR:
+    # look at the scores:
+    #
+    # master_walk now also counts available nodes (same site) in the
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
 
     local active_master="" master1="" master2="" master3=""
@@ -2569,7 +2601,6 @@ function master_walk() {
     # 4:P:slave:slave:worker:slave      KOELN
     super_ocf_log debug "DBG: master walk"
     # walk over all known cluster nodes
-    super_ocf_log debug "DBG: master walk for $srmode"
     for node in $NODENAME "${otherNodes[@]}"; do
         super_ocf_log debug "DBG: master walk node $node"
         nSite=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_SITE[@]}")
