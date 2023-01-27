@@ -759,14 +759,16 @@ function HANA_CALL()
                   cmdErr=$(if [ -f "$cmd_err_log" ]; then cat "$cmd_err_log"; rm -f "$cmd_err_log"; else echo "NA"; fi)
                   super_ocf_log debug "DBG: RA ==== action HANA_CALL (cmd is '$cmd', rc is '$rc', stderr from su is '$suErr', stderr from cmd is '$cmdErr') ===="
                   # on rc=1 - retry to improve the behavior in AD environments
-                  if [ "$rc" -eq 1 ]; then
-                      super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd_type' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
-                      if [ "$cmdErr" == "NA" ]; then
-                          # seems something was going wrong with the 'pre_cmd_type' (su)
-                          super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd_type'. Retry once."
-                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc="$?"
-                      fi
-                  fi
+                  # fh 20230127 deactivate this part. rc=1 could also be the valid rc of the called command
+                  # TODO PRIO2: NG - to improve handling of su-errors we need to catch this errors and differ them from the cmd rc
+                  #if [ "$rc" -eq 1 ]; then
+                  #    super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd_type' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
+                  #    if [ "$cmdErr" == "NA" ]; then
+                  #        # seems something was going wrong with the 'pre_cmd_type' (su)
+                  #        super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd_type'. Retry once."
+                  #        output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc="$?"
+                  #    fi
+                  #fi
                  ;;
     esac
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
