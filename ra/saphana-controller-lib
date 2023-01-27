@@ -144,7 +144,8 @@ EOF
 function backup_global_and_nameserver() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
-    local epochseconds="$(date +%s)"  # $EPOCHSECONDS was not available on two lab systems, so fallback to date
+    local epochseconds=""
+    epochseconds="$(date +%s)"  # $EPOCHSECONDS was not available on two lab systems, so fallback to date
     cp "/hana/shared/${SID}/global/hdb/custom/config/global.ini"     "/hana/shared/${SID}/global/hdb/custom/config/global.ini.${epochseconds}"
     cp "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini" "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini.${epochseconds}"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -745,7 +746,7 @@ function HANA_CALL()
                   if [ $rc -eq 124 ]; then
                       super_ocf_log warn "RA: HANA_CALL timed out after $timeOut seconds running command '$cmd'"
                   fi
-                  if [ $rc -eq 124 -a -n "$onTimeOut" ]; then
+                  if [[ "$rc" == "124" &&  -n "$onTimeOut" ]]; then
                       local second_output=""
                       second_output=$($pre_cmd "$pre_script; $onTimeOut");
                   fi
@@ -1093,7 +1094,7 @@ function saphana_init_get_remote_site()
     for clN in "${otherNodes[@]}"; do
 	    nodeSite=$(get_hana_attribute $clN "${ATTR_NAME_HANA_SITE[@]}")
         super_ocf_log info "TOP: clN=$clN, nodeSite=$nodeSite"
-        if [ -n "$nodeSite" -a "$nodeSite" != "$site" ]; then
+        if [[ -n "$nodeSite" && "$nodeSite" != "$site" ]]; then
             remSite=$nodeSite
             remSR_name=${remSite%%:*}
             remSR_id=${remSite#*:}
@@ -2295,10 +2296,13 @@ function saphana_check_local_instance()
       #  for each service <nr> we need the matching <dispstatus> and <name>
       for SERVNO in `echo "$output" | grep '^[0-9] ' | cut -d' ' -f1 | sort -u`
       do
-        local COLOR=`echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3`
-        local SERVICE=`echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3`
+        local COLOR=""
+        local SERVICE=""
         local STATE=0
         local SEARCH
+
+        COLOR=`echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3`
+        SERVICE=`echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3`
 
         case $COLOR in
           GREEN|YELLOW)       STATE="$OCF_SUCCESS";;
@@ -2434,7 +2438,7 @@ function lpa_push_lpt() {
     mkdir -p "$LPA_DIRECTORY"
     echo "$lpt" > $lpa_file
     clpt=$(lpa_pull_lpt); lpt_rc=$?
-    if [ "$clpt" != "$lpt" -o "$lpt_rc" != 0 ]; then
+    if [[ "$clpt" != "$lpt" || "$lpt_rc" != 0 ]]; then
         rc=2
     else
         rc=0
@@ -2532,7 +2536,7 @@ function lpa_check_lpt_status() {
         # as a fallback try to fetch the value from external status file
         LPTloc=$(lpa_pull_lpt);                 # FILE
         lparc=$?
-        if [ -z "$LPTloc" -o "$LPTloc" != -1 -o "$lparc" != 0 ]; then
+        if [[ -z "$LPTloc" || "$LPTloc" != -1 || "$lparc" != 0 ]]; then
             # last option - try to initialize as PRIMARY
             lpa_push_lpt 20
             lpa_set_lpt  20 "$sr_name"
@@ -2547,7 +2551,7 @@ function lpa_check_lpt_status() {
         rc=3
     else
         super_ocf_log debug "DBG: LPA: LPTloc ($LPTloc) LPTrem ($LPTrem) delta ($delta)"
-        if [ $LPTloc -lt $LPTMark -a $LPTrem -lt $LPTMark ]; then
+        if [[ $LPTloc -lt $LPTMark && $LPTrem -lt $LPTMark ]]; then
            delta=0   # both lpts are not a real timestamp so just take the greater one
         else
            delta=$DUPLICATE_PRIMARY_TIMEOUT   # at least one of the lpts is a real timestamp so include delta-gap
@@ -2631,7 +2635,7 @@ function master_walk() {
             nMaint=$(crm_attribute -N ${node} -n maintenance -G -l forever -q -d off)
             if [ "$nMaint" = "on" ]; then
                 super_ocf_log debug "DBG: Filter node by cluster node maintenance mode"
-            elif [ "$nStdBy" = "on" -a "$standbyFilter" = "1" ]; then
+            elif [[ "$nStdBy" = "on" && "$standbyFilter" = "1" ]]; then
                 super_ocf_log debug "DBG: Filter node by cluster node standby mode"
             else
                 nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}")
@@ -3205,7 +3209,7 @@ function saphana_monitor_primary()
                 rem_clone_status=$(get_hana_attribute ${rem_msn} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
                 rem_role=$(get_hana_attribute ${rem_msn} "${ATTR_NAME_HANA_ROLES[@]}")
                 rem_role="${rem_lss}:${rem_srr}:${rem_role}"
-                if [ "$promote_attr" = "DEMOTED" -a "$rem_clone_status" = "PROMOTED" ]; then
+                if [[ "$promote_attr" = "DEMOTED" && "$rem_clone_status" = "PROMOTED" ]]; then
                    case "$rem_role" in
                        [234]:P:* ) # dual primary, but other instance marked as PROMOTED by the cluster
                             # TODO: PRIO1: NG - Need to differ lpa_check_lpt_status return codes
