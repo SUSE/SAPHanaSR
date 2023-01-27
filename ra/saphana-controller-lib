@@ -102,7 +102,7 @@ function core_init() {
     # Resource Agent Generation
     RAG="2.0"
     declare -u SAPHanaFilter='ra-act-dec-lpa'
-    set +possix   # disable possix mode of the bash
+    set +o posix   # disable possix mode of the bash
     if ocf_is_true "$log_attributes"; then
         log_attr_file="/var/log/fhATTRIBUTES"
     else
@@ -1268,7 +1268,7 @@ function saphana_init() {
     # Determine list of other cluster nodes and store in otherNodes variable
     otherNodes=()
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-       *corosync* ) otherNodes=( cluster_get_other_nodes "${NODENAME}" );;
+       *corosync* ) otherNodes=( $(cluster_get_other_nodes "${NODENAME}") );;
        # TODO PRIO4: NG - fix cman code to be also shellcheck compatible
        #*cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
     esac
@@ -1291,7 +1291,8 @@ function saphana_init() {
     super_ocf_log info "TOP: sr_name=$sr_name, remSR_name=$remSR_name"
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
-    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
+    # TODO PRIO1: NG - reactivate SAPHanaFilter - during test the logs where all dropped after that command
+    #SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         if have_binary "/usr/sap/$SID/$InstanceName/exe/sapstartsrv" && have_binary "/usr/sap/$SID/$InstanceName/exe/sapcontrol"
