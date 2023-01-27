@@ -53,7 +53,7 @@ function super_ocf_log() {
     local message="$2"
     local skip=1
     local mtype=""
-    local shf="${SAPHanaFilter:-all}"
+    local -u shf="${SAPHanaFilter:-all}"
     # message levels: (dbg)|info|warn|err|error
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC|DBG2...
     case "$level" in
@@ -61,7 +61,7 @@ function super_ocf_log() {
         ;;
         info )
         case "$shf" in
-            all) skip=0
+            ALL) skip=0
             ;;
             none )
                 skip=1
@@ -101,7 +101,7 @@ function core_init() {
     SAPSTARTPROFILE=""
     # Resource Agent Generation
     RAG="2.0"
-    declare -u SAPHanaFilter='ra-act-dec-lpa'
+    SAPHanaFilter='ra-act-dec-lpa'
     set +o posix   # disable possix mode of the bash
     if ocf_is_true "$log_attributes"; then
         log_attr_file="/var/log/fhATTRIBUTES"
@@ -1291,8 +1291,7 @@ function saphana_init() {
     super_ocf_log info "TOP: sr_name=$sr_name, remSR_name=$remSR_name"
     super_ocf_log debug "DBG: sr_name=$sr_name, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
-    # TODO PRIO1: NG - reactivate SAPHanaFilter - during test the logs where all dropped after that command
-    #SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         if have_binary "/usr/sap/$SID/$InstanceName/exe/sapstartsrv" && have_binary "/usr/sap/$SID/$InstanceName/exe/sapcontrol"
