@@ -337,7 +337,6 @@ function HANA_CALL()
     #       would hdbnsutil -sr_stateConfiguration also create such a shared memory file?
     # TODO: PRIO 5: Maybe make "su" optional by a parameter
     local timeOut=0
-    local onTimeOut=""
     local rc=0
     local use_su=1 # Default to be changed later (see TODO above)
     local pre_cmd=""
@@ -348,7 +347,6 @@ function HANA_CALL()
         case "$1" in
             --timeout ) timeOut=$2; shift;;
             --use-su  ) use_su=1;;
-            --on-timeout ) onTimeOut="$2"; shift;;
             --cmd ) shift; cmd="$*"; break;;
         esac
         shift
@@ -390,16 +388,6 @@ function HANA_CALL()
                           # seems something was going wrong with the 'pre_cmd' (su)
                           super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
                           output=$(timeout "$timeOut" $pre_cmd "$pre_script; $cmd"); rc=$?
-                      fi
-                  fi
-                  #
-                  # on timeout ...
-                  #
-                  if [ $rc -eq 124 ]; then
-                      super_ocf_log warn "RA: HANA_CALL timed out after $timeOut seconds running command '$cmd'"
-                      if [ -n "$onTimeOut" ]; then
-                          local second_output=""
-                          second_output=$($pre_cmd "$pre_script; $onTimeOut");
                       fi
                   fi
                  ;;
