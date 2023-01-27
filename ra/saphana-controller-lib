@@ -73,7 +73,7 @@ function super_ocf_log() {
         esac
         ;;
     esac
-    if [ $skip -eq 0 ]; then
+    if [ "$skip" -eq 0 ]; then
         ocf_log "$level" "$message"
     fi
 }
@@ -88,6 +88,20 @@ function core_init() {
     raVersion="$1"
     timeBegin="$2"
     log_attributes="$3"
+    ## GLOBALS
+    SID=""
+    sidadm=""
+    InstanceName=""
+    InstanceNr=""
+    SAPVIRHOST=""
+    DIR_EXECUTABLE=""
+    SAPSTARTSRV=""
+    SAPCONTROL=""
+    DIR_PROFILE=""
+    SAPSTARTPROFILE=""
+    # Resource Agent Generation
+    RAG="2.0"
+    declare -u SAPHanaFilter='ra-act-dec-lpa'
     set +possix   # disable possix mode of the bash
     if ocf_is_true "$log_attributes"; then
         log_attr_file="/var/log/fhATTRIBUTES"
@@ -108,6 +122,8 @@ function core_init() {
     OCF_RESKEY_CRM_meta_master_max="${OCF_RESKEY_CRM_meta_master_max:-0}"
     OCF_RESKEY_CRM_meta_master_node_max="${OCF_RESKEY_CRM_meta_master_node_max:-0}"
     # SH=/bin/sh
+    log_attributes=false
+    debug_attributes=0
     return 0
 }
 
@@ -120,11 +136,11 @@ function saphana_usage() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     methods=$(saphana_methods)
-    methods=$(echo $methods | tr ' ' '|')
+    methods=$(echo "$methods" | tr ' ' '|')
     cat <<-EOF
-    usage: $0 ($methods)
+    usage: $0 ("$methods")
 
-    $0 manages two SAP HANA databases in system replication.
+    "$0" manages two SAP HANA databases in system replication.
 
     The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
     The 'stop'         operation stops the HANA instance
@@ -138,7 +154,7 @@ function saphana_usage() {
     The 'reload'       operation allows to adapt resource parameters
 
 EOF
-    return $rc
+    return "$rc"
 }
 
 function backup_global_and_nameserver() {
@@ -149,7 +165,7 @@ function backup_global_and_nameserver() {
     cp "/hana/shared/${SID}/global/hdb/custom/config/global.ini"     "/hana/shared/${SID}/global/hdb/custom/config/global.ini.${epochseconds}"
     cp "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini" "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini.${epochseconds}"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -297,7 +313,7 @@ The resource agent uses the following four interfaces provided by SAP:
 </actions>
 </resource-agent>
 END
-return $rc
+return "$rc"
 }
 
 #
@@ -312,7 +328,7 @@ function saphana_methods() {
     for m in start stop status monitor promote demote notify validate-all methods meta-data usage reload; do
         echo "$m"
     done
-    return $rc
+    return "$rc"
 }
 
 #
@@ -321,39 +337,39 @@ function saphana_methods() {
 # globals:  -
 function dequote()
 {
-    local rc=0; tr -d '"'; return $rc
+    local rc=0; tr -d '"'; return "$rc"
 }
 
 # function: version: compare two HANA version strings
 function ver_lt() {
-    ocf_version_cmp $1 $2
-    test $? -eq 0 && return 0 || return 1
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 0 && return 0 || return 1
 }
 
 function ver_le() {
-    ocf_version_cmp $1 $2
-    test $? -eq 0 -o $? -eq 1 && return 0 || return 1
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 0 -o "$?" -eq 1 && return 0 || return 1
 }
 
 function ver_gt() {
-    ocf_version_cmp $1 $2
-    test $? -eq 2 && return 0 || return 1
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 2 && return 0 || return 1
 }
 
 function ver_ge() {
-    ocf_version_cmp $1 $2
-    test $? -eq 2 -o $? -eq 1 && return 0 || return 1
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 2 -o "$?" -eq 1 && return 0 || return 1
 }
 #
 # function: version: compare two HANA version strings
 #
 function version() {
-    if [ $# -eq 3 ]; then
+    if [ "$#" -eq 3 ]; then
         case "$2" in
-            LE | le | "<=" ) ver_le $1 $3;;
-            LT | lt | "<" ) ver_lt $1 $3;;
-            GE | ge | ">=" ) ver_ge $1 $3;;
-            GT | gt | ">" ) ver_gt $1 $3;;
+            LE | le | "<=" ) ver_le "$1" "$3";;
+            LT | lt | "<" ) ver_lt "$1" "$3";;
+            GE | ge | ">=" ) ver_ge "$1" "$3";;
+            GT | gt | ">" ) ver_gt "$1" "$3";;
             * ) return 1;
         esac
     elif [ $# -ge 5 ]; then
@@ -379,9 +395,9 @@ function remoteHost2remoteNode()
     local remoteNode=""
     local rc=1
     for cl in "${otherNodes[@]}"; do
-        vHost=$(get_hana_attribute $cl  "${ATTR_NAME_HANA_VHOST[@]}" "$cl")
+        vHost=$(get_hana_attribute "$cl"  "${ATTR_NAME_HANA_VHOST[@]}" "$cl")
         if [ "$vHost" = "$remoteHost" ]; then # we found the correct node
-            remoteNode=$cl
+            remoteNode="$cl"
             rc=0
         fi
     done
@@ -389,7 +405,7 @@ function remoteHost2remoteNode()
         echo "$remoteNode"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 #
 # function: get_action_timeout
@@ -415,13 +431,13 @@ function get_action_timeout() {
     ((timeout = actionTimeOut * actTimeOutPercent/100))
     # max(3600, 95%(actionTimeOut))
     if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
-        timeout=$stdTimeOut
+        timeout="$stdTimeOut"
         super_ocf_log info "DEC: SAP HANA $hanaAction timeout is '$stdTimeOut'"
     else
         super_ocf_log info "DEC: SAP HANA $hanaAction timeout is '$timeout', was default '$stdTimeOut'"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]}"
-    echo $timeout
+    echo "$timeout"
 }
 
 #
@@ -451,14 +467,14 @@ function is_clone() {
                 # scale-up was: super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
                 super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1,master_node_max=1,master_max=1)"
                 # TODO PRIO1: NG - check which is the correct return code (scale-up was: OCF_ERR_CONFIGURED)
-                exit $OCF_NOT_RUNNING
+                exit "$OCF_NOT_RUNNING"
         fi
         rc=0;
     else
         rc=1;
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -482,19 +498,19 @@ function get_hana_attribute()
     case "$attr_store" in
         reboot | forever )
             if ocf_is_true "$log_attributes"; then
-                echo "$dstr: SAPHanaController: crm_attribute -N ${attr_obj} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
+                echo "$dstr: SAPHanaController: crm_attribute -N ${attr_obj} -G -n \"$attr_name\" -l $attr_store -q" >> "$log_attr_file"
             fi
-            crm_attribute -N ${attr_obj} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
+            crm_attribute -N "${attr_obj}" -G -n "$attr_name" -l "$attr_store" -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
             ;;
         props )
             if ocf_is_true "$log_attributes"; then
-                echo "$dstr: SAPHanaController: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> $log_attr_file
+                echo "$dstr: SAPHanaController: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> "$log_attr_file"
             fi
-            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>$log_attr_file; rc=$?
+            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -513,22 +529,22 @@ function set_hana_attribute()
     local attr_default=${5:-}
     local rc=1
     local attr_old=""
-    attr_old=$(get_hana_attribute $attr_obj $attr_name $attr_store $attr_default); get_rc=$?
+    attr_old=$(get_hana_attribute "$attr_obj" "$attr_name" "$attr_store" "$attr_default"); get_rc="$?"
     if [ "$attr_old" != "$attr_value" ]; then
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_obj} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         dstr=$(date)
         case "$attr_store" in
             reboot | forever )
                 if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHanaController: crm_attribute -N $attr_obj -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> $log_attr_file
+                    echo "$dstr: SAPHanaController: crm_attribute -N $attr_obj -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> "$log_attr_file"
                 fi
-                crm_attribute -N $attr_obj -v "$attr_value" -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
+                crm_attribute -N "$attr_obj" -v "$attr_value" -n "$attr_name" -l "$attr_store" 2>>"$log_attr_file"; rc="$?"
                 ;;
             props )
                 if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHanaController: crm_attribute -v \"$attr_value\" -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> $log_attr_file
+                    echo "$dstr: SAPHanaController: crm_attribute -v \"$attr_value\" -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> "$log_attr_file"
                 fi
-                crm_attribute -v "$attr_value" -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>$log_attr_file; rc=$?
+                crm_attribute -v "$attr_value" -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>"$log_attr_file"; rc="$?"
                 ;;
         esac
     else
@@ -536,7 +552,7 @@ function set_hana_attribute()
         rc=0
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE>
@@ -576,21 +592,21 @@ function get_hana_site_attribute()
 function assert() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local err_msg=$1
-    local default_rc=$OCF_NOT_RUNNING
+    local default_rc="$OCF_NOT_RUNNING"
     # DONE: Check, if we need to distinguish between probe and others
     if ocf_is_probe; then
-        default_exit=$OCF_NOT_RUNNING
+        default_exit="$OCF_NOT_RUNNING"
     else
         # TODO PRIO1: NG - scale-up was OCF_ERR_CONFIGURED, scale-out OCF_NOT_RUNNING - which is the better option?
         # for noe we use the scale-out solution; check with upstream documentation, if OCF_NOT_RUNNING is better reaction here
-        default_exit=$OCF_NOT_RUNNING
+        default_exit="$OCF_NOT_RUNNING"
     fi
     if [ "$ACTION" = "stop" ]; then
         cleanup_instance
-        exit $OCF_SUCCESS
+        exit "$OCF_SUCCESS"
     fi
     super_ocf_log err "ACT: $err_msg"
-    exit $OCF_NOT_RUNNING
+    exit "$OCF_NOT_RUNNING"
 }
 
 #
@@ -611,19 +627,19 @@ function set_crm_master()
         node="-N $2"
     fi
     # DONE: PRIO2: Only adjust master if value is really different (try to check that)
-    oldscore=$(${HA_SBIN_DIR}/crm_master "$node" -G -q -l reboot)
+    oldscore=$("${HA_SBIN_DIR}/crm_master" "$node" -G -q -l reboot)
     if [ "$oldscore" != "$score" ]; then
        dstr=$(date)
        if ocf_is_true "$log_attributes"; then
-           echo "$dstr: SAPHanaController: crm_master $node -v $score -l reboot " >> $log_attr_file
+           echo "$dstr: SAPHanaController: crm_master $node -v $score -l reboot " >> "$log_attr_file"
        fi
        super_ocf_log debug "DBG: SET crm master: $node $score (old: $oldscore)"
-       ${HA_SBIN_DIR}/crm_master $node -v $score -l reboot; rc=$?
+       "${HA_SBIN_DIR}/crm_master" "$node" -v "$score" -l reboot; rc="$?"
     else
        super_ocf_log debug "DBG: LET crm master: $score"
        rc=0
     fi
-    return $rc
+    return "$rc"
 }
 
 #
@@ -639,15 +655,15 @@ function scoring_crm_master()
     local skip=0
     local myScore=""
     for scan in "${SCORING_TABLE[@]}"; do
-        if [ $skip -eq 0 ]; then
-            read rolePatt syncPatt score <<< $scan
+        if [ "$skip" -eq 0 ]; then
+            read -r rolePatt syncPatt score <<< "$scan"
             if grep "$rolePatt" <<< "$roles"; then
                if grep "$syncPatt" <<< "$sync"; then
                   super_ocf_log info "DEC: scoring_crm_master: roles($roles) are matching pattern ($rolePatt)"
                   super_ocf_log info "DEC: scoring_crm_master: sync($sync) is matching syncPattern ($syncPatt)"
                   super_ocf_log info "DEC: scoring_crm_master: set score $score"
                   skip=1
-                  myScore=$score
+                  myScore="$score"
                fi
             fi
         fi
@@ -655,7 +671,7 @@ function scoring_crm_master()
     super_ocf_log debug "DBG: scoring_crm_master adjust score $myScore"
     # DONE: PRIO1: DO Not Score, If we did not found our role/sync at this moment - bsc#919925
     if [ -n "$myScore" ]; then
-        set_crm_master $myScore
+        set_crm_master "$myScore"
     fi
 }
 
@@ -668,8 +684,8 @@ function get_crm_master()
 {
   super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
   local rc=0
-   ${HA_SBIN_DIR}/crm_master -G -q -l reboot; rc=$?
-   return $rc
+   "${HA_SBIN_DIR}/crm_master" -G -q -l reboot; rc=$?
+   return "$rc"
 }
 
 #
@@ -702,22 +718,29 @@ function HANA_CALL()
         shift
     done
 
-    if [ $use_su -eq 1 ]; then
-        pre_cmd="su - ${sid}adm -c"
-        [[ $cmd == python* ]] && pre_script="cd $DIR_EXECUTABLE/python_support" || pre_script='true'
+    if [ "$use_su" -eq 1 ]; then
+        pre_cmd_type="su"
+        [[ "$cmd" == python* ]] && pre_script="cd $DIR_EXECUTABLE/python_support" || pre_script='true'
     else
         # as root user we need the library path to the SAP kernel to be able to call sapcontrol
         # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
         if [ "${LD_LIBRARY_PATH%%*:}" != "$DIR_EXECUTABLE" ]
         then
-            MY_LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+            MY_LD_LIBRARY_PATH="$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
         fi
-        pre_cmd="bash -c"
+        pre_cmd_type="bash"
         pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
     fi
-    case $timeOut in
+    case "$timeOut" in
         0 | inf )
-                  output=$($pre_cmd "$pre_script; $cmd"); rc=$?
+                  case "$pre_cmd_type" in
+                      bash )
+                            output=$(bash -c "$pre_script; $cmd"); rc="$?"
+                            ;;
+                      su )
+                            output=$(su - "${sid}adm" -c "$pre_script; $cmd"); rc="$?"
+                            ;;
+                  esac
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
@@ -725,25 +748,31 @@ function HANA_CALL()
                   cmd_out_log=/tmp/HANA_CALL_CMD_RA_OUT_${errExt}
                   cmd_err_log=/tmp/HANA_CALL_CMD_RA_${errExt}
 
-                  output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
-
+                  case "$pre_cmd_type" in
+                      bash )
+                            output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
+                            ;;
+                      su )
+                            output=$(timeout --foreground -s 9 "$timeOut" su - "${sid}adm" -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
+                            ;;
+                  esac
                   output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
                   suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
                   cmdErr=$(if [ -f "$cmd_err_log" ]; then cat "$cmd_err_log"; rm -f "$cmd_err_log"; else echo "NA"; fi)
                   super_ocf_log debug "DBG: RA ==== action HANA_CALL (cmd is '$cmd', rc is '$rc', stderr from su is '$suErr', stderr from cmd is '$cmdErr') ===="
                   # on rc=1 - retry to improve the behavior in AD environments
-                  if [ $rc -eq 1 ]; then
-                      super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
+                  if [ "$rc" -eq 1 ]; then
+                      super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd_type' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
                       if [ "$cmdErr" == "NA" ]; then
-                          # seems something was going wrong with the 'pre_cmd' (su)
-                          super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
-                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc=$?
+                          # seems something was going wrong with the 'pre_cmd_type' (su)
+                          super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd_type'. Retry once."
+                          output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc="$?"
                       fi
                   fi
                   #
                   # on timeout ...
                   #
-                  if [ $rc -eq 124 ]; then
+                  if [ "$rc" -eq 124 ]; then
                       super_ocf_log warn "RA: HANA_CALL timed out after $timeOut seconds running command '$cmd'"
                   fi
                   if [[ "$rc" == "124" &&  -n "$onTimeOut" ]]; then
@@ -754,7 +783,7 @@ function HANA_CALL()
     esac
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
-    return $rc;
+    return "$rc";
 }
 
 #
@@ -1092,12 +1121,12 @@ function saphana_init_get_remote_site()
     #              This limits us to only have sites A => B inside of the cluster and completely "ignore" site C
     #
     for clN in "${otherNodes[@]}"; do
-	    nodeSite=$(get_hana_attribute $clN "${ATTR_NAME_HANA_SITE[@]}")
+	    nodeSite=$(get_hana_attribute "$clN" "${ATTR_NAME_HANA_SITE[@]}")
         super_ocf_log info "TOP: clN=$clN, nodeSite=$nodeSite"
         if [[ -n "$nodeSite" && "$nodeSite" != "$site" ]]; then
-            remSite=$nodeSite
-            remSR_name=${remSite%%:*}
-            remSR_id=${remSite#*:}
+            remSite="$nodeSite"
+            remSR_name="${remSite%%:*}"
+            remSR_id="${remSite#*:}"
         fi
     done
     # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
@@ -1106,9 +1135,9 @@ function saphana_init_get_remote_site()
     # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE> <???>
 
     rem_mns=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_MNS[@]}")
-    remoteHost=$rem_mns
+    remoteHost="$rem_mns"
     super_ocf_log debug "DBG: remoteHost is $remoteHost"
-    remoteNode=$rem_mns
+    remoteNode="$rem_mns"
 }
 
 function saphana_init_get_hana_version()
@@ -1127,7 +1156,7 @@ function saphana_init_sap_commands()
     hdbState="hdbnsutil -sr_stateConfiguration"
     hdbMap="hdbnsutil -sr_stateHostMapping"
     local standbyFilter=""
-    if [ $ACTION = "stop" ]; then
+    if [ "$ACTION" = "stop" ]; then
        standbyFilter="--standbyFilter=off"
     fi
 }
@@ -1174,7 +1203,7 @@ function cluster_get_other_nodes()
 #
 function saphana_init() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=$OCF_SUCCESS
+    local rc="$OCF_SUCCESS"
     local clN
     SYSTEMCTL="/usr/bin/systemctl"
     # local site
@@ -1199,7 +1228,7 @@ function saphana_init() {
     # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
         vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-            | awk '$4 == SID && $6 == SYSNR { print $8 }' SID=$SID SYSNR=$InstanceNr 2>/dev/null )
+            | awk '$4 == SID && $6 == SYSNR { print $8 }' SID="$SID" SYSNR="$InstanceNr" 2>/dev/null )
         super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     else
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
@@ -1230,7 +1259,7 @@ function saphana_init() {
     #
     saphana_init_scoring_tables
     # TODO PRIO1: NG - scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
-    if ocf_is_true $PreferSiteTakeover; then
+    if ocf_is_true "$PreferSiteTakeover"; then
         SCORING_TABLE=("${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}")
     else
         case "$PreferSiteTakeover" in
@@ -1275,7 +1304,7 @@ function saphana_init() {
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
-        if have_binary /usr/sap/$SID/$InstanceName/exe/sapstartsrv && have_binary /usr/sap/$SID/$InstanceName/exe/sapcontrol
+        if have_binary "/usr/sap/$SID/$InstanceName/exe/sapstartsrv" && have_binary "/usr/sap/$SID/$InstanceName/exe/sapcontrol"
         then
             DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
         fi
@@ -1298,7 +1327,7 @@ function saphana_init() {
         # also take profile versions into account - they might break this fall-back
         # TODO: PRIO4: Check, if it makes sense to implement an additional last fall-back: get the SAPSTARTPROFILE from /usr/sap/sapservices
         #
-        SAPSTARTPROFILE="$(ls -1 $DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_*})"
+        SAPSTARTPROFILE="$(ls -1 "$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_*}")"
     fi
     #
     # get HANA version
@@ -1311,14 +1340,14 @@ function saphana_init() {
 
     # TODO PRIO2: Only, if scale-out do the master_walk
     if is_master_nameserver; then
-       master_walk $standbyFilter
+       master_walk "$standbyFilter"
     elif is_active_nameserver_slave; then
-       master_walk $standbyFilter
+       master_walk "$standbyFilter"
     elif is_lost_nameserver_slave; then
-       master_walk $standbyFilter
+       master_walk "$standbyFilter"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
-    return $OCF_SUCCESS
+    return "$OCF_SUCCESS"
 }
 
 # chk4systemdsupport - check, if SAP systemd support is available
@@ -1330,16 +1359,16 @@ function chk4systemdsupport() {
     local systemd_unit_name="SAP${SID}_${InstanceNr}.service"
     local rc=1
     if [ -x "$SYSTEMCTL" ]; then
-        if [ -f /etc/systemd/system/"$systemd_unit_name" ]; then
+        if [ -f "/etc/systemd/system/$systemd_unit_name" ]; then
             rc=0
-        elif $SYSTEMCTL list-unit-files | \
+        elif "$SYSTEMCTL" list-unit-files | \
             awk '$1 == service { found=1 } END { if (! found) {exit 1}}' service="${systemd_unit_name}"; then
             rc=0
         else
             rc=1
         fi
     fi
-    return $rc
+    return "$rc"
 }
 
 #
@@ -1380,7 +1409,7 @@ function handle_unix_domain_sockets() {
                     super_ocf_log info "RA: file '$sockFile' not found. Nothing to do, let sapstartsrv create a new one during start"
                 fi
             fi
-            if ocf_is_true $sockError; then
+            if ocf_is_true "$sockError"; then
                 # fallback - if there are Errors, remove unix domain socket as
                 # last resort
                 rm -f "$sockFile"
@@ -1399,22 +1428,22 @@ function check_sapstartsrv() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local restart=0
     local runninginst=""
-    local rc=$OCF_SUCCESS
+    local rc="$OCF_SUCCESS"
     local output=""
     if chk4systemdsupport; then
         # use systemd to control sapstartsrv
         local systemd_unit_name="SAP${SID}_${InstanceNr}.service"
 
-        if $SYSTEMCTL is-active --quiet "$systemd_unit_name"; then
+        if "$SYSTEMCTL" is-active --quiet "$systemd_unit_name"; then
             super_ocf_log info "ACT: systemd service $systemd_unit_name is active"
         else
             super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
             # use start, because restart does also stop sap instance
-            $SYSTEMCTL start "$systemd_unit_name" >/dev/null 2>&1; src=$?
-            if [ $src -ne 0 ]; then
+            "$SYSTEMCTL" start "$systemd_unit_name" >/dev/null 2>&1; src=$?
+            if [ "$src" -ne 0 ]; then
                 super_ocf_log error "ACT: error during start of systemd unit ${systemd_unit_name}!"
-                rc=$OCF_ERR_GENERIC
-                ocf_is_probe && rc=$OCF_NOT_RUNNING
+                rc="$OCF_ERR_GENERIC"
+                ocf_is_probe && rc="$OCF_NOT_RUNNING"
             fi
         fi
     else
@@ -1423,8 +1452,8 @@ function check_sapstartsrv() {
             super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
             restart=1
         else
-            output=$($SAPCONTROL -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
-            if [ $? -eq 0 ]
+            output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
+            if [ "$?" -eq 0 ]
             then
                 runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
                 if [ "$runninginst" != "$InstanceName" ]
@@ -1432,9 +1461,9 @@ function check_sapstartsrv() {
                     super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
                     restart=1
                 else
-                    output=$($SAPCONTROL -nr "$InstanceNr" -function AccessCheck Start)
-                    if [ $? -ne 0 ]; then
-                        super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 /tmp/.sapstream5${InstanceNr}13))"
+                    output=$("$SAPCONTROL" -nr "$InstanceNr" -function AccessCheck Start)
+                    if [ "$?" -ne 0 ]; then
+                        super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 "/tmp/.sapstream5${InstanceNr}13"))"
                         super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
                         restart=1
                     fi
@@ -1444,10 +1473,10 @@ function check_sapstartsrv() {
                 restart=1
             fi
         fi
-        if [ -z "$runninginst" ]; then runninginst=$InstanceName; fi
-        if [ $restart -eq 1 ]
+        if [ -z "$runninginst" ]; then runninginst="$InstanceName"; fi
+        if [ "$restart" -eq 1 ]
         then
-            if [ -d /usr/sap/$SID/SYS/profile/ ]
+            if [ -d "/usr/sap/$SID/SYS/profile/" ]
             then
                 DIR_PROFILE="/usr/sap/$SID/SYS/profile"
             else
@@ -1481,7 +1510,7 @@ function check_sapstartsrv() {
             fi
         fi
     fi
-    return $rc
+    return "$rc"
 }
 
 #
@@ -1505,7 +1534,7 @@ function cleanup_instance() {
 #
 function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc=$HANA_STATE_DEFECT
+    local rc="$HANA_STATE_DEFECT"
     local ini_mode=""
     local chkMethod=""
     for chkMethod in  hU hU hU gP; do
@@ -1534,17 +1563,17 @@ function check_for_primary() {
        esac
        case "$node_status" in
            primary )
-               rc=$HANA_STATE_PRIMARY
+               rc="$HANA_STATE_PRIMARY"
                break;;
            syncmem | sync | async )
-               rc=$HANA_STATE_SECONDARY
+               rc="$HANA_STATE_SECONDARY"
                break;;
            none ) # have seen that mode on second side BEFORE we registered it as replica
-               rc=$HANA_STATE_STANDALONE
+               rc="$HANA_STATE_STANDALONE"
                break;;
            * )
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
-               dump=$( echo $node_status | hexdump -C );
+               dump=$( echo "$node_status" | hexdump -C );
                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
                # TODO PRIO2: Limit the runtime of hdbnsutil and use getParameter.py as fallback
                # SAP_CALL
@@ -1555,7 +1584,7 @@ function check_for_primary() {
        sleep 20
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # function: analyze_hana_sync_statusSRS
@@ -1586,7 +1615,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: PRIO2: Here we might also need to filter additional sites (if multi tier should be supported)
     #              And is the check for return code capable for chains?
     #
-    if [ $srRc -eq 15 ]; then
+    if [ "$srRc" -eq 15 ]; then
        # Fix for a HANA BUG, where a non-working SR resulted in RC 15:
        if grep -q "ACTIVE" <<< "$FULL_SR_STATUS"; then
           super_ocf_log info "FLOW ${FUNCNAME[0]} SOK"
@@ -1602,10 +1631,10 @@ function analyze_hana_sync_statusSRS()
           # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
           lpa_set_lpt 10 "$remSR_name"
        fi
-    elif [ $srRc -le 11 ]; then # 11 and 10
+    elif [ "$srRc" -le 11 ]; then # 11 and 10
        # if systemReplicationStatus is ERROR and landscapeHostConfiguration is down then do NOT set SFAIL
        get_hana_landscape_status; lss=$?
-       if [ $lss -lt 2 ]; then
+       if [ "$lss" -lt 2 ]; then
           # keep everything like it was
           rc=2
        else
@@ -1639,7 +1668,7 @@ function analyze_hana_sync_statusSRS()
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} PRIM+LPA"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # analyze_hana_sync_statusSQL removed
@@ -1654,19 +1683,19 @@ function get_hana_landscape_status()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
-    if [ $rc -eq 124 ]; then
+    if [ "$rc" -eq 124 ]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
         super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds"
         sleep 20
         hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
-        if [ $rc -eq 124 ]; then
+        if [ "$rc" -eq 124 ]; then
            super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
         fi
     fi
-    return $rc;
+    return "$rc";
 }
 
 #
@@ -1684,8 +1713,8 @@ function register_hana_secondary()
     local remoteHanaHost="";
     # TODO PRIO1: NG - scale-up is normally always the_master_nameserver
     if is_the_master_nameserver; then
-        remoteInstance=$InstanceNr
-        if ocf_is_true ${AUTOMATED_REGISTER}; then
+        remoteInstance="$InstanceNr"
+        if ocf_is_true "${AUTOMATED_REGISTER}"; then
             # for scale-up we normally should not need that, but for scale-out:
             # before we could register we stop HANA on all nodes of the swarm (maybe some still running)
             saphana_stop
@@ -1719,7 +1748,7 @@ function register_hana_secondary()
         fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc;
+    return "$rc";
 }
 
 #
@@ -1729,8 +1758,8 @@ function register_hana_secondary()
 function saphana_status() {
     local binDeam="hdb.sap${SIDInstanceName}" rc=0
     binDeam=${binDeam:0:15}   # Process name is limited to the first 15 characters
-    if pgrep $binDeam 1>/dev/null; then rc=$OCF_SUCCESS; else rc=$OCF_NOT_RUNNING; fi
-    return $rc
+    if pgrep "$binDeam" 1>/dev/null; then rc="$OCF_SUCCESS"; else rc="$OCF_NOT_RUNNING"; fi
+    return "$rc"
 }
 
 #
@@ -1740,33 +1769,33 @@ function saphana_status() {
 #
 function saphana_start() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc=$OCF_NOT_RUNNING
+    local rc="$OCF_NOT_RUNNING"
     local output=""
     local loopcount=0
     local lastSrHook
     local lssRc
     # TODO PRIO2: check_sapstartsrv to be moved into "if is_the_master_nameserver..." ?
-    check_sapstartsrv; rc=$?
+    check_sapstartsrv; rc="$?"
     #
     # DONE: ASK: PRIO5: For SCALE-OUT - do we need to use another call like StartSystem? Or better to use the HDB command?
     #
     # set_SRHOOK() removed here. saphana_start() is used for primary and secondaries but would need different attribute values
     if is_the_master_nameserver; then
-        if [ $rc -eq $OCF_SUCCESS ]; then
+        if [ "$rc" -eq "$OCF_SUCCESS" ]; then
             lastSrHook=$(get_SRHOOK_plain "$sr_name")
             if [ -n "$lastSrHook" ]; then
                 # reset old srHook attribute to SWAIT as we are starting right now
                 set_SRHOOK "$sr_name" "SWAIT"
             fi
-            output=$($SAPCONTROL -nr $InstanceNr -function StartSystem); rc=$?
+            output=$("$SAPCONTROL" -nr "$InstanceNr" -function StartSystem); rc="$?"
             super_ocf_log info "ACT: SAP HANA START: Starting System $SID-$InstanceName: $output"
         fi
-        if [ $rc -eq 0 ]
+        if [ "$rc" -eq 0 ]
         then
             HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStarted)
             # HANA_ACTION_TIMEOUT=$(get_action_timeout)
-            output=$($SAPCONTROL -nr $InstanceNr -function WaitforStarted $HANA_ACTION_TIMEOUT 1)
-            if [ $? -eq 0 ]
+            output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStarted "$HANA_ACTION_TIMEOUT" 1)
+            if [ "$?" -eq 0 ]
             then
                 # TODO PRIO2: scale-up did not check the landscapeHostConfiguration rc
                 for i in 1 2 3 4; do
@@ -1774,7 +1803,7 @@ function saphana_start() {
                     # TODO PRIO2: query lss to be moved into a function
                     # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
                     # TODO PRIO2: reduce number of landscapeHostConfiguration.py calls in the code and create a function for that (including SAPCONTROL-OK: validation)
-                    hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
+                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
                     hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
                             awk -F= '
                             $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
@@ -1785,13 +1814,13 @@ function saphana_start() {
                             $1 == "nameServerActualRole"  {nsAR=$2}
                             $1 == "indexServerConfigRole" {isCR=$2}
                             $1 == "indexServerActualRole" {isAR=$2}
-                            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName=$vName )
+                            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
                     # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
                     hanaHostActive=$(echo "${hanaANSWER//[[:blank:]]/}" | \
                     awk -F= '
                                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
-                                END { printf "%s\n", hostActive;  } ' vName=$vName )
-                    set_hana_attribute ${NODENAME} "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+                                END { printf "%s\n", hostActive;  } ' vName="$vName" )
+                    set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
                     #
                     # set LSS local-site attribute
                     #
@@ -1812,7 +1841,7 @@ function saphana_start() {
         rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -1830,13 +1859,13 @@ function saphana_stopSystem() {
     if [ "$rc" == "$OCF_SUCCESS" ]; then
         ## TODO: PRIO 1: Only stop System, if I am the last master!
         ## TODO: PRIO 2: Do we need a "last-man-switch-off-the-light" detection?
-        output=$($SAPCONTROL -nr "$InstanceNr" -function "$stopMode")
+        output=$("$SAPCONTROL" -nr "$InstanceNr" -function "$stopMode")
         rc=$?
          super_ocf_log info "ACT: SAP HANA STOP: Stopping System $SID-$InstanceName: $output"
     fi
     if [ "$rc" == 0 ]; then
         HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStopped)
-        output=$($SAPCONTROL -nr $InstanceNr -function WaitforStopped $HANA_ACTION_TIMEOUT 1); rcWfS="$?"
+        output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStopped "$HANA_ACTION_TIMEOUT" 1); rcWfS="$?"
         while true; do
             #
             # If the master-nameserver dies and does not have a failover candidate but there are still running worker nodes
@@ -1845,12 +1874,12 @@ function saphana_stopSystem() {
             # TODO: PRIO1: NG - differ return codes for WaitforStarted from the Number-Of-Partial-Nodes
             #
             rcWfS=0
-            hanaANSWER=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null);
+            hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null);
             hAPart=$(echo "$hanaANSWER" | tr -d ' ' | \
             awk -F= '
                BEGIN { partials=0 }
                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive "-" $2; if ( $2 == "partial" ) { partials=1 } }
-                    END { printf "%s:%s\n", hostActive, partials;  } ' vName=$vName )
+                    END { printf "%s:%s\n", hostActive, partials;  } ' vName="$vName" )
             # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
             hanaHostActive="${hAPart%:*}"
             partials="${hAPart#*:}"
@@ -1911,10 +1940,10 @@ function saphana_stop() {
 	    is_active_nameserver_slave; is_slave_rc=$?
 	    super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($the_master) NOR is_lost_nameserver_slave"
         # TODO: PRIO1: NG - Do we need to set a clone state here?
-        rc=$OCF_SUCCESS
+        rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -1925,7 +1954,7 @@ function saphana_stop() {
 #
 function saphana_validate() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=$OCF_SUCCESS
+    local rc="$OCF_SUCCESS"
     #
     # check, if SID does NOT match ^[A-Z][A-Z0-9][A-Z0-9]$
     # we 'substract' the regular pattern from the string, if the result is not empty, it's not a 1:1 hit
@@ -1945,7 +1974,7 @@ function saphana_validate() {
         rc="$OCF_ERR_ARGS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -1957,7 +1986,7 @@ function saphana_start_primary()
 {
     # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
+    local primary_status sync_attr score_master rc="$OCF_NOT_RUNNING"
     local lss="$1"
     local sqlrc=0;
     local rc=0
@@ -1968,7 +1997,7 @@ function saphana_start_primary()
     #
     super_ocf_log debug "DBG: saphana_primary - check_for_primary reports HANA_STATE_PRIMARY"
     #
-    lpa_init_lpt $HANA_STATE_PRIMARY
+    lpa_init_lpt "$HANA_STATE_PRIMARY"
     lpa_check_lpt_status; lpa_dec=$?
     # TODO PRIO2: scale-out was to get lss as param; scale-up was to query lss
     # we take first lss from the parameter $1
@@ -1977,12 +2006,12 @@ function saphana_start_primary()
     my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
     my_sync=$(get_hana_site_attribute "${sr_name}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
     # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
-    if [ $lss -eq 0 ]; then
+    if [ "$lss" -eq 0 ]; then
        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
        # DONE: PRIO1: what to do for lss=0?
        # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
        lpa_advice="skip"
-       rc=$OCF_ERR_GENERIC
+       rc="$OCF_ERR_GENERIC"
     fi
     my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
     # TODO PRIO1: NG - function to set/get site specific attributes
@@ -2039,19 +2068,19 @@ function saphana_start_primary()
                 2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
                     super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc "$sr_name"
-                    rc=$OCF_SUCCESS
+                    lpa_set_lpt "$LPTloc" "$sr_name"
+                    rc="$OCF_SUCCESS"
                     ;;
                 1 ) # landscape says we are down, lets start and adjust scores and return code
                     super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
                     saphana_start
                     rc=$?
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc "$sr_name"
+                    lpa_set_lpt "$LPTloc" "$sr_name"
                     my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
                     ;;
             esac
-            my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+            my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
             my_role="${my_lss}:${my_srr}:${my_role}"
             super_ocf_log info "DEC: saphana_start_primary: scoring_crm_master($my_role,$my_sync)"
             scoring_crm_master "$my_role" "$my_sync"
@@ -2063,7 +2092,7 @@ function saphana_start_primary()
                     # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
                     super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
                     set_crm_master -inf
-                    rc=$OCF_NOT_RUNNING
+                    rc="$OCF_NOT_RUNNING"
                     ;;
                 1 ) # lets try to register
                     # DONE: PRIO2: Like Action in start_secondary
@@ -2072,12 +2101,12 @@ function saphana_start_primary()
                     # TODO PRIO2: NG normally only needed for scale-out:
                     set_crm_master  0
                     for m in "${masters[@]}"; do
-                        set_crm_master  0 $m
+                        set_crm_master  0 "$m"
                     done
                     if wait_for_primary_master 1; then
                         register_hana_secondary
                         check_for_primary; primary_status=$?
-                        if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+                        if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
                             super_ocf_log info "ACT: Register successful"
                             lpa_push_lpt 10
                             super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $sr_name"
@@ -2089,11 +2118,11 @@ function saphana_start_primary()
                             lpa_set_lpt  10 "$sr_name"
                         else
                             super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
-                            rc=$OCF_NOT_RUNNING
+                            rc="$OCF_NOT_RUNNING"
                         fi
                     else
                         # lets check next monitor, if we can register
-                        rc=$OCF_SUCCESS
+                        rc="$OCF_SUCCESS"
                     fi
                     ;;
             esac
@@ -2136,7 +2165,7 @@ function saphana_start_primary()
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2160,7 +2189,7 @@ function check_for_primary_master()
         * ) rc=1;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2183,9 +2212,9 @@ function wait_for_primary_master()
            wait=0
            rc=0
         else
-           if [ $loops -gt 0 ]; then
+           if [ "$loops" -gt 0 ]; then
               (( count++ ))
-              if [ $count -gt $loops ]; then
+              if [ "$count" -gt "$loops" ]; then
                  wait=0
                  rc=1
               fi
@@ -2194,7 +2223,7 @@ function wait_for_primary_master()
         fi
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2205,7 +2234,7 @@ function wait_for_primary_master()
 function saphana_start_secondary()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
+    local primary_status sync_attr score_master rc="$OCF_NOT_RUNNING"
     local sqlrc;
     case "$PreferSiteTakeover" in
         never | NEVER | Never )
@@ -2238,14 +2267,14 @@ function saphana_start_secondary()
     set_hana_attribute "${NODENAME}" "$sr_name" "${ATTR_NAME_HANA_SEC[@]}"
     if wait_for_primary_master 10; then
        saphana_start; rc=$?
-       if [ $rc -ne $OCF_SUCCESS ]; then
+       if [ "$rc" -ne "$OCF_SUCCESS" ]; then
            if ! wait_for_primary_master 1; then
                # It seems the stating secondary could not start because of stopping primary
                #    so this is a WAITING situation
                super_ocf_log info "ACT: PRIMARY seems to be down now ==> WAITING"
                set_hana_attribute "${NODENAME}" "WAITING4PRIM" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                set_crm_master -INFINITY
-               rc=$OCF_SUCCESS
+               rc="$OCF_SUCCESS"
            fi
        else
            super_ocf_log debug "DBG: 006 * lpa_set_lpt 10 $sr_name"
@@ -2255,10 +2284,10 @@ function saphana_start_secondary()
        super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
        set_hana_attribute "${NODENAME}" "WAITING4PRIM" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
        set_crm_master -INFINITY
-       rc=$OCF_SUCCESS
+       rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2294,23 +2323,23 @@ function saphana_check_local_instance()
       #  0 pid: 5898
       # TODO PRIO1: NG - improve the sap service status detection code here
       #  for each service <nr> we need the matching <dispstatus> and <name>
-      for SERVNO in `echo "$output" | grep '^[0-9] ' | cut -d' ' -f1 | sort -u`
+      for SERVNO in $(echo "$output" | grep '^[0-9] ' | cut -d' ' -f1 | sort -u)
       do
         local COLOR=""
         local SERVICE=""
         local STATE=0
         local SEARCH
 
-        COLOR=`echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3`
-        SERVICE=`echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3`
+        COLOR=$(echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3)
+        SERVICE=$(echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3)
 
-        case $COLOR in
+        case "$COLOR" in
           GREEN|YELLOW)       STATE="$OCF_SUCCESS";;
           *)                  STATE="$OCF_NOT_RUNNING";;
         esac
 
         # TODO PRIO1: NG - check this new code very carefully
-        SEARCH=`echo "$MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g'`
+        SEARCH=$(echo "$MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
         #if [ `echo "$SERVICE" | egrep -c "$SEARCH"` -eq 1 ]
         # do NOT quote regex $MONITOR_SERVICES here !!
         if  [[ "$SERVICE" =~ $MONITOR_SERVICES  ]]
@@ -2336,7 +2365,7 @@ function saphana_check_local_instance()
       fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2355,12 +2384,12 @@ function lpa_get_lpt() {
     lpt=$(get_hana_site_attribute "${mysite}" "${ATTR_NAME_HANA_SITE_LPA[@]}")
     if [ -n "$lpt" ]; then
         rc=0
-        echo $lpt
+        echo "$lpt"
     else
         rc=2
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2389,7 +2418,7 @@ function lpa_set_lpt() {
        super_ocf_log info "DEC: lpa_set_lpt - ignore changing lpt due to lost site name"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2404,13 +2433,13 @@ function lpa_pull_lpt() {
     local rc=1
     local lpt=-1
     local X=""
-    local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${NODENAME}
+    local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
     local -a lpt_file_words
     #
     # only fetch the first word of the first line as lpt
     #
     mapfile <"$lpa_file"; 
-    read lpt X <<<"${MAPFILE[0]}"
+    read -r lpt X <<<"${MAPFILE[0]}"
     if [ -n "$lpt" ]; then
         echo "$lpt"
         rc=0
@@ -2418,7 +2447,7 @@ function lpa_pull_lpt() {
         rc=2
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2436,7 +2465,7 @@ function lpa_push_lpt() {
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
     #
     mkdir -p "$LPA_DIRECTORY"
-    echo "$lpt" > $lpa_file
+    echo "$lpt" > "$lpa_file"
     clpt=$(lpa_pull_lpt); lpt_rc=$?
     if [[ "$clpt" != "$lpt" || "$lpt_rc" != 0 ]]; then
         rc=2
@@ -2444,7 +2473,7 @@ function lpa_push_lpt() {
         rc=0
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2467,7 +2496,7 @@ function lpa_init_lpt() {
     local LPTrem=-1
     local hana_state=$1
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
-    mkdir -p $LPA_DIRECTORY
+    mkdir -p "$LPA_DIRECTORY"
     LPTloc=$(lpa_get_lpt "${sr_name}") || LPTloc=$(lpa_pull_lpt) || \
         if   [ "$hana_state" == "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
             # init primary
@@ -2480,9 +2509,9 @@ function lpa_init_lpt() {
         else
             rc=2
         fi
-    lpa_set_lpt $LPTloc "$sr_name"
+    lpa_set_lpt "$LPTloc" "$sr_name"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2543,18 +2572,18 @@ function lpa_check_lpt_status() {
             LPTloc=20                           # DEFAULT
         fi
     fi
-    LPTrem=$(lpa_get_lpt $remSR_name); lparc=$?
+    LPTrem=$(lpa_get_lpt "$remSR_name"); lparc="$?"
     super_ocf_log info "LPA: LPTloc=$LPTloc LPTrem=$LPTrem"
-    if [ $lparc -ne 0 ]; then
+    if [ "$lparc" -ne 0 ]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
         super_ocf_log debug "DBG: LPA: LPTloc=$LPTloc, LPTrem undefined ==> WAIT"
         rc=3
     else
         super_ocf_log debug "DBG: LPA: LPTloc ($LPTloc) LPTrem ($LPTrem) delta ($delta)"
-        if [[ $LPTloc -lt $LPTMark && $LPTrem -lt $LPTMark ]]; then
+        if [[ "$LPTloc" -lt "$LPTMark" && "$LPTrem" -lt "$LPTMark" ]]; then
            delta=0   # both lpts are not a real timestamp so just take the greater one
         else
-           delta=$DUPLICATE_PRIMARY_TIMEOUT   # at least one of the lpts is a real timestamp so include delta-gap
+           delta="$DUPLICATE_PRIMARY_TIMEOUT"   # at least one of the lpts is a real timestamp so include delta-gap
         fi
         if (( delta < LPTloc - LPTrem )); then
             # We are the winner - LPA says STARTUP
@@ -2576,7 +2605,7 @@ function lpa_check_lpt_status() {
         fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # function: master_walk - find master node(s)
@@ -2626,38 +2655,38 @@ function master_walk() {
     # 4:P:slave:slave:worker:slave      KOELN
     super_ocf_log debug "DBG: master walk"
     # walk over all known cluster nodes
-    for node in $NODENAME "${otherNodes[@]}"; do
+    for node in "$NODENAME" "${otherNodes[@]}"; do
         super_ocf_log debug "DBG: master walk node $node"
-        nSite=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_SITE[@]}")
+        nSite=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_SITE[@]}")
         if [ "$site" = "$nSite" ]; then
             # node of same site found
-            nStdBy=$(crm_attribute -N ${node} -n standby     -G -l forever -q -d off)
-            nMaint=$(crm_attribute -N ${node} -n maintenance -G -l forever -q -d off)
+            nStdBy=$(crm_attribute -N "${node}" -n standby     -G -l forever -q -d off)
+            nMaint=$(crm_attribute -N "${node}" -n maintenance -G -l forever -q -d off)
             if [ "$nMaint" = "on" ]; then
                 super_ocf_log debug "DBG: Filter node by cluster node maintenance mode"
             elif [[ "$nStdBy" = "on" && "$standbyFilter" = "1" ]]; then
                 super_ocf_log debug "DBG: Filter node by cluster node standby mode"
             else
-                nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}")
-                IFS=: read nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
+                nRole=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")
+                IFS=: read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
                 super_ocf_log debug "DBG: site $site $nNsConf:$nNsCurr"
                 case "$nNsConf:$nNsCurr" in
-                    master1:master  ) master1=$node; active_master=$node
+                    master1:master  ) master1="$node"; active_master="$node"
                         super_ocf_log debug "DBG: roles $nRole match master1:master"
                     ;;
-                    master2:master  ) master2=$node; active_master=$node
+                    master2:master  ) master2="$node"; active_master="$node"
                         super_ocf_log debug "DBG: roles $nRole match master2:master"
                     ;;
-                    master3:master  ) master3=$node; active_master=$node
+                    master3:master  ) master3="$node"; active_master="$node"
                         super_ocf_log debug "DBG: roles $nRole match master3:master"
                     ;;
-                    master1:*       ) master1=$node;
+                    master1:*       ) master1="$node";
                         super_ocf_log debug "DBG: roles $nRole match master1:STAR"
                     ;;
-                    master2:*       ) master2=$node;
+                    master2:*       ) master2="$node";
                         super_ocf_log debug "DBG: roles $nRole match master2:STAR"
                     ;;
-                    master3:*       ) master3=$node;
+                    master3:*       ) master3="$node";
                         super_ocf_log debug "DBG: roles $nRole match master3:STAR"
                     ;;
                     *:shtdown       )
@@ -2684,7 +2713,7 @@ function master_walk() {
         best_cold_master="${masters[0]}"
         the_master="$best_cold_master"
     else
-        the_master=$active_master
+        the_master="$active_master"
     fi
     #
     # set MNS local-site attribute
@@ -2709,8 +2738,8 @@ function is_active_nameserver_slave()
 {
   super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
   local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
-  nRole=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
-  read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+  nRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
+  read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
   case "$nNsConf:$nNsCurr" in
       slave:slave )
 	 # configured as slave and actual role also detected as slave
@@ -2722,7 +2751,7 @@ function is_active_nameserver_slave()
   esac
   super_ocf_log info "DEC: is_active_nameserver_slave rc=$rc"
   super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-  return $rc
+  return "$rc"
 }
 
 # function: is_lost_nameserver_slave
@@ -2737,8 +2766,8 @@ function is_lost_nameserver_slave()
 {
   super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
   local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
-  nRole=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
-  IFS=: read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+  nRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+  IFS=: read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
   case "$nNsConf:$nNsCurr" in
       slave: )
 	 # configured as slave but actual role could not be figured out - treat as is_lost_nameserver_slave
@@ -2750,7 +2779,7 @@ function is_lost_nameserver_slave()
   esac
   super_ocf_log info "DEC: is_lost_nameserver_slave ($nNsConf:$nNsCurr) rc=$rc"
   super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-  return $rc
+  return "$rc"
 }
 
 # function: is_master_nameserver
@@ -2765,8 +2794,8 @@ function is_master_nameserver()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
-    nRole=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
-    read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+    nRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
+    read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
     case "$nNsConf:$nNsCurr" in
         master[123]:master )
            rc=0
@@ -2780,7 +2809,7 @@ function is_master_nameserver()
     esac
     super_ocf_log info "DEC: is_master_nameserver  rc=$rc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # function: is_the_master_nameserver
@@ -2797,7 +2826,7 @@ function is_the_master_nameserver()
         rc=0
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2808,7 +2837,7 @@ function is_the_master_nameserver()
 #
 function saphana_start_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local primary_status sync_attr score_master rc=$OCF_NOT_RUNNING
+    local primary_status sync_attr score_master rc="$OCF_NOT_RUNNING"
     local sqlrc;
     local chkusr;
     # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
@@ -2828,21 +2857,21 @@ function saphana_start_clone() {
         #   from the landscape.
         # NOTE: ALL NODES MUST BE IN THE SAME HANA FAILOVER GROUP (LIKE DEFAULT)
         #
-        if [ $nr_site_node -ge $lss_worker ]; then
-            if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
-                set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                saphana_start_primary $lss; rc=$?
+        if [ "$nr_site_node" -ge "$lss_worker" ]; then
+            if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
+                set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                saphana_start_primary "$lss"; rc="$?"
             else
-                set_hana_attribute ${NODENAME} "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                 super_ocf_log debug "DBG: 007 * lpa_set_lpt 10 $sr_name"
                 lpa_set_lpt  10 "$sr_name"
-                saphana_start_secondary $lss; rc=$?
+                saphana_start_secondary "$lss"; rc="$?"
             fi
         else
             # saphana_start_clone - WAITING4NODES handling
             super_ocf_log info "ACT: nr_site_worker < lss_worker- setting WAITING4NODES"
-            set_hana_attribute ${NODENAME} "WAITING4NODES" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-            rc=$OCF_SUCCESS
+            set_hana_attribute "${NODENAME}" "WAITING4NODES" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+            rc="$OCF_SUCCESS"
         fi
     else
         set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
@@ -2854,21 +2883,21 @@ function saphana_start_clone() {
         else
             # IF LS>=2 AND ROLE STANDBY "RESTART" INSTANCE
             get_hana_landscape_status; lss=$?
-            if [ $lss -gt 2 ]; then
+            if [ "$lss" -gt 2 ]; then
                 #
                 # only restart standby instances
                 #
-                my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+                my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
                 echo "$my_role" | grep -q ":standby" && start=1
-                output=$($SAPCONTROL -nr $InstanceNr -function RestartInstance)
+                output=$("$SAPCONTROL" -nr "$InstanceNr" -function RestartInstance)
             fi
             #
         fi
         set_crm_master -INFINITY
-        rc=$OCF_SUCCESS
+        rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -2903,13 +2932,13 @@ function recover_site_attributes_from_file()
         #
         # TODO: PRIO0: also allow a=b instead of a = b
         # TODO: PRIO5: also allow multiple attributes each in an own line - for now only one attribute is needed
-        read srATTR EQS srVALUE <"$srHookAttributeFile"
+        read -r srATTR EQS srVALUE <"$srHookAttributeFile"
         case "$srATTR" in
             hana_${sid}_site_srHook_* )
                 #
                 # get site name from site attribute-name
                 #
-                site="${srATTR#hana_${sid}_site_srHook_}"
+                site="${srATTR#hana_"${sid}"_site_srHook_}"
                 super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event ($srATTR=$srVALUE)"
                 #
                 # DONE: PRIO0 - add check for srATTR name here
@@ -2942,7 +2971,7 @@ function saphana_monitor_primary()
 {
     # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc=$OCF_ERR_GENERIC
+    local rc="$OCF_ERR_GENERIC"
     local promoted=0
     local init_attribute=0
     local LPTloc=-1
@@ -2976,11 +3005,11 @@ function saphana_monitor_primary()
                 # DONE: lpa_check_lpt_status to come out of here :)
                 # DONE: PRIO2: CHECK IF THE FIX FOR COMING OUT OF WAITING IS CORRECT
                 get_hana_landscape_status; lss=$?
-                if [ $lss -ge 2 ]; then
+                if [ "$lss" -ge 2 ]; then
                     # seems admin already decided that for us? -> we are running - set DEMOTED
                     promoted=0;
                     LPTloc=$(date '+%s')
-                    lpa_set_lpt $LPTloc "$sr_name"
+                    lpa_set_lpt "$LPTloc" "$sr_name"
                 fi
                 lpa_check_lpt_status; lparc=$?
                 case "$lparc" in
@@ -2989,10 +3018,10 @@ function saphana_monitor_primary()
                         saphana_start_clone
                         rc=$?
                         super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-                        return $rc
+                        return "$rc"
                         ;;
                     2 )
-                        lpa_init_lpt $HANA_STATE_PRIMARY
+                        lpa_init_lpt "$HANA_STATE_PRIMARY"
                         # still waiting for second site to expire
                         if ocf_is_true "$AUTOMATED_REGISTER" ; then
                            super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
@@ -3000,19 +3029,19 @@ function saphana_monitor_primary()
                            super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
                            super_ocf_log info "LPA: You need to manually sr_register the older primary"
                         fi
-                        return $OCF_SUCCESS
+                        return "$OCF_SUCCESS"
                     ;;
                     3 )
-                        lpa_init_lpt $HANA_STATE_PRIMARY
+                        lpa_init_lpt "$HANA_STATE_PRIMARY"
                         # still waiting for second site to report lpa-lpt
                         super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
-                        return $OCF_SUCCESS
+                        return "$OCF_SUCCESS"
                     ;;
                     4 )
                         # lpa internal error
                         # TODO PRIO3: Implement special handling for this issue - should we fail the ressource?
                         super_ocf_log info "LPA: LPA reports an internal error"
-                        return $OCF_SUCCESS
+                        return "$OCF_SUCCESS"
                     ;;
                 esac
                 promoted=0;
@@ -3034,7 +3063,7 @@ function saphana_monitor_primary()
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
         0 ) # FATAL or ERROR
-            rc=$OCF_ERR_GENERIC
+            rc="$OCF_ERR_GENERIC"
             ;;
         1 ) # DOWN or ERROR
             # DONE: PRIO2: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
@@ -3042,7 +3071,7 @@ function saphana_monitor_primary()
                 #
                 # leave master score untouched, only set return code
                 #
-                rc=$OCF_NOT_RUNNING
+                rc="$OCF_NOT_RUNNING"
             else
                 if [ "$promoted" == 1 ]; then
                     # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
@@ -3096,9 +3125,9 @@ function saphana_monitor_primary()
                         my_sync=$(get_SRHOOK "$remSR_name")
                         my_role="${my_lss}:${my_srr}:${my_role}"
                         scoring_crm_master "$my_role" "$my_sync"
-                        rc=$OCF_FAILED_MASTER
+                        rc="$OCF_FAILED_MASTER"
                     fi
-                    rc=$OCF_FAILED_MASTER
+                    rc="$OCF_FAILED_MASTER"
                 else
                     # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
                     # TODO: PRIO3: Adjust with set_crm_master?
@@ -3106,7 +3135,7 @@ function saphana_monitor_primary()
                     #       steps should already have done that
                     #
                     super_ocf_log info "DEC: PRIMDEFECT (in DEMOTED status)"
-                    rc=$OCF_NOT_RUNNING
+                    rc="$OCF_NOT_RUNNING"
                 fi
             fi
             ;;
@@ -3123,27 +3152,27 @@ function saphana_monitor_primary()
             my_hana_role="${my_lss}:${my_srr}:${my_role}"
             if ocf_is_probe; then
                 if [ "$promoted" == 1 ]; then
-                    rc=$OCF_RUNNING_MASTER
+                    rc="$OCF_RUNNING_MASTER"
                 else
-                    rc=$OCF_SUCCESS
+                    rc="$OCF_SUCCESS"
                 fi
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_hana_role,$my_sync)"
                 scoring_crm_master "$my_hana_role" "$my_sync"
             else
                 LPTloc=$(date '+%s')
-                lpa_set_lpt $LPTloc "$sr_name"
-                lpa_push_lpt $LPTloc
+                lpa_set_lpt "$LPTloc" "$sr_name"
+                lpa_push_lpt "$LPTloc"
                 if [ "$promoted" == 1 ]; then
                     # TODO PRIO1: NG - check which attribute to be set
                     set_hana_attribute "X" "$sr_name" "${ATTR_NAME_HANA_PRIM[@]}"
                     set_hana_site_attribute "$sr_name" "PRIM" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
-                    rc=$OCF_RUNNING_MASTER
+                    rc="$OCF_RUNNING_MASTER"
                 else
                     if [ "$init_attribute" == 1 ]; then
                         set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                        rc=$OCF_RUNNING_MASTER
+                        rc="$OCF_RUNNING_MASTER"
                     else
-                        rc=$OCF_SUCCESS
+                        rc="$OCF_SUCCESS"
                     fi
                 fi
                 # TODO PRIO1: NG - minimize the GETS on LSS, SRR and ROLES
@@ -3152,7 +3181,7 @@ function saphana_monitor_primary()
                 #
                 my_lss=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
                 my_srr=$(get_hana_site_attribute "$sr_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
-                my_role=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_ROLES[@]}")
+                my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
                 #
                 # first check, if we have a pending HA/DR provider attribute in the interface files
                 #
@@ -3206,20 +3235,20 @@ function saphana_monitor_primary()
                 rem_lss=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_LSS[@]}")
                 rem_srr=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
                 rem_msn=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_MNS[@]}")
-                rem_clone_status=$(get_hana_attribute ${rem_msn} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
-                rem_role=$(get_hana_attribute ${rem_msn} "${ATTR_NAME_HANA_ROLES[@]}")
+                rem_clone_status=$(get_hana_attribute "${rem_msn}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
+                rem_role=$(get_hana_attribute "${rem_msn}" "${ATTR_NAME_HANA_ROLES[@]}")
                 rem_role="${rem_lss}:${rem_srr}:${rem_role}"
                 if [[ "$promote_attr" = "DEMOTED" && "$rem_clone_status" = "PROMOTED" ]]; then
                    case "$rem_role" in
                        [234]:P:* ) # dual primary, but other instance marked as PROMOTED by the cluster
                             # TODO: PRIO1: NG - Need to differ lpa_check_lpt_status return codes
                             lpa_check_lpt_status; again_lpa_rc=$?
-                            if [ $again_lpa_rc -eq 2 ]; then
+                            if [ "$again_lpa_rc" -eq 2 ]; then
                                super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa stalemate ==> local restart"
                                super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $sr_name"
                                lpa_set_lpt 10 "$sr_name"
                                lpa_push_lpt 10
-                               rc=$OCF_NOT_RUNNING
+                               rc="$OCF_NOT_RUNNING"
                             fi
                             ;;
                    esac
@@ -3230,18 +3259,18 @@ function saphana_monitor_primary()
             ;;
         * ) # UNDEFINED STATUS
             if ocf_is_probe; then
-                rc=$OCF_NOT_RUNNING
+                rc="$OCF_NOT_RUNNING"
             else
                 if [ "$promoted" == 1 ]; then
-                     rc=$OCF_FAILED_MASTER
+                     rc="$OCF_FAILED_MASTER"
                 else
-                     rc=$OCF_NOT_RUNNING
+                     rc="$OCF_NOT_RUNNING"
                 fi
             fi
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -3253,7 +3282,7 @@ function saphana_monitor_primary()
 function saphana_monitor_secondary()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc=$OCF_ERR_GENERIC
+    local rc="$OCF_ERR_GENERIC"
     local promoted=0
     local init_attribute=0
     local lss
@@ -3289,7 +3318,7 @@ function saphana_monitor_secondary()
                     rc=$?
                 else
                     super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing"
-                    return $OCF_SUCCESS
+                    return "$OCF_SUCCESS"
                 fi
                 promoted=0;
                 ;;
@@ -3326,7 +3355,7 @@ function saphana_monitor_secondary()
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
             super_ocf_log debug "DBG: 011 * lpa_set_lpt 10 $sr_name"
             lpa_set_lpt  10 "$sr_name"
-            rc=$OCF_ERR_GENERIC
+            rc="$OCF_ERR_GENERIC"
             ;;
         1 ) # ERROR
             super_ocf_log debug "DBG: 012 * lpa_set_lpt 10 $sr_name"
@@ -3334,21 +3363,21 @@ function saphana_monitor_secondary()
             # Hide this error, if we still in WAITING4NODES
             case "$promote_attr" in
                 WAITING4NODES ) # hide error 
-                                rc=$OCF_SUCCESS
+                                rc="$OCF_SUCCESS"
                                 ;;
                 * )
-                                rc=$OCF_NOT_RUNNING
+                                rc="$OCF_NOT_RUNNING"
                                 ;;
             esac
             ;;
         2 | 3 | 4 ) # WARN INFO OK
-            rc=$OCF_SUCCESS
+            rc="$OCF_SUCCESS"
             # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
             if [ "$promoted" == 1 ]; then
                 # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
-                rc=$OCF_RUNNING_MASTER
+                rc="$OCF_RUNNING_MASTER"
             else
-                rc=$OCF_SUCCESS
+                rc="$OCF_SUCCESS"
             fi
             lpa_set_lpt  30 "$sr_name"
             sync_attr=$(get_SRHOOK "$sr_name")
@@ -3404,16 +3433,16 @@ function saphana_monitor_secondary()
             esac
             ;;
         * ) # UNDEFINED STATUS
-            rc=$OCF_NOT_RUNNING
+            rc="$OCF_NOT_RUNNING"
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 function saphana_monitor_clone_not_msn()
 {
-    nState=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
+    nState=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     # TODO: PRIO2: Check, if we need to (re) start a failed SAP HANA instance in a swarm
     if ! saphana_check_local_instance; then
         #
@@ -3421,9 +3450,9 @@ function saphana_monitor_clone_not_msn()
         #
         # IF LS>=2 AND ROLE STANDBY "RESTART" INSTANCE
         get_hana_landscape_status; lss=$?
-        if [ $lss -gt 2 ]; then
+        if [ "$lss" -gt 2 ]; then
             super_ocf_log info "DEC: local instance is down landscape is up (lss=$lss)"
-            rc=$OCF_NOT_RUNNING
+            rc="$OCF_NOT_RUNNING"
         else
             #
             # local instance AND landscape are down
@@ -3432,16 +3461,16 @@ function saphana_monitor_clone_not_msn()
             case "$nState" in
                 DEMOTED )
                             super_ocf_log info "DEC: DEMOTED => OCF_SUCCESS"
-                            rc=$OCF_SUCCESS;;          # landscape is down and local instance is down -> report SUCCESS
+                            rc="$OCF_SUCCESS";;          # landscape is down and local instance is down -> report SUCCESS
                 PROMOTED )
                             super_ocf_log info "DEC: PROMOTED => OCF_FAILED_MASTER"
-                            rc=$OCF_FAILED_MASTER;;   # same, but for MASTER -> report FAILED_MASTER
+                            rc="$OCF_FAILED_MASTER";;   # same, but for MASTER -> report FAILED_MASTER
                 UNDEFINED )
                             super_ocf_log info "DEC: UNDEFINED => OCF_NOT_RUNNING"
-                            rc=$OCF_NOT_RUNNING;;    # same is DEMOTED, but target should be down -> report NOT_RUNNING
+                            rc="$OCF_NOT_RUNNING";;    # same is DEMOTED, but target should be down -> report NOT_RUNNING
                 * )
                             super_ocf_log info "DEC: <<UNKNOWN>> => OCF_NOT_RUNNING"
-                            rc=$OCF_NOT_RUNNING;;
+                            rc="$OCF_NOT_RUNNING";;
             esac
         fi
         #
@@ -3460,27 +3489,27 @@ function saphana_monitor_clone_not_msn()
                 #
                 super_ocf_log info "DEC: left-over instance ???"
                 get_hana_landscape_status; lss=$?
-                if [ $lss -le 1 ]; then
+                if [ "$lss" -le 1 ]; then
                     #
                     # landscape already reports down / error but local instance is up and running
                     # we are a left-over active instance without master nameserver nodes - report an error to the cluster to get this instance stopped
                     #
                     super_ocf_log info "DEC: left-over instance and lss=$lss - report generic error for lost instance"
-                    rc=$OCF_ERR_GENERIC
+                    rc="$OCF_ERR_GENERIC"
                 else
                     #
                     # landscape still reports a running swarm AND local instance is up and running
                     # we are a left-over active instance without master nameserver nodes - wait till landscape status falls down to error
                     #
                     super_ocf_log info "DEC: left-over instance and lss=$lss - wait till lss falls down to error and SAP HANA did a final decision"
-                    rc=$OCF_SUCCESS
+                    rc="$OCF_SUCCESS"
                 fi
             else
                 #
                 # missing ALL master nameserver candidates AND local instance is also stopped -> just inform the cluster we are down
                 #
                 super_ocf_log info "DEC: left-over instance but already down"
-                rc=$OCF_NOT_RUNNING
+                rc="$OCF_NOT_RUNNING"
             fi
         else
           #
@@ -3508,10 +3537,10 @@ function saphana_monitor_clone_not_msn()
           #           => However we need to check, if it could happen that NO started (warm) master nameserver
           #              is available and we miss to monitor the degraded HANA on another node
           case "$nState" in
-              DEMOTED ) rc=$OCF_SUCCESS;;              # local instance is up -> report SUCCESS
-              PROMOTED ) rc=$OCF_RUNNING_MASTER;;      # same but state is MASTER -> report RUNNING_MASTER
-              UNDEFINED ) rc=$OCF_NOT_RUNNING;;        # same but state is DOWN -> report NOT_RUNNING
-              * ) rc=$OCF_NOT_RUNNING;;
+              DEMOTED ) rc="$OCF_SUCCESS";;              # local instance is up -> report SUCCESS
+              PROMOTED ) rc="$OCF_RUNNING_MASTER";;      # same but state is MASTER -> report RUNNING_MASTER
+              UNDEFINED ) rc="$OCF_NOT_RUNNING";;        # same but state is DOWN -> report NOT_RUNNING
+              * ) rc="$OCF_NOT_RUNNING";;
           esac
         fi
     fi
@@ -3578,21 +3607,21 @@ function saphana_monitor_clone() {
         # First check, if we are PRIMARY or SECONDARY
         #
         check_for_primary; primary_status=$?
-        if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+        if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
             # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
             # TODO PRIO1: NG - Maybe we need a lpa-check here to
             if ocf_is_probe; then
                 myMaster=$(get_crm_master); mRc=$?
-                if [ $mRc -ne 0 ]; then
+                if [ "$mRc" -ne 0 ]; then
                    set_crm_master 5
-                elif [ $myMaster -eq -1 ]; then
+                elif [ "$myMaster" -eq -1 ]; then
                    set_crm_master 5
                 fi
             else
                 saphana_check_local_instance
             fi
             saphana_monitor_primary; rc=$?
-        elif [ $primary_status -eq $HANA_STATE_SECONDARY  ]; then
+        elif [ "$primary_status" -eq "$HANA_STATE_SECONDARY"  ]; then
             if ! ocf_is_probe; then
                 saphana_check_local_instance
             fi
@@ -3605,20 +3634,20 @@ function saphana_monitor_clone() {
             # TODO: PRIO2: Or only set_crm_master -INFINITY ?
             # TODO: PRIO9: Currently pacemaker-remote nodes does not support 'reboot' attributes
             # DONE: PRIO1: OCF_ERR_GENERIC is quite fatal, if "only" hdbnsutil has a small problem
-            nState=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_CLONE_STATE[@]}")
+            nState=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
             if saphana_check_local_instance; then
                 case "$nState" in
-                        DEMOTED )   rc=$OCF_SUCCESS;;
-                        PROMOTED )  rc=$OCF_RUNNING_MASTER;;
-                        UNDEFINED ) rc=$OCF_NOT_RUNNING;;
-                        * )         rc=$OCF_NOT_RUNNING;;
+                        DEMOTED )   rc="$OCF_SUCCESS";;
+                        PROMOTED )  rc="$OCF_RUNNING_MASTER";;
+                        UNDEFINED ) rc="$OCF_NOT_RUNNING";;
+                        * )         rc="$OCF_NOT_RUNNING";;
                     esac
             else
 	            case "$nState" in
-                        DEMOTED )   rc=$OCF_NOT_RUNNING;;
-                        PROMOTED )  rc=$OCF_NOT_RUNNING;; ## TODO: PRIO 3: FAILED_MASTER?
-                        UNDEFINED ) rc=$OCF_NOT_RUNNING;;
-                        * )         rc=$OCF_NOT_RUNNING;;
+                        DEMOTED )   rc="$OCF_NOT_RUNNING";;
+                        PROMOTED )  rc="$OCF_NOT_RUNNING";; ## TODO: PRIO 3: FAILED_MASTER?
+                        UNDEFINED ) rc="$OCF_NOT_RUNNING";;
+                        * )         rc="$OCF_NOT_RUNNING";;
                 esac
             fi
         fi
@@ -3629,7 +3658,7 @@ function saphana_monitor_clone() {
         saphana_monitor_clone_not_msn
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -3650,15 +3679,15 @@ function saphana_promote_clone() {
     set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     check_for_primary; primary_status=$?
     #
-    if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
+    if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
         #
         # as we are already planned to be PRIMARY we only mark the node as PROMOTED
         #
         super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
 	    set_SRHOOK_PRIM
-        rc=$OCF_SUCCESS;
+        rc="$OCF_SUCCESS";
     else
-        if [ $primary_status -eq $HANA_STATE_SECONDARY ]; then
+        if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
             #
             # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
             # promote on the replica side...
@@ -3680,8 +3709,8 @@ function saphana_promote_clone() {
                                 LPTloc=$(date '+%s')
                                 # TODO PRIO1: NG - check if we need to set remSite to 20
                                 # lpa_set_lpt 20 $remoteNode
-                                lpa_set_lpt $LPTloc "$sr_name"
-                                lpa_push_lpt $LPTloc
+                                lpa_set_lpt "$LPTloc" "$sr_name"
+                                lpa_push_lpt "$LPTloc"
                                 backup_global_and_nameserver
                                 set_hana_attribute "$NODENAME" "$sr_name" "${ATTR_NAME_HANA_PRIM[@]}"
                                 # TODO PRIO5: 145 should not be static but come from the scoring table
@@ -3716,18 +3745,18 @@ function saphana_promote_clone() {
                             # check, if we now are primary
                             #
                             if check_for_primary; then
-                                rc=$OCF_SUCCESS;
+                                rc="$OCF_SUCCESS";
                                 # DONE: PRIO0: !!!
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"
                                 set_SRHOOK "$remSR_name" "SWAIT"
                             else
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER: TAKEOVER FAILED? STILL NOT PRIMARY"
-                                rc=$OCF_FAILED_MASTER
+                                rc="$OCF_FAILED_MASTER"
                             fi
                             ;;
                         * )
                             super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
-                            rc=$OCF_ERR_GENERIC
+                            rc="$OCF_ERR_GENERIC"
                             ;;
                     esac
                 ;;
@@ -3755,20 +3784,20 @@ function saphana_promote_clone() {
 #
 function saphana_demote_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=$OCF_ERR_GENERIC;
+    local rc="$OCF_ERR_GENERIC";
     set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-    rc=$OCF_SUCCESS;
+    rc="$OCF_SUCCESS";
     # bsc#1198127: let it fail, to get the resource stopped.
     my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
     # TODO PRIO1: NG - check, if value ':-:-:-:-' is the correct one
     if [[ "$my_role" =~ :-:-:-:- ]]; then
-        rc=$OCF_ERR_GENERIC
+        rc="$OCF_ERR_GENERIC"
     else
-        rc=$OCF_SUCCESS
+        rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "ACT: Demoted $SID-$InstanceName."
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # set ts=4 sw=4 sts=4 et
