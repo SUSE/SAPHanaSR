@@ -88,6 +88,7 @@ function core_init() {
     raVersion="$1"
     timeBegin="$2"
     log_attributes="$3"
+    set +possix   # disable possix mode of the bash
     if ocf_is_true "$log_attributes"; then
         log_attr_file="/var/log/fhATTRIBUTES"
     else
@@ -1131,6 +1132,34 @@ function saphana_init_sap_commands()
 }
 
 #
+# function: cluster_get_other_nodes - list all 'other' cluster nodes, but not the local node
+# params: node-name-to-be-filtered-out
+# globals: -
+#
+function cluster_get_other_nodes()
+{
+    local NODENAME="$1"
+    local -a MAPFILE
+    local mf=""
+    local ch=""
+    # TODO PRIO1: NG - check this new code here
+    #             lines are expected to have format <number><blank><nodename><blank><status>
+    #             1 grimsel01 member
+    mapfile <<<"$(crm_node -l)"
+    for mf in "${MAPFILE[@]}"; 
+    do 
+       mf="${mf// /:}"  # replace blank by colon for better reg-ex parsing
+       if [[ "$mf" =~ ^([0-9]+):([^:]+) ]]; then 
+           ch="${BASH_REMATCH[2]}" 
+           if [[ "$ch" != "${NODENAME}" ]]; then
+               echo "$ch";    
+           fi
+       fi
+    done
+    return 0
+}
+
+#
 # function: saphana_init - initialize variables for the resource agent
 # params:   InstanceName
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
@@ -1219,8 +1248,9 @@ function saphana_init() {
     # Determine list of other cluster nodes and store in otherNodes variable
     otherNodes=()
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-       *corosync* ) otherNodes=($(crm_node -l | awk '{ if ($2 != me) { print $2 }}' me="${NODENAME}"));;
-       *cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
+       *corosync* ) otherNodes=( cluster_get_other_nodes "${NODENAME}" );;
+       # TODO PRIO4: NG - fix cman code to be also shellcheck compatible
+       #*cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
     esac
     #
     # optionally init RA update
@@ -2369,13 +2399,17 @@ function lpa_pull_lpt() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1
     local lpt=-1
+    local X=""
     local lpa_file=$LPA_DIRECTORY/lpa_${sid}_${NODENAME}
     local -a lpt_file_words
-    lpt_file_words=( $( head -1 $lpa_file ) )
-    lpt=${lpt_file_words[0]}
+    #
+    # only fetch the first word of the first line as lpt
+    #
+    mapfile <"$lpa_file"; 
+    read lpt X <<<"${MAPFILE[0]}"
     if [ -n "$lpt" ]; then
+        echo "$lpt"
         rc=0
-        echo $lpt
     else
         rc=2
     fi
