@@ -1220,7 +1220,6 @@ function saphana_init() {
     otherNodes=()
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
        *corosync* ) otherNodes=($(crm_node -l | awk '{ if ($2 != me) { print $2 }}' me="${NODENAME}"));;
-       *openais* ) otherNodes=($(crm_node -l | awk '$3 == "member" { if ($2 != me) { print $2 }}' me="${NODENAME}"));;
        *cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
     esac
     #
@@ -2555,22 +2554,10 @@ function master_walk() {
     #       maintenance: on
     # se02group1: (offline)
     # se03group1:
-    # * crm_node -l
+    # * crm_node -l (corosync)
     # 1084752138 se01group1 member
     # 1084752148 se02group1 lost
     # 1084752154 se03group1 member
-    # ====> othernodes contains only members (for openais)
-    # * crm_attribute ...
-    #
-    # se01group1:~ # crm_attribute -N se01group1 -n standby -G -l forever -q
-    # on
-    # (rc=0)
-    # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q
-    # Error performing operation: No such device or address
-    # (rc=250)
-    # se01group1:~ # crm_attribute -N se02group1 -n standby -G -l forever -q -d off
-    # off
-    #
     #
     # ==> First exclude non-members (maybe done already) by
     #       'list of nodes | grep member'
