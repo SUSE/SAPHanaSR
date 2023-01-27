@@ -1,6 +1,6 @@
-.\" Version: 0.160.1
+.\" Version: 0.162.1
 .\"
-.TH SAPHanaSR 7 "27 Jun 2022" "" "SAPHanaSR_basic_cluster"
+.TH SAPHanaSR 7 "26 Jan 2023" "" "SAPHanaSR_basic_cluster"
 .\"
 .SH NAME
 SAPHanaSR_basic_cluster \- SAP HANA System Replication scale-up basic cluster configuration.
@@ -97,6 +97,18 @@ In case systemd-style init is used for the HANA database, the services
 saphostagent and SAP${SID}_${INO} need to be enabled and running inside the SAP
 slice. The instance profile Autostart feature needs to be off.
 The service saptune is highly recommended, see manual page saptune(8).
+
+\fB* pacemaker service dependency to SAP instance service\fR
+
+\fB[Unit]\fR
+.br
+\fBWants=SAP${SID}_${INO}.service\fR
+.br
+\fBAfter=SAP${SID}_${INO}.service\fR
+
+In case systemd-style init is used for the HANA database, it might be desired
+to have the SAP instance service stopping after pacemaker at system shutdown.
+Therefor a drop-in file for the pacemaker service might help. See examples below.
 
 .PP
 .\"
@@ -318,8 +330,45 @@ checked. Example SID is HA1, instance number is 10.
 # systemd-cgls -u SAP.slice
 .br
 # systemd-cgls -u SAPHA1_10.service
+.br
+# systemctl show SAPHA1_10.service
 .\" TODO check Autostart not set.
+.RE
+.PP
 
+\fB* show pacemaker service drop-in file\fR
+
+In case systemd-style init is used for the HANA database, it might be desired
+to have the  SAP instance service stopping after pacemaker at system shutdown.
+A drop-in file might help. Example SID is S07, instance number is 00.
+
+.pp
+.RS 2
+# cat /etc/systemd/system/pacemaker.service.d/00-pacemaker.conf
+.br
+[Unit]
+.br
+Description=pacemaker needs SAP instance service
+.br
+Documentation=man:SAPHanaSR_basic_cluster(7)
+.br
+Wants=SAPS07_00.service
+.br
+After=SAPS07_00.service
+.RE
+.PP
+
+\fB* check for pacemaker dependency to SAP instance service\fR
+
+Example SID is S07, instance number is 00.
+.PP
+.RS 2
+# systemctl show pacemaker.service | grep SAP07_00
+.br
+# systemd-delta | grep pacemaker
+.br
+# systemd-analyze dot | grep "pacemaker.*SAPS07_00"
+.RE
 .PP
 .\"
 .SH BUGS
@@ -336,7 +385,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBcrm_no_quorum_policy\fP(7) , \fBcrm\fP(8) , \fBcrm_simulate\fP(8) ,
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-showAttr\fP(7) ,
 \fBcorosync.conf\fP(5) , \fBvotequorum\fP(5) ,
-\fBnfs\fP(5) , \fBmount\fP(8) , \fBsystemctl\fP(1) , \fBsystemd-cgls\fP(1) ,
+\fBnfs\fP(5) , \fBmount\fP(8) , \fBsystemctl\fP(1) ,
+\fBsystemd-cgls\fP(1) , \fBsystemd-analyze\fP(1) , \fBsystemd-delta\fP(1) ,
 \fBha_related_suse_tids\fP(7) , \fBha_related_sap_notes\fP(7) ,
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap ,
@@ -355,7 +405,7 @@ F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2022 SUSE LLC
+(c) 2019-2023 SUSE LLC
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html
