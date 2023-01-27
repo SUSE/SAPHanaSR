@@ -55,22 +55,9 @@ source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 # P003 - in the swarm non master nodes may NOT do a full master-walk
 # P004 - Monitor on "dying" primary and failing systemReplicationStatus script set secondary to SFAIL, so local restart was processed instead of takeover
 # DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
+
 log_attributes=false
-if ocf_is_true "$log_attributes"; then
-    log_attr_file="/var/log/fhATTRIBUTES"
-else
-    log_attr_file="/dev/null"
-fi
-
-HANA_STATE_PRIMARY=0
-HANA_STATE_SECONDARY=1
-HANA_STATE_STANDALONE=2
-HANA_STATE_DEFECT=3
-HANA_STD_ACTION_TIMEOUT=3600
-
 debug_attributes=0
-
-SH=/bin/sh
 
 source /root/SAPHanaSR-NG/saphana-controller-lib
 
@@ -80,6 +67,8 @@ source /root/SAPHanaSR-NG/saphana-controller-lib
 # globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w),
 # globals:  SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
 #
+
+core_init "$SAPHanaControllerVersion"
 
 ## GLOBALS
 SID=""
@@ -106,6 +95,7 @@ if [ "$ACTION" = "status" ]; then
     ACTION=monitor
 fi
 
+super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
 # These operations don't require OCF parameters to be set
 # TODO: PRIO5: check, if notify is still not needing OCF parameters
 case "$ACTION" in
@@ -150,7 +140,6 @@ else
 fi
 
 # What kind of method was invoked?
-super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor|promote|demote) # Standard controlling actions
