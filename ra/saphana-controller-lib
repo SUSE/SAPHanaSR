@@ -861,9 +861,10 @@ function saphana_init_scoring_tables() {
     # TODO PRIO1: NG - scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
     #
     # TODO PRIO4: Table for non-preferred-site-takeover
+    # SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU is the default table, if topology PreferSiteTakeover are not detected. So the table also covers some basic checks for scale-out
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU=(
-       "[234]:P:[^:]*:master .*     150"             # primary - running active master nameserver role
-       "[234]:P:master       .*     140"             # primary - running configured master nameserver role (failover candidate)
+       "[234]:P:[^:]*:master .*     150"             # primary - running, active master nameserver role
+       "[234]:P:master       .*     140"             # primary - running, configured master nameserver role (failover candidate)
        "[015-9]:P:[^:]*:master .*    90"             # primary - not running, but active master nameserver role 
        "[0-9]:P:[^:]*:slave  .*      60"             # primary - any running status, slave master nameserver role (should not happen for ScaleUp)
        "[234]:P:[^:]*:[?:-]  .*       0"             # primary - running, but nameserver role not detected
@@ -879,16 +880,16 @@ function saphana_init_scoring_tables() {
        ".*                    .*      -1"            # any case not catched before
     )
     SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU=(
-       "[0-9]:P:[^:]*:master .*     150"
-       "[0-9]:P:[^:]*:.*     .*     140"
-       "[0-9]:S:[^:]*:master SOK    100"
-       "[0-9]:S:[^:]*:master PRIM   100"
-       "[0-9]:S:[^:]*:master SFAIL  -INFINITY"
-       "[0-9]:S:[^:]*:slave  SOK     10"
-       "[0-9]:S:[^:]*:slave  SFAIL  -INFINITY"
-       "[015-9]:S:[^:]*:[?:-]  .*    -1"
-       "[234]:S:[^:]*:[?:-]    .*    -1"
-       ".*                      .*    -1"
+       "[0-9]:P:[^:]*:master .*     150"             # primary - any running status, active master nameserver role
+       "[0-9]:P:[^:]*:.*     .*     140"             # primary - any running status, any other active namesrever role (even still not detected)
+       "[0-9]:S:[^:]*:master SOK    100"             # secondary - any running status, active master nameserver role, in sync
+       "[0-9]:S:[^:]*:master PRIM   100"             # secondary - any running status, active master nameserver role, already marked as PRIMary
+       "[0-9]:S:[^:]*:master SFAIL  -INFINITY"       # secondary - any running status, active master nameserver role, not in sync
+       "[0-9]:S:[^:]*:slave  SOK     10"             # secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)
+       "[0-9]:S:[^:]*:slave  SFAIL  -INFINITY"       # secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)
+       "[234]:S:[^:]*:[?:-]    .*    -1"             # secondary - running, but nameserver role not detected
+       "[015-9]:S:[^:]*:[?:-]  .*    -1"             # secondary - not running and nameserver role not detected
+       ".*                      .*    -1"            # any case not catched before
     )
     SCORING_TABLE_PREFERRED_NEVER_SU=(
        "[234]*:P:[^:]*:master .*     150"
