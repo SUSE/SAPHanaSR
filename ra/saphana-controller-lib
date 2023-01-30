@@ -1984,9 +1984,8 @@ function saphana_start_primary()
 {
     # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local primary_status sync_attr score_master rc="$OCF_NOT_RUNNING"
+    local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     local lss="$1"
-    local sqlrc=0;
     local rc=0
     local lpa_dec=4
     local lpa_advice=""
@@ -2232,8 +2231,7 @@ function wait_for_primary_master()
 function saphana_start_secondary()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local primary_status sync_attr score_master rc="$OCF_NOT_RUNNING"
-    local sqlrc;
+    local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     case "$PreferSiteTakeover" in
         never | NEVER | Never )
             set_crm_master -INFINITY
@@ -2430,14 +2428,12 @@ function lpa_pull_lpt() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1
     local lpt=-1
-    local X=""
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
-    local -a lpt_file_words
     #
     # only fetch the first word of the first line as lpt
     #
     mapfile <"$lpa_file";
-    read -r lpt X <<<"${MAPFILE[0]}"
+    lpt="${MAPFILE[0]%% *}" # only catch first word of first line
     if [ -n "$lpt" ]; then
         echo "$lpt"
         rc=0
@@ -2553,8 +2549,6 @@ function lpa_check_lpt_status() {
     local LPTrem=-1
     local LPTMark=1000
     local delta=0
-    local remSn_name=""
-    local remHost=""
     #
     # First GET LPT from ATTR-FILE-DEFAULT
     #
@@ -2634,7 +2628,7 @@ function master_walk() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
 
     local active_master="" master1="" master2="" master3=""
-    local nSite="" nRole=""
+    local nSite="" nodeRole=""
     local best_cold_master="" rest=""
     local standbyFilter=1
     nr_site_node=0     # is counting any node reporting a role like 'worker' or 'standby'
@@ -2655,54 +2649,53 @@ function master_walk() {
     # walk over all known cluster nodes
     for node in "$NODENAME" "${otherNodes[@]}"; do
         super_ocf_log debug "DBG: master walk node $node"
-        nSite=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_SITE[@]}")
+        nSite="$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_SITE[@]}")"
         if [ "$site" = "$nSite" ]; then
             # node of same site found
-            nStdBy=$(crm_attribute -N "${node}" -n standby     -G -l forever -q -d off)
-            nMaint=$(crm_attribute -N "${node}" -n maintenance -G -l forever -q -d off)
+            nStdBy="$(crm_attribute -N "${node}" -n standby     -G -l forever -q -d off)"
+            nMaint="$(crm_attribute -N "${node}" -n maintenance -G -l forever -q -d off)"
             if [ "$nMaint" = "on" ]; then
                 super_ocf_log debug "DBG: Filter node by cluster node maintenance mode"
             elif [[ "$nStdBy" = "on" && "$standbyFilter" = "1" ]]; then
                 super_ocf_log debug "DBG: Filter node by cluster node standby mode"
             else
-                nRole=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")
-                IFS=: read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
-                super_ocf_log debug "DBG: site $site $nNsConf:$nNsCurr"
-                case "$nNsConf:$nNsCurr" in
-                    master1:master  ) master1="$node"; active_master="$node"
-                        super_ocf_log debug "DBG: roles $nRole match master1:master"
-                    ;;
-                    master2:master  ) master2="$node"; active_master="$node"
-                        super_ocf_log debug "DBG: roles $nRole match master2:master"
-                    ;;
-                    master3:master  ) master3="$node"; active_master="$node"
-                        super_ocf_log debug "DBG: roles $nRole match master3:master"
-                    ;;
+                nodeRole="$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")"
+                super_ocf_log debug "DBG: site $site $nodeRole"
+                case "$nodeRole" in
+                    master1:master:*  ) master1="$node"; active_master="$node"
+                        super_ocf_log debug "DBG: roles $nodeRole match master1:master:*"
+                        ;;
+                    master2:master:*  ) master2="$node"; active_master="$node"
+                        super_ocf_log debug "DBG: roles $nodeRole match master2:master:*"
+                        ;;
+                    master3:master:*  ) master3="$node"; active_master="$node"
+                        super_ocf_log debug "DBG: roles $nodeRole match master3:master:*"
+                        ;;
                     master1:*       ) master1="$node";
-                        super_ocf_log debug "DBG: roles $nRole match master1:STAR"
-                    ;;
+                        super_ocf_log debug "DBG: roles $nodeRole match master1:*"
+                        ;;
                     master2:*       ) master2="$node";
-                        super_ocf_log debug "DBG: roles $nRole match master2:STAR"
-                    ;;
+                        super_ocf_log debug "DBG: roles $nodeRole match master2:*"
+                        ;;
                     master3:*       ) master3="$node";
-                        super_ocf_log debug "DBG: roles $nRole match master3:STAR"
-                    ;;
-                    *:shtdown       )
-                        super_ocf_log debug "DBG: roles $nRole ignore node (down)"
-                    ;;
+                        super_ocf_log debug "DBG: roles $nodeRole match master3:*"
+                        ;;
+                    *:shtdown:*       )
+                        super_ocf_log debug "DBG: roles $nodeRole ignore node (down)" # TODO PRIO2: NG - do we need to change to *:-:* ?
+                        ;;
                     * )
-                        super_ocf_log debug "DBG: roles $nRole NO match"
+                        super_ocf_log debug "DBG: roles $nodeRole NO match"
                     ;;
                 esac
-                case "$nIsConf" in
-                    worker )  (( nr_site_worker++ ))
-                              (( nr_site_node++ ))
-                              ;;
-                    standby ) (( nr_site_standby++ ))
+                case "$nodeRole" in
+                    *:*:worker )  (( nr_site_worker++ ))
+                                  (( nr_site_node++ ))
+                                  ;;
+                    *:*:standby ) (( nr_site_standby++ ))
                               (( nr_site_node++ ))
                               ;;
                 esac
-                super_ocf_log debug "DBG: $site: $nRole"
+                super_ocf_log debug "DBG: $site: $nodeRole"
             fi
         fi
     done
@@ -2726,7 +2719,7 @@ function master_walk() {
 # function: is_active_nameserver_slave
 # params:   -
 # rc:       0: yes its an active nameserver slave (running)
-#           2: yes it is a configured but lost slave
+#           2: yes it is a configured but lost slave  # TODO PRIO2: NG - rc2 seems to got lost
 #           1: else
 # globals:
 #
@@ -2734,68 +2727,68 @@ function master_walk() {
 #
 function is_active_nameserver_slave()
 {
-  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-  local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
-  nRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
-  read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
-  case "$nNsConf:$nNsCurr" in
-      slave:slave )
-	 # configured as slave and actual role also detected as slave
-         rc=0
-         ;;
-      * )
-         rc=1
-         ;;
-  esac
-  super_ocf_log info "DEC: is_active_nameserver_slave rc=$rc"
-  super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-  return "$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1 nodeRole=""
+    nodeRole="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
+    case "$nodeRole" in
+        slave:slave )
+            # configured as slave and actual role also detected as slave
+            rc=0
+            ;;
+        * )
+            rc=1
+        ;;
+    esac
+    super_ocf_log info "DEC: is_active_nameserver_slave rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
 }
 
 # function: is_lost_nameserver_slave
 # params:   -
 # rc:       0: yes it is a configured but lost slave
 #           1: else
-# globals:
+# globals:  ATTR_NAME_HANA_ROLES[@], NODENAME
 #
 # true, if the node has an active (runnig) master nameserver slave role
 #
 function is_lost_nameserver_slave()
 {
-  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-  local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
-  nRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-  IFS=: read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
-  case "$nNsConf:$nNsCurr" in
-      slave: )
-	 # configured as slave but actual role could not be figured out - treat as is_lost_nameserver_slave
-         rc=0
-	 ;;
-      * )
-         rc=1
-         ;;
-  esac
-  super_ocf_log info "DEC: is_lost_nameserver_slave ($nNsConf:$nNsCurr) rc=$rc"
-  super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-  return "$rc"
+    # TODO PRIO2: NG - check this new code carefully
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1 nodeRole=""
+    nodeRole="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
+    case "$nodeRole" in
+        slave:* )
+            # configured as slave but actual role could not be figured out - treat as is_lost_nameserver_slave
+            rc=0
+            ;;
+        * )
+            rc=1
+            ;;
+    esac
+    super_ocf_log info "DEC: is_lost_nameserver_slave ($nodeRole) rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
 }
 
 # function: is_master_nameserver
 # params:   -
 # rc:       0: yes its a master nameserver
 #           1: else
-# globals:
+# globals:  ATTR_NAME_HANA_ROLES[@], NODENAME
 #
 # true, if the node has an active or configured master nameserver role
 #
 function is_master_nameserver()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc=1 nRole="" nLsc=""  nSrmode="" nNsConf="" nNsCurr="" nIsConf="" nIsCurr=""
-    nRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
-    read -r nNsConf nNsCurr nIsConf nIsCurr <<< "$nRole"
-    case "$nNsConf:$nNsCurr" in
-        master[123]:master )
+    local rc=1 nodeRole=""
+    nodeRole="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
+    # IFS=: read -a nodeFields <<<"$with_colon"
+    # nFields=( ${nRole//:/ } )
+    case "$nodeRole" in
+        master[123]:master:* )
            rc=0
            ;;
         master[123]:* )
@@ -2835,9 +2828,7 @@ function is_the_master_nameserver()
 #
 function saphana_start_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local primary_status sync_attr score_master rc="$OCF_NOT_RUNNING"
-    local sqlrc;
-    local chkusr;
+    local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
     if is_the_master_nameserver; then
         check_for_primary; primary_status=$?
@@ -2873,7 +2864,6 @@ function saphana_start_clone() {
         fi
     else
         set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-        local start=0
         local lss=0
         local my_role=0
         if saphana_check_local_instance; then
@@ -2885,11 +2875,13 @@ function saphana_start_clone() {
                 #
                 # only restart standby instances
                 #
-                my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-                echo "$my_role" | grep -q ":standby" && start=1
-                output=$("$SAPCONTROL" -nr "$InstanceNr" -function RestartInstance)
+                my_role="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
+                case "$my_role" in
+                    *:standby ) # last field (current worker role) must be 'standby'
+                                output=$("$SAPCONTROL" -nr "$InstanceNr" -function RestartInstance)
+                                ;;
+                esac
             fi
-            #
         fi
         set_crm_master -INFINITY
         rc="$OCF_SUCCESS"
@@ -2923,39 +2915,49 @@ function recover_site_attributes_from_file()
 {
     local srHookAttributeFile="$1"
     local site
+    local -a mapLines
+    local srAttr srValue
 
     if [ -f "$srHookAttributeFile" ]; then
         #
         # need to read attribute from the file
         #
-        # TODO: PRIO0: also allow a=b instead of a = b
-        # TODO: PRIO5: also allow multiple attributes each in an own line - for now only one attribute is needed
-        read -r srATTR EQS srVALUE <"$srHookAttributeFile"
-        case "$srATTR" in
-            hana_${sid}_site_srHook_* )
-                #
-                # get site name from site attribute-name
-                #
-                site="${srATTR#hana_"${sid}"_site_srHook_}"
-                super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event ($srATTR=$srVALUE)"
-                #
-                # DONE: PRIO0 - add check for srATTR name here
-                #
-                case "$srVALUE" in
-                SOK )
-                      super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SOK"
-                      set_SRHOOK "$site" "SOK"
-                      ;;
-                SFAIL )
-                      super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SFAIL"
-                      set_SRHOOK "$site" "SFAIL"
-                      ;;
-                * )
-                      super_ocf_log info "DEC: failed recover attributes from file $srHookAttributeFile - Unknown value <<$srVALUE>>"
-                      ;;
-                esac
-                ;;
-        esac
+        mapfile -t mapLines <"$srHookAttributeFile"
+        for mapLine in "${mapLines[@]}"; do
+            srAttr="${mapLine%%=*}"   # cut-off right side of a = b
+            srAttr="${srAttr// /}"    # attribute must not contain blanks
+            srValue="${mapLine#*=}"   # cut-off left side of a = b
+            srValue="${srValue## }"   # cut-off leading blanks in value
+            srValue="${srValue%% }"   # cut-off trailing blanks in value
+            srValue="${srValue#\'}"   # cut-off leading single quote
+            srValue="${srValue%\'}"   # cut-off closing single quote
+            # TODO PRIO3: NG - check this new code-part
+            case "$srAttr" in
+                hana_${sid}_site_srHook_* )
+                    #
+                    # get site name from site attribute-name
+                    #
+                    site="${srAttr#hana_"${sid}"_site_srHook_}"
+                    super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event for site=$site ($srAttr=$srValue)"
+                    #
+                    # DONE: PRIO0 - add check for srATTR name here
+                    #
+                    case "$srValue" in
+                    SOK )
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SOK"
+                          set_SRHOOK "$site" "SOK"
+                          ;;
+                    SFAIL )
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SFAIL"
+                          set_SRHOOK "$site" "SFAIL"
+                          ;;
+                    * )
+                          super_ocf_log info "DEC: failed recover attributes from file $srHookAttributeFile - Unknown value <<$srValue>>"
+                          ;;
+                    esac
+                    ;;
+            esac
+        done
         rm "$srHookAttributeFile"
     fi
 }
@@ -3565,7 +3567,6 @@ function saphana_monitor_clone() {
     local init_attribute=0
     local nState=""
     local primary_status="$HANA_STATE_DEFECT"
-    local lpaRc=0
     local mRc=0
     local myMaster=-1
     #
