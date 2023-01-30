@@ -2,7 +2,7 @@
 #
 # saphana-controller-lib
 #
-# Description:  library for SAPHana(Controller)
+# Description:  library for SAPHanaController
 #
 ##############################################################################
 #
@@ -34,7 +34,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaControllerLibVersion="1.001.2"
+SAPHanaControllerLibVersion="1.001.8"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -53,7 +53,7 @@ function super_ocf_log() {
     local message="$2"
     local skip=1
     local mtype=""
-    local -u shf="${SAPHanaFilter:-all}"
+    local -u shf="${SAPHanaFilter:-ALLBUTFLOW}"
     # message levels: (dbg)|info|warn|err|error
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC|DBG2...
     case "$level" in
@@ -61,15 +61,21 @@ function super_ocf_log() {
         ;;
         info )
         case "$shf" in
-            ALL) skip=0
-            ;;
-            none )
+            ALL) 
+                skip=0
+                ;;
+            NONE )
                 skip=1
+                ;;
+            ALLBUTFLOW )  
+                mtype=${message%% *}
+                mtype=${mtype%:}
+                [[ "FLOW" == *${mtype}* ]] && skip=1 || skip=0
                 ;;
             * ) mtype=${message%% *}
                 mtype=${mtype%:}
                 [[ ${shf} == *${mtype}* ]] && skip=0 || skip=1
-            ;;
+                ;;
         esac
         ;;
     esac
@@ -651,26 +657,24 @@ function set_crm_master()
 function scoring_crm_master()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local roles="$1"
-    local sync="$2"
-    local skip=0
+    local hana_roles="$1"
+    local hana_sync="$2"
     local myScore=""
-    for scan in "${SCORING_TABLE[@]}"; do
-        if [ "$skip" -eq 0 ]; then
-            read -r rolePatt syncPatt score <<< "$scan"
-            if grep "$rolePatt" <<< "$roles"; then
-               if grep "$syncPatt" <<< "$sync"; then
-                  super_ocf_log info "DEC: scoring_crm_master: roles($roles) are matching pattern ($rolePatt)"
-                  super_ocf_log info "DEC: scoring_crm_master: sync($sync) is matching syncPattern ($syncPatt)"
-                  super_ocf_log info "DEC: scoring_crm_master: set score $score"
-                  skip=1
-                  myScore="$score"
-               fi
-            fi
+    local scoring_rule
+    local lssPattern srrPattern rolePattern syncPattern myScore patternDescription fullRolePattern
+    for scoring_rule in "${SCORING_TABLE[@]}"; do
+        # parts are: lss-pattern srr-pattern role-pattern sync-pattern description
+        read -r lssPattern srrPattern rolePattern syncPattern myScore patternDescription <<< "$scoring_rule"
+        fullRolePattern="$lssPattern:$srrPattern:$rolePattern"
+        if [[ "${hana_roles}" =~ $fullRolePattern ]] && [[ "${hana_sync}" =~ $syncPattern ]]; then
+              super_ocf_log info "DEC: scoring_crm_master: roles($hana_roles) are matching pattern ($fullRolePattern)"
+              super_ocf_log info "DEC: scoring_crm_master: sync($hana_sync) is matching syncPattern ($syncPattern)"
+              super_ocf_log info "DEC: scoring_crm_master: set score $myScore ($patternDescription)"
+              break;  # end scanning, best rule already found
         fi
     done
     super_ocf_log debug "DBG: scoring_crm_master adjust score $myScore"
-    # DONE: PRIO1: DO Not Score, If we did not found our role/sync at this moment - bsc#919925
+    # Do not score, if we did not found our role/sync at this moment - bsc#919925
     if [ -n "$myScore" ]; then
         set_crm_master "$myScore"
     fi
@@ -858,26 +862,42 @@ function set_SRHOOK_PRIM()
 }
 
 function saphana_init_scoring_tables() {
-    # TODO PRIO1: NG - scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
-    #
-    # TODO PRIO4: Table for non-preferred-site-takeover
     # SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU is the default table, if topology PreferSiteTakeover are not detected. So the table also covers some basic checks for scale-out
+    # format of the scoring table lines:
+    # <lss>:<primary-secondary>:<configured-mns-role>[:<actice-mns-role>]  <sync-status>   <score> ['<score-description>']
+    SCORING_TABLE_TEST_SU=(
+       "[234]:P:[^:]*:master         .*     150             'primary - running, active master nameserver role'"
+       "[234]:P:master               .*     140             'primary - running, configured master nameserver role (failover candidate)'"
+       "[015-9]:P:[^:]*:master       .*      90             'primary - not running, but active master nameserver role '"
+       "[0-9]:P:[^:]*:slave          .*      60             'primary - any running status, slave master nameserver role (should not happen for ScaleUp)'"
+       "[234]:P:[^:]*:[?:-]          .*       0             'primary - running, but nameserver role not detected'"
+       "[015-9]:P:[^:]*:[?:-]        .*      -1             'primary - not running and nameserver role not detected'"
+       "[234]:S:[^:]*:master         SOK    100             'secondary - running, active master nameserver role, in sync'"
+       "[234]:S:[^:]*:master         PRIM   100             'secondary - running, active master nameserver role, already marked as PRIMary'"
+       "[015-9]:S:[^:]*:master       SOK     80             'secondary - not running, but active master nameserver role and in sync'"
+       "[0-9]:S:[^:]*:master         SFAIL  -INFINITY       'secondary - any running status, active master nameserver role, not in sync (exclude for promote)'"
+       "[0-9]:S:[^:]*:slave          SOK     10             'secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)'"
+       "[0-9]:S:[^:]*:slave          SFAIL  -INFINITY       'secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)'"
+       "[234]:S:[^:]*:[?:-]          .*       0             'secondary - running, but nameserver role not detected'"
+       "[015-9]:S:[^:]*:[?:-]        .*      -1             'secondary - not running and nameserver role not detected'"
+       ".*                           .*      -1             'any case not catched before'"
+    )
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU=(
-       "[234]:P:[^:]*:master .*     150"             # primary - running, active master nameserver role
-       "[234]:P:master       .*     140"             # primary - running, configured master nameserver role (failover candidate)
-       "[015-9]:P:[^:]*:master .*    90"             # primary - not running, but active master nameserver role 
-       "[0-9]:P:[^:]*:slave  .*      60"             # primary - any running status, slave master nameserver role (should not happen for ScaleUp)
-       "[234]:P:[^:]*:[?:-]  .*       0"             # primary - running, but nameserver role not detected
-       "[015-9]:P:[^:]*:[?:-]  .*    -1"             # primary - not running and nameserver role not detected
-       "[234]:S:[^:]*:master SOK    100"             # secondary - running, active master nameserver role, in sync
-       "[234]:S:[^:]*:master PRIM   100"             # secondary - running, active master nameserver role, already marked as PRIMary
-       "[015-9]:S:[^:]*:master SOK   80"             # secondary - not running, but active master nameserver role and in sync
-       "[0-9]:S:[^:]*:master SFAIL  -INFINITY"       # secondary - any running status, active master nameserver role, not in sync (exclude for promote)
-       "[0-9]:S:[^:]*:slave  SOK     10"             # secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)
-       "[0-9]:S:[^:]*:slave  SFAIL  -INFINITY"       # secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)
-       "[234]:S:[^:]*:[?:-]  .*       0"             # secondary - running, but nameserver role not detected
-       "[015-9]:S:[^:]*:[?:-] .*     -1"             # secondary - not running and nameserver role not detected
-       ".*                    .*      -1"            # any case not catched before
+       "[234]   P [^:]*:master         .*     150             'primary - running, active master nameserver role'"
+       "[234]   P master               .*     140             'primary - running, configured master nameserver role (failover candidate)'"
+       "[015-9] P [^:]*:master         .*        90             'primary - not running, but active master nameserver role '"
+       "[0-9]   P [^:]*:slave          .*      60             'primary - any running status, slave master nameserver role (should not happen for ScaleUp)'"
+       "[234]   P [^:]*:[?:-]          .*       0             'primary - running, but nameserver role not detected'"
+       "[015-9] P [^:]*:[?:-]          .*        -1             'primary - not running and nameserver role not detected'"
+       "[234]   S [^:]*:master         SOK    100             'secondary - running, active master nameserver role, in sync'"
+       "[234]   S [^:]*:master         PRIM   100             'secondary - running, active master nameserver role, already marked as PRIMary'"
+       "[015-9] S [^:]*:master         SOK       80             'secondary - not running, but active master nameserver role and in sync'"
+       "[0-9]   S [^:]*:master         SFAIL  -INFINITY       'secondary - any running status, active master nameserver role, not in sync (exclude for promote)'"
+       "[0-9]   S [^:]*:slave          SOK     10             'secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)'"
+       "[0-9]   S [^:]*:slave          SFAIL  -INFINITY       'secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)'"
+       "[234]   S [^:]*:[?:-]          .*       0             'secondary - running, but nameserver role not detected'"
+       "[015-9] S [^:]*:[?:-]          .*        -1             'secondary - not running and nameserver role not detected'"
+       ".*                             .*        -1             'any case not catched before'"
     )
     SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU=(
        "[0-9]:P:[^:]*:master .*     150"             # primary - any running status, active master nameserver role
@@ -892,8 +912,8 @@ function saphana_init_scoring_tables() {
        ".*                      .*    -1"            # any case not catched before
     )
     SCORING_TABLE_PREFERRED_NEVER_SU=(
-       "[234]*:P:[^:]*:master .*     150"
-       "[015-9]*:P:[^:]*:master .*    90"
+       "[234]*:P:[^:]*:master .*     150"            # primary - running, active master nameserver role
+       "[015-9]*:P:[^:]*:master .*    90"            # primary - not running, but active master nameserver role
        "[0-9]*:P:[^:]*:.*     .*     -INFINITY"
        "[0-9]*:S:[^:]*:.*     .*     -INFINITY"
        ".*                    .*     -INFINITY"
@@ -1252,12 +1272,13 @@ function saphana_init() {
     topology=$(get_hana_attribute "global" "${ATTR_NAME_HANA_TOPOLOGY[@]}")    # ScaleUp ScaleOut
     if ocf_is_true "$PreferSiteTakeover"; then
         preferRecover="remote"
-    elif [[ "${PreferSiteTakeover,,}" == "never" ]]
+    elif [[ "${PreferSiteTakeover,,}" == "never" ]]; then
         preferRecover="localOnly"
     else
         preferRecover="local"
     fi
     saphana_init_scoring_tables
+    super_ocf_log info "RA: set scoring table for scenario ${topology}_${preferRecover}"
     case "${topology}_${preferRecover}" in
         ScaleUp_remote      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;
         ScaleUp_local       ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU[@]}");;
@@ -1265,7 +1286,7 @@ function saphana_init() {
         ScaleOut_local      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SO[@]}");;
         ScaleUp_localOnly   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SU[@]}");;
         ScaleOut_localOnly  ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SO[@]}");;
-        *                   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;  # use ScaleUp_remote as deafult, if takeover and/or PreferSiteTakeover are not already detected
+        *                   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;  # use ScaleUp_remote as default, if takeover and/or PreferSiteTakeover are not already detected
     esac
 
     #
@@ -1449,8 +1470,7 @@ function check_sapstartsrv() {
             super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
             restart=1
         else
-            output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
-            if [ "$?" -eq 0 ]
+            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
             then
                 runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
                 if [ "$runninginst" != "$InstanceName" ]
@@ -1458,8 +1478,8 @@ function check_sapstartsrv() {
                     super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
                     restart=1
                 else
-                    output=$("$SAPCONTROL" -nr "$InstanceNr" -function AccessCheck Start)
-                    if [ "$?" -ne 0 ]; then
+                    if ! output=$("$SAPCONTROL" -nr "$InstanceNr" -function AccessCheck Start)
+                    then
                         super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 "/tmp/.sapstream5${InstanceNr}13"))"
                         super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
                         restart=1
@@ -1791,8 +1811,7 @@ function saphana_start() {
         then
             HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStarted)
             # HANA_ACTION_TIMEOUT=$(get_action_timeout)
-            output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStarted "$HANA_ACTION_TIMEOUT" 1)
-            if [ "$?" -eq 0 ]
+            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStarted "$HANA_ACTION_TIMEOUT" 1)
             then
                 # TODO PRIO2: scale-up did not check the landscapeHostConfiguration rc
                 for i in 1 2 3 4; do
