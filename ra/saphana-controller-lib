@@ -34,7 +34,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaControllerLibVersion="1.001.9"
+SAPHanaControllerLibVersion="1.001.10"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -856,7 +856,7 @@ function set_SRHOOK_PRIM()
     lastSrHook=$(get_SRHOOK_plain "$sr_name")
     lastRemSrHook=$(get_SRHOOK_plain "$remSR_name")
     if [ -n "${lastSrHook}${lastRemSrHook}" ]; then
-        # reset srHook attribute to PRIM as we found either local or remore srHook attribute
+        # reset srHook attribute to PRIM as we found either local or remote srHook attribute
         set_SRHOOK "$sr_name" "PRIM"
     fi
 }
@@ -958,12 +958,12 @@ function saphana_init_attribute_definitions()
     # attribute containing the current running srHook generation
     ATTR_NAME_HANA_SRHOOK_GEN=("hana_${sid}_gsh" "reboot")
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
-    ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
+    # ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")  # unused variable, remove or use
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
-    ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
-    ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
+    # ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot") # unused variable, remove or use
+    # ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot") # unused variable, remove or use
     ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     ATTR_NAME_HANA_SRACTION_HISTORY=("hana_${sid}_srah" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     #
@@ -996,7 +996,7 @@ function saphana_init_attribute_definitions()
     # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
     # scale-out and scale-up now use LPA as site specific attribute
     ATTR_NAME_HANA_SITE_LPA=("hana_${sid}_site_lpt" "props")
-    ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay")
+    # ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay") # TODO PRIO2: NG - reuse this variable
     ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
@@ -1042,7 +1042,7 @@ function saphana_init_handle_update()
         if [ "$nrOfNodes" == "$updNodes" ]; then
             updState="ok"
         else
-            oldNodes=$(("$nrOfNodes" - "$updNodes"))
+            # oldNodes=$(("$nrOfNodes" - "$updNodes"))  # TODO PRIO2: NG - check usage of this variable (oldNodes)
             updState="nok"
         fi
         # if cluster_update_state is empty or the stored value does not match the
@@ -1121,7 +1121,7 @@ function saphana_init_get_remote_site()
         if [[ -n "$nodeSite" && "$nodeSite" != "$site" ]]; then
             remSite="$nodeSite"
             remSR_name="${remSite%%:*}"
-            remSR_id="${remSite#*:}"
+            # remSR_id="${remSite#*:}"  # TODO PRIO2: NG - do we need the site id (number)?
         fi
     done
     # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
@@ -1143,13 +1143,14 @@ function saphana_init_get_hana_version()
     [[ -z ${ges_ver:-} ]] && ges_ver=$(HANA_CALL --timeout 10 --cmd "HDB version" | tr -d " " | awk -F: '$1 == "version" {print $2}')
     #Version xx.yy.zzz
     [[ ${ges_ver} =~ [0-9]+(\.[0-9]+){2} ]] && hdbver=${BASH_REMATCH[0]}
+    super_ocf_log info "DEC: SAP HANA version  $hdbver detected"
 }
 
 function saphana_init_sap_commands()
 {
     # TODO PRIO2: NG also set --sapcontrol=1 here
     hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
+    #hdbMap="hdbnsutil -sr_stateHostMapping"   # TODO PRIO2: NG - do we need hdbMap again?
     local standbyFilter=""
     if [ "$ACTION" = "stop" ]; then
        standbyFilter="--standbyFilter=off"
@@ -1216,7 +1217,7 @@ function saphana_init() {
     sid="${SID,,}"
     sidadm="${sid}adm"
     # TODO PRIO3: Do we need a parameter for the RA to be able to adjust hdbSrQueryTimeout?
-    hdbSrQueryTimeout=180
+    # hdbSrQueryTimeout=180 # TODO PRIO3: NG - do we need hdbSrQueryTimeout ?
     # DONE: PRIO4: SAPVIRHOST might be different to NODENAME
     # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API? Answer: Yes
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
@@ -1294,7 +1295,7 @@ function saphana_init() {
     #  ATTR_NAME_HANA_SITE
     site=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SITE[@]}");
     sr_name=${site%%:*}  # first field of site (separator :)
-    sr_id=${site#*:}     # rest of site (separator :)
+    #sr_id=${site#*:}     # rest of site (separator :)  ; TODO PRIO2: NG  - do we need the site id (number)?
     sr_mode=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SRMODE2[@]}")
     if [ -z "$sr_mode" ]; then
         sr_mode="sync"
@@ -1601,7 +1602,8 @@ function check_for_primary() {
 function analyze_hana_sync_statusSRS()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc=-1 srRc=0 all_nodes_other_side="" n="" siteParam=""
+    #local rc=-1 srRc=0 all_nodes_other_side="" n="" siteParam=""  # TODO PRIO2: NG - Do we need all_nodes_other_side, n?
+    local rc=-1 srRc=0 siteParam=""
     if [ -n "$remSR_name" ]; then
        siteParam="--site=$remSR_name"
     fi
@@ -1709,7 +1711,6 @@ function register_hana_secondary()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=2;
     local remoteInstance="";
-    local newParameter=1
     local remoteHanaHost="";
     # TODO PRIO1: NG - scale-up is normally always the_master_nameserver
     if is_the_master_nameserver; then
@@ -1771,7 +1772,6 @@ function saphana_start() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_NOT_RUNNING"
     local output=""
-    local loopcount=0
     local lastSrHook
     local lssRc
     # TODO PRIO2: check_sapstartsrv to be moved into "if is_the_master_nameserver..." ?
@@ -1815,10 +1815,10 @@ function saphana_start() {
                             $1 == "indexServerActualRole" {isAR=$2}
                             END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
                     # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
-                    hanaHostActive=$(echo "${hanaANSWER//[[:blank:]]/}" | \
-                    awk -F= '
-                                $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
-                                END { printf "%s\n", hostActive;  } ' vName="$vName" )
+                    #hanaHostActive=$(echo "${hanaANSWER//[[:blank:]]/}" | \
+                    #awk -F= '
+                    #            $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
+                    #            END { printf "%s\n", hostActive;  } ' vName="$vName" )
                     set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
                     #
                     # set LSS local-site attribute
@@ -1879,8 +1879,7 @@ function saphana_stopSystem() {
                BEGIN { partials=0 }
                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive "-" $2; if ( $2 == "partial" ) { partials=1 } }
                     END { printf "%s:%s\n", hostActive, partials;  } ' vName="$vName" )
-            # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
-            hanaHostActive="${hAPart%:*}"
+            # hanaHostActive="${hAPart%:*}" # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
             partials="${hAPart#*:}"
             if [ "$partials" == 0 ]; then
                 # terminate wait-for-all-nodes-down if no partial nodes are left any more
@@ -2327,7 +2326,7 @@ function saphana_check_local_instance()
         local COLOR=""
         local SERVICE=""
         local STATE=0
-        local SEARCH
+        # local SEARCH
 
         COLOR=$(echo "$output" | grep "^$SERVNO dispstatus: " | cut -d' ' -f3)
         SERVICE=$(echo "$output" | grep "^$SERVNO name: " | cut -d' ' -f3)
@@ -2338,7 +2337,7 @@ function saphana_check_local_instance()
         esac
 
         # TODO PRIO1: NG - check this new code very carefully
-        SEARCH=$(echo "$MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
+        ##SEARCH=$(echo "$MONITOR_SERVICES" | sed 's/\+/\\\+/g' | sed 's/\./\\\./g')
         #if [ `echo "$SERVICE" | egrep -c "$SEARCH"` -eq 1 ]
         # do NOT quote regex $MONITOR_SERVICES here !!
         if  [[ "$SERVICE" =~ $MONITOR_SERVICES  ]]
@@ -2400,12 +2399,12 @@ function lpa_get_lpt() {
 function lpa_set_lpt() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=1
-    local crm_rc=1
+    #local crm_rc=1
     local lpt=$1
     local clpt=-1
     local mysite=$2
     if [ -n "$mysite" ]; then
-        set_hana_site_attribute "${mysite}" "$lpt" "${ATTR_NAME_HANA_SITE_LPA[@]}"; crm_rc=$?
+        set_hana_site_attribute "${mysite}" "$lpt" "${ATTR_NAME_HANA_SITE_LPA[@]}" || super_ocf_log error "LPA: setting cluster attribute failed"
         clpt=$(lpa_get_lpt "$mysite")
         if [ "$lpt" != "$clpt" ]; then
             super_ocf_log error "LPA: lpa_set_lpt failed for lpt=$lpt and mysite=$mysite"
@@ -2530,16 +2529,16 @@ function lpa_init_lpt() {
 #    SECONDARY sets to 10
 #    PRIMARY   sets to 20
 #
-#    LPRlocal OR LPTremore ARE real lpt (>1000)
+#    LPRlocal OR LPTremote ARE real lpt (>1000)
 #        THEN:
 #            Bigger LPR wins, if delta-gab is OK
-#               LPTlocal >> LPTremore ===> rc=0 (start)
+#               LPTlocal >> LPTremote ===> rc=0 (start)
 #               LPTRemote >> LPTlocal ===> rc=1 (register)
 #            Stalemate in all other cases ==> STALEMATE-HANDLING ===> rc=2 (wait4gab)
-#    LPRlocal AND LPTremore ARE NOT real lpt (<=1000)
+#    LPRlocal AND LPTremote ARE NOT real lpt (<=1000)
 #        THEN:
 #            Bigger LPT wins
-#               LPTlocal > LPTremore ===> rc=0 (start)
+#               LPTlocal > LPTremote ===> rc=0 (start)
 #               LPTRemote > LPTlocal ===> rc=1 (register)
 #            Stalemate in all other cases ==> STALEMATE-HANDLING ===> rc=2 (wait4gab)
 #    LPTRemote is not initialized or node/site not known to the cluster (0)
@@ -2976,7 +2975,7 @@ function saphana_monitor_primary()
     local LPTloc=-1
     local lparc=4
     local lss
-    local remoreSync=""
+    local remoteSync=""
     local my_role=""
     local node=""
     local nodeSite=""
