@@ -1159,17 +1159,17 @@ function saphana_init_sap_commands()
 function cluster_get_other_nodes()
 {
     local NODENAME="$1"
-    local -a MAPFILE
-    local mf=""
+    local -a NODELIST
+    local ne=""
     local ch=""
     # TODO PRIO1: NG - check this new code here
     #             lines are expected to have format <number><blank><nodename><blank><status>
-    #             1 grimsel01 member
-    mapfile <<<"$(crm_node -l)"
-    for mf in "${MAPFILE[@]}"; 
+    #             example: "1 grimsel01 member"
+    mapfile -t NODELIST < <(crm_node -l)    # syntax < <(...) is intended
+    for ne in "${NODELIST[@]}";
     do 
-       mf="${mf// /:}"  # replace blank by colon for better reg-ex parsing
-       if [[ "$mf" =~ ^([0-9]+):([^:]+) ]]; then 
+       ne="${ne// /:}"  # replace blank by colon for better reg-ex parsing
+       if [[ "$ne" =~ ^([0-9]+):([^:]+) ]]; then
            ch="${BASH_REMATCH[2]}" 
            if [[ "$ch" != "${NODENAME}" ]]; then
                echo "$ch";    
@@ -1268,7 +1268,7 @@ function saphana_init() {
     # Determine list of other cluster nodes and store in otherNodes variable
     otherNodes=()
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-       *corosync* ) otherNodes=( $(cluster_get_other_nodes "${NODENAME}") );;
+       *corosync* ) mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) ;; # the syntax < <(..) is intended
        # TODO PRIO4: NG - fix cman code to be also shellcheck compatible
        #*cman*    ) otherNodes=($(crm_node -l | awk '{for (i=1; i<=NF; i++) { if ($i != me) { print $i }}}' me="${NODENAME}"));;
     esac
