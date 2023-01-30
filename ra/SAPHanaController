@@ -36,7 +36,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaControllerVersion="1.001.2"
+SAPHanaControllerVersion="1.001.4"
 #
 # Initialization:
 timeB=$(date '+%s')
@@ -65,9 +65,6 @@ source /root/SAPHanaSR-NG/saphana-controller-lib
 # globals:  SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
 #
 
-core_init "$SAPHanaControllerVersion"
-
-
 
 if [ $# -ne 1 ]
 then
@@ -80,7 +77,22 @@ if [ "$ACTION" = "status" ]; then
     ACTION=monitor
 fi
 
+if is_clone
+then
+    CLACT=_clone
+else
+    if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
+    then
+        super_ocf_log err "ACT: $ACTION called in a non multi-state environment"
+        exit "$OCF_ERR_ARGS"
+    fi
+fi
+
 super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
+core_init "$SAPHanaControllerVersion"
+
+
+
 # These operations don't require OCF parameters to be set
 # TODO: PRIO5: check, if notify is still not needing OCF parameters
 case "$ACTION" in
@@ -113,16 +125,6 @@ then
     exit "$OCF_ERR_ARGS"
 fi
 
-if is_clone
-then
-    CLACT=_clone
-else
-    if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
-    then
-        super_ocf_log err "ACT: $ACTION called in a non multi-state environment"
-        exit "$OCF_ERR_ARGS"
-    fi
-fi
 
 # What kind of method was invoked?
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
