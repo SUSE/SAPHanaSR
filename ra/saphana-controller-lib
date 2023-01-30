@@ -102,6 +102,7 @@ function core_init() {
     # Resource Agent Generation
     RAG="2.0"
     SAPHanaFilter='ra-act-dec-lpa'
+    super_ocf_log info "RA SAPHanaControllerLibVersion=$SAPHanaControllerLibVersion"
     set +o posix   # disable possix mode of the bash
     if ocf_is_true "$log_attributes"; then
         log_attr_file="/var/log/fhATTRIBUTES"
@@ -123,7 +124,7 @@ function core_init() {
     OCF_RESKEY_CRM_meta_master_node_max="${OCF_RESKEY_CRM_meta_master_node_max:-0}"
     # SH=/bin/sh
     log_attributes=false
-    debug_attributes=0
+    #debug_attributes=0   # TODO PRIO3: variable currently unused - remove or use
     return 0
 }
 
@@ -388,7 +389,7 @@ function version() {
 function remoteHost2remoteNode()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local -a clusterNodes=()
+    # local -a clusterNodes=() # TODO PRIO3: variable currently unused - remove or use
     local cl=""
     local vHost=""
     local remoteHost="$1"
@@ -493,7 +494,7 @@ function get_hana_attribute()
     local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
     local attr_default=${4:-}
     local dstr
-    local attr_val=""
+    # local attr_val="" # TODO PRIO3: variable currently unused - remove or use
     dstr=$(date)
     case "$attr_store" in
         reboot | forever )
@@ -592,15 +593,15 @@ function get_hana_site_attribute()
 function assert() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local err_msg=$1
-    local default_rc="$OCF_NOT_RUNNING"
-    # DONE: Check, if we need to distinguish between probe and others
-    if ocf_is_probe; then
-        default_exit="$OCF_NOT_RUNNING"
-    else
-        # TODO PRIO1: NG - scale-up was OCF_ERR_CONFIGURED, scale-out OCF_NOT_RUNNING - which is the better option?
-        # for noe we use the scale-out solution; check with upstream documentation, if OCF_NOT_RUNNING is better reaction here
-        default_exit="$OCF_NOT_RUNNING"
-    fi
+    # local default_exit="$OCF_NOT_RUNNING" # TODO PRIO3: variable currently unused - remove or use
+    # TODO PRIO3: NG - decide, if assert in normal actions (not probe) needs to return OCF_ERR_CONFIGURED
+    # for now we use the scale-out solution; check with upstream documentation, if OCF_NOT_RUNNING is better reaction here
+    #if ocf_is_probe; then
+    #    default_exit="$OCF_NOT_RUNNING"
+    #else
+    #    # TODO PRIO3: NG - scale-up was OCF_ERR_CONFIGURED, scale-out OCF_NOT_RUNNING - which is the better option?
+    #    default_exit="$OCF_NOT_RUNNING"
+    #fi
     if [ "$ACTION" = "stop" ]; then
         cleanup_instance
         exit "$OCF_SUCCESS"
@@ -703,7 +704,7 @@ function HANA_CALL()
     local timeOut=0
     local rc=0
     local use_su=1 # Default to be changed later (see TODO above)
-    local pre_cmd=""
+    local pre_cmd_type=""
     local cmd=""
     local pre_script=""
     local output=""
@@ -856,7 +857,7 @@ function set_SRHOOK_PRIM()
     fi
 }
 
-saphana_init_scoring_tables() {
+function saphana_init_scoring_tables() {
     # TODO PRIO1: NG - scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
     #
     # TODO PRIO4: Table for non-preferred-site-takeover
@@ -896,7 +897,7 @@ saphana_init_scoring_tables() {
        "[0-9]*:S:[^:]*:.*     .*     -INFINITY"
        ".*                    .*     -INFINITY"
     )
-    SCORING_TABLE_PREFERRED_SITE_TAKEOVER=(
+    SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SO=(
        "[234]:P:master[123]:master     .*          150"
        "[234]:P:master[123]            .*          140"
        "[234]:P:master[123]:slave:.*:standby      .*          115"
@@ -1167,12 +1168,12 @@ function cluster_get_other_nodes()
     #             example: "1 grimsel01 member"
     mapfile -t NODELIST < <(crm_node -l)    # syntax < <(...) is intended
     for ne in "${NODELIST[@]}";
-    do 
+    do
        ne="${ne// /:}"  # replace blank by colon for better reg-ex parsing
        if [[ "$ne" =~ ^([0-9]+):([^:]+) ]]; then
-           ch="${BASH_REMATCH[2]}" 
+           ch="${BASH_REMATCH[2]}"
            if [[ "$ch" != "${NODENAME}" ]]; then
-               echo "$ch";    
+               echo "$ch";
            fi
        fi
     done
@@ -1247,20 +1248,24 @@ function saphana_init() {
     #
     # init scoring tables
     #
-    saphana_init_scoring_tables
-    # TODO PRIO1: NG - scale-out (_SO) vs scale-up (*_SU) tables - mechanism to select su or so
+    topology=$(get_hana_attribute "global" "${ATTR_NAME_HANA_TOPOLOGY[@]}")    # ScaleUp ScaleOut
     if ocf_is_true "$PreferSiteTakeover"; then
-        SCORING_TABLE=("${SCORING_TABLE_PREFERRED_SITE_TAKEOVER[@]}")
+        preferRecover="remote"
+    elif [[ "${PreferSiteTakeover,,}" == "never" ]]
+        preferRecover="localOnly"
     else
-        case "$PreferSiteTakeover" in
-            never|NEVER|Never )
-                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_NEVER[@]}")
-                ;;
-            * )
-                SCORING_TABLE=("${SCORING_TABLE_PREFERRED_LOCAL_RESTART[@]}")
-                ;;
-        esac
+        preferRecover="local"
     fi
+    saphana_init_scoring_tables
+    case "${topology}_${preferRecover}" in
+        ScaleUp_remote      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;
+        ScaleUp_local       ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU[@]}");;
+        ScaleOut_remote     ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SO[@]}");;
+        ScaleOut_local      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SO[@]}");;
+        ScaleUp_localOnly   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SU[@]}");;
+        ScaleOut_localOnly  ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SO[@]}");;
+    esac
+
     #
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     super_ocf_log debug "DBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
@@ -1277,7 +1282,7 @@ function saphana_init() {
     #
     # saphana_init_handle_update
     #
-    # get remote site 
+    # get remote site
     #
     saphana_init_get_remote_site
     #  ATTR_NAME_HANA_SITE
@@ -1595,7 +1600,7 @@ function analyze_hana_sync_statusSRS()
     if [ -n "$remSR_name" ]; then
        siteParam="--site=$remSR_name"
     fi
-    # TODO PRIO2: NG scale-up has 5s here (static); scale-out used HANA_CALL_TIMEOUT  - review 
+    # TODO PRIO2: NG scale-up has 5s here (static); scale-out used HANA_CALL_TIMEOUT  - review
     # TODO PRIO2: NG define "python systemReplicationStatus.py" in saphana_init_sap_commands()?
     # TODO PRIO2: NG reaction, if timeout occurs? Should we set SFAIL?
     FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
@@ -2428,7 +2433,7 @@ function lpa_pull_lpt() {
     #
     # only fetch the first word of the first line as lpt
     #
-    mapfile <"$lpa_file"; 
+    mapfile <"$lpa_file";
     read -r lpt X <<<"${MAPFILE[0]}"
     if [ -n "$lpt" ]; then
         echo "$lpt"
@@ -2708,7 +2713,7 @@ function master_walk() {
     #
     # set MNS local-site attribute
     #
-    set_hana_site_attribute "$sr_name" "$the_master" "${ATTR_NAME_HANA_SITE_MNS[@]}" 
+    set_hana_site_attribute "$sr_name" "$the_master" "${ATTR_NAME_HANA_SITE_MNS[@]}"
 
     super_ocf_log info "DEC: ===> master_walk: priorities for site $site master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
     super_ocf_log info "DEC: ===> master_walk: the_master=$the_master;"
@@ -3352,7 +3357,7 @@ function saphana_monitor_secondary()
             lpa_set_lpt  10 "$sr_name"
             # Hide this error, if we still in WAITING4NODES
             case "$promote_attr" in
-                WAITING4NODES ) # hide error 
+                WAITING4NODES ) # hide error
                                 rc="$OCF_SUCCESS"
                                 ;;
                 * )
