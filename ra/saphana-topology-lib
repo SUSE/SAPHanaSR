@@ -64,6 +64,37 @@ function super_ocf_log() {
 }
 
 #
+# function core_init - lightwight variable initialization without SAP HANA interaction
+# params: TODO raVersion timeBegin log_attributes
+# globals: -
+#
+function core_init() {
+    raVersion="$1"
+    timeBegin="$2"
+    log_attributes="$3"
+    ## GLOBALS
+    log_attributes=false
+    if ocf_is_true "$log_attributes"; then
+        log_attr_file="/var/log/fhATTRIBUTES"
+    else
+        log_attr_file="/dev/null"
+    fi
+
+    HANA_STATE_PRIMARY=0
+    HANA_STATE_SECONDARY=1
+    HANA_STATE_STANDALONE=2
+    HANA_STATE_DEFECT=3
+    SID=""
+    sidadm=""
+    InstanceName=""
+    InstanceNr=""
+    DIR_EXECUTABLE=""
+    declare -u SAPHanaFilter='ra-act-dec-lpa'
+    NODENAME="$(crm_node -n)"
+
+}
+
+#
 # function: sht_usage - short usage info
 # params:   -
 # globals:  $0(r)
@@ -1240,18 +1271,5 @@ function sht_monitor_clone() {
     #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     fi # end ocf_is_NOT_probe
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
-}
-
-#
-# function: sht_notify - notify action
-# params:   -
-# globals:  OCF_*(r), ACTION(r), CLACT(r), NODENAME(r)
-# sht_notify: Handle master scoring - to make sure a slave gets the next master
-#
-function sht_notify() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=0
-    super_ocf_log info "RA ==== end action $ACTION$CLACT (${n_type}/${n_op})===="
     return $rc
 }
