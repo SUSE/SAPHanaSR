@@ -4,9 +4,9 @@
 #
 # Description:	Clone resource to analyze SAPHana-Topology
 #
-###################################################################################################################
 #
-# Thanks to Alexander Krauth for providing SAPInstance and SAPDatabase
+#
+###################################################################################################################
 #
 # SAPHanaTopology: (short sht)
 # Author:       Fabian Herschel, February 2014
@@ -20,38 +20,32 @@
 #      See usage() function below for more details...
 #
 # OCF instance parameters:
-#   OCF_RESKEY_SID            (LNX, NDB, SLE)
-#   OCF_RESKEY_InstanceNumber (00..99)
-#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#   OCF_RESKEY_SID
+#   OCF_RESKEY_InstanceNumber
+#   OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#
+# HANA must support the following commands:
+#     hdbnsutil -sr_stateConfiguration
+#     hdbnsutil -sr_takeover
+#     hdbnsutil -sr_register
+#     landscapeHostConfiguration.py
+#     systemReplicationStatus.py
 #
 #######################################################################
-# DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
-SAPHanaTopologyVersion="1.001.2"
+SAPHanaTopologyVersion="1.001.3"
 #
 # Initialization:
 timeB=$(date '+%s')
 
 OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
 source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
-
-#######################################################################
-log_attributes=false
-if ocf_is_true "$log_attributes"; then
-    log_attr_file="/var/log/fhATTRIBUTES"
-else
-    log_attr_file="/dev/null"
-fi
-
-HANA_STATE_PRIMARY=0
-HANA_STATE_SECONDARY=1
-HANA_STATE_STANDALONE=2
-HANA_STATE_DEFECT=3
-
-debug_attributes=0
-SH=/bin/sh
-
-# TODO PRIO1: adjust the correct path and file name for the library to be sourced for first testing use current directory
+# TODO PRIO1: NG - adjust the correct path and file name for the library to be sourced for first testing use current directory
 source /root/SAPHanaSR-NG/saphana-topology-lib
+
+#
+#######################################################################
+#
+# KNOWN PROBLEMS TO BE FIXED:
 
 #
 # function: main - main function to operate
@@ -59,24 +53,27 @@ source /root/SAPHanaSR-NG/saphana-topology-lib
 # globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), DIR_EXECUTABLE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
 #
 
-## GLOBALS
-SID=""
-sidadm=""
-InstanceName=""
-InstanceNr=""
-DIR_EXECUTABLE=""
-declare -u SAPHanaFilter='ra-act-dec-lpa'
-NODENAME="$(crm_node -n)"
 
 if [ "$#" != "1" ]
 then
-  sht_usage
-  exit "$OCF_ERR_ARGS"
+    sht_usage
+    exit "$OCF_ERR_ARGS"
 fi
 
 ACTION="$1"
 if [ "$ACTION" = "status" ]; then
     ACTION=monitor
+fi
+
+if is_clone
+then
+    CLACT=_clone
+else
+    if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
+    then
+        super_ocf_log err "ACT: $ACTION called in a non clone environment"
+        exit "$OCF_ERR_ARGS"
+    fi
 fi
 
 # These operations don't require OCF parameters to be set
@@ -89,7 +86,10 @@ case "$ACTION" in
                     exit "$OCF_SUCCESS";;
     admin-setup)    admin-setup
                     exit "$OCF_SUCCESS";;
-    *);;
+    *)
+                    super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
+                    core_init "$SAPHanaTopologyVersion"
+                    ;;
 esac
 sht_init
 
@@ -112,18 +112,6 @@ then
     exit "$OCF_ERR_ARGS"
 fi
 
-if is_clone
-then
-    CLACT=_clone
-else
-    if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
-    then
-        super_ocf_log err "ACT: $ACTION called in a non clone environment"
-        exit "$OCF_ERR_ARGS"
-    fi
-fi
-
-super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor) # Standard controlling actions
@@ -134,7 +122,7 @@ case "$ACTION" in
         sht_validate
         ra_rc="$?"
         ;;
-    reload )
+    reload)
         ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
@@ -146,3 +134,4 @@ timeE="$(date '+%s')"
 (( timeR = timeE - timeB ))
 super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
 exit "${ra_rc}"
+# set ts=4 sw=4 sts=4 et

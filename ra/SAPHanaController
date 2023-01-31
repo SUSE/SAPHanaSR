@@ -8,7 +8,7 @@
 #
 ##############################################################################
 #
-# SAPHana
+# SAPHanaController (short saphana)
 # Author:       Fabian Herschel, November 2013
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
@@ -29,21 +29,22 @@
 #   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
 #
 # HANA must support the following commands:
-#     hdbnsutil -sr_stateConfiguration (unsure, if this means >= SPS110, SPS111 or SPS10x)
+#     hdbnsutil -sr_stateConfiguration
 #     hdbnsutil -sr_takeover
 #     hdbnsutil -sr_register
 #     landscapeHostConfiguration.py
-#     systemReplicationStatus.py (>= SPS090)
+#     systemReplicationStatus.py
 #
 #######################################################################
-SAPHanaControllerVersion="1.001.4"
+SAPHanaControllerVersion="1.001.5"
 #
 # Initialization:
 timeB=$(date '+%s')
-SAPHanaFilter=""
 
 OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
 source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
+# TODO PRIO1: NG - adjust the correct path and file name for the library to be sourced for first testing use current directory
+source /root/SAPHanaSR-NG/saphana-controller-lib
 
 #
 #######################################################################
@@ -53,10 +54,6 @@ source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 # P002 - in the swarm non master-nameserver nodes may never set the lpt=date
 # P003 - in the swarm non master nodes may NOT do a full master-walk
 # P004 - Monitor on "dying" primary and failing systemReplicationStatus script set secondary to SFAIL, so local restart was processed instead of takeover
-# DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
-
-
-source /root/SAPHanaSR-NG/saphana-controller-lib
 
 #
 # function: main - main function to operate
@@ -66,10 +63,10 @@ source /root/SAPHanaSR-NG/saphana-controller-lib
 #
 
 
-if [ $# -ne 1 ]
+if [ "$#" != "1" ]
 then
-  saphana_usage
-  exit "$OCF_ERR_ARGS"
+    saphana_usage
+    exit "$OCF_ERR_ARGS"
 fi
 
 ACTION="$1"
@@ -88,13 +85,7 @@ else
     fi
 fi
 
-super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
-core_init "$SAPHanaControllerVersion"
-
-
-
 # These operations don't require OCF parameters to be set
-# TODO: PRIO5: check, if notify is still not needing OCF parameters
 case "$ACTION" in
     usage|methods)  saphana_"$ACTION"
                     exit "$OCF_SUCCESS";;
@@ -102,7 +93,10 @@ case "$ACTION" in
                     exit "$OCF_SUCCESS";;
     notify)         #saphana_notify
                     exit "$OCF_SUCCESS";;
-    *);;
+    *)
+                    super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
+                    core_init "$SAPHanaControllerVersion"
+                    ;;
 esac
 saphana_init
 
@@ -125,8 +119,6 @@ then
     exit "$OCF_ERR_ARGS"
 fi
 
-
-# What kind of method was invoked?
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor|promote|demote) # Standard controlling actions
@@ -149,9 +141,8 @@ case "$ACTION" in
         ra_rc="$OCF_ERR_UNIMPLEMENTED"
         ;;
 esac
-timeE=$(date '+%s')
+timeE="$(date '+%s')"
 (( timeR = timeE - timeB ))
-super_ocf_log debug "DBG: ==== SAPHanaFilter=$SAPHanaFilter"
 super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaControllerVersion) (${timeR}s)===="
 exit "${ra_rc}"
 # set ts=4 sw=4 sts=4 et
