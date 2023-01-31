@@ -91,6 +91,14 @@ function core_init() {
     DIR_EXECUTABLE=""
     declare -u SAPHanaFilter='ra-act-dec-lpa'
     NODENAME="$(crm_node -n)"
+    #
+    # TODO PRIO1: NG - check. if we really could/should initialize such missing variables
+    #
+    OCF_RESKEY_CRM_meta_timeout="${OCF_RESKEY_CRM_meta_timeout:-3600}"   # cluster should always set these values
+    OCF_RESKEY_CRM_meta_clone_max="${OCF_RESKEY_CRM_meta_clone_max:-0}"  # cluster must always set this value
+    OCF_RESKEY_CRM_meta_clone_node_max="${OCF_RESKEY_CRM_meta_clone_node_max:-0}"
+    OCF_RESKEY_CRM_meta_master_max="${OCF_RESKEY_CRM_meta_master_max:-0}"
+    OCF_RESKEY_CRM_meta_master_node_max="${OCF_RESKEY_CRM_meta_master_node_max:-0}"
 
 }
 
@@ -512,7 +520,7 @@ function master_walk() {
               if [ "$site" = "$nSite" ]; then
                  # node of same site found
                  nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
-                 read nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
+                 read -r nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
                  super_ocf_log debug "DBG: site $site $nNsConf:$nNsCurr"
                  case "$nNsConf:$nNsCurr" in
                     master1:master  ) master1=$node; active_master=$node
