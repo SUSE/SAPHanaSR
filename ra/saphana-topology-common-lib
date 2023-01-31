@@ -69,7 +69,9 @@ function super_ocf_log() {
 # globals: -
 #
 function core_init() {
+    # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of raVersion later
     raVersion="$1"
+    # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of timeBegin later
     timeBegin="$2"
     log_attributes="$3"
     ## GLOBALS
@@ -111,24 +113,24 @@ function get_hana_attribute()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-    local attr_node=$1
-    local attr_name=$2
-    local attr_store=${3:-reboot} # DONE: PRIO5 get this (optional) from parameter
-    local attr_default=${4:-}
+    local attr_node="$1"
+    local attr_name="$2"
+    local attr_store="${3:-reboot}" # DONE: PRIO5 get this (optional) from parameter
+    local attr_default="${4:-}"
     local dstr
-    dstr=$(date)
+    dstr="$(date)"
     case "$attr_store" in
         reboot | forever )
-            echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> $log_attr_file
-            crm_attribute -N ${attr_node} -G -n "$attr_name" -l $attr_store -q -d "$attr_default" 2>>$log_attr_file; rc=$?
+            echo "$dstr: SAPHanaTopology: crm_attribute -N ${attr_node} -G -n \"$attr_name\" -l $attr_store -q" >> "$log_attr_file"
+            crm_attribute -N "${attr_node}" -G -n "$attr_name" -l "$attr_store" -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
             ;;
         props )
-            echo "$dstr: SAPHanaTopology: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> $log_attr_file
-            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>$log_attr_file; rc=$?
+            echo "$dstr: SAPHanaTopology: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> "$log_attr_file"
+            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE>
@@ -176,18 +178,18 @@ function set_hana_attribute()
     local rc=1
     local attr_old=""
     local dstr
-    dstr=$(date)
-    attr_old=$(get_hana_attribute $attr_node $attr_name $attr_store $attr_default); get_rc=$?
+    dstr="$(date)"
+    attr_old=$(get_hana_attribute "$attr_node" "$attr_name" "$attr_store" "$attr_default"); get_rc="$?"
     if [ "$attr_old" != "$attr_value" ]; then
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_node} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         case "$attr_store" in
             reboot | forever )
-                echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> $log_attr_file
-                crm_attribute -N $attr_node -v $attr_value -n "$attr_name" -l $attr_store 2>>$log_attr_file; rc=$?
+                echo "$dstr: SAPHanaTopology: crm_attribute -N $attr_node -v $attr_value -n \"$attr_name\" -l $attr_store" >> "$log_attr_file"
+                crm_attribute -N "$attr_node" -v "$attr_value" -n "$attr_name" -l "$attr_store" 2>>"$log_attr_file"; rc="$?"
                 ;;
             props )
-                echo "$dstr: SAPHanaTopology: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> $log_attr_file
-                crm_attribute -v $attr_value -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>$log_attr_file; rc=$?
+                echo "$dstr: SAPHanaTopology: crm_attribute -v $attr_value -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> "$log_attr_file"
+                crm_attribute -v "$attr_value" -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>"$log_attr_file"; rc="$?"
                 ;;
         esac
     else
@@ -195,7 +197,7 @@ function set_hana_attribute()
         rc=0
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -220,14 +222,14 @@ function is_clone() {
        #
         if [ "$OCF_RESKEY_CRM_meta_clone_node_max" != 1 ] ; then
                 super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1)"
-                exit $OCF_ERR_CONFIGURED
+                exit "$OCF_ERR_CONFIGURED"
         fi
         rc=0;
     else
         rc=1;
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -258,7 +260,7 @@ function HANA_CALL()
         shift
     done
 
-    if [ $use_su -eq 1 ]; then
+    if [ "$use_su" == "1" ]; then
         pre_cmd="su - ${sid}adm -c"
         [[ $cmd == python* ]] && pre_script="cd $DIR_EXECUTABLE/python_support" || pre_script='true'
     else
@@ -268,6 +270,7 @@ function HANA_CALL()
         then
             MY_LD_LIBRARY_PATH=$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
         fi
+        # TODO PRIO2: NG - allign with controller code (pre_cmd_tye)
         pre_cmd="bash -c"
         pre_script="LD_LIBRARY_PATH=$MY_LD_LIBRARY_PATH; export LD_LIBRARY_PATH"
     fi
@@ -281,6 +284,7 @@ function HANA_CALL()
                   cmd_out_log=/tmp/HANA_CALL_CMD_TOP_OUT_${errExt}
                   cmd_err_log=/tmp/HANA_CALL_CMD_TOP_${errExt}
 
+                  # shellcheck disable=SC2086   # TODO PRIO2: NG - allign with controller code (pre_cmd_tye)
                   output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
                   output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
@@ -288,19 +292,20 @@ function HANA_CALL()
                   cmdErr=$(if [ -f "$cmd_err_log" ]; then cat "$cmd_err_log"; rm -f "$cmd_err_log"; else echo "NA"; fi)
                   super_ocf_log debug "DBG: RA ==== action HANA_CALL (cmd is '$cmd', rc is '$rc', stderr from su is '$suErr', stderr from cmd is '$cmdErr') ===="
                   # on rc=1 - retry to improve the behavior in AD environments
-                  if [ $rc -eq 1 ]; then
+                  if [ "$rc" == "1" ]; then
                       super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
                       if [ "$cmdErr" == "NA" ]; then
                           # seems something was going wrong with the 'pre_cmd' (su)
                           super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd'. Retry once."
-                          output=$(timeout "$timeOut" $pre_cmd "$pre_script; $cmd"); rc=$?
+                          # shellcheck disable=SC2086   # TODO PRIO2: NG - allign with controller code (pre_cmd_tye)
+                          output=$(timeout "$timeOut" $pre_cmd "$pre_script; $cmd"); rc="$?"
                       fi
                   fi
                  ;;
     esac
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
-    return $rc;
+    return "$rc";
 }
 
 function saphana_init_attribute_definitions()
@@ -314,17 +319,24 @@ function saphana_init_attribute_definitions()
     # to mutli-target replication.
     # node specific, set, if the NewResourceAgent is running on the system
     # contains the resource agent generation ($RAG)
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_GRA=("hana_${sid}_gra" "forever")
     # attribute containing the current running srHook generation
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SRHOOK_GEN=("hana_${sid}_gsh" "reboot")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UNKNOWN?, DEMOTED, PROMOTED
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
     ATTR_NAME_HANA_VHOST=("hana_${sid}_vhost" "forever")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_STATUS=("hana_${sid}_status" "reboot")
     ATTR_NAME_HANA_VERSION=("hana_${sid}_version" "reboot")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SRACTION=("hana_${sid}_sra" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SRACTION_HISTORY=("hana_${sid}_srah" "reboot") # Marks, if cluster in a phase requesting  a takeover (T) or registration (R)
     #
     # new "central" attributes
@@ -334,12 +346,16 @@ function saphana_init_attribute_definitions()
     # cluster nodes are already updated to the new RA or if there are still
     # nodes left running the old RA version
     # expected value "ok" - "nok", if there still old RAs running in the cluster
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_UPD_STATE=("hana_${sid}_glob_upd" "props")
     # attribut showing, if migration from global to site specific hook should
     # be done - customer choice
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_multiTargetSupport=("hana_${sid}_glob_mts" "props")
     #
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
     # TODO PRIO1: NG - ATTR_NAME_HANA_SRMODE2 to be moved to site specific
     ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
@@ -347,6 +363,7 @@ function saphana_init_attribute_definitions()
     # For MULTI-TARGET we need a site-specific attribute not a global one
     # but for compatibility we need to recognize the old global attribute too
     # TODO PRIO1: NG - ATTR_NAME_HANA_GLOB_SRHOOK needs to be ATTR_NAME_HANA_SITE_SRHOOK
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_GLOB_SRHOOK=("hana_${sid}_glob_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_FILTER=("hana_${sid}_glob_filter" "props" "ra-act-dec-lpa")
     ATTR_NAME_HANA_TOPOLOGY=("hana_${sid}_glob_topology" "props" "")   # ScaleUp ScaleOut
@@ -355,12 +372,17 @@ function saphana_init_attribute_definitions()
     #
     # TODO PRIO1: NG - check which attributes to keep and which attributes to move from other spaces to site specific
     # scale-out and scale-up now use LPA as site specific attribute
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_LPA=("hana_${sid}_site_lpt" "props")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_MNS=("hana_${sid}_site_mns" "props")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_srPoll" "props")       # polling attribute SOK, SFAIL
 }
 
@@ -379,20 +401,20 @@ function check_for_primary() {
     case "$srmode" in
        primary )
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_PRIMARY"
-              rc=$HANA_STATE_PRIMARY;;
+              rc="$HANA_STATE_PRIMARY";;
        syncmem | sync | async )
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_SECONDARY"
-              rc=$HANA_STATE_SECONDARY;;
+              rc="$HANA_STATE_SECONDARY";;
        none ) # have seen that mode on second side BEFEORE we registered it as replica
               # TODO: PRIO1: NG - Should we set SFAIL?
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_STANDALONE"
-              rc=$HANA_STATE_STANDALONE;;
+              rc="$HANA_STATE_STANDALONE";;
        * )
           # TODO: PRIO3: NG - Should we set SFAIL?
           # TODO: PRIO1: NG - Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
-          dump=$( echo $srmode | hexdump -C );
+          dump=$( echo "$srmode" | hexdump -C );
           super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
-          rc=$HANA_STATE_DEFECT
+          rc="$HANA_STATE_DEFECT"
           # scale-out have had a new re-try code line here: would be needed for the repeat-loop
           #### SAP-CALL
           #node_full_status=$(HANA_CALL --timeout $HANA_CALL_TIMEOUT --cmd "hdbnsutil -sr_stateConfiguration --sapcontrol=1" 2>/dev/null )
@@ -401,7 +423,7 @@ function check_for_primary() {
           # TODO: PRIO5: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
    esac;
    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-   return $rc
+   return "$rc"
 }
 
 # chk4systemdsupport - check, if SAP systemd support is available
@@ -421,7 +443,7 @@ function chk4systemdsupport() {
             rc=1
         fi
     fi
-    return $rc
+    return "$rc"
 }
 
 #
@@ -434,16 +456,16 @@ function start_saphostagent()
     ### SAP-CALL
     if chk4systemdsupport; then
         # use systemd to control saphostagent
-        if $SYSTEMCTL is-active --quiet "$systemd_unit_name"; then
+        if "$SYSTEMCTL" is-active --quiet "$systemd_unit_name"; then
             super_ocf_log info "ACT: systemd service $systemd_unit_name is active"
         else
             super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
-            $SYSTEMCTL start "$systemd_unit_name" >/dev/null 2>&1
+            "$SYSTEMCTL" start "$systemd_unit_name" >/dev/null 2>&1
         fi
     else
         # no SAP systemd unit available, continue with old code...
         if [ -x "${HOSTEXEC_PATH}" ]; then
-            ${HOSTEXEC_PATH} pf=${HOSTEXEC_PROFILE_PATH}
+            "${HOSTEXEC_PATH}" pf="${HOSTEXEC_PROFILE_PATH}"
         fi
     fi
     return 0
@@ -493,9 +515,9 @@ function check_saphostagent()
         # no SAP systemd unit available, continue with old code...
         # TODO: PRIO3: should the path been removed like "saphostexec" instead of "/usr/sap/hostctrl/exe/saphostexec"
         #       or should we use ${HOSTEXEC_PATH} instead?
-        pgrep -f /usr/sap/hostctrl/exe/saphostexec; rc=$?
+        pgrep -f /usr/sap/hostctrl/exe/saphostexec; rc="$?"
     fi
-    return $rc
+    return "$rc"
 }
 
 # function: master_walk - find master node(s)
@@ -515,21 +537,20 @@ function master_walk() {
       primary | sync | syncmem | async )
           # walk over all known cluster nodes
           super_ocf_log debug "DBG: master walk for $srmode"
-          for node in $(crm_node  -l | awk '{print $2}'); do
-              nSite=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_SITE[@]}")
+          for node in $(crm_node  -l | awk '{print $2}'); do    # TODO PRIO3: NG - use function other_nodes + NODENAME here instead of query again
+              nSite=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_SITE[@]}")
               if [ "$site" = "$nSite" ]; then
                  # node of same site found
-                 nRole=$(get_hana_attribute ${node} "${ATTR_NAME_HANA_ROLES[@]}" | tr ':' ' ')
-                 read -r nNsConf nNsCurr nIsConf nIsCurr <<< $nRole
-                 super_ocf_log debug "DBG: site $site $nNsConf:$nNsCurr"
-                 case "$nNsConf:$nNsCurr" in
-                    master1:master  ) master1=$node; active_master=$node
+                 nRole=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")
+                 super_ocf_log debug "DBG: site $site $nRole"
+                 case "$nRole" in
+                    master1:master:*  ) master1=$node; active_master=$node
                  super_ocf_log debug "DBG: site $site match master1:master"
                                     ;;
-                    master2:master  ) master2=$node; active_master=$node
+                    master2:master:*  ) master2=$node; active_master=$node
                  super_ocf_log debug "DBG: site $site match master2:master"
                                     ;;
-                    master3:master  ) master3=$node; active_master=$node
+                    master3:master:*  ) master3=$node; active_master=$node
                  super_ocf_log debug "DBG: site $site match master3:master"
                                     ;;
                     master1:*       ) master1=$node;
