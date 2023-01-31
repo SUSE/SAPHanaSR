@@ -13,7 +13,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-# Copyright:    (c) 2015-2023 SUSE LLC
+#               (c) 2015-2023 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -41,6 +41,7 @@ SAPHanaControllerVersion="1.001.5"
 # Initialization:
 timeB=$(date '+%s')
 
+raType="saphana"
 OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
 source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 # TODO PRIO1: NG - adjust the correct path and file name for the library to be sourced for first testing use current directory
@@ -58,14 +59,13 @@ source /root/SAPHanaSR-NG/saphana-controller-lib
 #
 # function: main - main function to operate
 # params:   ACTION
-# globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), SAPVIRHOST(w), DIR_EXECUTABLE(w),
-# globals:  SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
+# globals:  OCF_*(r), CLACT(w), ra_rc(rw), $0(r)
 #
 
 
 if [ "$#" != "1" ]
 then
-    saphana_usage
+    "${raType}"usage
     exit "$OCF_ERR_ARGS"
 fi
 
@@ -87,18 +87,18 @@ fi
 
 # These operations don't require OCF parameters to be set
 case "$ACTION" in
-    usage|methods)  saphana_"$ACTION"
+    usage|methods)  "${raType}""$ACTION"
                     exit "$OCF_SUCCESS";;
-    meta-data)      saphana_meta_data
+    meta-data)      "${raType}"meta_data
                     exit "$OCF_SUCCESS";;
-    notify)         #saphana_notify
+    notify)         # just ignore
                     exit "$OCF_SUCCESS";;
     *)
                     super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
                     core_init "$SAPHanaControllerVersion"
                     ;;
 esac
-saphana_init
+"${raType}"init
 
 if ! ocf_is_root
 then
@@ -122,11 +122,11 @@ fi
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor|promote|demote) # Standard controlling actions
-        saphana_"$ACTION$CLACT"
+        "${raType}""$ACTION$CLACT"
         ra_rc="$?"
         ;;
     validate-all)
-        saphana_validate
+        "${raType}"validate
         ra_rc="$?"
         ;;
     lpa_check)
@@ -137,7 +137,7 @@ case "$ACTION" in
         ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
-        saphana_methods
+        "${raType}"methods
         ra_rc="$OCF_ERR_UNIMPLEMENTED"
         ;;
 esac

@@ -13,8 +13,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
-#               (c) 2015-2016 SUSE Linux GmbH
-#               (c) 2017-2023 SUSE LLC
+#               (c) 2015-2023 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -37,6 +36,7 @@ SAPHanaTopologyVersion="1.001.3"
 # Initialization:
 timeB=$(date '+%s')
 
+raType="sht"
 OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
 source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 # TODO PRIO1: NG - adjust the correct path and file name for the library to be sourced for first testing use current directory
@@ -50,13 +50,13 @@ source /root/SAPHanaSR-NG/saphana-topology-lib
 #
 # function: main - main function to operate
 # params:   ACTION
-# globals:  OCF_*(r), SID(w), sidadm(w), InstanceName(w), DIR_EXECUTABLE(w), ACTION(w), CLACT(w), ra_rc(rw), $0(r), %ENV(r)
+# globals:  OCF_*(r), CLACT(w), ra_rc(rw), $0(r)
 #
 
 
 if [ "$#" != "1" ]
 then
-    sht_usage
+    "${raType}"usage
     exit "$OCF_ERR_ARGS"
 fi
 
@@ -78,20 +78,18 @@ fi
 
 # These operations don't require OCF parameters to be set
 case "$ACTION" in
-    usage|methods)  sht_"$ACTION"
+    usage|methods)  "${raType}""$ACTION"
                     exit "$OCF_SUCCESS";;
-    meta-data)      sht_meta_data
+    meta-data)      "${raType}"meta_data
                     exit "$OCF_SUCCESS";;
-    notify)         sht_notify
-                    exit "$OCF_SUCCESS";;
-    admin-setup)    admin-setup
+    notify)         # just ignore
                     exit "$OCF_SUCCESS";;
     *)
                     super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
                     core_init "$SAPHanaTopologyVersion"
                     ;;
 esac
-sht_init
+"${raType}"init
 
 if ! ocf_is_root
 then
@@ -115,18 +113,18 @@ fi
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor) # Standard controlling actions
-        sht_"$ACTION$CLACT"
+        "${raType}""$ACTION$CLACT"
         ra_rc="$?"
         ;;
     validate-all)
-        sht_validate
+        "${raType}"validate
         ra_rc="$?"
         ;;
     reload)
         ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
-        sht_methods
+        "${raType}"methods
         ra_rc="$OCF_ERR_UNIMPLEMENTED"
         ;;
 esac
