@@ -648,6 +648,7 @@ function check_saphostagent()
 function get_role_by_landscape(){
     local virtName="$1"
     local nodeRole=""
+    local lssRc=0
     # TODO PRIO2: query lss to be moved into a function
     # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
     hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
@@ -663,7 +664,7 @@ function get_role_by_landscape(){
             $1 == "indexServerActualRole" {isAR=$2}
             END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$virtName" )
     echo "$nodeRole"
-    return 0
+    return "$lssRc"
 }
 
 function get_role_by_cluster_or_landscape() {
