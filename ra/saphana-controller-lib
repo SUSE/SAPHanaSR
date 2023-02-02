@@ -662,6 +662,7 @@ function saphana_start() {
     local output=""
     local lastSrHook
     local lssRc
+    local nodeRole=""
     # TODO PRIO2: check_sapstartsrv to be moved into "if is_the_master_nameserver..." ?
     check_sapstartsrv; rc="$?"
     #
@@ -681,37 +682,24 @@ function saphana_start() {
         if [ "$rc" -eq 0 ]
         then
             HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStarted)
-            # HANA_ACTION_TIMEOUT=$(get_action_timeout)
             if output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStarted "$HANA_ACTION_TIMEOUT" 1)
             then
                 # TODO PRIO2: scale-up did not check the landscapeHostConfiguration rc
+                # shellcheck disable=SC2034 ## for-counter i is only to repeat the code but the counter itsef is not needed
                 for i in 1 2 3 4; do
                     super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName started: $output"
-                    # TODO PRIO2: query lss to be moved into a function
-                    # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
                     # TODO PRIO2: reduce number of landscapeHostConfiguration.py calls in the code and create a function for that (including SAPCONTROL-OK: validation)
-                    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
-                    hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
-                            awk -F= '
-                            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
-                            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
-                            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
-                            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
-                            $1 == "nameServerConfigRole"  {nsCR=$2}
-                            $1 == "nameServerActualRole"  {nsAR=$2}
-                            $1 == "indexServerConfigRole" {isCR=$2}
-                            $1 == "indexServerActualRole" {isAR=$2}
-                            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
-                    # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
-                    #hanaHostActive=$(echo "${hanaANSWER//[[:blank:]]/}" | \
-                    #awk -F= '
-                    #            $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive ":" $2}
-                    #            END { printf "%s\n", hostActive;  } ' vName="$vName" )
-                    set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+                    hanarole="$(get_role_by_landscape "${NODENAME}" "${vName}")"; lssRc="$?"
                     #
                     # set LSS local-site attribute
                     #
+                    # TODO PRIO2: NG - currently we are sometimes using sr_name and sometime site would globalSiteName be more explicit?
                     set_hana_site_attribute "$sr_name" "${lssRc}" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+                    if [ -n "$hanarole" ]; then
+                        # TODO PRIO2: NG - should this be done in the cluster by Topology only? But keep the roles and lssRc already for Scoring?
+                        set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+                        break;
+                    fi
                     sleep 5
                 done
                 rc="$OCF_SUCCESS"
@@ -1922,6 +1910,7 @@ function saphana_monitor_clone() {
             fi
         fi
     else
+        # shellcheck disable=SC2154
         super_ocf_log info "DEC: REGULAR MONITOR interval=${OCF_RESKEY_CRM_meta_interval}"
     fi
     if is_the_master_nameserver; then
