@@ -385,6 +385,9 @@ function sht_start() {
 
     local rc="$OCF_NOT_RUNNING"
     local output=""
+    local hanarole=""
+    local hanalrc=0
+    local hanaANSWER=""
     #local loopcount=0
 
     # TODO: PRIO3: move the string "$HA_RSCTMP/SAPHana/SAPTopologyON" to a variable
@@ -393,6 +396,22 @@ function sht_start() {
     touch "$HA_RSCTMP/SAPHana/SAPTopologyON.${SID}"
     if ! check_saphostagent; then
         start_saphostagent
+    fi
+    # TODO PRIO1: NG - move set _ROLE attribute and ladscapeHostCobfiguration query to a function
+    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
+    hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
+            awk -F= '
+            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
+            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
+            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
+            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
+            $1 == "nameServerConfigRole"  {nsCR=$2}
+            $1 == "nameServerActualRole"  {nsAR=$2}
+            $1 == "indexServerConfigRole" {isCR=$2}
+            $1 == "indexServerActualRole" {isAR=$2}
+            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
+    if "$setRole"; then
+        set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     # TODO PRIO 1: scale-out used side-effect via RC_hdbnsutil to give back different return codes; scale-up rc was always OCF_SUCCESS
     # currently using the always-good mode to force OCF_SUCCESS
