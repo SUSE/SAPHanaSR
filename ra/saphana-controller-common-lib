@@ -306,11 +306,11 @@ function set_SRHOOK_PRIM()
     local lastSrHook
     local lastRemSrHook
     # to be backward compatible only set the site attribute, if the local or remote site attribute is already used (set) in the past
-    lastSrHook=$(get_SRHOOK_plain "$sr_name")
+    lastSrHook=$(get_SRHOOK_plain "$gSite")
     lastRemSrHook=$(get_SRHOOK_plain "$remSR_name")
     if [ -n "${lastSrHook}${lastRemSrHook}" ]; then
         # reset srHook attribute to PRIM as we found either local or remote srHook attribute
-        set_SRHOOK "$sr_name" "PRIM"
+        set_SRHOOK "$gSite" "PRIM"
     fi
 }
 
@@ -825,7 +825,7 @@ function lpa_init_lpt() {
     local hana_state=$1
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
     mkdir -p "$LPA_DIRECTORY"
-    LPTloc=$(lpa_get_lpt "${sr_name}") || LPTloc=$(lpa_pull_lpt) || \
+    LPTloc=$(lpa_get_lpt "${gSite}") || LPTloc=$(lpa_pull_lpt) || \
         if   [ "$hana_state" == "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
             # init primary
             LPTloc=20
@@ -837,7 +837,7 @@ function lpa_init_lpt() {
         else
             rc=2
         fi
-    lpa_set_lpt "$LPTloc" "$sr_name"
+    lpa_set_lpt "$LPTloc" "$gSite"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 }
@@ -886,7 +886,7 @@ function lpa_check_lpt_status() {
     #
     # First GET LPT from ATTR-FILE-DEFAULT
     #
-    LPTloc=$(lpa_get_lpt "$sr_name"); lparc=$?   # ATTR
+    LPTloc=$(lpa_get_lpt "$gSite"); lparc=$?   # ATTR
     if [ "$lparc" != 0 ]; then
         # as a fallback try to fetch the value from external status file
         LPTloc=$(lpa_pull_lpt);                 # FILE
@@ -894,7 +894,7 @@ function lpa_check_lpt_status() {
         if [[ -z "$LPTloc" || "$LPTloc" != -1 || "$lparc" != 0 ]]; then
             # last option - try to initialize as PRIMARY
             lpa_push_lpt 20
-            lpa_set_lpt  20 "$sr_name"
+            lpa_set_lpt  20 "$gSite"
             LPTloc=20                           # DEFAULT
         fi
     fi
