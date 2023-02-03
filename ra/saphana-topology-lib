@@ -235,14 +235,7 @@ function sht_init() {
         export DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
     fi
 
-    #PATH=${PATH}:${DIR_EXECUTABLE}
-    #
-    # figure-out all needed values from system replication status with ONE call
-    # we need: mode=primary|sync|syncmem|...; site name=<site>; mapping/<me>=<site>/<node> (multiple lines)
-    case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-        *corosync* ) mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) ;; # the syntax < <(..) is intended
-       *cman*    ) nodelist=$(crm_node -l);;
-    esac
+    mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
     # TODO PRIO 2: get version as function
     #
     # get HANA version
@@ -260,7 +253,7 @@ function sht_init() {
     # TODO PRIO2: NG - super_ocf_log: re-classify the log classes (here new class 'INFO?'
     # TODO PRIO1: NG - could we get remote site already here?
     # TODO PRIO1: NG - could we get operation mode already here?
-    super_ocf_log debug "INFO: site=$site, mode=$srmode"
+    super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return "$OCF_SUCCESS"
 }
@@ -605,31 +598,22 @@ function sht_monitor_clone() {
     # TODO PRIO1: NG - set nodes site attribute and for the site the attributes LSS, SRR
     # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
     # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
-    super_ocf_log info "DEC: site=$site; hanalrc=$hanalrc"
-    if [[ -n "$site" && "$hanalrc" != "124" ]]; then
+    super_ocf_log info "DEC: site=$gSite; hanalrc=$hanalrc"
+    if [[ -n "$gSite" && "$hanalrc" != "124" ]]; then
         #
         # set LSS and SRR of the local site and site of the local node
         #
-        set_hana_site_attribute "$site" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
-        super_ocf_log info "DEC: set_hana_site_attribute $site $hanalrc ${ATTR_NAME_HANA_SITE_LSS[*]}"
-        set_hana_site_attribute "$site" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
-        set_hana_attribute "${NODENAME}" "$site" "${ATTR_NAME_HANA_SITE[@]}"
-        super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $site ${ATTR_NAME_HANA_SITE[0]}"
+        set_hana_site_attribute "$gSite" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+        super_ocf_log info "DEC: set_hana_site_attribute $gSite $hanalrc ${ATTR_NAME_HANA_SITE_LSS[*]}"
+        set_hana_site_attribute "$gSite" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
+        set_hana_attribute "${NODENAME}" "$gSite" "${ATTR_NAME_HANA_SITE[@]}"
+        super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $gSite ${ATTR_NAME_HANA_SITE[0]}"
     fi
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status
             # TODO PRIO1: NG - check, if we set the right attribute here as srmode should be site-specific
-            set_hana_attribute "X" "$srmode" "${ATTR_NAME_HANA_SRMODE2[@]}"
-            # from scale-up (set sr_mode for all cluster nodes but not for sites
-            #case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-            #   *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
-            #   *cman*    ) nodelist=$(crm_node -l);;
-            #esac
-
-            #for n in ${nodelist}; do
-            #   set_hana_attribute ${n} "$srmode" ${ATTR_NAME_HANA_SRMODE[@]}
-            #done
+            set_hana_attribute "X" "$gSrMode" "${ATTR_NAME_HANA_SRMODE2[@]}"
             ;;
     esac
     #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later

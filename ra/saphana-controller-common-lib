@@ -414,7 +414,7 @@ function saphana_init_get_remote_site()
     for clN in "${otherNodes[@]}"; do
 	    nodeSite=$(get_hana_attribute "$clN" "${ATTR_NAME_HANA_SITE[@]}")
         super_ocf_log info "TOP: clN=$clN, nodeSite=$nodeSite"
-        if [[ -n "$nodeSite" && "$nodeSite" != "$site" ]]; then
+        if [[ -n "$nodeSite" && "$nodeSite" != "$gSite" ]]; then
             remSite="$nodeSite"
             remSR_name="${remSite%%:*}"
             # remSR_id="${remSite#*:}"  # TODO PRIO2: NG - do we need the site id (number)?
@@ -453,33 +453,6 @@ function saphana_init_sap_commands()
     fi
 }
 
-#
-# function: cluster_get_other_nodes - list all 'other' cluster nodes, but not the local node
-# params: node-name-to-be-filtered-out
-# globals: -
-#
-function cluster_get_other_nodes()
-{
-    local NODENAME="$1"
-    local -a NODELIST
-    local ne=""
-    local ch=""
-    # TODO PRIO1: NG - check this new code here
-    #             lines are expected to have format <number><blank><nodename><blank><status>
-    #             example: "1 grimsel01 member"
-    mapfile -t NODELIST < <(crm_node -l)    # syntax < <(...) is intended
-    for ne in "${NODELIST[@]}";
-    do
-       ne="${ne// /:}"  # replace blank by colon for better reg-ex parsing
-       if [[ "$ne" =~ ^([0-9]+):([^:]+) ]]; then
-           ch="${BASH_REMATCH[2]}"
-           if [[ "$ch" != "${NODENAME}" ]]; then
-               echo "$ch";
-           fi
-       fi
-    done
-    return 0
-}
 
 # TODO PRIO0: start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
 
@@ -1094,18 +1067,18 @@ function recover_site_attributes_from_file()
                     # get site name from site attribute-name
                     #
                     site="${srAttr#hana_"${sid}"_site_srHook_}"
-                    super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event for site=$site ($srAttr=$srValue)"
+                    super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event for site=$gSite ($srAttr=$srValue)"
                     #
                     # DONE: PRIO0 - add check for srATTR name here
                     #
                     case "$srValue" in
                     SOK )
-                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SOK"
-                          set_SRHOOK "$site" "SOK"
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $gSite SOK"
+                          set_SRHOOK "$gSite" "SOK"
                           ;;
                     SFAIL )
-                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $site SFAIL"
-                          set_SRHOOK "$site" "SFAIL"
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $gSite SFAIL"
+                          set_SRHOOK "$gSite" "SFAIL"
                           ;;
                     * )
                           super_ocf_log info "DEC: failed recover attributes from file $srHookAttributeFile - Unknown value <<$srValue>>"

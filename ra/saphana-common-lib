@@ -451,10 +451,9 @@ function saphana_init_attribute_definitions()
 #
 # get system replication mode and local site name
 #
-# globals: srmode(w), site(w)
+# globals: gSrMode(w), gSite(w)
 #
-function get_local_sr_config()
-{
+function get_local_sr_config() {
     # * get sr_mode (primary|sync|synmem|async|none)
     # * get local site name (MAINZ, KOELN, DUESSELDORF, AACHEN)
     # TODO PRIO3: NG - move SAP commands to command-init function
@@ -471,21 +470,21 @@ function get_local_sr_config()
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+                gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
                 # if 'actual_mode' is not available, fallback to 'mode'
-                if [ -z "$srmode" ]; then
-                    srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                if [ -z "$gSrMode" ]; then
+                    gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 fi
-                super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
+                super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$gSrMode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 # TODO PRIO 2: Debug-Log for result
                 # TODO PRIO 2: Check '--sacontrol=1 Output' for the begin and end mark to check valiity and completeness
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
                 ;;
         esac
-        case "$srmode" in
+        case "$gSrMode" in
             primary | syncmem | sync | async | none )
               # we can leave the loop as we already got a result
               break
@@ -498,15 +497,14 @@ function get_local_sr_config()
         esac
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
-    site=$siteNAME
+    gSite=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
     # from scale-up: only set srmode, if it is still empty
     # from scale-up: first search for 'actual_mode', then for 'mode' as key
-    if [ -z "$srmode" ]; then
-        srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+    if [ -z "$gSrMode" ]; then
+        gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
         # if 'actual_mode' is not available, fallback to 'mode'
-        if [ -z "$srmode" ]; then
-            srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+        if [ -z "$gSrMode" ]; then
+            gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
         fi
     fi
 }
@@ -514,20 +512,20 @@ function get_local_sr_config()
 #
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
-# globals:  HANA_STATE_*(r), srmode(rw), site(rw)
+# globals:  HANA_STATE_*(r), gSrMode(rw), gSite(rw)
 #
 function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$HANA_STATE_DEFECT"
     case "$raType" in
         saphana* ) # SAPHanaController
-            get_local_sr_config  # sets gloval variables srmode and site
+            get_local_sr_config  # sets gloval variables gSrMode and gSite
             ;;
         sht* )     # SAPHanaTopology - did that already in sht_init() - maybe we can align that later
             ;;
     esac
-    super_ocf_log info "DEC: check_for_primary: srmode=$srmode site=$site"
-    case "$srmode" in
+    super_ocf_log info "DEC: check_for_primary: srmode=$gSrMode site=$gSite"
+    case "$gSrMode" in
         primary )
               super_ocf_log info "DEC: ${FUNCNAME[0]} rc=HANA_STATE_PRIMARY"
               rc="$HANA_STATE_PRIMARY";;
@@ -541,7 +539,7 @@ function check_for_primary() {
               rc="$HANA_STATE_STANDALONE";;
         * )
               # TODO: PRIO3: NG - Should we set SFAIL?
-              dump=$( echo "$srmode" | hexdump -C );
+              dump=$( echo "$gSrMode" | hexdump -C );
               super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
               # TODO: PRIO1: NG - Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
               rc="$HANA_STATE_DEFECT"
@@ -686,23 +684,6 @@ function master_walk() {
     #
     # TODO: PRIO1: NG - EXCLUDE NON ONLINE CLUSTER NODES (offline/unclean/standby/maintenance)
     #
-    # * crm node list se03 is online, se01 is standby+maintenance, se02 is offline
-    # se01group1:
-    #       standby: on
-    #       maintenance: on
-    # se02group1: (offline)
-    # se03group1:
-    # * crm_node -l (corosync)
-    # 1084752138 se01group1 member
-    # 1084752148 se02group1 lost
-    # 1084752154 se03group1 member
-    #
-    # ==> First exclude non-members (maybe done already) by
-    #       'list of nodes | grep member'
-    # ==> then query the attributes 'standby' and 'maintenance
-    # OR:
-    # look at the scores:
-    #
     # master_walk now also counts available nodes (same site) in the
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local active_master="" master1="" master2="" master3=""
@@ -729,7 +710,7 @@ function master_walk() {
     for node in "$NODENAME" "${otherNodes[@]}"; do
         super_ocf_log debug "DBG: master walk for node=$node"
         nSite="$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_SITE[@]}")"
-        if [[ "$site" == "$nSite" || "$node" == "$NODENAME" ]]; then
+        if [[ "$gSite" == "$nSite" || "$node" == "$NODENAME" ]]; then
             # myself, or node of same site found
             nStdBy="$(crm_attribute -N "${node}" -n standby     -G -l forever -q -d off)"
             nMaint="$(crm_attribute -N "${node}" -n maintenance -G -l forever -q -d off)"
@@ -743,7 +724,7 @@ function master_walk() {
                 if [[ -z "$nodeRole" && "$node" == "$NODENAME" ]]; then
                     nodeRole="$gNodeRole"
                 fi
-                super_ocf_log info "DEC: site=$site role=$nodeRole"
+                super_ocf_log info "DEC: site=$gSite role=$nodeRole"
                 case "$nodeRole" in
                     master1:master:*  ) master1="$node"; active_master="$node"
                                         super_ocf_log info "DEC: roles $nodeRole match master1:master:*"
@@ -770,12 +751,12 @@ function master_walk() {
                                         super_ocf_log info "DEC: roles $nodeRole NO match"
                                         ;;
                 esac
-                # TODO PRIO4: NG - for future SAP workloads with indexserver roles 'none' - how to handle that here?
+                # TODO PRIO4: NG - XSA/NSE/... for SAP workloads with indexserver roles 'none' - how to handle that here?
                 case "$nodeRole" in
                     *:*:worker:* )  (( nr_site_worker++ ));  (( gNrSiteNode++ ));;
                     *:*:standby:* ) (( nr_site_standby++ )); (( gNrSiteNode++ ));;
                 esac
-                super_ocf_log debug "DBG: $site: $nodeRole"
+                super_ocf_log debug "DBG: $gSite: $nodeRole"
             fi
         fi
     done
@@ -799,7 +780,37 @@ function master_walk() {
                     ;;
     esac
     #
-    super_ocf_log info "DEC: ===> master_walk: priorities for site $site master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
+    super_ocf_log info "DEC: ===> master_walk: priorities for site $gSite master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
     super_ocf_log info "DEC: ===> master_walk: the_master=$gTheMaster;"
     super_ocf_log info "FLOW ${FUNCNAME[0]} the_master=$gTheMaster rc=0"
+}
+
+#
+# function: cluster_get_other_nodes - list all 'other' cluster nodes, but not the local node
+# params: node-name-to-be-filtered-out
+# globals: -
+# external commands: crm_node -l
+#
+function cluster_get_other_nodes()
+{
+    local NODENAME="$1"
+    local -a NODELIST
+    local ne=""
+    local ch=""
+    # TODO PRIO1: NG - check this new code here
+    #             lines are expected to have format <number><blank><nodename><blank><status>
+    #             example: "1 grimsel01 member"
+    # code expected to be independendt from the cluster infrastructure
+    mapfile -t NODELIST < <(crm_node -l)    # syntax < <(...) is intended
+    for ne in "${NODELIST[@]}";
+    do
+       ne="${ne// /:}"  # replace blank by colon for better reg-ex parsing
+       if [[ "$ne" =~ ^([0-9]+):([^:]+) ]]; then
+           ch="${BASH_REMATCH[2]}"
+           if [[ "$ch" != "${NODENAME}" ]]; then
+               echo "$ch";
+           fi
+       fi
+    done
+    return 0
 }
