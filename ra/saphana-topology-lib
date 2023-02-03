@@ -295,7 +295,7 @@ function sht_start() {
             $1 == "nameServerActualRole"  {nsAR=$2}
             $1 == "indexServerConfigRole" {isCR=$2}
             $1 == "indexServerActualRole" {isAR=$2}
-            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
+            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$gVirtName" )
     if "$setRole"; then
         set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
@@ -448,7 +448,7 @@ function sht_stop_clone() {
     fi
 
     # TODO PRIO1: NG - get_role_by_landscape to take timeout parameter
-    gNodeRole="$( get_role_by_landscape "$vName")"; hanalrc="$?"
+    gNodeRole="$( get_role_by_landscape "$gVirtName")"; hanalrc="$?"
     if [[ "$hanalrc" != "124" ]]; then
         # normal exit, use gNodeRole
         tout=0
@@ -533,19 +533,19 @@ function sht_monitor_clone() {
     # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
     #### SAP-CALL
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
-        vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
+        gVirtName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
             | awk '$4 == SID && $6 == SYSNR { print $8 }' SID="$SID" SYSNR="$InstanceNr" 2>/dev/null )
     else
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
     fi
-    if [ -n "$vName" ]; then
-       set_hana_attribute "${NODENAME}" "$vName" "${ATTR_NAME_HANA_VHOST[@]}"
+    if [ -n "$gVirtName" ]; then
+       set_hana_attribute "${NODENAME}" "$gVirtName" "${ATTR_NAME_HANA_VHOST[@]}"
     else
-       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
+       gVirtName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
     fi
-    # last fallback, if neither the HANA call NOR the Attribute "knows" the vName - try the local hostname
-    if [ -z "$vName" ]; then
-       vName="${NODENAME}"
+    # last fallback, if neither the HANA call NOR the Attribute "knows" the gVirtName - try the local hostname
+    if [ -z "$gVirtName" ]; then
+       gVirtName="${NODENAME}"
     fi
     setRole=true
     hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
@@ -579,7 +579,7 @@ function sht_monitor_clone() {
             $1 == "nameServerActualRole"  {nsAR=$2}
             $1 == "indexServerConfigRole" {isCR=$2}
             $1 == "indexServerActualRole" {isAR=$2}
-            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
+            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$gVirtName" )
     if "$setRole"; then
         set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
@@ -593,7 +593,7 @@ function sht_monitor_clone() {
                             awk -F= '
                             $1 == "host/"vName"/nameServerConfigRole"  {SoSu="ScaleOut"}
                             $1 == "nameServerConfigRole"  {SoSu="ScaleUp"}
-                            END { printf "%s\n", SoSu;  } ' vName="$vName" )
+                            END { printf "%s\n", SoSu;  } ' vName="$gVirtName" )
     set_hana_attribute "global" "$hanaScaleOutScaleUp" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
     # TODO PRIO1: NG - set nodes site attribute and for the site the attributes LSS, SRR
     # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?

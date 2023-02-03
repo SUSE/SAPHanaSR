@@ -374,22 +374,22 @@ function saphana_init() {
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
-        vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
+        gVirtName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
             | awk '$4 == SID && $6 == SYSNR { print $8 }' SID="$SID" SYSNR="$InstanceNr" 2>/dev/null )
         super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     else
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
     fi
-    if [ -z "$vName" ]; then
+    if [ -z "$gVirtName" ]; then
        #
        # if saphostctrl does not know the answer, try to fallback to attribute provided by SAPHanaTopology
        #
-       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "$NODENAME");
+       gVirtName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "$NODENAME");
     fi
-    if [ -z "$vName" ]; then # last fallback if we are not able to figure out the virtual host name
-       vName="$NODENAME"
+    if [ -z "$gVirtName" ]; then # last fallback if we are not able to figure out the virtual host name
+       gVirtName="$NODENAME"
     fi
-    SAPVIRHOST=${vName}
+    SAPVIRHOST=${gVirtName}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
     RemoveSAPSockets="${CF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
@@ -686,7 +686,7 @@ function saphana_start() {
                 for i in 1 2 3 4; do
                     super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName started: $output"
                     # TODO PRIO2: reduce number of landscapeHostConfiguration.py calls in the code and create a function for that (including SAPCONTROL-OK: validation)
-                    hanarole="$(get_role_by_landscape "${NODENAME}" "${vName}")"; lssRc="$?"
+                    hanarole="$(get_role_by_landscape "${NODENAME}" "${gVirtName}")"; lssRc="$?"
                     #
                     # set LSS local-site attribute
                     #
@@ -751,7 +751,7 @@ function saphana_stopSystem() {
             awk -F= '
                BEGIN { partials=0 }
                 $1 ~ "host/[a-zA-Z].*/hostActive" {hostActive = hostActive "-" $2; if ( $2 == "partial" ) { partials=1 } }
-                    END { printf "%s:%s\n", hostActive, partials;  } ' vName="$vName" )
+                    END { printf "%s:%s\n", hostActive, partials;  } ' vName="$gVirtName" )
             # hanaHostActive="${hAPart%:*}" # TODO PRIO2: NG do we still need hanaHostActive? Seems to be unsused
             partials="${hAPart#*:}"
             if [ "$partials" == 0 ]; then
