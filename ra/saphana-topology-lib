@@ -404,6 +404,7 @@ function sht_start_clone() {
 # sht_stop_clone
 #
 function sht_stop_clone() {
+    # TODO PRIO1: NG - needs to write lss attribute once leaving the bridge :) needs to be stopped after SAPHanaController is stopped, OR SAPHanaController needs to write LSS after stop
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local tout=0
@@ -537,13 +538,25 @@ function sht_monitor_clone() {
     fi
     setRole=true
 
-    gNodeRole="$( get_role_by_landscape "$gVirtName" --set_gTopology)"; hanalrc="$?"
+    super_ocf_log info "DEC: get_role_by_landscape"
+    mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --set_gTopology );
+    # TODO PRIO2: NG - check for role=<role>, topo=<topo> instead of just assign [0] and [1] and cut of the "<key>="
+    for splitResultLine in "${splitResult[@]}"; do
+        case "$splitResultLine" in
+            role=* ) gNodeRole="${splitResultLine#*=}";;
+            topo=* ) gTopology="${splitResultLine#*=}";;
+            retn=* ) hanalrc="${splitResultLine#*=}";;
+        esac
+    done
+    super_ocf_log info "DEC: gNodeRole=$gNodeRole gTopology=$gTopology hanalrc=$hanalrc"
     if [[ "$hanalrc" != "124" ]]; then
         # normal exit, use gNodeRole
+        super_ocf_log info "DEC: gNodeRole=$gNodeRole"
         set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
         # TODO PRIO2: NG - Only to be done on one instance per site; or even only on the primary mns?
         # TODO PRIO2: NG - finalize the strings (attribute values) to be used. Currently we use "ScaleOut" and "ScaleUp"
         # TODO PRIO2: NG - check, if currently using global space is suffiecient - we do not need to differ that for sites, right?
+        super_ocf_log info "DEC: gTopology=$gTopology"
         set_hana_attribute "global" "$gTopology" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
 
         #
