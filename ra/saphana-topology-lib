@@ -283,21 +283,9 @@ function sht_start() {
     if ! check_saphostagent; then
         start_saphostagent
     fi
-    # TODO PRIO1: NG - move set _ROLE attribute and ladscapeHostCobfiguration query to a function
-    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
-    hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
-            awk -F= '
-            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
-            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
-            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
-            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
-            $1 == "nameServerConfigRole"  {nsCR=$2}
-            $1 == "nameServerActualRole"  {nsAR=$2}
-            $1 == "indexServerConfigRole" {isCR=$2}
-            $1 == "indexServerActualRole" {isAR=$2}
-            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$gVirtName" )
-    if "$setRole"; then
-        set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
+    gNodeRole="$( get_role_by_landscape "$gVirtName")"; hanalrc="$?"
+    if [[ "$hanalrc" != 124 ]]; then
+        set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     # TODO PRIO 1: scale-out used side-effect via RC_hdbnsutil to give back different return codes; scale-up rc was always OCF_SUCCESS
     # currently using the always-good mode to force OCF_SUCCESS
@@ -548,67 +536,29 @@ function sht_monitor_clone() {
        gVirtName="${NODENAME}"
     fi
     setRole=true
-    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
-    # landscape timeout - retry command
-    if [ "$hanalrc" == 124 ]; then
-        # TODO PRIO1: NG - code stability scale-up used '-ge 124', scale-out used '-eq 124' - check what is correct
-        super_ocf_log warn "RA: HANA_CALL timed out after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'. Retrying..."
-        hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
-        # if the second try again run into a timeout, log an error and do not set hanarole but keep the previous settings.
-        if [ "$hanalrc" -ge 124 ]; then
-            super_ocf_log err "RA: HANA_CALL Operation timeout after $HANA_CALL_TIMEOUT seconds running command 'landscapeHostConfiguration.py --sapcontrol=1'."
-                setRole=false
-        fi
-    fi
-    # TODO PRIO1: NG - check, if we still need the attribute ATTR_NAME_HANA_REMOTEHOST to be set as we decide on site level
-    #    if [ -n "$hanaRemoteHost" ]; then
-    #        set_hana_attribute ${NODENAME} "$hanaRemoteHost" ${ATTR_NAME_HANA_REMOTEHOST[@]}
-    #    fi
-    # TODO: PRIO1: NG - Do we need to check the lines: 'SAPCONTROL-OK: <begin>' and 'SAPCONTROL-OK: <end>'?
-    # TODO: PRIO1: NG - Could we differ between scale-up and scale-out by the line format (k=v vs host/h/k=v)
-    #
-    # scan with and without host prefix to allow also single instances (scaleup) for smaller test environments
-    #
-    hanarole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
-            awk -F= '
-            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
-            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
-            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
-            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
-            $1 == "nameServerConfigRole"  {nsCR=$2}
-            $1 == "nameServerActualRole"  {nsAR=$2}
-            $1 == "indexServerConfigRole" {isCR=$2}
-            $1 == "indexServerActualRole" {isAR=$2}
-            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$gVirtName" )
-    if "$setRole"; then
-        set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
-    fi
-    #
-    # differ between ScaleUp and ScaleOut
-    # TODO PRIO2: NG - Only to be done on one instance per site; or even only on the primary mns?
-    # TODO PRIO2: NG - check, if currently using global space is suffiecient - we do not need to differ that for sites, right?
-    # TODO PRIO2: NG - finalize the strings (attribute values) to be used. Currently we use "ScaleOut" and "ScaleUp"
-    #
-    hanaScaleOutScaleUp=$(echo "${hanaANSWER//[[:blank:]]/}" | \
-                            awk -F= '
-                            $1 == "host/"vName"/nameServerConfigRole"  {SoSu="ScaleOut"}
-                            $1 == "nameServerConfigRole"  {SoSu="ScaleUp"}
-                            END { printf "%s\n", SoSu;  } ' vName="$gVirtName" )
-    set_hana_attribute "global" "$hanaScaleOutScaleUp" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
-    # TODO PRIO1: NG - set nodes site attribute and for the site the attributes LSS, SRR
-    # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
-    # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
-    super_ocf_log info "DEC: site=$gSite; hanalrc=$hanalrc"
-    if [[ -n "$gSite" && "$hanalrc" != "124" ]]; then
+
+    gNodeRole="$( get_role_by_landscape "$gVirtName" --set_gTopology)"; hanalrc="$?"
+    if [[ "$hanalrc" != "124" ]]; then
+        # normal exit, use gNodeRole
+        set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
+        # TODO PRIO2: NG - Only to be done on one instance per site; or even only on the primary mns?
+        # TODO PRIO2: NG - finalize the strings (attribute values) to be used. Currently we use "ScaleOut" and "ScaleUp"
+        # TODO PRIO2: NG - check, if currently using global space is suffiecient - we do not need to differ that for sites, right?
+        set_hana_attribute "global" "$gTopology" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
+
         #
         # set LSS and SRR of the local site and site of the local node
         #
         set_hana_site_attribute "$gSite" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
         super_ocf_log info "DEC: set_hana_site_attribute $gSite $hanalrc ${ATTR_NAME_HANA_SITE_LSS[*]}"
+        # TODO PRIO1: NG - where does hanaPrim come from?
         set_hana_site_attribute "$gSite" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
         set_hana_attribute "${NODENAME}" "$gSite" "${ATTR_NAME_HANA_SITE[@]}"
         super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $gSite ${ATTR_NAME_HANA_SITE[0]}"
     fi
+    # TODO PRIO1: NG - set nodes site attribute and for the site the attributes LSS, SRR
+    # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
+    # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status

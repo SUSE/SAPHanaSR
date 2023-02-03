@@ -643,14 +643,25 @@ function check_saphostagent()
     return "$rc"
 }
 
+#
+# globals: gTopology(w)
+
 function get_role_by_landscape(){
-    local virtName="$1"
+    local virtName="$1"; shift
     local nodeRole=""
     local lssRc=0
+    local hanaAnswer
+    local setTopology=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --set_gTopology ) setTopology=1;;
+        esac
+        shift
+    done
     # TODO PRIO2: query lss to be moved into a function
     # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
-    hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
-    nodeRole=$(echo "${hanaANSWER//[[:blank:]]/}" | \
+    hanaAnswer=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
+    nodeRole=$(echo "${hanaAnswer//[[:blank:]]/}" | \
             awk -F= '
             $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
             $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
@@ -661,6 +672,16 @@ function get_role_by_landscape(){
             $1 == "indexServerConfigRole" {isCR=$2}
             $1 == "indexServerActualRole" {isAR=$2}
             END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$virtName" )
+    if [[ "$setTopology" == "1" ]]; then
+        #
+        # differ between ScaleUp and ScaleOut; use last hana answer again (hanAnswer)
+        #
+        gTopology=$(echo "${hanaAnswer//[[:blank:]]/}" | \
+                                awk -F= '
+                                $1 == "host/"vName"/nameServerConfigRole"  {SoSu="ScaleOut"}
+                                $1 == "nameServerConfigRole"  {SoSu="ScaleUp"}
+                                END { printf "%s\n", SoSu;  } ' vName="$virtName" )
+    fi
     echo "$nodeRole"
     return "$lssRc"
 }
