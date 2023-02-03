@@ -679,9 +679,9 @@ function get_role_by_cluster_or_landscape() {
     return 0
 }
 
-# function: master_walk - find master node(s)
+# function: master_walk - find master nodes of local site
 # params:   -
-# globals:  the_master(w), masters[@](w), nr_site_node(w), nr_site_worker(w), nr_site_standby(w), globalNodeRole(r)
+# globals:  gTheMaster(w), gMasters[@](w), gNrSiteNode(w), gNodeRole(r)
 function master_walk() {
     #
     # TODO: PRIO1: NG - EXCLUDE NON ONLINE CLUSTER NODES (offline/unclean/standby/maintenance)
@@ -708,10 +708,10 @@ function master_walk() {
     local active_master="" master1="" master2="" master3=""
     local nSite="" nodeRole=""
     local best_cold_master="" rest=""
-    local standbyFilter=1
-    nr_site_node=0     # is counting any node reporting a role like 'worker' or 'standby'
-    nr_site_worker=0   # is counting 'configured' worker nodes
-    nr_site_standby=0  # is counting 'configured' standby nodes
+    local standbyFilter=1    # default - filter cluster standby nodes
+    gNrSiteNode=0            # is counting any node reporting a role like 'worker' or 'standby'
+    local nr_site_worker=0   # is counting 'configured' worker nodes
+    local nr_site_standby=0  # is counting 'configured' standby nodes
     while [ $# -gt 0 ]; do
         case "$1" in
             --standbyFilter=off ) standbyFilter=0;;
@@ -741,67 +741,65 @@ function master_walk() {
                # TODO PRIO1: NG - Topology might always use landsscapeHostConfiguration here
                 nodeRole="$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")"
                 if [[ -z "$nodeRole" && "$node" == "$NODENAME" ]]; then
-                    nodeRole="$globalNodeRole"
+                    nodeRole="$gNodeRole"
                 fi
                 super_ocf_log info "DEC: site=$site role=$nodeRole"
                 case "$nodeRole" in
                     master1:master:*  ) master1="$node"; active_master="$node"
-                        super_ocf_log info "DEC: roles $nodeRole match master1:master:*"
-                        ;;
+                                        super_ocf_log info "DEC: roles $nodeRole match master1:master:*"
+                                        ;;
                     master2:master:*  ) master2="$node"; active_master="$node"
-                        super_ocf_log info "DEC: roles $nodeRole match master2:master:*"
-                        ;;
+                                        super_ocf_log info "DEC: roles $nodeRole match master2:master:*"
+                                        ;;
                     master3:master:*  ) master3="$node"; active_master="$node"
-                        super_ocf_log info "DEC: roles $nodeRole match master3:master:*"
-                        ;;
-                    master1:*       ) master1="$node";
-                        super_ocf_log info "DEC: roles $nodeRole match master1:*"
-                        ;;
-                    master2:*       ) master2="$node";
-                        super_ocf_log info "DEC: roles $nodeRole match master2:*"
-                        ;;
-                    master3:*       ) master3="$node";
-                        super_ocf_log info "DEC: roles $nodeRole match master3:*"
-                        ;;
+                                        super_ocf_log info "DEC: roles $nodeRole match master3:master:*"
+                                        ;;
+                    master1:*         ) master1="$node";
+                                        super_ocf_log info "DEC: roles $nodeRole match master1:*"
+                                        ;;
+                    master2:*         ) master2="$node";
+                                        super_ocf_log info "DEC: roles $nodeRole match master2:*"
+                                        ;;
+                    master3:*         ) master3="$node";
+                                        super_ocf_log info "DEC: roles $nodeRole match master3:*"
+                                        ;;
                     *:shtdown:*       )
-                        super_ocf_log info "DEC: roles $nodeRole ignore node (down)" # TODO PRIO2: NG - do we need to change to *:-:* ?
-                        ;;
+                                        super_ocf_log info "DEC: roles $nodeRole ignore node (down)" # TODO PRIO2: NG - do we need to change to *:-:* ?
+                                        ;;
                     * )
-                        super_ocf_log info "DEC: roles $nodeRole NO match"
-                        ;;
+                                        super_ocf_log info "DEC: roles $nodeRole NO match"
+                                        ;;
                 esac
+                # TODO PRIO4: NG - for future SAP workloads with indexserver roles 'none' - how to handle that here?
                 case "$nodeRole" in
-                    *:*:worker:* )  (( nr_site_worker++ ))
-                                  (( nr_site_node++ ))
-                                  ;;
-                    *:*:standby:* ) (( nr_site_standby++ ))
-                              (( nr_site_node++ ))
-                              ;;
+                    *:*:worker:* )  (( nr_site_worker++ ));  (( gNrSiteNode++ ));;
+                    *:*:standby:* ) (( nr_site_standby++ )); (( gNrSiteNode++ ));;
                 esac
                 super_ocf_log debug "DBG: $site: $nodeRole"
             fi
         fi
     done
+    declare -a -g gMasters
+    # shellcheck disable=SC2206  ## masters1,2,3 all are either empty or include a none-space single word (hostname), UNQUOTED variables are intended here to fill gMasters with only the detected master1,2,3 names
+    gMasters=( $master1 $master2 $master3 )
     if [ -z "$active_master" ]; then
-        declare -a masters
-        masters=( "$master1" "$master2" "$master3" )
-        best_cold_master="${masters[0]}"
-        the_master="$best_cold_master"
+        best_cold_master="${gMasters[0]}"  # get first of detected master nameserver out of master1,2,3
+        gTheMaster="$best_cold_master"
     else
-        the_master="$active_master"
+        gTheMaster="$active_master"
     fi
     #
     # set MNS local-site attribute
     # TODO PRIO2: NG - should Topology and Controller set this attribute or only Controller
     case "$raType" in
         saphana* )  # SAPHanaController to set the MNS attribute
-                    set_hana_site_attribute "$sr_name" "$the_master" "${ATTR_NAME_HANA_SITE_MNS[@]}"
+                    set_hana_site_attribute "$sr_name" "$gTheMaster" "${ATTR_NAME_HANA_SITE_MNS[@]}"
                     ;;
         sht*     )  # Currently skip that on SAPHanaTopology (to be checked)
                     ;;
     esac
     #
     super_ocf_log info "DEC: ===> master_walk: priorities for site $site master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
-    super_ocf_log info "DEC: ===> master_walk: the_master=$the_master;"
-    super_ocf_log info "FLOW ${FUNCNAME[0]} the_master=$the_master rc=0"
+    super_ocf_log info "DEC: ===> master_walk: the_master=$gTheMaster;"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} the_master=$gTheMaster rc=0"
 }

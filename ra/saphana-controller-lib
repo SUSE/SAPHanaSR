@@ -802,17 +802,17 @@ function saphana_stop() {
 	    super_ocf_log info "ACT: saphana_stop: is_the_master_nameserver"
         # Stop the entire SAP HANA site (StopSystem)
         saphana_stopSystem; rc=$?
-    elif is_active_nameserver_slave && [ -z "$the_master" ]; then
+    elif is_active_nameserver_slave && [ -z "$gTheMaster" ]; then
 	    super_ocf_log info "ACT: saphana_stop: is_active_nameserver_slave and no master nameserver is available"
         # Stop the entire SAP HANA site (StopSystem)
         saphana_stopSystem; rc=$?
-    elif is_lost_nameserver_slave && [ -z "$the_master" ]; then
+    elif is_lost_nameserver_slave && [ -z "$gTheMaster" ]; then
 	    super_ocf_log info "ACT: saphana_stop: is_lost_nameserver_slave and no master nameserver is available"
         # Stop ONLY the local SAP HANA instance to avoid an isolated SAP HANA nameserver slave does shutdown the entire site
         saphana_stopSystem Stop rc=$?
     else
 	    is_active_nameserver_slave; is_slave_rc=$?
-	    super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($the_master) NOR is_lost_nameserver_slave"
+	    super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($gTheMaster) NOR is_lost_nameserver_slave"
         # TODO: PRIO1: NG - Do we need to set a clone state here?
         rc="$OCF_SUCCESS"
     fi
@@ -971,9 +971,12 @@ function saphana_start_primary()
                     # DONE: PRIO2: Like Action in start_secondary
                     super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
                     super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
-                    # TODO PRIO2: NG normally only needed for scale-out:
+                    #
+                    # prevent that any part of the local site will be promoted at this moment
+                    #
                     set_crm_master  0
-                    for m in "${masters[@]}"; do
+                    # TODO PRIO2: NG - normally only needed for scale-out:
+                    for m in "${gMasters[@]}"; do
                         set_crm_master  0 "$m"
                     done
                     if wait_for_primary_master 1; then
@@ -1194,21 +1197,17 @@ function saphana_start_clone() {
     # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
     if is_the_master_nameserver; then
         check_for_primary; primary_status=$?
-        #
-        # DONE: PRIO0: NOW! Insert get_hana_landscape_status HERE to check
-        #       nr_site_nodes vs. landscape-workers?
+        # gNrSiteNode vs. landscape-workers?
         get_hana_landscape_status; lss=$?
-        # DONE: PRIO0: NOW! Parse hana_LSS_Out
-        #lss_worker=$(echo "$hana_LSS_Out" | tr -d ' ' | awk -F '|' '$12 == "worker" { w++ } END { print w }')
         lss_worker=$(echo "$hana_LSS_Out" | awk '/indexServerConfigRole=worker/ { w++; } END { print w; }')
         #
         # Only start HANA, if there are enough nodes in the cluster to fulfill the landscape:
-        # $nr_site_node -ge $lss_worker means that we count all nodes (worker and standby) in the
+        # $gNrSiteNode -ge $lss_worker means that we count all nodes (worker and standby) in the
         #   cluster attributes and this number must be greater than the expected worker nodes
         #   from the landscape.
         # NOTE: ALL NODES MUST BE IN THE SAME HANA FAILOVER GROUP (LIKE DEFAULT)
         #
-        if [ "$nr_site_node" -ge "$lss_worker" ]; then
+        if [ "$gNrSiteNode" -ge "$lss_worker" ]; then
             if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
                 set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                 saphana_start_primary "$lss"; rc="$?"
@@ -1220,7 +1219,7 @@ function saphana_start_clone() {
             fi
         else
             # saphana_start_clone - WAITING4NODES handling
-            super_ocf_log info "ACT: nr_site_worker < lss_worker- setting WAITING4NODES"
+            super_ocf_log info "ACT: To few cluster nodes for this site: available: $gNrSiteNode needed: $lss_worker - setting WAITING4NODES"
             set_hana_attribute "${NODENAME}" "WAITING4NODES" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
             rc="$OCF_SUCCESS"
         fi
@@ -1789,8 +1788,8 @@ function saphana_monitor_clone_not_msn()
         #
         # local instance not THE master nameserver, but up-and-running
         #
-        super_ocf_log info "DEC: the_master=<<$the_master>>"
-        if [ -z "$the_master"  ]; then
+        super_ocf_log info "DEC: the_master=<<$gTheMaster>>"
+        if [ -z "$gTheMaster"  ]; then
             #
             # code for missing ALL master nameserver candidates
             #

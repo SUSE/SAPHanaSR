@@ -240,7 +240,7 @@ function sht_init() {
     # figure-out all needed values from system replication status with ONE call
     # we need: mode=primary|sync|syncmem|...; site name=<site>; mapping/<me>=<site>/<node> (multiple lines)
     case $(crm_attribute --type crm_config --name cluster-infrastructure -q) in
-       *corosync* ) nodelist=$(crm_node -l | awk '{ print $2 }');;
+        *corosync* ) mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) ;; # the syntax < <(..) is intended
        *cman*    ) nodelist=$(crm_node -l);;
     esac
     # TODO PRIO 2: get version as function
@@ -347,7 +347,7 @@ function sht_monitor() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     # TODO PRIO 1: 'master_walk' is only needed for scale-out; how to differ that here?
-    master_walk
+    master_walk --standbyFilter=off
     if [ -f "$HA_RSCTMP/SAPHana/SAPTopologyON.${SID}" ]; then
         rc="$OCF_SUCCESS"
     else
@@ -437,17 +437,7 @@ function sht_stop_clone() {
     else
         hanaPrim="-"
     fi
-    # bsc#1198127
-    # we do not use our usual HANA_CALL_TIMEOUT for this call of
-    # 'landscapeHostConfiguration.py', but a much longer one, because if the
-    # timeout is reached, the node will be fenced. So it is a critical call
-    # and should get reasonable time to succeed.
-    # But it will be configurable by the cluster config (action timeout), if a
-    # system needs more time than we expected. The minimum used timeout is 300s
-    #
-    # timeOut = max(300, 50%(actionTimeOut))
-    # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action
-    # in ms
+    # TODO PRIO2: NG - check, if that code could be moved to a function (already exists)?
     local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
     local stdTimeOut=300
     local actTimeOutPercent=50
@@ -464,35 +454,24 @@ function sht_stop_clone() {
         timeout=$stdTimeOut
     fi
 
-    hanaANSWER=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); hanalrc="$?"
-    # TODO PRIO1: NG - check, if this shoulf be '-ge 124' or '-eq 124'
-    if [ "$hanalrc" -ge 124 ]; then
-        # timeout of HANA_CALL, set role to '1:P:-:-:-:-'
-        # scale-out was: timeout of HANA_CALL, set role to '$nNsConf:shtdown:shtdown:shtdown'
-        # to get the saphana_demote_clone to fail and stop the resource
+    # TODO PRIO1: NG - get_role_by_landscape to take timeout parameter
+    gNodeRole="$( get_role_by_landscape "$vName")"; hanalrc="$?"
+    if [[ "$hanalrc" != "124" ]]; then
+        # normal exit, use gNodeRole
+        tout=0
+        set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
+    else
+        # time-out occurred that a critical bug during stop, use last result in cluster, modify role attribute and mark fatal
+        # and exit with 1 to let the stop fail
+        tout=1
         nRole=$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")
         nNsConf="${nRole%%:}" # only first field use here
         set_hana_attribute "${NODENAME}" "$nNsConf:-:-:-" "${ATTR_NAME_HANA_ROLES[@]}"
-        # and exit with 1 to let the stop fail
-        tout=1
-    else
-        # TODO PRIO1: NG - differ scale-up and scale-out by the output format
-        hanarole=$(echo "$hanaANSWER" | tr -d ' ' | \
-            awk -F= '
-            $1 == "host/"vName"/nameServerConfigRole"  {nsCR=$2}
-            $1 == "host/"vName"/nameServerActualRole"  {nsAR=$2}
-            $1 == "host/"vName"/indexServerConfigRole" {isCR=$2}
-            $1 == "host/"vName"/indexServerActualRole" {isAR=$2}
-            $1 == "nameServerConfigRole"  {nsCR=$2}
-            $1 == "nameServerActualRole"  {nsAR=$2}
-            $1 == "indexServerConfigRole" {isCR=$2}
-            $1 == "indexServerActualRole" {isAR=$2}
-            END { printf "%s:%s:%s:%s\n", nsCR, nsAR, isCR, isAR;  } ' vName="$vName" )
-        set_hana_attribute "${NODENAME}" "$hanarole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
-    sht_stop; rc=$? # till now it returns everytime $OCF_SUCCESS
+
+    sht_stop; rc="$?" # till now it returns everytime $OCF_SUCCESS
     if [ "$tout" == 1 ]; then
-        # timeout of landscapeHostConfiguration.py - let stop fail
+        # timeout of get_role_by_landscape() - let stop fail to inform cluster about fatal problem
         rc="$OCF_ERR_GENERIC"
     fi
     return "$rc"
