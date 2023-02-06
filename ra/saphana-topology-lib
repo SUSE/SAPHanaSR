@@ -253,6 +253,10 @@ function sht_init() {
     # TODO PRIO2: NG - super_ocf_log: re-classify the log classes (here new class 'INFO?'
     # TODO PRIO1: NG - could we get remote site already here?
     # TODO PRIO1: NG - could we get operation mode already here?
+    #
+    # get remote site
+    #
+    saphana_init_get_remote_site
     super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return "$OCF_SUCCESS"
@@ -575,8 +579,11 @@ function sht_monitor_clone() {
     case "$hanaPrim" in
         P ) ;;
         S ) # only secondary may propagate its sync status
-            # TODO PRIO1: NG - check, if we set the right attribute here as srmode should be site-specific
-            set_hana_attribute "X" "$gSrMode" "${ATTR_NAME_HANA_SRMODE2[@]}"
+            # TODO PRIO1: NG - need to be multi site specific. maybe setting this attribute for the OLD primary during a begin of a promote (as getting P) for the register which could follow?
+            super_ocf_log info "DEC: set_hana_site_attribute $gSite $gSrMode ${ATTR_NAME_HANA_SITE_REPLICATION_MODE[*]}" 
+            set_hana_site_attribute "$gSite" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
+            # TODO PRIO2: NG - remSR_name to be marked as global using name gRemSite
+            set_hana_site_attribute "$remSR_name" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
             ;;
     esac
     #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later

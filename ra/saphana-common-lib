@@ -28,6 +28,8 @@ saphana_common_lib_version="1.001.1"
 #
 #######################################################################
 
+# TODO PRIO1: Set attribute version (if missing or old) during monitor action (not only probe)
+
 #
 # function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
 # params:   LOG_MESSAGE
@@ -134,7 +136,7 @@ function get_hana_attribute()
     local attr_obj="$1"
     local attr_name="$2"
     local attr_store="${3:-reboot}" # DONE: PRIO5 get this (optional) from parameter
-    local attr_default="${4:-}"
+    local attr_default="$4"
     local dstr
     dstr="$(date)"
     case "$attr_store" in
@@ -159,22 +161,21 @@ function get_hana_attribute()
 
 #
 # function: set_hana_attribute - set the multi-state status of a node
-# params:   OBJECT VALUE ATTR [STORE [DEFAULT]]
+# params:   OBJECT VALUE ATTR [STORE]
 #           OBJECT could be a node name, a site name or global
 # globals:  -
 #
 function set_hana_attribute()
 {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local attr_obj=$1
-    local attr_value=$2
-    local attr_name=$3
-    local attr_store=${4:-reboot} # DONE: PRIO5 get this (optional) from parameter
-    local attr_default=${5:-}
+    local attr_obj="$1"
+    local attr_value="$2"
+    local attr_name="$3"
+    local attr_store="${4:-reboot}"
     local rc=1
     local attr_old=""
     local dstr
-    attr_old=$(get_hana_attribute "$attr_obj" "$attr_name" "$attr_store" "$attr_default"); get_rc="$?"
+    attr_old=$(get_hana_attribute "$attr_obj" "$attr_name" "$attr_store"); get_rc="$?"
     if [ "$attr_old" != "$attr_value" ]; then
         super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_obj} to ${attr_value} former ($attr_old) get_rc=$get_rc "
         dstr=$(date)
@@ -206,11 +207,10 @@ function set_hana_site_attribute()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local attr_obj="$1"
-    local attr_value=$2
+    local attr_value="$2"
     local attr_name="${3}_${attr_obj}"
-    local attr_store=${4:-props} # site attributes are always props, non node attributes
-    local attr_default=${5:-}
-    set_hana_attribute "$attr_obj" "$attr_value" "$attr_name" "$attr_store" "$attr_default"
+    local attr_store="${4:-props}" # site attributes are always props, non node attributes
+    set_hana_attribute "$attr_obj" "$attr_value" "$attr_name" "$attr_store" 
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return 0
 }
@@ -222,8 +222,8 @@ function get_hana_site_attribute()
     local rc=0
     local attr_obj="$1"
     local attr_name="${2}_${attr_obj}"
-    local attr_store=${3:-props} # site attributes are always props, non node attributes
-    local attr_default=${4:-}
+    local attr_store="${3:-props}" # site attributes are always props, non node attributes
+    local attr_default="$4"
     get_hana_attribute "$attr_obj" "$attr_name" "$attr_store" "$attr_default"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return 0
@@ -275,6 +275,39 @@ function is_clone() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
+}
+
+
+function saphana_init_get_remote_site()
+{
+    # TODO PRIO2: NG allow multiple remote sites later
+    #
+    #
+    # get remote site name
+    # PRIO1: WHAT TO DO, IF remSite could not be fetched?
+    # TODO: PRIO1: NG - Do not overwrite already found remSite, if next node does not provide this value
+    # TODO: PRIO9: For later releases we might add the feature to differ between other remote Sites. Currently we only allow two SR sites of
+    #              one SAP HANA Database in the same cluster. So only e.g. WALLDORF and ROT and not WALLDORF, ROT and NUSSLOCH.
+    #              This limits us to only have sites A => B inside of the cluster and completely "ignore" site C
+    #
+    for clN in "${otherNodes[@]}"; do
+	    nodeSite=$(get_hana_attribute "$clN" "${ATTR_NAME_HANA_SITE[@]}")
+        super_ocf_log info "TOP: clN=$clN, nodeSite=$nodeSite"
+        if [[ -n "$nodeSite" && "$nodeSite" != "$gSite" ]]; then
+            remSite="$nodeSite"
+            remSR_name="${remSite%%:*}"
+            # remSR_id="${remSite#*:}"  # TODO PRIO2: NG - do we need the site id (number)?
+        fi
+    done
+    # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
+    # TODO PRIO1: NG - function to set/get site specific attributes
+    # get_hana_site_attribute <site> <ATTRIBUTE-TEMPLATE> <???>
+    # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE> <???>
+
+    rem_mns=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_MNS[@]}")
+    remoteHost="$rem_mns"
+    super_ocf_log debug "DBG: remoteHost is $remoteHost"
+    remoteNode="$rem_mns"
 }
 
 #
@@ -419,8 +452,6 @@ function saphana_init_attribute_definitions()
     ATTR_NAME_HANA_PRIM=("hana_${sid}_glob_prim" "props")                        # SITE
     # shellcheck disable=SC2034
     ATTR_NAME_HANA_SEC=("hana_${sid}_glob_sec" "props")                          # SITE
-    # TODO PRIO1: NG - ATTR_NAME_HANA_SRMODE2 to be moved to site specific
-    ATTR_NAME_HANA_SRMODE2=("hana_${sid}_glob_srmode" "props" "sync")            # sync syncmem async
     #
     # For MULTI-TARGET we need a site-specific attribute not a global one
     # but for compatibility we need to recognize the old global attribute too
@@ -437,11 +468,11 @@ function saphana_init_attribute_definitions()
     # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_LPA=("hana_${sid}_site_lpt" "props")
     # shellcheck disable=SC2034
-    # ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_op_mode" "props" "logreplay") # TODO PRIO2: NG - reuse this variable
-    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
+    ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_opMode" "props" "logreplay")
+    ATTR_NAME_HANA_SITE_REPLICATION_MODE=("hana_${sid}_site_srMode" "props" "sync")            # sync syncmem async
     # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_MNS=("hana_${sid}_site_mns" "props")
     # shellcheck disable=SC2034
@@ -645,7 +676,7 @@ function check_saphostagent()
 
 #
 # globals: -
-# output: either singel value (default); or multi line key=value (--set_Topology)
+# output: either single value (default); or multi line key=value (--set_Topology)
 
 function get_role_by_landscape(){
     local virtName="$1"; shift

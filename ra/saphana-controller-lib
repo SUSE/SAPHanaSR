@@ -445,12 +445,14 @@ function saphana_init() {
     if [ -z "$gSite" ]; then
         gSite=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SITE[@]}");
     fi
-    sr_mode=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SRMODE2[@]}")
-    if [ -z "$sr_mode" ]; then
-        sr_mode="sync"
+    # TODO PRIO1: NG - check, if gSrMode (sr_mode) is already set
+    super_ocf_log info "DEC: sr_name=$gSite, remSR_name=$remSR_name, sr_mode=$gSrMode"
+    gSrMode="$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}")"
+    if [ -z "$gSrMode" ]; then
+        gSrMode="sync"
     fi
-    super_ocf_log info "TOP: sr_name=$gSite, remSR_name=$remSR_name"
-    super_ocf_log debug "DBG: sr_name=$gSite, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
+    super_ocf_log info "DEC: sr_name=$gSite, remSR_name=$remSR_name, sr_mode=$gSrMode"
+    #super_ocf_log debug "DBG: sr_name=$gSite, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
     # optional OCF parameters, we try to guess which directories are correct
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
@@ -605,26 +607,23 @@ function register_hana_secondary()
             # for scale-up we normally should not need that, but for scale-out:
             # before we could register we stop HANA on all nodes of the swarm (maybe some still running)
             saphana_stop
-            # TODO: PRIO1 NG - change from remoteHost to remoteMNS (remote MasterNameServer)
-            # TODO: PRIO2 How to get the remoteHost without cluster attribute remoteHost - could we use the master-list attribute?
+            # TODO PRIO1: NG - change from remoteHost to remoteMNS (remote MasterNameServer)
+            # TODO PRIO2: How to get the remoteHost without cluster attribute remoteHost - could we use the master-list attribute?
             local hanaOM=""
             local hanaRM=""
-            hanaOM=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_OPERATION_MODE[@]}")
-            if [ -n "$hanaOM" ]; then
-                hanaOM="--operationMode=$hanaOM"
-            fi
-            hanaRM="--replicationMode=$sr_mode"
-            # TODO PRIO2: NG do we still need ATTR_NAME_HANA_SEC?
+            hanaOM=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}")
+            hanaRM=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}")
+            # TODO PRIO2: NG - do we still need ATTR_NAME_HANA_SEC?
             set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_SEC[@]}"
             remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
-            # TODO PRIO2: NG only start resgister, if all variables are set
-            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$gSite"
+            # TODO PRIO2: NG - only start register, if all variables are set
+            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"
             #
             # set status "R" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
             #
             set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
             set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance $hanaRM $hanaOM --name=$gSite"; rc=$?
+            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"; rc=$?
             #
             # resset status "-" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
             #
@@ -1587,8 +1586,7 @@ function saphana_monitor_primary() {
 # globals:  OCF_*, ATTR_NAME_*, NODENAME
 # saphana_monitor_secondary
 #
-function saphana_monitor_secondary()
-{
+function saphana_monitor_secondary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_ERR_GENERIC"
     local promoted=0
@@ -1695,9 +1693,9 @@ function saphana_monitor_secondary()
             hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
             hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
             hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
-            set_hana_attribute "${NODENAME}" "$hanaOM" "${ATTR_NAME_HANA_OPERATION_MODE[@]}"
-            if [ -n "$remoteNode" ]; then
-                set_hana_attribute "${remoteNode}" "$hanaOM" "${ATTR_NAME_HANA_OPERATION_MODE[@]}" # also set attribute for remoteNode (bsc1082974)
+            set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
+            if [[ -n "$remoteNode" && -n "$remSite" ]]; then
+                set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
             fi
             super_ocf_log debug "DBG: sync_attr=$sync_attr"
             case "$sync_attr" in

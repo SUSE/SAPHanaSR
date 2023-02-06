@@ -399,37 +399,6 @@ function saphana_init_scoring_tables() {
 # TODO PRIO0: check_for_primary   chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
 
 
-function saphana_init_get_remote_site()
-{
-    # TODO PRIO2: NG allow multiple remote sites later
-    #
-    #
-    # get remote site name
-    # PRIO1: WHAT TO DO, IF remSite could not be fetched?
-    # TODO: PRIO1: NG - Do not overwrite already found remSite, if next node does not provide this value
-    # TODO: PRIO9: For later releases we might add the feature to differ between other remote Sites. Currently we only allow two SR sites of
-    #              one SAP HANA Database in the same cluster. So only e.g. WALLDORF and ROT and not WALLDORF, ROT and NUSSLOCH.
-    #              This limits us to only have sites A => B inside of the cluster and completely "ignore" site C
-    #
-    for clN in "${otherNodes[@]}"; do
-	    nodeSite=$(get_hana_attribute "$clN" "${ATTR_NAME_HANA_SITE[@]}")
-        super_ocf_log info "TOP: clN=$clN, nodeSite=$nodeSite"
-        if [[ -n "$nodeSite" && "$nodeSite" != "$gSite" ]]; then
-            remSite="$nodeSite"
-            remSR_name="${remSite%%:*}"
-            # remSR_id="${remSite#*:}"  # TODO PRIO2: NG - do we need the site id (number)?
-        fi
-    done
-    # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
-    # TODO PRIO1: NG - function to set/get site specific attributes
-    # get_hana_site_attribute <site> <ATTRIBUTE-TEMPLATE> <???>
-    # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE> <???>
-
-    rem_mns=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_MNS[@]}")
-    remoteHost="$rem_mns"
-    super_ocf_log debug "DBG: remoteHost is $remoteHost"
-    remoteNode="$rem_mns"
-}
 
 function saphana_init_get_hana_version()
 {
