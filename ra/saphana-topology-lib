@@ -476,17 +476,17 @@ function sht_monitor_clone() {
 	#local promoted=0
     #local init_attribute=0
 
+    # TODO PRIO 1: move get version to a function and/or only detect it once in the RA
+    local hana_version
+    hana_version=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
+    [[ -z ${hana_version:-} ]] && hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
+        | awk -F':' '$1=="  version" {print $2}; ' | tr -d '[:space:]')
+    if [[ -n $hana_version ]]; then
+        set_hana_attribute "${NODENAME}" "$hana_version" "${ATTR_NAME_HANA_VERSION[@]}"
+    fi
 	if ocf_is_probe; then
 		super_ocf_log debug "DBG: PROBE ONLY"
         sht_monitor; rc=$?
-        # TODO PRIO 1: move getinfo to a function and/or only detect it once in the RA
-        local hana_version
-        hana_version=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
-        [[ -z ${hana_version:-} ]] && hana_version=$(HANA_CALL --timeout 10 --cmd "HDB version" \
-            | awk -F':' '$1=="  version" {print $2}; ' | tr -d '[:space:]')
-        if [[ -n $hana_version ]]; then
-            set_hana_attribute "${NODENAME}" "$hana_version" "${ATTR_NAME_HANA_VERSION[@]}"
-        fi
 	else
 		super_ocf_log debug "DBG: REGULAR MONITOR"
         if ! check_saphostagent; then
