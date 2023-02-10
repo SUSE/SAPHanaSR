@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH susCostOpt.py 7 "22 Nov 2022" "" "SAPHanaSR"
+.TH susCostOpt.py 7 "10 Feb 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 susCostOpt.py \- Provider for SAP HANA srHook method postTakeover().
@@ -161,7 +161,6 @@ SAPHanaSR_maintenance_examples(7).
 Before doing anything with the cluster, and after something has been done, the
 status of Linux cluster and HANA system replication has to be checked.
 See manual page SAPHanaSR_maintenance_examples(7).
-.\" TODO change global.ini with hdbsql, see test matrix
 .PP
 The procedure at a glance:
 .PP
@@ -189,6 +188,36 @@ The procedure at a glance:
 11. take HANA multi-state resource out of maintenance
 .RE
 .PP
+* Adpating configuration for secondary in memory and in persistence (global.ini).
+.PP
+This can be done for adapting the global.ini to prepare a future secondary. E.g.
+in the context of the above procedure for reverting back to the initial state.
+In that context it might be done before the primary gets stopped at step 5. In
+that case above step 7 is not needed anymore.
+.PP
+Example instance number is 00, SID is S07, user keystore is saphanasr_S07_costopt,
+memory limit for the secondary database is 128000 MB.
+.PP
+.RS 2
+# su - s07adm
+.br
+~> hdbsql -i 00 -U saphanasr_S07_costopt -d SYSTEMDB
+.br
+hdbsql SYSTEMDB=> ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') \\
+.br
+SET ('memorymanager','global_allocation_limit') = '128000' \\
+.br
+WITH RECONFIGURE
+.br
+hdbsql SYSTEMDB=> ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') \\
+.br
+SET ('system_replication','preload_column_tables') = 'false' \\
+.br
+WITH RECONFIGURE
+.br
+hdbsql SYSTEMDB=> quit
+.RE
+.PP
 .\"
 .SH FILES
 .TP
@@ -196,8 +225,10 @@ The procedure at a glance:
 the hook provider, delivered with the RPM
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
-the on-disk representation of HANA global system configuration
-.\" TODO HANA <sid>adm keystore
+on-disk representation of HANA global system configuration
+.TP
+/usr/sap/$SID/home/.hdb/$HOST/
+path to HANA user keystore
 .TP
 /usr/sap/$SID/HDB$nr/$HOST/trace
 path to HANA tracefiles
@@ -243,7 +274,7 @@ A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2022 SUSE LLC
+(c) 2022-2023 SUSE LLC
 .br
 susCostOpt.py comes with ABSOLUTELY NO WARRANTY.
 .br
