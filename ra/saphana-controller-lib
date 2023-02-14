@@ -456,6 +456,8 @@ function saphana_init() {
     gSrr=$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")
     gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
     gFullRole="${gLss}:${gSrr}:${gRole}"
+    gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+    gSrHook=$(get_SRHOOK "$gSite")
 
     super_ocf_log info "DEC: sr_name=$gSite, remSR_name=$remSR_name, sr_mode=$gSrMode"
     #super_ocf_log debug "DBG: sr_name=$gSite, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
@@ -859,8 +861,7 @@ function saphana_validate() {
 # params: current_landsscape_status
 # globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
 #
-function saphana_start_primary()
-{
+function saphana_start_primary() {
     # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
@@ -879,7 +880,7 @@ function saphana_start_primary()
     # we take first lss from the parameter $1
     # get_hana_landscape_status; lss=$?
     # TODO PRIO2: NG reduce number of queries for role, sync, lss, srr
-    my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+    my_sync="$gSrPoll"
     # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
     if [ "$lss" -eq 0 ]; then
        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
@@ -889,7 +890,6 @@ function saphana_start_primary()
        rc="$OCF_ERR_GENERIC"
     fi
     scoring_crm_master "$gFullRole" "$my_sync"
-    # TODO PRIO1: NG - function to set/get site specific attributes
     # saphana_start_primary - set SR attribute of primary to "PRIM"
     case "$lpa_dec" in
         0) # LPA says start
@@ -934,7 +934,7 @@ function saphana_start_primary()
             ;;
     esac
 
-    my_sync=$(get_SRHOOK "$gSite")
+    my_sync="$gSrHook"
     case "$lpa_advice" in
         start )  # process a normal START
             set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
@@ -1371,7 +1371,7 @@ function saphana_monitor_primary() {
             ;;
         1 ) # DOWN or ERROR
             # DONE: PRIO2: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
-            scoring_crm_master "$gFullRole" "$my_sync"
+            scoring_crm_master "$gFullRole" "$gSrHook"
             if ocf_is_probe; then
                 #
                 # leave master score untouched, only set return code
@@ -1450,7 +1450,6 @@ function saphana_monitor_primary() {
                 else
                     rc="$OCF_SUCCESS"
                 fi
-                super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_hana_role,$my_sync)"
             else
                 LPTloc=$(date '+%s')
                 lpa_set_lpt "$LPTloc" "$gSite"
@@ -1486,7 +1485,7 @@ function saphana_monitor_primary() {
                 #
                 # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the
                 #
-                my_sync=$(get_SRHOOK "$remSR_name")
+                my_rem_sync=$(get_SRHOOK "$remSR_name")
                 case "$gFullRole" in
                     # TODO PRIO1: NG - scale-out pattern: [12]:P:*:*:*, scale-up pattern: [12]:P:*:master:*
                     [12]:P:*:*:*  ) # primary is down or may not answer analyze_hana_sync_statusSRS
@@ -1507,12 +1506,12 @@ function saphana_monitor_primary() {
                                     #       of results of the SAP interfaces
                                     super_ocf_log info "DEC: call analyze_hana_sync_statusSRS()"
                                     analyze_hana_sync_statusSRS
-                                    if [ "$my_sync" = "SWAIT" ]; then
+                                    if [ "$my_rem_sync" = "SWAIT" ]; then
                                         # DONE: PRIO0: Check, if we really should overwrite "SWAIT" or keep that value
                                         # if we still did not got a hook time since the cluster start-up maybe the
                                         # HANA was already in (stable) sync, so the HANA Hook would never been called till
                                         # a new event comes up. This is why we transfer the 'polled' attribute to the Hook attribute.
-                                        my_sync=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+                                        my_rem_sync=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
                                         set_SRHOOK "$remSR_name" "$my_sync"
                                         super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SITE_SYNC_STATUS[0]} ($my_sync)"
                                     fi
@@ -1704,7 +1703,8 @@ function saphana_monitor_secondary() {
                     super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
                     my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
                     super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$my_sync)"
-                    scoring_crm_master "$gFullRole" "$my_sync"
+                    # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
+                    scoring_crm_master "$gFullRole" "$gSrHook"
                     ;;
             esac
             ;;
@@ -1791,11 +1791,8 @@ function saphana_monitor_clone_not_msn()
           #
           # code, if we still have ANY master nameserver candidates
           #
-          # for self-scoring always use the local sites SR-attribute
-          #
-          my_sync=$(get_SRHOOK "$gSite")
-          super_ocf_log info "DEC: scoring $gFullRole : $my_sync"
-          scoring_crm_master "$gFullRole" "$my_sync"
+          super_ocf_log info "DEC: scoring $gFullRole : $gSrHook"
+          scoring_crm_master "$gFullRole" "$gSrHook"
           # TODO PRIO2: So far we do NOT monitor the swarm, if we are NOT the master nameserver
           #              This reflects the situation that swarm members get be started (as resource)
           #              before the master nameserver runs the StartSystem command
@@ -1838,7 +1835,7 @@ function saphana_monitor_clone() {
     # get local site(s) LSS, SRR and nodes ROLES
     # TODO PRIO1: NG - reduce number of queries in LSS, SRR and ROLES
     #
-    scoring_crm_master "$gFullRole" "$my_sync"
+    scoring_crm_master "$gFullRole" "$gSrHook"
     #
     # reset possible left SRACTION_HISTORY
     #
