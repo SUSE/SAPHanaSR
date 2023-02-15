@@ -604,7 +604,9 @@ function get_hana_landscape_status()
 # checks for a "remote" primary master
 # params: -
 # globals: ATTR_NAME_HANA_SITE_SRR(r), ATTR_NAME_HANA_SITE_LSS(r), remSR_name(r)
-# rc: 0 for available primary (lss is 3 or 4); 1 otherwise
+# rc: 0 for available primary (lss is 3 or 4); ( can be used as "true" )
+#     2 warning (lss is 2) ( can be used as "false" )
+#     1 otherwise (lss is 1 or 0) ( can be used as false )
 #
 function check_for_primary_master()
 {
@@ -617,7 +619,8 @@ function check_for_primary_master()
     rem_srr=$(get_hana_site_attribute "$remSR_name" "${ATTR_NAME_HANA_SITE_SRR[@]}")
     case "$rem_lss:$rem_srr" in
         3:P | 4:P ) rc=0;;
-        * ) rc=1;;
+        2:P )       rc=2;;
+        * )         rc=1;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
