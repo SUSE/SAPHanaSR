@@ -122,6 +122,45 @@ function core_init() {
     return 0
 }
 
+function saphana_get_hana_version_by_hdb_version() {
+    local hv hvp hvph1
+    local -a hdbVers
+    mapfile -t hdbVers < <(HANA_CALL --timeout 10 --cmd "HDB version")
+    for hv in "${hdbVers[@]}"; do
+        hvp=${hv// /}                    # cut-out blanks
+        case "$hvp" in
+            version:* ) 
+                hvph1="${hvp#:}"   # select version: line and cut-out key-field to get value only
+                echo "${hvph1%.*}" # cut-off .<timestamp> at the end
+        esac
+    done
+}
+
+function saphana_get_hana_version_by_manifest() {
+    local mf mfh1 mfh2
+    local -a manifest
+    mapfile -t manifest < "/usr/sap/$SID/$InstanceName/exe/manifest"
+    for mf in "${manifest[@]}"; do
+        # fullversion: 2.00.063.00 Build 1655123455-1530 (cut-out 2.00.063.00)
+        case  "$mf" in
+            fullversion:* )
+                mfh1=${mf#* }; mfh2=${mfh1%% *}; echo "$mfh2" ;; 
+        esac
+    done
+}
+
+#
+# 
+#
+function saphana_get_hana_version() {
+    local ver
+    ver=$(saphana_get_hana_version_by_manifest)
+    if [[ -z "$ver" ]]; then
+        ver="$(saphana_get_hana_version_by_hdb_version)"
+    fi
+    super_ocf_log info "DEC: SAP HANA version  $ver detected"
+}
+
 #
 # function: get_hana_attribute
 # params:   OBJECT ATTR [STORE]
@@ -129,8 +168,7 @@ function core_init() {
 # globals:  -
 # output:   attribute value
 #
-function get_hana_attribute()
-{
+function get_hana_attribute() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local attr_obj="$1"
