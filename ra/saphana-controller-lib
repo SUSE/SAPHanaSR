@@ -986,7 +986,7 @@ function saphana_start_primary() {
                     done
                     if wait_for_primary_master 1; then
                         register_hana_secondary
-                        check_for_primary; primary_status=$?
+                        primary_status="$(check_for_primary)";
                         if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
                             super_ocf_log info "ACT: Register successful"
                             lpa_push_lpt 10
@@ -1200,7 +1200,7 @@ function saphana_start_clone() {
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
     if is_the_master_nameserver; then
-        check_for_primary; primary_status=$?
+        primary_status="$(check_for_primary)";
         # gNrSiteNode vs. landscape-workers?
         get_hana_landscape_status; lss=$?
         lss_worker=$(echo "$hana_LSS_Out" | awk '/indexServerConfigRole=worker/ { w++; } END { print w; }')
@@ -1265,7 +1265,7 @@ function saphana_stop_clone() {
     local primary_status="x"
     set_hana_attribute "${NODENAME}" "UNDEFINED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     super_ocf_log debug "DBG: SET UNDEFINED"
-    check_for_primary; primary_status="$?"
+    primary_status="$(check_for_primary)";
     if [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
         super_ocf_log debug "DBG: 008 * lpa_set_lpt 10 $gSite"
         lpa_set_lpt  10 "$gSite"
@@ -1898,7 +1898,7 @@ function saphana_monitor_clone() {
         #
         # First check, if we are PRIMARY or SECONDARY
         #
-        check_for_primary; primary_status=$?
+        primary_status="$(check_for_primary)";
         if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
             # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
             # TODO PRIO1: NG - Maybe we need a lpa-check here to
@@ -1969,7 +1969,7 @@ function saphana_promote_clone() {
     # first check, if we WILL be PRIMARY (checking HANA status)
     #
     set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-    check_for_primary; primary_status=$?
+    primary_status="$(check_for_primary)"; 
     #
     if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
         #
@@ -2036,7 +2036,8 @@ function saphana_promote_clone() {
                             #
                             # check, if we now are primary
                             #
-                            if check_for_primary; then
+                            primary_status="$(check_for_primary)"
+                            if [[ "$primary_status" == "P"]]; then
                                 rc="$OCF_SUCCESS";
                                 # DONE: PRIO0: !!!
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"

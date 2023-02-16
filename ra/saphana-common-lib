@@ -102,10 +102,10 @@ function core_init() {
     else
         log_attr_file="/dev/null"
     fi
-    HANA_STATE_PRIMARY=0
-    HANA_STATE_SECONDARY=1
-    HANA_STATE_STANDALONE=2
-    HANA_STATE_DEFECT=3
+    HANA_STATE_PRIMARY="P"     # was 0
+    HANA_STATE_SECONDARY="S"   # was 1
+    HANA_STATE_STANDALONE="N"  # was 2
+    HANA_STATE_DEFECT="D"      # was 3
     HANA_STD_ACTION_TIMEOUT=3600
     # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
     NODENAME="$(crm_node -n)"
@@ -582,10 +582,14 @@ function get_local_sr_config() {
 # function: check_for_primary - check if local SAP HANA is configured as primary
 # params:   -
 # globals:  HANA_STATE_*(r), gSrMode(rw), gSite(rw)
+# output:   state like P,S,N,D
+# rc:       0, if P, S, N
+#           1, if D
 #
 function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc="$HANA_STATE_DEFECT"
+    local state="$HANA_STATE_DEFECT"
+    local rc=0
     case "$raType" in
         saphana* ) # SAPHanaController
             get_local_sr_config  # sets gloval variables gSrMode and gSite
@@ -596,23 +600,27 @@ function check_for_primary() {
     super_ocf_log info "DEC: check_for_primary: srmode=$gSrMode site=$gSite"
     case "$gSrMode" in
         primary )
-              super_ocf_log info "DEC: ${FUNCNAME[0]} rc=HANA_STATE_PRIMARY"
-              rc="$HANA_STATE_PRIMARY";;
+              super_ocf_log info "DEC: ${FUNCNAME[0]} state=HANA_STATE_PRIMARY"
+              state="$HANA_STATE_PRIMARY";;
         syncmem | sync | async )
-              super_ocf_log info "DEC: ${FUNCNAME[0]} rc=HANA_STATE_SECONDARY"
-              rc="$HANA_STATE_SECONDARY";;
+              super_ocf_log info "DEC: ${FUNCNAME[0]} state=HANA_STATE_SECONDARY"
+              state="$HANA_STATE_SECONDARY";;
         none ) 
-              # e.g. have seen that mode on second side BEFORE we registered it as replica
               # TODO: PRIO1: NG - Should we set SFAIL? or SNA? or ...
-              super_ocf_log info "DEC: ${FUNCNAME[0]} rc=HANA_STATE_STANDALONE"
-              rc="$HANA_STATE_STANDALONE";;
+              super_ocf_log info "DEC: ${FUNCNAME[0]} state=HANA_STATE_STANDALONE"
+              state="$HANA_STATE_STANDALONE";;
         * )
               # TODO: PRIO3: NG - Should we set SFAIL?
               dump=$( echo "$gSrMode" | hexdump -C );
               super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
-              # TODO: PRIO1: NG - Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
-              rc="$HANA_STATE_DEFECT"
+              # NG - keep last value from cluster, if we did not get a valid answer at this moment
+              state="$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")"
+              if [[ -z "$state" ]]; then
+                  state="$HANA_STATE_DEFECT"
+              fi
+              rc=1
    esac;
+   echo "$state"
    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
    return "$rc"
 }

@@ -406,17 +406,7 @@ function sht_stop_clone() {
     local rc=0
     local tout=0
     local nRole nNsConf 
-    check_for_primary; primary_status=$?
-    if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
-        hanaPrim="P"
-    elif [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
-        hanaPrim="S"
-    elif [ "$primary_status" == "$HANA_STATE_STANDALONE" ]; then
-        hanaPrim="N"
-    else
-        hanaPrim="-"
-    fi
-    # TODO PRIO2: NG - check, if that code could be moved to a function (already exists)?
+    hanaPrim="$(check_for_primary)"; 
     local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
     local stdTimeOut=300
     local actTimeOutPercent=50
@@ -480,33 +470,8 @@ function sht_monitor_clone() {
 	#
 	# First check, if we are PRIMARY or SECONDARY
 	#
-    super_ocf_log debug "DBG: HANA SID $SID"
-    super_ocf_log debug "DBG: HANA InstanceName $InstanceName"
-    super_ocf_log debug "DBG: HANA InstanceNr $InstanceNr"
-	check_for_primary; primary_status="$?"
-    if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
-        hanaPrim="P"
-        super_ocf_log debug "DBG: HANA IS PRIMARY"
-        sht_monitor; rc="$?"
-    else
-        if [ "$primary_status" == "$HANA_STATE_SECONDARY"  ]; then
-            hanaPrim="S"
-            super_ocf_log debug "DBG: HANA IS SECONDARY"
-            sht_monitor; rc=$?
-        elif [ "$primary_status" == "$HANA_STATE_STANDALONE"  ]; then
-            hanaPrim="N"
-            super_ocf_log debug "DBG: HANA IS STANDALONE"
-            sht_monitor; rc=$?
-        else
-            # From scale-up: bsc#1027098 Do not mark HANA instance as failed, if "only" the HANA state could not be detected
-            hanaPrim=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}" | awk -F: '{ print $2}')
-            if [ "$hanaPrim" = "" ]; then
-                hanaPrim="-"
-            fi
-            super_ocf_log warn "ACT: sht_monitor_clone: HANA_STATE_DEFECT (primary/secondary state could not be detected at this point of time)"
-            sht_monitor; rc="$?"
-        fi
-    fi
+	hanaPrim="$(check_for_primary)"; 
+    sht_monitor; rc="$?"
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
     #### SAP-CALL
@@ -552,7 +517,6 @@ function sht_monitor_clone() {
         #
         set_hana_site_attribute "$gSite" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
         super_ocf_log info "DEC: set_hana_site_attribute $gSite $hanalrc ${ATTR_NAME_HANA_SITE_LSS[*]}"
-        # TODO PRIO1: NG - where does hanaPrim come from?
         set_hana_site_attribute "$gSite" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
         set_hana_attribute "${NODENAME}" "$gSite" "${ATTR_NAME_HANA_SITE[@]}"
         super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $gSite ${ATTR_NAME_HANA_SITE[0]}"
