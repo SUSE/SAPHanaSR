@@ -467,60 +467,55 @@ function sht_monitor_clone() {
         if ! check_saphostagent; then
              start_saphostagent
         fi
-	#
-	# First check, if we are PRIMARY or SECONDARY
-	#
-	hanaPrim="$(check_for_primary)"; 
-    sht_monitor; rc="$?"
-    # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-    # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
-    #### SAP-CALL
-    get_local_virtual_name
-    setRole=true
-
-    super_ocf_log info "DEC: get_role_by_landscape"
-    mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --set_gTopology );
-    # TODO PRIO2: NG - check for role=<role>, topo=<topo> instead of just assign [0] and [1] and cut of the "<key>="
-    for splitResultLine in "${splitResult[@]}"; do
-        case "$splitResultLine" in
-            role=* ) gNodeRole="${splitResultLine#*=}";;
-            topo=* ) gTopology="${splitResultLine#*=}";;
-            retn=* ) hanalrc="${splitResultLine#*=}";;
+        #
+        # First check, if we are PRIMARY or SECONDARY
+        #
+        hanaPrim="$(check_for_primary)"; 
+        sht_monitor; rc="$?"
+        # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+        # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
+        #### SAP-CALL
+        get_local_virtual_name
+        setRole=true
+        super_ocf_log info "DEC: get_role_by_landscape"
+        mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --set_gTopology );
+        # TODO PRIO2: NG - check for role=<role>, topo=<topo> instead of just assign [0] and [1] and cut of the "<key>="
+        for splitResultLine in "${splitResult[@]}"; do
+            case "$splitResultLine" in
+                role=* ) gNodeRole="${splitResultLine#*=}";;
+                topo=* ) gTopology="${splitResultLine#*=}";;
+                retn=* ) hanalrc="${splitResultLine#*=}";;
+            esac
+        done
+        super_ocf_log info "DEC: gNodeRole=$gNodeRole gTopology=$gTopology hanalrc=$hanalrc"
+        if [[ "$hanalrc" != "124" ]]; then
+            # normal exit, use gNodeRole
+            super_ocf_log info "DEC: gNodeRole=$gNodeRole"
+            set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
+            # TODO PRIO2: NG - Only to be done on one instance per site; or even only on the primary mns?
+            super_ocf_log info "DEC: gTopology=$gTopology"
+            set_hana_attribute "global" "$gTopology" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
+            #
+            # set LSS and SRR of the local site and site of the local node
+            #
+            set_hana_site_attribute "$gSite" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+            super_ocf_log info "DEC: set_hana_site_attribute $gSite $hanalrc ${ATTR_NAME_HANA_SITE_LSS[*]}"
+            set_hana_site_attribute "$gSite" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
+            set_hana_attribute "${NODENAME}" "$gSite" "${ATTR_NAME_HANA_SITE[@]}"
+            super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $gSite ${ATTR_NAME_HANA_SITE[0]}"
+        fi
+        # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
+        # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
+        case "$hanaPrim" in
+            P ) ;;
+            S ) # only secondary may propagate its sync status
+                # TODO PRIO1: NG - need to be multi site specific. maybe setting this attribute for the OLD primary during a begin of a promote (as getting P) for the register which could follow?
+                super_ocf_log info "DEC: set_hana_site_attribute $gSite $gSrMode ${ATTR_NAME_HANA_SITE_REPLICATION_MODE[*]}" 
+                set_hana_site_attribute "$gSite" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
+                # TODO PRIO2: NG - remSR_name to be marked as global using name gRemSite
+                set_hana_site_attribute "$remSR_name" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
+                ;;
         esac
-    done
-    super_ocf_log info "DEC: gNodeRole=$gNodeRole gTopology=$gTopology hanalrc=$hanalrc"
-    if [[ "$hanalrc" != "124" ]]; then
-        # normal exit, use gNodeRole
-        super_ocf_log info "DEC: gNodeRole=$gNodeRole"
-        set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
-        # TODO PRIO2: NG - Only to be done on one instance per site; or even only on the primary mns?
-        # TODO PRIO2: NG - finalize the strings (attribute values) to be used. Currently we use "ScaleOut" and "ScaleUp"
-        # TODO PRIO2: NG - check, if currently using global space is suffiecient - we do not need to differ that for sites, right?
-        super_ocf_log info "DEC: gTopology=$gTopology"
-        set_hana_attribute "global" "$gTopology" "${ATTR_NAME_HANA_TOPOLOGY[@]}"
-        #
-        # set LSS and SRR of the local site and site of the local node
-        #
-        set_hana_site_attribute "$gSite" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
-        super_ocf_log info "DEC: set_hana_site_attribute $gSite $hanalrc ${ATTR_NAME_HANA_SITE_LSS[*]}"
-        set_hana_site_attribute "$gSite" "$hanaPrim" "${ATTR_NAME_HANA_SITE_SRR[@]}"
-        set_hana_attribute "${NODENAME}" "$gSite" "${ATTR_NAME_HANA_SITE[@]}"
-        super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $gSite ${ATTR_NAME_HANA_SITE[0]}"
-    fi
-    # TODO PRIO1: NG - set nodes site attribute and for the site the attributes LSS, SRR
-    # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
-    # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
-    case "$hanaPrim" in
-        P ) ;;
-        S ) # only secondary may propagate its sync status
-            # TODO PRIO1: NG - need to be multi site specific. maybe setting this attribute for the OLD primary during a begin of a promote (as getting P) for the register which could follow?
-            super_ocf_log info "DEC: set_hana_site_attribute $gSite $gSrMode ${ATTR_NAME_HANA_SITE_REPLICATION_MODE[*]}" 
-            set_hana_site_attribute "$gSite" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
-            # TODO PRIO2: NG - remSR_name to be marked as global using name gRemSite
-            set_hana_site_attribute "$remSR_name" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
-            ;;
-    esac
-    #ATTR_NAME_HANA_STATUS  # TODO: PRIO5: For SCALE-OUT: Fill that attribute later
     fi # end ocf_is_NOT_probe
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
