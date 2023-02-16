@@ -475,21 +475,7 @@ function sht_monitor_clone() {
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
     #### SAP-CALL
-    if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
-        gVirtName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-            | awk '$4 == SID && $6 == SYSNR { print $8 }' SID="$SID" SYSNR="$InstanceNr" 2>/dev/null )
-    else
-        super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
-    fi
-    if [ -n "$gVirtName" ]; then
-       set_hana_attribute "${NODENAME}" "$gVirtName" "${ATTR_NAME_HANA_VHOST[@]}"
-    else
-       gVirtName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
-    fi
-    # last fallback, if neither the HANA call NOR the Attribute "knows" the gVirtName - try the local hostname
-    if [ -z "$gVirtName" ]; then
-       gVirtName="${NODENAME}"
-    fi
+    get_local_virtual_name
     setRole=true
 
     super_ocf_log info "DEC: get_role_by_landscape"

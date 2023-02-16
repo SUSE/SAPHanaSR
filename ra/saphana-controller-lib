@@ -367,28 +367,10 @@ function saphana_init() {
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid="${SID,,}"
     sidadm="${sid}adm"
-    # TODO PRIO3: Do we need a parameter for the RA to be able to adjust hdbSrQueryTimeout?
-    # hdbSrQueryTimeout=180 # TODO PRIO3: NG - do we need hdbSrQueryTimeout ?
-    # DONE: PRIO4: SAPVIRHOST might be different to NODENAME
-    # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API? Answer: Yes
-    # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
-    # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
-    if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
-        gVirtName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-            | awk '$4 == SID && $6 == SYSNR { print $8 }' SID="$SID" SYSNR="$InstanceNr" 2>/dev/null )
-        super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
-    else
-        super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
-    fi
-    if [ -z "$gVirtName" ]; then
-       #
-       # if saphostctrl does not know the answer, try to fallback to attribute provided by SAPHanaTopology
-       #
-       gVirtName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "$NODENAME");
-    fi
-    if [ -z "$gVirtName" ]; then # last fallback if we are not able to figure out the virtual host name
-       gVirtName="$NODENAME"
-    fi
+    #
+    # get sao virtual host name
+    #
+    get_local_virtual_name
     SAPVIRHOST=${gVirtName}
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
@@ -2037,7 +2019,7 @@ function saphana_promote_clone() {
                             # check, if we now are primary
                             #
                             primary_status="$(check_for_primary)"
-                            if [[ "$primary_status" == "P"]]; then
+                            if [[ "$primary_status" == "P" ]]; then
                                 rc="$OCF_SUCCESS";
                                 # DONE: PRIO0: !!!
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"
