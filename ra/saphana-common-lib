@@ -65,7 +65,7 @@ function super_ocf_log() {
         esac
         ;;
     esac
-    if [ "$skip" -eq 0 ]; then
+    if [[ "$skip" == 0 ]]; then
         ocf_log "$level" "$message"
     fi
 }
@@ -86,13 +86,18 @@ function core_init() {
     sidadm=""
     InstanceName=""
     InstanceNr=""
+    # shellcheck disable=SC2034
     SAPVIRHOST=""
     DIR_EXECUTABLE=""
+    # shellcheck disable=SC2034
     SAPSTARTSRV=""
+    # shellcheck disable=SC2034
     SAPCONTROL=""
     DIR_PROFILE=""
+    # shellcheck disable=SC2034
     SAPSTARTPROFILE=""
     # Resource Agent Generation
+    # shellcheck disable=SC2034
     RAG="2.0"
     SAPHanaFilter='ra-act-dec-lpa'
     super_ocf_log info "RA saphana_common_lib_version=$saphana_common_lib_version"
@@ -106,6 +111,7 @@ function core_init() {
     HANA_STATE_SECONDARY="S"   # was 1
     HANA_STATE_STANDALONE="N"  # was 2
     HANA_STATE_DEFECT="D"      # was 3
+    # shellcheck disable=SC2034
     HANA_STD_ACTION_TIMEOUT=3600
     # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
     NODENAME="$(crm_node -n)"
@@ -278,7 +284,6 @@ function get_hana_site_attribute()
 #
 function is_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local weg_damit=1  # delete later, currently for checking shellcheck calls
     local rc=0
     #
     # is a clone config?
@@ -345,6 +350,7 @@ function saphana_init_get_remote_site()
     rem_mns=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
     remoteHost="$rem_mns"
     super_ocf_log debug "DBG: remoteHost is $remoteHost"
+    # shellcheck disable=SC2034
     remoteNode="$rem_mns"
 }
 
@@ -509,6 +515,7 @@ function saphana_init_attribute_definitions()
     ATTR_NAME_HANA_SITE_SRHOOK=("hana_${sid}_site_srHook" "props")                    # external triggered SOK, SFAIL
     ATTR_NAME_HANA_SITE_LSS=("hana_${sid}_site_lss" "props")
     ATTR_NAME_HANA_SITE_SRR=("hana_${sid}_site_srr" "props")
+    # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_OPERATION_MODE=("hana_${sid}_site_opMode" "props" "logreplay")
     ATTR_NAME_HANA_SITE_REPLICATION_MODE=("hana_${sid}_site_srMode" "props" "sync")            # sync syncmem async
     # shellcheck disable=SC2034
@@ -527,7 +534,7 @@ function get_local_sr_config() {
     # * get local site name (MAINZ, KOELN, DUESSELDORF, AACHEN)
     # TODO PRIO3: NG - move SAP commands to command-init function
     hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
+    # hdbMap="hdbnsutil -sr_stateHostMapping"
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
     # TODO PRIO 1: NG - Stabilize the detection of primary/secondary/none status - is maybe gP the better approach?
@@ -585,7 +592,7 @@ function get_local_sr_config() {
 # rc: 0
 function get_local_virtual_name() {
     local -a listInstances
-    local lI lih1
+    local lI lIh1
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
         mapfile -t listInstances < <( /usr/sap/hostctrl/exe/saphostctrl -function ListInstances )
         for lI in "${listInstances[@]}"; do

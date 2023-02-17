@@ -34,7 +34,8 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaControllerLibVersion="1.001.10"
+# TODO PRIO2: NG - use SAPHanaControllerLibVersion=
+# SAPHanaControllerLibVersion="1.001.10"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -475,7 +476,7 @@ function saphana_init() {
     #
     # get HANA version
     #
-    gHdbVer="$(saphana_get_hana_version)"
+    #gHdbVer="$(saphana_get_hana_version)"
     #
     # set sap commands
     #
@@ -522,7 +523,7 @@ function analyze_hana_sync_statusSRS()
     # TODO: PRIO2: Here we might also need to filter additional sites (if multi tier should be supported)
     #              And is the check for return code capable for chains?
     #
-    if [ "$srRc" -eq 15 ]; then
+    if [[ "$srRc" == 15 ]]; then
        # Fix for a HANA BUG, where a non-working SR resulted in RC 15:
        if grep -q "ACTIVE" <<< "$FULL_SR_STATUS"; then
           super_ocf_log info "FLOW ${FUNCNAME[0]} SOK"
@@ -657,7 +658,7 @@ function saphana_start() {
     #
     # set_SRHOOK() removed here. saphana_start() is used for primary and secondaries but would need different attribute values
     if is_the_master_nameserver; then
-        if [ "$rc" -eq "$OCF_SUCCESS" ]; then
+        if [[ "$rc" == "$OCF_SUCCESS" ]]; then
             lastSrHook=$(get_SRHOOK_plain "$gSite")
             if [ -n "$lastSrHook" ]; then
                 # reset old srHook attribute to SWAIT as we are starting right now
@@ -666,11 +667,9 @@ function saphana_start() {
             output=$("$SAPCONTROL" -nr "$InstanceNr" -function StartSystem); rc="$?"
             super_ocf_log info "ACT: SAP HANA START: Starting System $SID-$InstanceName: $output"
         fi
-        if [ "$rc" -eq 0 ]
-        then
+        if [[ "$rc" == 0 ]]; then
             HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStarted)
-            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStarted "$HANA_ACTION_TIMEOUT" 1)
-            then
+            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function WaitforStarted "$HANA_ACTION_TIMEOUT" 1); then
                 # TODO PRIO2: scale-up did not check the landscapeHostConfiguration rc
                 # shellcheck disable=SC2034 ## for-counter i is only to repeat the code but the counter itsef is not needed
                 for i in 1 2 3 4; do
@@ -714,7 +713,7 @@ function saphana_stopSystem() {
     local rc=0 rcWfS=0
     local stopMode="StopSystem"
     # TODO PRIO1: NG - should scale-up ALWAYS use stop mode "Stop" and never "StopSystem" ?
-    if [ $# -eq 1 ]; then
+    if [ "$#" == "1" ]; then
         stopMode="$1"
     fi
     check_sapstartsrv; rc="$?"
@@ -871,7 +870,7 @@ function saphana_start_primary() {
     # TODO PRIO2: NG reduce number of queries for role, sync, lss, srr
     my_sync="$gSrPoll"
     # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
-    if [ "$lss" -eq 0 ]; then
+    if [[ "$lss" == 0 ]]; then
        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
        # DONE: PRIO1: what to do for lss=0?
        # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
@@ -969,7 +968,7 @@ function saphana_start_primary() {
                     if wait_for_primary_master 1; then
                         register_hana_secondary
                         primary_status="$(check_for_primary)";
-                        if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
+                        if [[ "$primary_status" == "$HANA_STATE_SECONDARY" ]]; then
                             super_ocf_log info "ACT: Register successful"
                             lpa_push_lpt 10
                             super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $gSite"
@@ -1035,8 +1034,7 @@ function saphana_start_primary() {
 # params:
 # globals: OCF_*(r), NODENAME, ATTR_NAME_*,
 #
-function saphana_start_secondary()
-{
+function saphana_start_secondary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     case "$PreferSiteTakeover" in
@@ -1070,7 +1068,7 @@ function saphana_start_secondary()
     set_hana_attribute "${NODENAME}" "$gSite" "${ATTR_NAME_HANA_SEC[@]}"
     if wait_for_primary_master 10; then
        saphana_start; rc=$?
-       if [ "$rc" -ne "$OCF_SUCCESS" ]; then
+       if [[ "$rc" != "$OCF_SUCCESS" ]]; then
            if ! wait_for_primary_master 1; then
                # It seems the stating secondary could not start because of stopping primary
                #    so this is a WAITING situation
@@ -1194,7 +1192,7 @@ function saphana_start_clone() {
         # NOTE: ALL NODES MUST BE IN THE SAME HANA FAILOVER GROUP (LIKE DEFAULT)
         #
         if [ "$gNrSiteNode" -ge "$lss_worker" ]; then
-            if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
+            if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
                 set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
                 saphana_start_primary "$lss"; rc="$?"
             else
@@ -1285,7 +1283,7 @@ function dual_primary_detection() {
                 # dual primary, but other instance marked as PROMOTED by the cluster
                 # TODO: PRIO1: NG - Need to differ lpa_check_lpt_status return codes
                 lpa_check_lpt_status; lpa_rc=$?
-                if [ "$lpa_rc" -ne 0 ]; then
+                if [[ "$lpa_rc" != 0 ]]; then
                     super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa_check_lpt_status != 0  ==> local restart"
                     super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $gSite"
                     lpa_set_lpt 05 "$gSite"
@@ -1881,21 +1879,21 @@ function saphana_monitor_clone() {
         # First check, if we are PRIMARY or SECONDARY
         #
         primary_status="$(check_for_primary)";
-        if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
+        if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
             # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
             # TODO PRIO1: NG - Maybe we need a lpa-check here to
             if ocf_is_probe; then
                 myMaster=$(get_crm_master); mRc=$?
-                if [ "$mRc" -ne 0 ]; then
+                if [[ "$mRc" != 0 ]]; then
                    set_crm_master 5
-                elif [ "$myMaster" -eq -1 ]; then
+                elif [[ "$myMaster" == -1 ]]; then
                    set_crm_master 5
                 fi
             else
                 saphana_check_local_instance
             fi
             saphana_monitor_primary; rc=$?
-        elif [ "$primary_status" -eq "$HANA_STATE_SECONDARY"  ]; then
+        elif [ "$primary_status" == "$HANA_STATE_SECONDARY"  ]; then
             if ! ocf_is_probe; then
                 saphana_check_local_instance
             fi
@@ -1953,7 +1951,7 @@ function saphana_promote_clone() {
     set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     primary_status="$(check_for_primary)";
     #
-    if [ "$primary_status" -eq "$HANA_STATE_PRIMARY" ]; then
+    if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
         #
         # as we are already planned to be PRIMARY we only mark the node as PROMOTED
         #
@@ -1961,7 +1959,7 @@ function saphana_promote_clone() {
 	    set_SRHOOK_PRIM
         rc="$OCF_SUCCESS";
     else
-        if [ "$primary_status" -eq "$HANA_STATE_SECONDARY" ]; then
+        if [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
             #
             # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
             # promote on the replica side...

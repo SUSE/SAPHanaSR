@@ -35,7 +35,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-SAPHanaControllerLibVersion="1.001.10"
+# SAPHanaControllerLibVersion="1.001.10"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -81,7 +81,7 @@ function ver_ge() {
 # function: version: compare two HANA version strings
 #
 function version() {
-    if [ "$#" -eq 3 ]; then
+    if [[ "$#" == 3 ]]; then
         case "$2" in
             LE | le | "<=" ) ver_le "$1" "$3";;
             LT | lt | "<" ) ver_lt "$1" "$3";;
@@ -310,11 +310,11 @@ function saphana_init_scoring_tables() {
     # <lss> <primary-secondary> <configured-mns-role>[:<actice-mns-role>]  <sync-status>   <score> ['<score-description>']
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU=(
        "[234]   P [^:]*:master         .*       150             'primary - running, active master nameserver role'"
-       "[234]   P master               .*       140             'primary - running, configured master nameserver role (failover candidate)'"
-       "[015-9] P [^:]*:master         .*        90             'primary - not running, but active master nameserver role '"
+       "[234]   P master[123]          .*       140             'primary - running, configured master nameserver role (failover candidate)'"
+       "[015-9] P master[123]          .*        90             'primary - not running, but configured master nameserver role '"
        "[0-9]   P [^:]*:slave          .*        60             'primary - any running status, slave master nameserver role (should not happen for ScaleUp)'"
-       "[234]   P [^:]*:[?:-]          .*         0             'primary - running, but nameserver role not detected'"
-       "[015-9] P [^:]*:[?:-]          .*        -1             'primary - not running and nameserver role not detected'"
+       "[234]   P [^:]*:[?:-]          .*         2             'primary - running, but nameserver role not detected'"
+       "[015-9] P [^:]*:[?:-]          .*         1             'primary - not running and nameserver role not detected'"
        "[234]   S [^:]*:master         SOK      100             'secondary - running, active master nameserver role, in sync'"
        "[234]   S [^:]*:master         PRIM     100             'secondary - running, active master nameserver role, already marked as PRIMary'"
        "[015-9] S [^:]*:master         SOK       80             'secondary - not running, but active master nameserver role and in sync'"
@@ -474,7 +474,7 @@ function check_sapstartsrv() {
             super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
             # use start, because restart does also stop sap instance
             "$SYSTEMCTL" start "$systemd_unit_name" >/dev/null 2>&1; src=$?
-            if [ "$src" -ne 0 ]; then
+            if [[ "$src" != 0 ]]; then
                 super_ocf_log error "ACT: error during start of systemd unit ${systemd_unit_name}!"
                 rc="$OCF_ERR_GENERIC"
                 ocf_is_probe && rc="$OCF_NOT_RUNNING"
@@ -507,7 +507,7 @@ function check_sapstartsrv() {
             fi
         fi
         if [ -z "$runninginst" ]; then runninginst="$InstanceName"; fi
-        if [ "$restart" -eq 1 ]
+        if [[ "$restart" == 1 ]]
         then
             if [ -d "/usr/sap/$SID/SYS/profile/" ]
             then
@@ -532,7 +532,7 @@ function check_sapstartsrv() {
                 "$SAPCONTROL" -nr "$InstanceNr" -function GetProcessList > /dev/null 2>&1
                 srvrc=$?
             done
-            if [ "$srvrc" -ne 1 ]
+            if [[ "$srvrc" != 1 ]]
             then
                 super_ocf_log info "ACT: sapstartsrv for instance $SID-$InstanceName was restarted!"
                 rc="$OCF_SUCCESS"
@@ -574,13 +574,13 @@ function get_hana_landscape_status()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
-    if [ "$rc" -eq 124 ]; then
+    if [[ "$rc" == 124 ]]; then
         # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
         # landscape timeout
         super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds"
         sleep 20
         hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
-        if [ "$rc" -eq 124 ]; then
+        if [ "$rc" == 124 ]; then
            super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
            # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
            rc=0
@@ -852,7 +852,7 @@ function lpa_check_lpt_status() {
     fi
     LPTrem=$(lpa_get_lpt "$gRemSite"); lparc="$?"
     super_ocf_log info "LPA: LPTloc=$LPTloc LPTrem=$LPTrem"
-    if [ "$lparc" -ne 0 ]; then
+    if [[ "$lparc" != 0 ]]; then
         # LPT of the other node could not be evaluated - LPA says WAIT
         super_ocf_log debug "DBG: LPA: LPTloc=$LPTloc, LPTrem undefined ==> WAIT"
         rc=3
@@ -995,7 +995,7 @@ function is_the_master_nameserver()
 function recover_site_attributes_from_file()
 {
     local srHookAttributeFile="$1"
-    local site
+    local attrSite
     local -a mapLines
     local srAttr srValue
 
@@ -1018,19 +1018,19 @@ function recover_site_attributes_from_file()
                     #
                     # get site name from site attribute-name
                     #
-                    site="${srAttr#hana_"${sid}"_site_srHook_}"
+                    attrSite="${srAttr#hana_"${sid}"_site_srHook_}"
                     super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event for site=$gSite ($srAttr=$srValue)"
                     #
                     # DONE: PRIO0 - add check for srATTR name here
                     #
                     case "$srValue" in
                     SOK )
-                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $gSite SOK"
-                          set_SRHOOK "$gSite" "SOK"
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $attrSite SOK"
+                          set_SRHOOK "$attrSite" "SOK"
                           ;;
                     SFAIL )
-                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $gSite SFAIL"
-                          set_SRHOOK "$gSite" "SFAIL"
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $attrSite SFAIL"
+                          set_SRHOOK "$attrSite" "SFAIL"
                           ;;
                     * )
                           super_ocf_log info "DEC: failed recover attributes from file $srHookAttributeFile - Unknown value <<$srValue>>"
