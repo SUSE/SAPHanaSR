@@ -846,11 +846,7 @@ function saphana_start_primary() {
     # TODO PRIO2: NG shorten this function, make it easier to read and maintain
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
-    local lss="$1"
-    local rc=0
-    local lpa_dec=4
-    local lpa_advice=""
-    local rem_master=1
+    local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss
     #
     # we will be a PRIMARY so checking, if there is anOTHER primary
     #
@@ -942,6 +938,9 @@ function saphana_start_primary() {
                     ;;
             esac
             super_ocf_log info "DEC: saphana_start_primary: scoring_crm_master($gFullRole,$my_sync)"
+            # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology
+            lLss="$(get_hana_landscape_status)"
+            gFullRole="${lLss}:${gSrr}:${gRole}"
             scoring_crm_master "$gFullRole" "$my_sync"
             ;;
         register ) # process a REGISTER
