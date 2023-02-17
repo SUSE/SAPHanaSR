@@ -830,10 +830,6 @@ function get_role_by_cluster_or_landscape() {
 # params:   -
 # globals:  gTheMaster(w), gMasters[@](w), gNrSiteNode(w), gNodeRole(r)
 function master_walk() {
-    #
-    # TODO: PRIO1: NG - EXCLUDE NON ONLINE CLUSTER NODES (offline/unclean/standby/maintenance)
-    #
-    # master_walk now also counts available nodes (same site) in the
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local active_master="" master1="" master2="" master3=""
     local nSite="" nodeRole=""
@@ -864,9 +860,9 @@ function master_walk() {
             nStdBy="$(crm_attribute -N "${node}" -n standby     -G -l forever -q -d off)"
             nMaint="$(crm_attribute -N "${node}" -n maintenance -G -l forever -q -d off)"
             if [ "$nMaint" = "on" ]; then
-                super_ocf_log debug "DBG: Filter node by cluster node maintenance mode"
-            elif [[ "$nStdBy" = "on" && "$standbyFilter" = "1" ]]; then
-                super_ocf_log debug "DBG: Filter node by cluster node standby mode"
+                super_ocf_log info "DEC: Filter node $node by cluster node maintenance mode"
+            elif [[ "$nStdBy" = "on" && "$standbyFilter" = "1" && "$node" != "$NODENAME" ]]; then
+                super_ocf_log info "DEC: Filter node $node by cluster node standby mode"
             else
                # TODO PRIO1: NG - Topology might always use landsscapeHostConfiguration here
                 nodeRole="$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")"
