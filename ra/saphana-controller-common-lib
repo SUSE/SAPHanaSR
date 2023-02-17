@@ -313,17 +313,21 @@ function saphana_init_scoring_tables() {
        "[234]   P master[123]          .*       140             'primary - running, configured master nameserver role (failover candidate)'"
        "[015-9] P master[123]          .*        90             'primary - not running, but configured master nameserver role '"
        "[0-9]   P [^:]*:slave          .*        60             'primary - any running status, slave master nameserver role (should not happen for ScaleUp)'"
-       "[234]   P [^:]*:[?:-]          .*         2             'primary - running, but nameserver role not detected'"
-       "[015-9] P [^:]*:[?:-]          .*         1             'primary - not running and nameserver role not detected'"
+       "[234]   P [^:]*:[?:-]          .*         3             'primary - running, but nameserver role not detected'"
+       "[015-9] P [^:]*:[?:-]          .*         2             'primary - not running and nameserver role not detected'"
+       ".*      P [^:]*:[?:-]          .*         1             'primary - unknown lss'"
        "[234]   S [^:]*:master         SOK      100             'secondary - running, active master nameserver role, in sync'"
+       "[234]   S master[123]          SOK      100             'secondary - running, configured master nameserver role, in sync'"
        "[234]   S [^:]*:master         PRIM     100             'secondary - running, active master nameserver role, already marked as PRIMary'"
+       "[234]   S master[123]          PRIM     100             'secondary - running, configured master nameserver role, already marked as PRIMary'"
        "[015-9] S [^:]*:master         SOK       80             'secondary - not running, but active master nameserver role and in sync'"
        "[0-9]   S [^:]*:master         SFAIL    -INFINITY       'secondary - any running status, active master nameserver role, not in sync (exclude for promote)'"
        "[0-9]   S [^:]*:slave          SOK       10             'secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)'"
        "[0-9]   S [^:]*:slave          SFAIL    -INFINITY       'secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)'"
        "[234]   S [^:]*:[?:-]          .*         0             'secondary - running, but nameserver role not detected'"
        "[015-9] S [^:]*:[?:-]          .*        -1             'secondary - not running and nameserver role not detected'"
-       ".*      . .*                   .*        -1             'any case, not catched before'"
+       ".*      S [^:]*:[?:-]          .*        -2             'secondary - unknown lss'"
+       ".*      . .*                   .*        -3             'any case, not catched before'"
     )
     SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU=(
        "[0-9]   P [^:]*:master         .*     150               'primary - any running status, active master nameserver role'"
@@ -582,7 +586,7 @@ function get_hana_landscape_status()
         hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
         if [ "$rc" == 124 ]; then
            super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
-           # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL"
+           # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL" - Maybe we should return the stored attribute value?
            rc=0
         fi
     fi
