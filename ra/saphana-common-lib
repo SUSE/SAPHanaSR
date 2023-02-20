@@ -324,7 +324,7 @@ function saphana_init_get_remote_site() {
     #
     #
     # get remote site name
-    # PRIO1: WHAT TO DO, IF remSite could not be fetched?
+    # TODO PRIO1: NG - WHAT TO DO, IF remSite could not be fetched?
     # TODO PRIO1: NG - Do not overwrite already found remSite, if next node does not provide this value
     # TODO PRIO9: For later releases we might add the feature to differ between other remote Sites. Currently we only allow two SR sites of
     #              one SAP HANA Database in the same cluster. So only e.g. WALLDORF and ROT and not WALLDORF, ROT and NUSSLOCH.
@@ -336,14 +336,9 @@ function saphana_init_get_remote_site() {
         if [[ -n "$nodeSite" && "$nodeSite" != "$gSite" ]]; then
             remSite="$nodeSite"
             gRemSite="${remSite%%:*}"
-            # remSR_id="${remSite#*:}"  # TODO PRIO2: NG - do we need the site id (number)?
         fi
     done
     # It's always the master name server of the remote site which is really relevant, so we do not need any longer each nodes remoteHost
-    # TODO PRIO1: NG - function to set/get site specific attributes
-    # get_hana_site_attribute <site> <ATTRIBUTE-TEMPLATE> <???>
-    # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE> <???>
-
     rem_mns=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
     remoteHost="$rem_mns"
     super_ocf_log debug "DBG: remoteHost is $remoteHost"
@@ -754,9 +749,11 @@ function check_saphostagent() {
 } # end function check_saphostagent
 
 #
+# params: virt-name [--timeout timeout] [--set_gTopology]
+# TODO PRIO2: NG - parameter name '--set_gTopology' or better '--multiValue' ??
 # globals: -
 # output: either single value (default); or multi line key=value (--set_Topology)
-
+# rc:     lss or timeout (124)
 function get_role_by_landscape(){
     local virtName="$1"; shift
     local nodeRole=""
@@ -764,15 +761,17 @@ function get_role_by_landscape(){
     local hanaAnswer
     local setTopology=0
     local topology=""
+    local timeout="$HANA_CALL_TIMEOUT"
     while [ $# -gt 0 ]; do
         case "$1" in
             --set_gTopology ) setTopology=1;;
+            --timeout=*     ) timeout=${1#*=};;
         esac
         shift
     done
     # TODO PRIO2: query lss to be moved into a function
     # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
-    hanaAnswer=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
+    hanaAnswer=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
     super_ocf_log info "DEC: lssRc=$lssRc"
     nodeRole=$(echo "${hanaAnswer//[[:blank:]]/}" | \
             awk -F= '
