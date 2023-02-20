@@ -241,9 +241,6 @@ function sht_init() {
     super_ocf_log info "DEC: SAP HANA version $gHdbVer"
 
     get_local_sr_config  # set global variables 'site' and 'srmode'
-    # TODO PRIO2: NG - super_ocf_log: re-classify the log classes (here new class 'INFO?'
-    # TODO PRIO1: NG - could we get remote site already here?
-    # TODO PRIO1: NG - could we get operation mode already here?
     #
     # get remote site
     #
@@ -397,7 +394,6 @@ function sht_start_clone() {
 # sht_stop_clone
 #
 function sht_stop_clone() {
-    # TODO PRIO1: NG - needs to write lss attribute once leaving the bridge :) needs to be stopped after SAPHanaController is stopped, OR SAPHanaController needs to write LSS after stop
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local tout=0
@@ -419,12 +415,12 @@ function sht_stop_clone() {
         timeout=$stdTimeOut
     fi
 
-    # TODO PRIO1: NG - get_role_by_landscape to take timeout parameter
-    gNodeRole="$( get_role_by_landscape "$gVirtName")"; hanalrc="$?"
+    gNodeRole="$( get_role_by_landscape "$gVirtName" --timeout=$timeout)"; hanalrc="$?"
     if [[ "$hanalrc" != "124" ]]; then
         # normal exit, use gNodeRole
         tout=0
         set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
+        set_hana_site_attribute "$gSite" "$hanalrc" "${ATTR_NAME_HANA_SITE_LSS[@]}"
     else
         # time-out occurred that a critical bug during stop, use last result in cluster, modify role attribute and mark fatal
         # and exit with 1 to let the stop fail
@@ -507,7 +503,9 @@ function sht_monitor_clone() {
         case "$hanaPrim" in
             P ) ;;
             S ) # only secondary may propagate its sync status
-                # TODO PRIO1: NG - need to be multi site specific. maybe setting this attribute for the OLD primary during a begin of a promote (as getting P) for the register which could follow?
+                # TODO PRIO2: NG - need to be multi site specific. 
+                #      maybe setting this attribute for the OLD primary during a begin of a promote (as getting P) for the register which could follow?
+                #      currently all sites will have the same replication mode (and operation mode)
                 super_ocf_log info "DEC: set_hana_site_attribute $gSite $gSrMode ${ATTR_NAME_HANA_SITE_REPLICATION_MODE[*]}"
                 set_hana_site_attribute "$gSite" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
                 set_hana_site_attribute "$gRemSite" "$gSrMode" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}"
