@@ -55,28 +55,28 @@ function backup_global_and_nameserver() {
     cp "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini" "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini.${epochseconds}"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function backup_global_and_nameserver
 
 # function: version: compare two HANA version strings
 function ver_lt() {
     ocf_version_cmp "$1" "$2"
     test "$?" -eq 0 && return 0 || return 1
-}
+} # end function ver_lt
 
 function ver_le() {
     ocf_version_cmp "$1" "$2"
     test "$?" -eq 0 -o "$?" -eq 1 && return 0 || return 1
-}
+} # end function ver_le
 
 function ver_gt() {
     ocf_version_cmp "$1" "$2"
     test "$?" -eq 2 && return 0 || return 1
-}
+} # end function ver_gt
 
 function ver_ge() {
     ocf_version_cmp "$1" "$2"
     test "$?" -eq 2 -o "$?" -eq 1 && return 0 || return 1
-}
+} # end function ver_ge
 #
 # function: version: compare two HANA version strings
 #
@@ -94,7 +94,7 @@ function version() {
     else
         return 1;
     fi
-}
+} # end function version
 
 #
 # function: get_action_timeout
@@ -127,7 +127,7 @@ function get_action_timeout() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]}"
     echo "$timeout"
-}
+} # end function get_action_timeout
 
 # TODO PRIO0: HANA_CALL   saphana_init_attribute_definitions   chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
 #
@@ -153,15 +153,14 @@ function assert() {
     fi
     super_ocf_log err "ACT: $err_msg"
     exit "$OCF_NOT_RUNNING"
-}
+} # end function assert
 
 #
 # function: set_crm_master - set the crm master score of the local or remote node
 # params:   SCORE  [NODE]
 # globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
 #
-function set_crm_master()
-{
+function set_crm_master() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local score=0
@@ -186,15 +185,14 @@ function set_crm_master()
        rc=0
     fi
     return "$rc"
-}
+} # end function set_crm_master
 
 #
 # function: scoring_crm_master - score instance due to role and sync match (table SCORING_TABLE)
 # params:   NODE_ROLES NODE_SYNC_STATUS
 # globals:  SCORING_TABLE[@],
 #
-function scoring_crm_master()
-{
+function scoring_crm_master() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local hana_roles="$1"
     local hana_sync="$2"
@@ -217,20 +215,19 @@ function scoring_crm_master()
     if [ -n "$myScore" ]; then
         set_crm_master "$myScore"
     fi
-}
+} # end function scoring_crm_master
 
 #
 # function: get_crm_master - get the crm master score of the local node
 # params:   -
 # globals:  HA_SBIN_DIR(r)
 #
-function get_crm_master()
-{
+function get_crm_master() {
   super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
   local rc=0
    "${HA_SBIN_DIR}/crm_master" -G -q -l reboot; rc=$?
    return "$rc"
-}
+} # end function get_crm_master
 
 # TODO PRIO0: saphana_init_attribute_definitions   chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
 
@@ -240,12 +237,11 @@ function get_crm_master()
 # globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r)
 # locals:  ATTR[@], get_sr_name
 #
-function get_SRHOOK_plain()
-{
+function get_SRHOOK_plain() {
     local get_sr_name="$1"
     get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}"
     return 0
-}
+} # end function get_SRHOOK_plain
 
 #
 # function get_SRHOOK
@@ -254,8 +250,7 @@ function get_SRHOOK_plain()
 # globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SITE_SYNC_STATUS[@](r)
 # locals:  my_sync, get_sr_name
 #
-function get_SRHOOK()
-{
+function get_SRHOOK() {
     local my_sync
     local get_sr_name="$1"
     # We assume for NG, that SR attributes are site specific
@@ -275,7 +270,7 @@ function get_SRHOOK()
     super_ocf_log info "DEC: Finally get_SRHOOK()=$my_sync"
     echo "$my_sync"
     return 0
-}
+} # end function get_SRHOOK
 
 #
 # function set_SRHOOK - sets the site specific Hook SR status
@@ -284,14 +279,13 @@ function get_SRHOOK()
 # locals:  ATTR[@], my_sync, get_sr_name
 # SAPHanaSR ANGI already uses multi-target aware SR Hook attribute there is not global fallback attribute
 #
-function set_SRHOOK()
-{
+function set_SRHOOK() {
     local my_sync old_sync
     local get_sr_name="$1"
     local value="$2"
     set_hana_site_attribute "$get_sr_name" "$value" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}"
     return 0
-}
+} # end function set_SRHOOK
 
 #
 # function set_SRHOOK_PRIM - sets the site specific Hook SR status
@@ -299,10 +293,9 @@ function set_SRHOOK()
 # globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
 # SAPHanaSR Scale-Up already uses multi-target aware SR Hook attribute there is not global fallback attribute
 #
-function set_SRHOOK_PRIM()
-{
+function set_SRHOOK_PRIM() {
     set_SRHOOK "$gSite" "PRIM"
-}
+} # end function set_SRHOOK_PRIM
 
 function saphana_init_scoring_tables() {
     # SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU is the default table, if topology PreferSiteTakeover are not detected. So the table also covers some basic checks for scale-out
@@ -388,15 +381,9 @@ function saphana_init_scoring_tables() {
        "[0-9]   S [^:]*:*:               .*    -INFINITY 'not described yet'"
        ".*      . .*                     .*    -INFINITY 'not described yet'"
     )
-}
+} # end function saphana_init_scoring_tables
 
-# TODO PRIO0: chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
-
-
-
-
-function saphana_init_sap_commands()
-{
+function saphana_init_sap_commands() {
     # TODO PRIO2: NG also set --sapcontrol=1 here
     hdbState="hdbnsutil -sr_stateConfiguration"
     #hdbMap="hdbnsutil -sr_stateHostMapping"   # TODO PRIO2: NG - do we need hdbMap again?
@@ -404,10 +391,7 @@ function saphana_init_sap_commands()
     if [ "$ACTION" = "stop" ]; then
        standbyFilter="--standbyFilter=off"
     fi
-}
-
-
-# TODO PRIO0: start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
+} # end function saphana_init_sap_commands
 
 #
 # handle_unix_domain_sockets
@@ -454,7 +438,7 @@ function handle_unix_domain_sockets() {
             fi
         done
     fi
-}
+} # end function handle_unix_domain_sockets
 
 #
 # function: check_sapstartsrv - check for sapstartsrv - optional start
@@ -548,7 +532,7 @@ function check_sapstartsrv() {
         fi
     fi
     return "$rc"
-}
+} # end function check_sapstartsrv
 
 #
 # function: cleanup_instance - remove resources from a crashed instance
@@ -562,19 +546,14 @@ function cleanup_instance() {
   super_ocf_log debug "DBG: cleanup_instance currently not implemented"
   rc=0
   super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-}
-
-# TODO PRIO0: chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
-
-# analyze_hana_sync_statusSQL removed
+} # end function cleanup_instance
 
 #
 # function: get_hana_landscape_status - figure out hana landscape status
 # params:   -
 # globals:  sidadm(r), DIR_EXECUTABLE(r), hana_LSS_Out(w)
 #
-function get_hana_landscape_status()
-{
+function get_hana_landscape_status() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
@@ -591,7 +570,7 @@ function get_hana_landscape_status()
         fi
     fi
     return "$rc";
-}
+} # end function get_hana_landscape_status
 
 #
 # check_for_primary_master
@@ -602,8 +581,7 @@ function get_hana_landscape_status()
 #     2 warning (lss is 2) ( can be used as "false" )
 #     1 otherwise (lss is 1 or 0) ( can be used as false )
 #
-function check_for_primary_master()
-{
+function check_for_primary_master() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1
     #
@@ -618,15 +596,14 @@ function check_for_primary_master()
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function check_for_primary_master
 
 #
 # wait_for_primary_master: wait some time till a running primary master is shown in attributes
 # params: optional: loop count - currently time in 10s waiting loop
 # globals: -
 #
-function wait_for_primary_master()
-{
+function wait_for_primary_master() {
     local wait=1
     local rc=1
     local loops=${1:-0}
@@ -652,7 +629,7 @@ function wait_for_primary_master()
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function wait_for_primary_master
 
 #
 # function: lpa_get_lpt - get lpt from cluster
@@ -676,7 +653,7 @@ function lpa_get_lpt() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function lpa_get_lpt
 
 #
 # function: lpa_set_lpt - set lpt in cluster
@@ -705,7 +682,7 @@ function lpa_set_lpt() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function lpa_set_lpt
 
 #
 # function: lpa_pull_lpt - fetch lpt from file
@@ -732,7 +709,7 @@ function lpa_pull_lpt() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function lpa_pull_lpt
 
 #
 # function: lpa_push_lpt - put lpt to file
@@ -758,7 +735,7 @@ function lpa_push_lpt() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function lpa_push_lpt
 
 #
 # function: lpa_init_lpt - initialize local lpt, if needed
@@ -796,7 +773,7 @@ function lpa_init_lpt() {
     lpa_set_lpt "$LPTloc" "$gSite"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function lpa_init_lpt
 
 #
 # function: lpa_check_lpt_status - start a hana clone instance
@@ -888,7 +865,7 @@ function lpa_check_lpt_status() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function lpa_check_lpt_status
 
 
 # function: is_active_nameserver_slave
@@ -900,8 +877,7 @@ function lpa_check_lpt_status() {
 #
 # true, if the node has an active (runnig) master nameserver slave role
 #
-function is_active_nameserver_slave()
-{
+function is_active_nameserver_slave() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1 nodeRole=""
     nodeRole="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
@@ -917,7 +893,7 @@ function is_active_nameserver_slave()
     super_ocf_log info "DEC: is_active_nameserver_slave rc=$rc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function is_active_nameserver_slave
 
 # function: is_lost_nameserver_slave
 # params:   -
@@ -927,8 +903,7 @@ function is_active_nameserver_slave()
 #
 # true, if the node has an active (runnig) master nameserver slave role
 #
-function is_lost_nameserver_slave()
-{
+function is_lost_nameserver_slave() {
     # TODO PRIO2: NG - check this new code carefully
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1 nodeRole=""
@@ -945,7 +920,7 @@ function is_lost_nameserver_slave()
     super_ocf_log info "DEC: is_lost_nameserver_slave ($nodeRole) rc=$rc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function is_lost_nameserver_slave
 
 
 # function: is_master_nameserver
@@ -956,8 +931,7 @@ function is_lost_nameserver_slave()
 #
 # true, if the node has an active or configured master nameserver role
 #
-function is_master_nameserver()
-{
+function is_master_nameserver() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1
     gNodeRole="$(get_role_by_cluster_or_landscape "${NODENAME}" "$gVirtName")"
@@ -977,15 +951,14 @@ function is_master_nameserver()
     super_ocf_log info "DEC: is_master_nameserver  rc=$rc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function is_master_nameserver
 
 # function: is_the_master_nameserver
 # params:   -
 # rc:       0: yes, local node is THE master nameserver
 #           1: else
 # globals:
-function is_the_master_nameserver()
-{
+function is_the_master_nameserver() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1
     # TODO PRIO1: NG - always true for scale-up, for scale-out we need to check the_master
@@ -994,10 +967,9 @@ function is_the_master_nameserver()
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function is_the_master_nameserver
 
-function recover_site_attributes_from_file()
-{
+function recover_site_attributes_from_file() {
     local srHookAttributeFile="$1"
     local attrSite
     local -a mapLines
@@ -1045,6 +1017,6 @@ function recover_site_attributes_from_file()
         done
         rm "$srHookAttributeFile"
     fi
-}
+} # end function recover_site_attributes_from_file
 
 # set ts=4 sw=4 sts=4 et
