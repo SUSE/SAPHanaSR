@@ -68,7 +68,7 @@ function super_ocf_log() {
     if [[ "$skip" == 0 ]]; then
         ocf_log "$level" "$message"
     fi
-}
+} # end function super_ocf_log
 
 #
 # function core_init - lightwight variable initialization without SAP HANA interaction
@@ -126,7 +126,7 @@ function core_init() {
     log_attributes=false
     #debug_attributes=0   # TODO PRIO3: variable currently unused - remove or use
     return 0
-}
+} # end function core_init
 
 function saphana_get_hana_version_by_hdb_version() {
     local hv hvp hvph1
@@ -140,7 +140,7 @@ function saphana_get_hana_version_by_hdb_version() {
                 echo "${hvph1%.*}" # cut-off .<timestamp> at the end
         esac
     done
-}
+} # end function saphana_get_hana_version_by_hdb_version
 
 function saphana_get_hana_version_by_manifest() {
     local mf mfh1 mfh2
@@ -153,7 +153,7 @@ function saphana_get_hana_version_by_manifest() {
                 mfh1=${mf#* }; mfh2=${mfh1%% *}; echo "$mfh2" ;;
         esac
     done
-}
+} # end function saphana_get_hana_version_by_manifest
 
 #
 #
@@ -166,7 +166,7 @@ function saphana_get_hana_version() {
     fi
     echo "$ver"
     super_ocf_log info "DEC: SAP HANA version  $ver detected"
-}
+} # end function saphana_get_hana_version
 
 #
 # function: get_hana_attribute
@@ -202,7 +202,7 @@ function get_hana_attribute() {
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function get_hana_attribute
 
 #
 # function: set_hana_attribute - set the multi-state status of a node
@@ -210,8 +210,7 @@ function get_hana_attribute() {
 #           OBJECT could be a node name, a site name or global
 # globals:  -
 #
-function set_hana_attribute()
-{
+function set_hana_attribute() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local attr_obj="$1"
     local attr_value="$2"
@@ -244,11 +243,10 @@ function set_hana_attribute()
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function set_hana_attribute
 
 # set_hana_site_attribute <site> <value> <ATTRIBUTE-TEMPLATE>
-function set_hana_site_attribute()
-{
+function set_hana_site_attribute() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local attr_obj="$1"
@@ -258,11 +256,10 @@ function set_hana_site_attribute()
     set_hana_attribute "$attr_obj" "$attr_value" "$attr_name" "$attr_store"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return 0
-}
+} # end function set_hana_site_attribute
 
 # get_hana_site_attribute <site> <ATTRIBUTE-TEMPLATE>
-function get_hana_site_attribute()
-{
+function get_hana_site_attribute() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local attr_obj="$1"
@@ -272,7 +269,7 @@ function get_hana_site_attribute()
     get_hana_attribute "$attr_obj" "$attr_name" "$attr_store" "$attr_default"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return 0
-}
+} # end function get_hana_site_attribute
 
 #
 # function: is_clone - report, if resource is configured as a clone (also multi-state)
@@ -319,11 +316,10 @@ function is_clone() {
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
-}
+} # end function is_clone
 
 
-function saphana_init_get_remote_site()
-{
+function saphana_init_get_remote_site() {
     # TODO PRIO2: NG allow multiple remote sites later
     #
     #
@@ -353,15 +349,14 @@ function saphana_init_get_remote_site()
     super_ocf_log debug "DBG: remoteHost is $remoteHost"
     # shellcheck disable=SC2034
     remoteNode="$rem_mns"
-}
+} # end function saphana_init_get_remote_site
 
 #
 # function: HANA_CALL
 # params:   timeout-in-seconds cmd-line
 # globals:  sid(r), SID(r), InstanceName(r)
 #
-function HANA_CALL()
-{
+function HANA_CALL() {
     #
     # TODO: PRIO 5: remove 'su - ${sidadm} later, when SAP HANA resoled issue with
     #       root-user-called hdbnsutil -sr_state (which creates root-owned shared memory file in /var/lib/hdb/SID/shmgrp)
@@ -446,10 +441,9 @@ function HANA_CALL()
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
     return "$rc";
-}
+} # end function HANA_CALL
 
-function saphana_init_attribute_definitions()
-{
+function saphana_init_attribute_definitions() {
     # TODO PRIO1: NG - check which atributes to keep and which attributes to delete
     # TODO PRIO1: NG - sort attributes to node, site, global area
     #
@@ -523,7 +517,7 @@ function saphana_init_attribute_definitions()
     ATTR_NAME_HANA_SITE_MNS=("hana_${sid}_site_mns" "props")
     # shellcheck disable=SC2034
     ATTR_NAME_HANA_SITE_SYNC_STATUS=("hana_${sid}_site_srPoll" "props")       # polling attribute SOK, SFAIL
-}
+} # end function saphana_init_attribute_definitions
 
 #
 # get system replication mode and local site name
@@ -584,7 +578,7 @@ function get_local_sr_config() {
             gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
         fi
     fi
-}
+} # end function get_local_sr_config
 
 #
 # function get_local_virtual_name - get virtual sap host name from sap host control
@@ -617,7 +611,7 @@ function get_local_virtual_name() {
        gVirtName="$NODENAME"
     fi
     return 0
-}
+} # end function get_local_virtual_name
 
 
 #
@@ -665,7 +659,7 @@ function check_for_primary() {
    echo "$state"
    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
    return "$rc"
-}
+} # end function check_for_primary
 
 # chk4systemdsupport - check, if SAP systemd support is available
 # check for the existence of the SAP SID+Instance related unit file
@@ -686,15 +680,14 @@ function chk4systemdsupport() {
         fi
     fi
     return "$rc"
-}
+} # end function chk4systemdsupport
 
 #
 # function: start_saphostagent
 # params:   -
 # globals:  HOSTEXEC_PATH(r), HOSTEXEC_PROFILE_PATH(r)
 #
-function start_saphostagent()
-{
+function start_saphostagent() {
     ### SAP-CALL
     if chk4systemdsupport; then
         # use systemd to control saphostagent
@@ -711,15 +704,14 @@ function start_saphostagent()
         fi
     fi
     return 0
-}
+} # end function start_saphostagent
 
 #
 # function: stop_saphostagent
 # params:   -
 # globals: HOSTEXEC_PATH(r)
 #
-function stop_saphostagent()
-{
+function stop_saphostagent() {
     ### SAP-CALL
     if chk4systemdsupport; then
         # use systemd to control saphostagent
@@ -735,15 +727,14 @@ function stop_saphostagent()
             ${HOSTEXEC_PATH} -stop
         fi
     fi
-}
+} # end function stop_saphostagent
 
 #
 # function: check_saphostagent
 # params:   -
 # globals:
 #
-function check_saphostagent()
-{
+function check_saphostagent() {
     local rc=1
     if chk4systemdsupport; then
         # use systemd to control saphostagent
@@ -760,7 +751,7 @@ function check_saphostagent()
         pgrep -f /usr/sap/hostctrl/exe/saphostexec; rc="$?"
     fi
     return "$rc"
-}
+} # end function check_saphostagent
 
 #
 # globals: -
@@ -813,7 +804,7 @@ function get_role_by_landscape(){
         echo "$nodeRole"
     fi
     return "$lssRc"
-}
+} # end function get_role_by_landscape
 
 function get_role_by_cluster_or_landscape() {
     local node="$1"
@@ -825,7 +816,7 @@ function get_role_by_cluster_or_landscape() {
     fi
     echo "$nodeRole"
     return 0
-}
+} # end function get_role_by_cluster_or_landscape
 
 # function: master_walk - find master nodes of local site
 # params:   -
@@ -929,7 +920,7 @@ function master_walk() {
     super_ocf_log info "DEC: ===> master_walk: priorities for site $gSite master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
     super_ocf_log info "DEC: ===> master_walk: the_master=$gTheMaster;"
     super_ocf_log info "FLOW ${FUNCNAME[0]} the_master=$gTheMaster rc=0"
-}
+} # end function master_walk
 
 #
 # function: cluster_get_other_nodes - list all 'other' cluster nodes, but not the local node
@@ -937,8 +928,7 @@ function master_walk() {
 # globals: -
 # external commands: crm_node -l
 #
-function cluster_get_other_nodes()
-{
+function cluster_get_other_nodes() {
     local NODENAME="$1"
     local -a NODELIST
     local ne=""
@@ -959,4 +949,4 @@ function cluster_get_other_nodes()
        fi
     done
     return 0
-}
+} # end function cluster_get_other_nodes
