@@ -535,7 +535,7 @@ function analyze_hana_sync_statusSRS() {
           super_ocf_log info "FLOW ${FUNCNAME[0]} SFAIL"
           set_hana_site_attribute "$gRemSite" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
           super_ocf_log info "ACT site=$gSite, setting SFAIL for secondary on site $gRemSite - srRc=$srRc lss=$lss No ACTIVES found in cmd output"
-          # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
+          # TODO PRIO1: - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
           lpa_set_lpt 10 "$gRemSite"
        fi
     elif [ "$srRc" -le 11 ]; then # 11 and 10
@@ -552,7 +552,7 @@ function analyze_hana_sync_statusSRS() {
           # super_ocf_log info "ACT site=$gSite, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
           set_hana_site_attribute "$gRemSite" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
           super_ocf_log debug "DBG: site=$gSite, setting SFAIL for secondary (5) - srRc=$srRc lss=$lss"
-          # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
+          # TODO PRIO1: - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
           # TODO PRIO1: NG - need to decide, if scale-up should set site attributes now
           # old scale-up code: lpa_set_lpt 10 "$remoteNode"
           super_ocf_log debug "DBG: 001 * lpa_set_lpt 10 $gRemSite"
@@ -566,7 +566,7 @@ function analyze_hana_sync_statusSRS() {
         # old scale-up code: set_hana_attribute "$remoteNode" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
         set_hana_site_attribute "$gRemSite" "SFAIL" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
         super_ocf_log info "ACT: site=$gSite, setting SFAIL for secondary (2) - srRc=$srRc"
-        # TODO: PRIO1 - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
+        # TODO PRIO1: - P004: need to check LSS again to avoid dying primary to block (SFAIL) secondary
         # TODO PRIO1: NG - need to decide, if scale-up should set site attributes now
         # old scale-up code: lpa_set_lpt 10 "$remoteNode"
         super_ocf_log debug "DBG: 002 * lpa_set_lpt 10 $gRemSite"
@@ -696,7 +696,7 @@ function saphana_start() {
             rc="$OCF_ERR_GENERIC"
         fi
     else
-        # TODO: PRIO1: NG - Do we need to set a clone state here?
+        # TODO PRIO1: NG - Do we need to set a clone state here?
         rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -730,7 +730,7 @@ function saphana_stopSystem() {
             # If the master-nameserver dies and does not have a failover candidate but there are still running worker nodes
             #    WaitforStopped terminates to early and does not wait till the worker nodes are down.
             #    So we need to wait till the last "partial" node is down.
-            # TODO: PRIO1: NG - differ return codes for WaitforStarted from the Number-Of-Partial-Nodes
+            # TODO PRIO1: NG - differ return codes for WaitforStarted from the Number-Of-Partial-Nodes
             #
             rcWfS=0
             hanaANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null);
@@ -797,7 +797,7 @@ function saphana_stop() {
     else
 	    is_active_nameserver_slave; is_slave_rc=$?
 	    super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($gTheMaster) NOR is_lost_nameserver_slave"
-        # TODO: PRIO1: NG - Do we need to set a clone state here?
+        # TODO PRIO1: NG - Do we need to set a clone state here?
         rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -909,7 +909,7 @@ function saphana_start_primary() {
         3)  # LPA says to wait for remote LPA to be reported/announced
             lpa_advice="wait"
             ;;
-        4)  # LPA says something is completely wrong - FAIL resource # TODO: PRIO1: NG - RC3 for waiting remote side to report lss
+        4)  # LPA says something is completely wrong - FAIL resource # TODO PRIO1: NG - RC3 for waiting remote side to report lss
             lpa_advice="fail"
             ;;
         *)  # LPA failed with an unknown status - FAIL resource
@@ -1104,7 +1104,7 @@ function saphana_check_local_instance() {
     local count=0
     local SERVNO
     local output
-    local MONITOR_SERVICES="hdbnameserver|hdbdaemon" # TODO: PRIO1: exact list of Services
+    local MONITOR_SERVICES="hdbnameserver|hdbdaemon" # TODO PRIO1: exact list of Services
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     check_sapstartsrv
     rc="$?"
@@ -1281,7 +1281,7 @@ function dual_primary_detection() {
         case "$rem_role" in
             [234]:P:* )
                 # dual primary, but other instance marked as PROMOTED by the cluster
-                # TODO: PRIO1: NG - Need to differ lpa_check_lpt_status return codes
+                # TODO PRIO1: NG - Need to differ lpa_check_lpt_status return codes
                 lpa_check_lpt_status; lpa_rc=$?
                 if [[ "$lpa_rc" != 0 ]]; then
                     super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa_check_lpt_status != 0  ==> local restart"
@@ -1461,7 +1461,7 @@ function saphana_monitor_primary() {
                     rc="$OCF_FAILED_MASTER"
                 else
                     # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
-                    # TODO: PRIO1: NG - Adjust with set_crm_master?
+                    # TODO PRIO1: NG - Adjust with set_crm_master?
                     #       Current decision: Do NOT adjust master score now as other
                     #       steps should already have done that
                     #
