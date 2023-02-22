@@ -452,21 +452,16 @@ function saphana_init() {
     # TODO PRIO1: NG - check in which cases we could (already) trust on the cluster attributre srr
     #
     gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-    if [ -z "$gRole" ]; then
-        # need to get these values life
-        local -a splitResult
-        mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --multiValue );
-        for splitResultLine in "${splitResult[@]}"; do
-            case "$splitResultLine" in
-                role=* ) gRole="${splitResultLine#*=}";;
-                retn=* ) gLss="${splitResultLine#*=}";;
-                #topo=* ) gTopology="${splitResultLine#*=}";;
-            esac
-        done
-    else
-        # try to trust already on SAPHanaTopology
-        gLss=$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_LSS[@]}")
-    fi
+    # need to get these values life
+    local -a splitResult
+    mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --multiValue );
+    for splitResultLine in "${splitResult[@]}"; do
+        case "$splitResultLine" in
+            role=* ) gRole="${splitResultLine#*=}";;
+            retn=* ) gLss="${splitResultLine#*=}";;
+            #topo=* ) gTopology="${splitResultLine#*=}";;
+        esac
+    done
 
     gFullRole="${gLss}:${gSrr}:${gRole}"
     super_ocf_log info "DEC: init(): gFullRole=$gFullRole"
