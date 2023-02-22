@@ -369,7 +369,7 @@ function saphana_init() {
     sid="${SID,,}"
     sidadm="${sid}adm"
     #
-    # get sao virtual host name
+    # get sap virtual host name
     #
     get_local_virtual_name
     SAPVIRHOST=${gVirtName}
@@ -414,38 +414,6 @@ function saphana_init() {
     # Determine list of other cluster nodes and store in otherNodes variable
     otherNodes=()
     mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
-    #
-    # optionally init RA update
-    #
-    # saphana_init_handle_update
-    #
-    # get remote site
-    #
-    saphana_init_get_remote_site
-    super_ocf_log info "DEC: gRemSite=$gRemSite"
-    #  ATTR_NAME_HANA_SITE
-    # TODO PRIO1: NG - check if gSite is already set
-    if [ -z "$gSite" ]; then
-        gSite=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_SITE[@]}");
-    fi
-    # TODO PRIO1: NG - check, if gSrMode (sr_mode) is already set
-    super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
-    gSrMode="$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_REPLICATION_MODE[@]}")"
-    if [ -z "$gSrMode" ]; then
-        gSrMode="sync"
-    fi
-
-    gLss=$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_LSS[@]}")
-    gSrr=$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")
-    gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-    gFullRole="${gLss}:${gSrr}:${gRole}"
-    gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
-    gSrHook=$(get_SRHOOK "$gSite")
-
-    super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
-    #super_ocf_log debug "DBG: sr_name=$gSite, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
-    # optional OCF parameters, we try to guess which directories are correct
-    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         if have_binary "/usr/sap/$SID/$InstanceName/exe/sapstartsrv" && have_binary "/usr/sap/$SID/$InstanceName/exe/sapcontrol"
@@ -463,6 +431,53 @@ function saphana_init() {
 
     [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
     DIR_PROFILE="${OCF_RESKEY_DIR_PROFILE:-/usr/sap/$SID/SYS/profile}"
+    #
+    # get local system replication config 
+    #
+    get_local_sr_config # sets gSrr gSrMode and gSite
+    super_ocf_log info "DEC: gSrr=$gSrr gSrMode=$gSrMode gSite=$gSite"
+    # TODO PRIO1: NG - check if gSite and others are now set
+    #
+    # get remote site
+    #
+    saphana_init_get_remote_site
+    super_ocf_log info "DEC: gRemSite=$gRemSite"
+    #
+    # get landscape config (lss and roles)
+    #
+    # TODO PRIO1: NG - if clone_state or roles are (still) empty, then do not trust in the cluster attributes
+    #                  if roles is not se, them SAPHanaTopology did not report that so far, so check for life values
+    # TODO PRIO1: NG - check for global variable gClone (set by clone_state attr)
+    #
+    # TODO PRIO1: NG - check in which cases we could (already) trust on the cluster attributre srr
+    #
+    gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+    if [ -z "$gRole" ]; then
+        # need to get these values life
+        local -a splitResult
+        mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --multiValue );
+        for splitResultLine in "${splitResult[@]}"; do
+            case "$splitResultLine" in
+                role=* ) gRole="${splitResultLine#*=}";;
+                retn=* ) gLss="${splitResultLine#*=}";;
+                #topo=* ) gTopology="${splitResultLine#*=}";;
+            esac
+        done
+    else
+        # try to trust already on SAPHanaTopology
+        gLss=$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+    fi
+
+    gFullRole="${gLss}:${gSrr}:${gRole}"
+    super_ocf_log info "DEC: init(): gFullRole=$gFullRole"
+
+    gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+    gSrHook=$(get_SRHOOK "$gSite")
+
+    super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
+    #super_ocf_log debug "DBG: sr_name=$gSite, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
+    # optional OCF parameters, we try to guess which directories are correct
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     # check, if the following fall-back is ok, or if there could be multiple profiles matching this pattern
     if [ -n "${SAPVIRHOST}" ]; then
         SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_${SAPVIRHOST}}"
@@ -1325,6 +1340,15 @@ function saphana_monitor_primary() {
     if [ -z "$promote_attr" ]; then
         init_attribute=1
         promoted=0;
+        # TODO PRIO1: NG - emergency exit, if clone attribute is not already existing during a probe (might be cluster start)
+        # TODO PRIO1: NG -  checking, if OCF_SUCCESS woule be better here?
+        if ocf_is_probe; then
+            get_hana_landscape_status; lss=$?
+            case "$lss" in
+                0 | 1     ) return "$OCF_NOT_RUNNING" ;;
+                2 | 3 | 4 ) return "$OCF_SUCCESS";;
+            esac
+        fi
     else
         case "$promote_attr" in
             PROMOTED )
@@ -1857,18 +1881,13 @@ function saphana_monitor_clone() {
     local mRc=0
     local myMaster=-1
     #
-    # get local site(s) LSS, SRR and nodes ROLES
-    # TODO PRIO1: NG - reduce number of queries in LSS, SRR and ROLES
-    #
-    super_ocf_log info "DEC: scoring_crm_master **11**"
-    scoring_crm_master "$gFullRole" "$gSrHook"
-    #
     # reset possible left SRACTION_HISTORY
     #
     set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
     if ocf_is_probe; then
         super_ocf_log info "DEC: PROBE ONLY"
         # TODO PRIO1: NG - could check the Master status in a probe - after a refresh this status should be lost?
+        # TODO PRIO1: NG - score, if CLONE_ATTRIBUTE is known 
         #
         # check during probe, if this instance is *NOT* running as master
         # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
@@ -1882,6 +1901,8 @@ function saphana_monitor_clone() {
             fi
         fi
     else
+        super_ocf_log info "DEC: scoring_crm_master **11**"
+        scoring_crm_master "$gFullRole" "$gSrHook"
         # shellcheck disable=SC2154
         super_ocf_log info "DEC: REGULAR MONITOR interval=${OCF_RESKEY_CRM_meta_interval}"
     fi
