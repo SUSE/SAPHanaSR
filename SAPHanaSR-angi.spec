@@ -109,13 +109,13 @@ install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 # auxiliary Perl library and test scripts
 #install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
-install -m 0555 test/SAPHanaSR-monitor %{buildroot}/usr/sbin
-install -m 0555 test/SAPHanaSR-showAttr %{buildroot}/usr/sbin
-install -m 0555 test/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
-install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
-install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
-install -m 0555 test/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
-install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
+install -m 0555 tools/SAPHanaSR-monitor %{buildroot}/usr/sbin
+install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/sbin
+install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
+install -m 0555 tools/SAPHanaSR-filter %{buildroot}/usr/sbin
+install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
+install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
+install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # README and LICENSE
 install -m 0444 doc/LICENSE %{buildroot}%{_docdir}/%{name}
