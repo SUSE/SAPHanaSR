@@ -1,0 +1,224 @@
+#!/bin/bash
+#
+# test_kill_secondary (ScaleUp)
+# test steps expected
+#
+# STATUS 10 TEST START
+# global             maintenance=<empty>|false  prim=<pSite> secn=<sSite> topology=ScaleUp
+# resource  cl_*     maintenance=<empty>|false          
+# resource  ms_*     maintenance=<empty>|false          
+# site <pSite>: site=pSite lpt=<timestamp> lss=4 srr=P srHook=PRIM srPoll=PRM 
+# site <sSite>: site=sSite lpt=30          lss=4 srr=S srHook=SOK  srPoll=SOK
+# host <pHost>: clone_state=PROMOTED roles=master1:master:worker:master score=150 site=<pSite> sra=<empty>|- srah=<empty>|- vhost=<pHost> 
+# host <sHost>: clone_state=DEMOTED  roles=master1:master:worker:master score=100 site=<sSite> sra=<empty>|- srah=<empty>|- vhost=<sHost> 
+#
+# ACTION: kill SAP HANA on <sHost>
+# Allowed values to change: <sSite>: lpt, lss, srHook, srPoll; <sHost>: clone_state, roles, score
+# NEXT STATUS is 20
+#
+#########################################################################################################################################
+#
+# STATUS 20 ERROR DETECTED
+# global             maintenance=<empty>|false  prim=<pSite> secn=<sSite> topology=ScaleUp
+# resource  cl_*     maintenance=<empty>|false          
+# resource  ms_*     maintenance=<empty>|false          
+# site <pSite>: site=pSite lpt=<timestamp> lss=4   srr=P srHook=PRIM   srPoll=PRM 
+# site <sSite>: site=sSite lpt=10          lss=1|2 srr=S srHook=SFAIL  srPoll=SFAIL
+# host <pHost>: clone_state=PROMOTED roles=master1:master:worker:master score=150         site=<pSite> sra=<empty>|- srah=<empty>|- vhost=<pHost> 
+# host <sHost>: clone_state=DEMOTED  roles=master1::worker:             score=-INFINITY|0 site=<sSite> sra=<empty>|- srah=<empty>|- vhost=<sHost> 
+#
+# ACTION: wait
+# Allowed values to change: <sSite>: srHook, srPoll; <sHost>: clone_state, score
+# Sequence/Combiation of lss=4->2->1 and clone_state=DEMOTED->UNDEFINED could be in different order; srPoll might be still in SOK (if monitor was not already running)
+# NEXT STATUS is 30
+#
+#########################################################################################################################################
+#
+# STATUS 30 BEGIN RECOVER
+# global             maintenance=<empty>|false  prim=<pSite> secn=<sSite> topology=ScaleUp
+# resource  cl_*     maintenance=<empty>|false          
+# resource  ms_*     maintenance=<empty>|false          
+# site <pSite>: site=pSite lpt=<timestamp> lss=4   srr=P srHook=PRIM         srPoll=PRM 
+# site <sSite>: site=sSite lpt=10          lss=1   srr=S srHook=SFAIL|SWAIT  srPoll=SFAIL
+# host <pHost>: clone_state=PROMOTED   roles=master1:master:worker:master score=150         site=<pSite> sra=<empty>|- srah=<empty>|- vhost=<pHost> 
+# host <sHost>: clone_state=UNDEFINED  roles=master1::worker:             score=-INFINITY|0 site=<sSite> sra=<empty>|- srah=<empty>|- vhost=<sHost> 
+#
+# ACTION: wait
+# Allowed values to change: <sSite>: lpt, lss, srHook, srPoll; <sHost>: clone_state, roles, score
+#
+# Expected Cluster Plan: 
+# Executing Cluster Transition:
+#  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_stop_0
+#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 stop on basf02
+#  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_stopped_0
+#  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_start_0
+#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 start on basf02
+#  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_running_0
+#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 monitor=61000 on basf02
+#
+# NEXT STATUS is 40
+#
+#########################################################################################################################################
+#
+# STATUS 40 END RECOVER
+# <AS STATUS 10>
+#
+# ACTION: commit test as successful
+# Cluster state: S_IDLE
+
+declare -a sapHanaSr
+
+function storeSAPHanaSR() {
+    # purpose: get all current SAPHanaSR values
+    # params:  -
+    # global:  sapHanaSr(w)
+    # callout: SAPHanaSR-showAttr
+    # output:  -
+    # rc:      0
+    mapfile -t sapHanaSr < <(ssh basf01 "SAPHanaSR-showAttr --format=script")
+    return 0
+}
+
+function search4getValue() {
+    # purpose: search in sapHanaSr for pattern and return value(s) 
+    # params:  reg Exp
+    # global:  sapHanaSr(r)
+    # callout: -
+    # output:  value(s)
+    # if it hits 'Hosts/basf02/clone_state="DEMOTED"' it returns "DEMOTED"
+    local regExp="$1" s r
+    local -a results
+    mapfile -t results < <(
+            for s in "${sapHanaSr[@]}"; do 
+                echo "$s" | awk -F=  '$0 ~ regExp { print $2 }' regExp="$regExp";
+            done
+        )
+    for r in "${results[@]}"; do
+        echo "${r//\"/}"
+    done
+}
+
+function search4getObject() {
+    # purpose: search in sapHanaSr for pattern and return objects(s)
+    # params:  reg Exp
+    # global:  sapHanaSr(r)
+    # callout: -
+    # output:  value(s)
+    # if it hits 'Hosts/basf02/clone_state="DEMOTED"' it returns "basf02"
+    local regExp="$1" s r
+    local -a results
+    mapfile -t results < <(
+            for s in "${sapHanaSr[@]}"; do 
+                echo "$s" | awk -F'[/=]'  '$0 ~ regExp { print $2 }' regExp="$regExp";
+            done
+        )
+    for r in "${results[@]}"; do
+        echo "${r//\"/}"
+    done
+}
+
+function search4getKeyValue() {
+    # purpose: search in sapHanaSr for pattern and return key-value pairs(s)
+    # params:  reg Exp
+    # global:  sapHanaSr(r)
+    # callout: -
+    # output:  value(s)
+    # if it hits 'Hosts/basf02/clone_state="DEMOTED"' it returns 'clone_state="DEMOTED"'
+    local regExp="$1" s r
+    local -a results
+    mapfile -t results < <(
+            for s in "${sapHanaSr[@]}"; do 
+                echo "$s" | awk -F'/'  '$0 ~ regExp { print $3 }' regExp="$regExp";
+            done
+        )
+    for r in "${results[@]}"; do
+        echo "${r//\"/}"
+    done
+}
+
+function checkKeyValue() {
+    # purpose: search in given array1 for patterns in array2
+    # remark keyValues and patterns are both arrays. Each array member MUST be in the form key=value
+    local -a keyValues 
+    local -a patterns
+    local nowPatterns=1 kV p
+    local rc=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --keyValue ) nowPatterns=1;;
+            --pattern ) nowPatterns=0;;
+            * ) if [ "$nowPatterns" == 0 ]; then
+                    patterns=( "${patterns[@]}" "$1" )
+                else
+                    keyValues=( "${keyValues[@]}" "$1" )
+                fi
+        esac
+        shift
+    done
+ 
+    echo "keyValues ${keyValues[2]}"
+    echo "patterns ${patterns[2]}"
+
+    for kV in "${keyValues[@]}"; do
+        kVFound=2
+        for p in "${patterns[@]}"; do
+            vKey="${kV%=*}"; pKey="${p%=*}"
+            if [ "$vKey" == "$pKey" ]; then # if same key, check if we match
+                echo "$kV" | grep -q "$p" && kVFound=0 && break || kVFound=1 && break
+            fi
+        done
+        case "$kVFound" in
+            0 ) # matching
+                echo "kV $kV matched by p $p"
+                ;;
+            1 ) # not matching
+                echo "kV $kV NOT matched by p $p"
+                rc=1
+                ;;
+            2 ) # ignored (not tested)
+                echo "kV $kV not checked"
+        esac
+    done
+    return "$rc"
+}
+
+storeSAPHanaSR
+
+#
+# get primary site and host
+#
+pSite="$(search4getObject 'Sites/.*/srr="P"')"
+pHost="$(search4getObject 'Hosts/.*/site="'$pSite'"')"
+sSite="$(search4getObject 'Sites/.*/srr="S"')"
+sHost="$(search4getObject 'Hosts/.*/site="'$sSite'"')"
+
+echo "INITIAL: pHost=$pHost, pSite=$pSite, sHost"
+
+#
+#
+#
+mapfile -t primarySite <  <(search4getKeyValue 'Sites/'"$pSite"'/')
+
+patterns=(
+   "lss=[34]"
+   "srr=P"
+   "lpt=16771....."
+) 
+
+checkKeyValue --keyValue "${primarySite[@]}" --pattern "${patterns[@]}"; rc="$?"
+
+echo "checkKeyValue() rc=$rc"
+
+
+
+
+
+
+search4getValue 'Hosts/.*/score'
+search4getObject 'Hosts/.*/score="1.0"'
+
+
+
+
+
+
