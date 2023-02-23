@@ -7,12 +7,13 @@
 FILE_LIST = doc \
 			man \
 			ra \
+			tools \
 	 		test \
 			icons \
 			srHook \
 	 		wizard 
 
-TAR_EXTRAS = -X test/SAPHanaSR-testDriver
+TAR_EXTRAS = -X tools/SAPHanaSR-testDriver
 
 PKG = SAPHanaSR-angi
 SPECFILE = ${PKG}.spec
