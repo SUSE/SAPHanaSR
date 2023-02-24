@@ -49,12 +49,12 @@
 # Expected Cluster Plan: 
 # Executing Cluster Transition:
 #  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_stop_0
-#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 stop on basf02
+#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 stop on node02
 #  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_stopped_0
 #  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_start_0
-#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 start on basf02
+#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 start on node02
 #  * Pseudo action:   ms_SAPHanaCon_HA1_HDB00_running_0
-#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 monitor=61000 on basf02
+#  * Resource action: rsc_SAPHanaCon_HA1_HDB00 monitor=61000 on node02
 #
 # NEXT STATUS is 40
 #
@@ -65,160 +65,159 @@
 #
 # ACTION: commit test as successful
 # Cluster state: S_IDLE
+#
+########
+#
+#echo "checkKeyValue() rc=$rc"
+#search4getValue 'Hosts/.*/score'
+#search4getObject 'Hosts/.*/score="1.0"'
 
-declare -a sapHanaSr
+source ./test-lib
 
-function storeSAPHanaSR() {
-    # purpose: get all current SAPHanaSR values
-    # params:  -
-    # global:  sapHanaSr(w)
-    # callout: SAPHanaSR-showAttr
-    # output:  -
-    # rc:      0
-    mapfile -t sapHanaSr < <(ssh basf01 "SAPHanaSR-showAttr --format=script")
-    return 0
-}
+function status_10() { # test status 10 is reached
+    getAllKeyValue
 
-function search4getValue() {
-    # purpose: search in sapHanaSr for pattern and return value(s) 
-    # params:  reg Exp
-    # global:  sapHanaSr(r)
-    # callout: -
-    # output:  value(s)
-    # if it hits 'Hosts/basf02/clone_state="DEMOTED"' it returns "DEMOTED"
-    local regExp="$1" s r
-    local -a results
-    mapfile -t results < <(
-            for s in "${sapHanaSr[@]}"; do 
-                echo "$s" | awk -F=  '$0 ~ regExp { print $2 }' regExp="$regExp";
-            done
-        )
-    for r in "${results[@]}"; do
-        echo "${r//\"/}"
-    done
-}
+    patternsPrimarySite=(
+        "site=$pSite"
+        "lss=4"
+        "srr=P"
+        "lpt=1[6-9]........"
+        "srHook=PRIM"
+        "srPoll=PRIM"
+    ) 
 
-function search4getObject() {
-    # purpose: search in sapHanaSr for pattern and return objects(s)
-    # params:  reg Exp
-    # global:  sapHanaSr(r)
-    # callout: -
-    # output:  value(s)
-    # if it hits 'Hosts/basf02/clone_state="DEMOTED"' it returns "basf02"
-    local regExp="$1" s r
-    local -a results
-    mapfile -t results < <(
-            for s in "${sapHanaSr[@]}"; do 
-                echo "$s" | awk -F'[/=]'  '$0 ~ regExp { print $2 }' regExp="$regExp";
-            done
-        )
-    for r in "${results[@]}"; do
-        echo "${r//\"/}"
-    done
-}
+    patternsSecondarySite=(
+        "site=$sSite"
+        "lpt=30"
+        "lss=4"
+        "srr=S"
+        "srHook=SOK"
+        "srPoll=SOK"
+    )
 
-function search4getKeyValue() {
-    # purpose: search in sapHanaSr for pattern and return key-value pairs(s)
-    # params:  reg Exp
-    # global:  sapHanaSr(r)
-    # callout: -
-    # output:  value(s)
-    # if it hits 'Hosts/basf02/clone_state="DEMOTED"' it returns 'clone_state="DEMOTED"'
-    local regExp="$1" s r
-    local -a results
-    mapfile -t results < <(
-            for s in "${sapHanaSr[@]}"; do 
-                echo "$s" | awk -F'/'  '$0 ~ regExp { print $3 }' regExp="$regExp";
-            done
-        )
-    for r in "${results[@]}"; do
-        echo "${r//\"/}"
-    done
-}
-
-function checkKeyValue() {
-    # purpose: search in given array1 for patterns in array2
-    # remark keyValues and patterns are both arrays. Each array member MUST be in the form key=value
-    local -a keyValues 
-    local -a patterns
-    local nowPatterns=1 kV p
-    local rc=0
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --keyValue ) nowPatterns=1;;
-            --pattern ) nowPatterns=0;;
-            * ) if [ "$nowPatterns" == 0 ]; then
-                    patterns=( "${patterns[@]}" "$1" )
-                else
-                    keyValues=( "${keyValues[@]}" "$1" )
-                fi
-        esac
-        shift
-    done
+    patternsPrinaryHost=(
+       "clone_state=PROMOTED" 
+       "roles=master1:master:worker:master" 
+       "score=150" 
+       "site=$pSite" 
+    )
  
-    echo "keyValues ${keyValues[2]}"
-    echo "patterns ${patterns[2]}"
-
-    for kV in "${keyValues[@]}"; do
-        kVFound=2
-        for p in "${patterns[@]}"; do
-            vKey="${kV%=*}"; pKey="${p%=*}"
-            if [ "$vKey" == "$pKey" ]; then # if same key, check if we match
-                echo "$kV" | grep -q "$p" && kVFound=0 && break || kVFound=1 && break
-            fi
-        done
-        case "$kVFound" in
-            0 ) # matching
-                echo "kV $kV matched by p $p"
-                ;;
-            1 ) # not matching
-                echo "kV $kV NOT matched by p $p"
-                rc=1
-                ;;
-            2 ) # ignored (not tested)
-                echo "kV $kV not checked"
-        esac
-    done
+    patternsSecondaryHost=(
+       "clone_state=DEMOTED" 
+       "roles=master1:master:worker:master" 
+       "score=100" 
+       "site=$sSite" 
+    )
+    
+    checkAllKeyValue; rc="$?"
     return "$rc"
 }
 
-storeSAPHanaSR
+function status_20() { # test status 20 is reached
+    getAllKeyValue
 
-#
-# get primary site and host
-#
-pSite="$(search4getObject 'Sites/.*/srr="P"')"
-pHost="$(search4getObject 'Hosts/.*/site="'$pSite'"')"
-sSite="$(search4getObject 'Sites/.*/srr="S"')"
-sHost="$(search4getObject 'Hosts/.*/site="'$sSite'"')"
+    patternsPrimarySite=(
+        "site=$pSite" 
+        "lss=4" 
+        "srr=P" 
+        "lpt=1[6-9]........" 
+        "srHook=PRIM" 
+        "srPoll=PRIM"
+    ) 
 
-echo "INITIAL: pHost=$pHost, pSite=$pSite, sHost"
+    patternsSecondarySite=(
+        "site=$sSite"
+        "lpt=(10|30)"
+        "lss=[12]"
+        "srr=S"
+        "srHook=SFAIL"
+        "srPoll=(SFAIL|SOK)"
+    )
 
-#
-#
-#
-mapfile -t primarySite <  <(search4getKeyValue 'Sites/'"$pSite"'/')
+    patternsPrinaryHost=(
+       "clone_state=PROMOTED" 
+       "roles=master1:master:worker:master" 
+       "score=150" 
+       "site=$pSite" 
+    )
+ 
+    patternsSecondaryHost=(
+       "clone_state=DEMOTED" 
+       "roles=master1::worker:" 
+       "score=(-INFINITY|0)" 
+       "site=$sSite" 
+    )
 
-patterns=(
-   "lss=[34]"
-   "srr=P"
-   "lpt=16771....."
-) 
+    checkAllKeyValue; rc="$?"
 
-checkKeyValue --keyValue "${primarySite[@]}" --pattern "${patterns[@]}"; rc="$?"
+    return "$rc"
+}
 
-echo "checkKeyValue() rc=$rc"
+function status_30() { # test status 30 is reached
+    getAllKeyValue
 
+    patternsPrimarySite=(
+        "site=$pSite" 
+        "lss=4" 
+        "srr=P" 
+        "lpt=1[6-9]........" 
+        "srHook=PRIM" 
+        "srPoll=PRIM"
+    ) 
 
+    patternsSecondarySite=(
+        "site=$sSite"
+        "lpt=10"
+        "lss=1"
+        "srr=S"
+        "srHook=SFAIL"
+        "srPoll=(SFAIL|SOK)"
+    )
 
+    patternsPrinaryHost=(
+       "clone_state=PROMOTED" 
+       "roles=master1:master:worker:master" 
+       "score=150" 
+       "site=$pSite" 
+    )
+ 
+    patternsSecondaryHost=(
+       "clone_state=UNDEFINED" 
+       "roles=master1::worker:" 
+       "score=(-INFINITY|0)" 
+       "site=$sSite" 
+    )
 
+    checkAllKeyValue; rc="$?"
 
+    return "$rc"
+}
 
-search4getValue 'Hosts/.*/score'
-search4getObject 'Hosts/.*/score="1.0"'
+function status_40() { # test status 40 is reached
+    status_10
+}
 
+function action_10() {
+   local sidadm="ha1adm"
+   local node="$1"
+   local rc=0
+   message "HDB kill-9 on node $node"
+   timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
+   message "HDB kill-9 on node $node rc=$rc"
+   return "$rc"
+}
 
+init "$@"
 
-
-
-
+if loopForStatus 10  1; then
+   action_10 "$sHost"
+   if loopForStatus 20 60 && \
+      loopForStatus 30 60 && \
+      loopForStatus 40 60 ; then
+            message "TEST SUCCESS"
+   else
+        message "TEST FAILED" 
+   fi
+else
+   message "TEST PREREQUISITES NOT MATCHED"
+fi
