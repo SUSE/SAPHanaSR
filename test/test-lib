@@ -8,6 +8,8 @@
 #search4getValue 'Hosts/.*/score'
 #search4getObject 'Hosts/.*/score="1.0"'
 
+set -u
+
 declare -a sapHanaSr
 
 function init() {
@@ -24,10 +26,10 @@ function init() {
     # get primary site and host
     #
     pSite="$(search4getObject 'Sites/.*/srr="P"')"
-    pHost="$(search4getObject 'Hosts/.*/site="'$pSite'"')"
+    pHost="$(search4getObject 'Hosts/.*/site="'"$pSite"'"')"
     sSite="$(search4getObject 'Sites/.*/srr="S"')"
-    sHost="$(search4getObject 'Hosts/.*/site="'$sSite'"')"
-    message "INITIAL: pHost=$pHost, pSite=$pSite, sHost=$sHost, sSite=$sSite"
+    sHost="$(search4getObject 'Hosts/.*/site="'"$sSite"'"')"
+    message "INIT(): pHost=$pHost, pSite=$pSite, sHost=$sHost, sSite=$sSite"
 }
 
 function message() {
@@ -106,12 +108,16 @@ function search4getKeyValue() {
 function checkKeyValue() {
         # purpose: search in given array1 for patterns in array2
         # remark keyValues and patterns are both arrays. Each array member MUST be in the form key=value
+        # output: failed tests - must ONLY output the failed tests, nothing more!!
         local -a keyValues 
         local -a patterns
         local nowPatterns=1 kV p
         local rc=0
+        local -a failedTests
+        local purpose
         while [ $# -gt 0 ]; do
             case "$1" in
+                --purpose=* ) purpose="${1#*=}";;
                 --keyValue ) nowPatterns=1;;
                 --pattern ) nowPatterns=0;;
                 * ) if [ "$nowPatterns" == 0 ]; then
@@ -122,34 +128,37 @@ function checkKeyValue() {
             esac
             shift
         done
-     
-        #echo "keyValues ${keyValues[2]}"
-        #echo "patterns ${patterns[2]}"
-
-        for kV in "${keyValues[@]}"; do
+        for p in "${patterns[@]}"; do
             kVFound=2
-            for p in "${patterns[@]}"; do
+            for kV in "${keyValues[@]}"; do
                 vKey="${kV%=*}"; pKey="${p%=*}"
                 if [ "$vKey" == "$pKey" ]; then # if same key, check if we match
-                    echo "$kV" | egrep -q "$p" && kVFound=0 && break || kVFound=1 && break
+                    echo "$kV" | grep -E -q "$p" && kVFound=0 && break || kVFound=1 && break
                 fi
             done
             case "$kVFound" in
                 0 ) # matching
-                    #echo "kV $kV matched by p $p"
+                    #echo "kV $kV matched by p $p" >&2
                     ;;
                 1 ) # not matching
+                    failedTests=( "${failedTests[@]}" "$purpose: $kV !~ $p" )
                     if [ "$verbose" == "1" ]; then
-                        echo "kV $kV NOT matched by p $p"
+                        echo "$purpose: $kV !~ $p" >&2
                     fi
-                    # TDDO PRIO2: store unmatch reason
                     rc=1
                     ;;
-                2 ) # ignored (not tested)
-                    # echo "kV $kV not checked"
+                2)  #  
+                    failedTests=( "${failedTests[@]}" "$purpose: missing $p" )
+                    if [ "$verbose" == "1" ]; then
+                        echo "$purpose: missing $p" >&2
+                    fi
+                    rc=1
                     ;;
             esac
         done
+        if [[ "$rc" == 1 ]]; then 
+            echo "${failedTests[@]}"
+        fi
         return "$rc"
 }
 
@@ -164,16 +173,23 @@ function getAllKeyValue() {
     mapfile -t secondaryHost <  <(search4getKeyValue 'Hosts/'"$sHost"'/')
 }
 
-function checkAllKeyValue() {
-    local rc
-    checkKeyValue --keyValue "${primarySite[@]}"   --pattern "${patternsPrimarySite[@]}";   primSiteRc="$?"
-    checkKeyValue --keyValue "${secondarySite[@]}" --pattern "${patternsSecondarySite[@]}"; secnSiteRc="$?"
-    checkKeyValue --keyValue "${primaryHost[@]}"   --pattern "${patternsPrimaryHost[@]}";   primHostRc="$?"
-    checkKeyValue --keyValue "${secondaryHost[@]}" --pattern "${patternsSecondaryHost[@]}"; secnHostRc="$?"
+function checkAllKeyValueHelp() {
+    # output: function must just output output by checkKeyValue ...
+    checkKeyValue --purpose=pSite --keyValue "${primarySite[@]}"   --pattern "${patternsPrimarySite[@]}";   
+    checkKeyValue --purpose=sSite --keyValue "${secondarySite[@]}" --pattern "${patternsSecondarySite[@]}"; 
+    checkKeyValue --purpose=pHost --keyValue "${primaryHost[@]}"   --pattern "${patternsPrimaryHost[@]}";   
+    checkKeyValue --purpose=sHost --keyValue "${secondaryHost[@]}" --pattern "${patternsSecondaryHost[@]}";
+}
 
-    if [[ "$primSiteRc" == 0 && "$secnSiteRc" == 0 && "$primHostRc" == 0 && "$secnHostRc" == 0 ]]; then
+function checkAllKeyValue() {
+    # output: all failed tests
+    local rc
+    local -a failedTests
+    mapfile -t failedTests < <( checkAllKeyValueHelp )
+    if [[ "${failedTests[*]}" == "" ]]; then
         rc=0
     else
+        echo "${failedTests[@]}"
         rc=1
     fi
     return "$rc"
@@ -184,20 +200,21 @@ function loopForStatus() {
     local maxLoops="$2"
     local rc=0
     local loops=0
+    local lastFailedTests=""
     # TODO PRIO2: get sleep interval by parameter
     while true; do
         (( loops++ ))
         storeSAPHanaSR "$node"
-        status_"$status" ; rc=$?
+        lastFailedTests="$(status_"$status")" ; rc=$?
         if [ "$rc" == 0 ]; then
-            message "Status is now $status"
+            message "STATUS: REACHED STEP $status ####"
             break
         else
             if [[ "$loops" -ge "$maxLoops"  ]]; then
+                message "RESULT: LAST FAILED COMPARES $lastFailedTests"
                 rc=1
                 break;
             fi
-            # echo "Status $status not reached"
         fi
         sleep 2
     done
