@@ -231,7 +231,8 @@ function processStep() {
     mapfile -t patternsSecondarySite < <(search4getKeyValue "Steps/$stepID/sSite" | awk -F= '{ printf "%s=%s\n", $2,$3 }')
     mapfile -t patternsPrimaryHost < <(search4getKeyValue "Steps/$stepID/pHost" | awk -F= '{ printf "%s=%s\n", $2,$3 }')
     mapfile -t patternsSecondaryHost < <(search4getKeyValue "Steps/$stepID/sHost" | awk -F= '{ printf "%s=%s\n", $2,$3 }')
-    loopForStatusJson "$stepID" "$repeat"; rc="$?"
+    message "NEXT(): $stepID ($stepName)"
+    loopForStatusJson "$stepID" "$stepName" "$repeat" "$interval"; rc="$?"
     if [[ "$rc" == 0 && "$postAction" != "" ]]; then
         action "$postAction"
     fi
@@ -263,7 +264,9 @@ function checkSequence() {
 
 function loopForStatusJson() {
     local status="$1"
-    local maxLoops="$2"
+    local statusName="$2"
+    local maxLoops="$3"
+    local interval="$4"
     local rc=0
     local loops=0
     local lastFailedTests=""
@@ -285,21 +288,22 @@ function loopForStatusJson() {
         lastFailedTests="$(checkAllKeyValue)"; rc="$?"
         if [ "$rc" == 0 ]; then
             if [ "$verbose" != "1" ]; then
-                printf "\n"  # end the line of dots
+                printf " (loops=%s)\n" "$loops" # end the line of dots
             fi
-            message "STATUS: REACHED STEP $status ####"
+            message "STATUS: REACHED STEP $status ($statusName) ####"
             break
         else
             if [[ "$loops" -ge "$maxLoops"  ]]; then
                 if [ "$verbose" != "1" ]; then
-                    printf "\n"  # end the line of dots
+                    printf " (maxLoops=%s reached)\n" "$maxLoops" # end the line of dots
                 fi
+                message "RESULT: STATUS FAILED STEP $status ($statusName)"
                 message "RESULT: LAST FAILED COMPARES $lastFailedTests"
                 rc=1
                 break;
             fi
         fi
-        sleep 2
+        sleep "$interval"
     done
     return "$rc"
 }
