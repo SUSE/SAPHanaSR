@@ -29,7 +29,12 @@ function init() {
     pHost="$(search4getObject 'Hosts/.*/site="'"$pSite"'"')"
     sSite="$(search4getObject 'Sites/.*/srr="S"')"
     sHost="$(search4getObject 'Hosts/.*/site="'"$sSite"'"')"
-    message "INIT(): pHost=$pHost, pSite=$pSite, sHost=$sHost, sSite=$sSite"
+    #
+    # get sid, mstResource
+    #
+    SID="$(search4getValue 'Tests/'"$testCase"'/sid')"
+    mstResource="$(search4getValue 'Tests/'"$testCase"'/mst')"
+    message "INIT(): SID=$SID (${SID,,}) pHost=$pHost, pSite=$pSite, sHost=$sHost, sSite=$sSite $mstResource"
     logFile="./test.$testCase.$$.txt"
     return 0
 }
@@ -317,29 +322,30 @@ function action {
     local theActionCode="$1"
     case "$theActionCode" in
         ksi ) # kill secondary instance 
-            local sidadm="ha1adm"
+            local sidadm="${SID,,}adm"
             local node="$sHost"
             local rc=0
             message "ACTION: HDB kill-9 on node $node"
-            timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
+            echo "ssh $node su - $sidadm -c HDB kill-9" >&2
+            timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null'; rc="$?"
             message "ACTION: HDB kill-9 on node $node rc=$rc"
             ;;
         kpi ) # kill primary instance 
-            local sidadm="ha1adm"
+            local sidadm="${SID,,}adm"
             local node="$pHost"
             local rc=0
             message "ACTION: HDB kill-9 on node $node"
-            timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
+            timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null'; rc="$?"
             message "ACTION: HDB kill-9 on node $node rc=$rc"
             ;;
         cleanup ) # cleanup cluster resource 
-            local sidadm="ha1adm"
+            local sidadm="${SID,,}adm"
             local node="$pHost"
-            local resource="ms_SAPHanaCon_HA1_HDB00"
+            local resource="$mstResource"
             local rc=0
-            message "ACTION: crm cleanup resource $resource"
-            timeout 10 ssh "$node" 'crm resource cleanup '"$resource"' '; rc="$?"
-            message "ACTION: crm cleanup resource $resource rc=$rc"
+            message "ACTION: crm cleanup resource $mstResource"
+            timeout 10 ssh "$node" 'crm resource cleanup '"$mstResource"' '; rc="$?"
+            message "ACTION: crm cleanup resource $mstResource rc=$rc"
             ;;
         ssn ) # standby secondary node (set node running secondary to standby)
             local node="$sHost"
