@@ -314,33 +314,45 @@ function loopForStatusJson() {
 
 # TODO: to be implemented in the library and the action to be defined in the json file
 function action {
-   local theActionCode="$1"
-   case "$theActionCode" in
-       ksi ) # kill secondary instance 
-           local sidadm="ha1adm"
-           local node="$sHost"
-           local rc=0
-           message "ACTION: HDB kill-9 on node $node"
-           timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
-           message "ACTION: HDB kill-9 on node $node rc=$rc"
-           ;;
-       kpi ) # kill primary instance 
-           local sidadm="ha1adm"
-           local node="$pHost"
-           local rc=0
-           message "ACTION: HDB kill-9 on node $node"
-           timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
-           message "ACTION: HDB kill-9 on node $node rc=$rc"
-           ;;
-      cleanup ) # cleanup cluster resource 
-           local sidadm="ha1adm"
-           local node="$pHost"
-           local resource="ms_SAPHanaCon_HA1_HDB00"
-           local rc=0
-           message "ACTION: crm cleanup resource $resource"
-           timeout 10 ssh "$node" 'crm resource cleanup '"$resource"' '; rc="$?"
-           message "ACTION: crm cleanup resource $resource rc=$rc"
-           ;;
+    local theActionCode="$1"
+    case "$theActionCode" in
+        ksi ) # kill secondary instance 
+            local sidadm="ha1adm"
+            local node="$sHost"
+            local rc=0
+            message "ACTION: HDB kill-9 on node $node"
+            timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
+            message "ACTION: HDB kill-9 on node $node rc=$rc"
+            ;;
+        kpi ) # kill primary instance 
+            local sidadm="ha1adm"
+            local node="$pHost"
+            local rc=0
+            message "ACTION: HDB kill-9 on node $node"
+            timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null' rc="$?"
+            message "ACTION: HDB kill-9 on node $node rc=$rc"
+            ;;
+        cleanup ) # cleanup cluster resource 
+            local sidadm="ha1adm"
+            local node="$pHost"
+            local resource="ms_SAPHanaCon_HA1_HDB00"
+            local rc=0
+            message "ACTION: crm cleanup resource $resource"
+            timeout 10 ssh "$node" 'crm resource cleanup '"$resource"' '; rc="$?"
+            message "ACTION: crm cleanup resource $resource rc=$rc"
+            ;;
+        ssn ) # standby secondary node (set node running secondary to standby)
+            local node="$sHost"
+            message "ACTION: crm node standby $node"
+            timeout 10 ssh "$node" 'crm node standby '"$node"' '; rc="$?"
+            message "ACTION: crm node standby $node rc=$rc"
+            ;;
+        osn ) # online secondary node (set node running secondary to online)
+            local node="$sHost"
+            message "ACTION: crm node online $node"
+            timeout 10 ssh "$node" 'crm node online '"$node"' '; rc="$?"
+            message "ACTION: crm node online $node rc=$rc"
+            ;;
    esac
    return "$rc"
 }
