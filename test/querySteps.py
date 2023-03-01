@@ -13,11 +13,21 @@ def loopCondition(conditions, area, object, key):
 
 testID= data['test'];
 testName= data['name'];
+testSID="SUS"
+testMstResource="mst_SAPHanaCon_{}_HDB00".format(testSID)
+try:
+    testSID=data['sid'];
+    testMstResource=data['mstResource'];
+except:
+    print("info: test {} is missing either sid or mstResource definition".format(testID))
+    
 steps=data['steps']; 
 start=data['start'];
 
 slashIt("Tests",testID,"name",testName)
 slashIt("Tests",testID,"start",start)
+slashIt("Tests",testID,"sid",testSID)
+slashIt("Tests",testID,"mst",testMstResource)
 
 for step in data['steps']:
     try:
@@ -27,7 +37,7 @@ for step in data['steps']:
         stepLoop=step['loop']
         stepIntv=step['wait']
     except:
-        print("step {} missing definitions".format(stepID))
+        print("step {} missing mandatory definitions (step, name, next, loop, wait)".format(stepID))
     try:
         stepPost=step['post']
     except:
