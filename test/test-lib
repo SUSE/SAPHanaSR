@@ -35,12 +35,13 @@ function init() {
     SID="$(search4getValue 'Tests/'"$testCase"'/sid')"
     mstResource="$(search4getValue 'Tests/'"$testCase"'/mst')"
     message "INIT(): SID=$SID (${SID,,}) pHost=$pHost, pSite=$pSite, sHost=$sHost, sSite=$sSite $mstResource"
-    logFile="./test.$testCase.$$.txt"
+    logFile="./$testCase.$$.log.txt"
     return 0
 }
 
 function message() {
     echo "$(date +'%Y-%m-%d %T') $*"
+    echo "$(date +'%Y-%m-%d %T') $*" >>"$logFile"
 }
 
 function storeSAPHanaSR() {
@@ -83,7 +84,7 @@ function search4getValue() {
     local -a results
     mapfile -t results < <(
             for s in "${sapHanaSr[@]}"; do 
-                echo "$s" | awk -F=  '$0 ~ regExp { print $2 }' regExp="$regExp";
+                awk -F=  '$0 ~ regExp { print $2 }' regExp="$regExp" <<<"$s";
             done
         )
     for r in "${results[@]}"; do
@@ -102,7 +103,7 @@ function search4getObject() {
     local -a results
     mapfile -t results < <(
             for s in "${sapHanaSr[@]}"; do 
-                echo "$s" | awk -F'[/=]'  '$0 ~ regExp { print $2 }' regExp="$regExp";
+                awk -F'[/=]'  '$0 ~ regExp { print $2 }' regExp="$regExp" <<<"$s";
             done
         )
     for r in "${results[@]}"; do
@@ -121,7 +122,7 @@ function search4getKeyValue() {
     local -a results
     mapfile -t results < <(
             for s in "${sapHanaSr[@]}"; do 
-                echo "$s" | awk -F'/'  '$0 ~ regExp { print $3 }' regExp="$regExp";
+                awk -F'/'  '$0 ~ regExp { print $3 }' regExp="$regExp" <<<"$s";
             done
         )
     for r in "${results[@]}"; do
@@ -132,7 +133,7 @@ function search4getKeyValue() {
 function checkKeyValue() {
         # purpose: search in given array1 for patterns in array2
         # remark keyValues and patterns are both arrays. Each array member MUST be in the form key=value
-        # output: failed tests - must ONLY output the failed tests, nothing more!!
+        # output: all failed tests with leading 'ft:' at the begin of the line; 'rc:' for return codes 
         local -a keyValues 
         local -a patterns
         local nowPatterns=1 kV p
@@ -159,7 +160,7 @@ function checkKeyValue() {
                 # echo "DBG: ?? $kv ~ $p" >&2
                 vKey="${kV%=*}"; pKey="${p%=*}"
                 if [ "$vKey" == "$pKey" ]; then # if same key, check if we match
-                    echo "$kV" | grep -E -q "$p" && kVFound=0 && break || kVFound=1 && break
+                    grep -E -q "$p" <<<"$kv" && kVFound=0 && break || kVFound=1 && break
                 fi
             done
             case "$kVFound" in
@@ -169,22 +170,25 @@ function checkKeyValue() {
                 1 ) # not matching
                     failedTests=( "${failedTests[@]}" "$purpose: $kV !~ $p" )
                     if [ "$verbose" == "1" ]; then
-                        echo "!!$purpose: $kV !~ $p" >&2
+                        message "!!$purpose: $kV !~ $p"
                     fi
                     rc=1
                     ;;
                 2)  #  
                     failedTests=( "${failedTests[@]}" "$purpose: missing $p" )
                     if [ "$verbose" == "1" ]; then
-                        echo "$purpose: missing $p" >&2
+                        message "$purpose: missing $p" 
                     fi
                     rc=1
                     ;;
             esac
         done
         if [[ "$rc" == 1 ]]; then 
-            echo "${failedTests[@]}"
+            for ft in "${failedTests[@]}"; do
+                echo "ft:$ft"
+            done
         fi
+        echo "rc:$rc"
         return "$rc"
 }
 
@@ -200,23 +204,34 @@ function getAllKeyValue() {
 }
 
 function checkAllKeyValueHelp() {
-    # output: function must just output output by checkKeyValue ...
+    # output: output of checkKeyValue()
     checkKeyValue --purpose=pSite --keyValue "${primarySite[@]}"   --pattern "${patternsPrimarySite[@]}";   
     checkKeyValue --purpose=sSite --keyValue "${secondarySite[@]}" --pattern "${patternsSecondarySite[@]}"; 
     checkKeyValue --purpose=pHost --keyValue "${primaryHost[@]}"   --pattern "${patternsPrimaryHost[@]}";   
     checkKeyValue --purpose=sHost --keyValue "${secondaryHost[@]}" --pattern "${patternsSecondaryHost[@]}";
+    return 0
 }
 
 function checkAllKeyValue() {
-    # output: all failed tests
-    local rc
+    # output: list of failed compairs
+    local rc=0 lrc
     local -a failedTests
-    mapfile -t failedTests < <( checkAllKeyValueHelp )
-    if [[ "${failedTests[*]}" == "" ]]; then
-        rc=0
-    else
+    local -a output
+    mapfile -t output < <( checkAllKeyValueHelp )
+    for out in "${output[@]}"; do
+        case "$out" in
+            ft:* ) # failed-test entry
+                   failedTest=( "${failedTests[@]}" "${out#*:}" )
+                   ;;
+            rc:* ) # return code entry
+                   lrc=${out#*:}
+                   if [[ "$lrc" -gt "$rc" ]]; then
+                       rc="$lrc"    
+                   fi
+        esac
+    done
+    if  [[ "$rc" -gt 0 ]]; then
         echo "${failedTests[@]}"
-        rc=1
     fi
     return "$rc"
 }
@@ -300,8 +315,8 @@ function loopForStatusJson() {
             message "STATUS: REACHED STEP $status ($statusName) ####"
             break
         else
-            message "DEBUG: STATUS STEP $status ($statusName)" >>"$logFile"
-            message "DEBUG: CURRENT FAILED COMPARES $lastFailedTests" >>"$logFile"
+            message "DEBUG: STATUS STEP $status ($statusName)" >/dev/null   # only to logFile
+            message "DEBUG: CURRENT FAILED COMPARES $lastFailedTests" >/dev/null # only to log File
             if [[ "$loops" -ge "$maxLoops"  ]]; then
                 if [ "$verbose" != "1" ]; then
                     printf " (maxLoops=%s reached)\n" "$maxLoops" # end the line of dots
