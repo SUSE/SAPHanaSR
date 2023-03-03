@@ -184,8 +184,10 @@ function checkKeyValue() {
             esac
         done
         if [[ "$rc" == 1 ]]; then 
+            message "DEBUG: checkKeyValue-rc=1" >/dev/null # only for log file
             for ft in "${failedTests[@]}"; do
                 echo "ft:$ft"
+                message "DEBUG: checkKeyValue: ft:$ft" >/dev/null # only for log file
             done
         fi
         echo "rc:$rc"
@@ -221,7 +223,7 @@ function checkAllKeyValue() {
     for out in "${output[@]}"; do
         case "$out" in
             ft:* ) # failed-test entry
-                   failedTest=( "${failedTests[@]}" "${out#*:}" )
+                   failedTests=( "${failedTests[@]}" "${out#*:}" )
                    ;;
             rc:* ) # return code entry
                    lrc=${out#*:}
@@ -358,9 +360,9 @@ function action {
             local node="$pHost"
             local resource="$mstResource"
             local rc=0
-            message "ACTION: crm cleanup resource $mstResource"
-            timeout 10 ssh "$node" 'crm resource cleanup '"$mstResource"' '; rc="$?"
-            message "ACTION: crm cleanup resource $mstResource rc=$rc"
+            message "ACTION: crm cleanup resource $resource"
+            timeout 10 ssh "$node" 'crm resource cleanup '"$resource"' '; rc="$?"
+            message "ACTION: crm cleanup resource $resource rc=$rc"
             ;;
         ssn ) # standby secondary node (set node running secondary to standby)
             local node="$sHost"
