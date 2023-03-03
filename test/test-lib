@@ -16,7 +16,7 @@ function init() {
             --node=* ) node="${1#*=}";;
             --testCase=* ) testCase="${1#*=}";;
             --testFile=* ) testFile="${1#*=}";;
-            --verbose ) verbose=1;; 
+            --verbose ) verbose=1;;
         esac
         shift
     done
@@ -46,7 +46,7 @@ function message() {
 
 function storeSAPHanaSR() {
     # purpose: get all current SAPHanaSR values
-    # params:  node 
+    # params:  node
     # global:  sapHanaSr(w)
     # callout: SAPHanaSR-showAttr
     # output:  -
@@ -62,7 +62,7 @@ function storeSAPHanaSR() {
 
 function loadTests() {
     # purpose: get all test definitions in file
-    # params:  file 
+    # params:  file
     # global:  testDefinition(w)
     # callout: python3 querySteps.py
     # output:  -
@@ -74,7 +74,7 @@ function loadTests() {
 }
 
 function search4getValue() {
-    # purpose: search in sapHanaSr for pattern and return value(s) 
+    # purpose: search in sapHanaSr for pattern and return value(s)
     # params:  reg Exp
     # global:  sapHanaSr(r)
     # callout: -
@@ -83,7 +83,7 @@ function search4getValue() {
     local regExp="$1" s r
     local -a results
     mapfile -t results < <(
-            for s in "${sapHanaSr[@]}"; do 
+            for s in "${sapHanaSr[@]}"; do
                 awk -F=  '$0 ~ regExp { print $2 }' regExp="$regExp" <<<"$s";
             done
         )
@@ -102,7 +102,7 @@ function search4getObject() {
     local regExp="$1" s r
     local -a results
     mapfile -t results < <(
-            for s in "${sapHanaSr[@]}"; do 
+            for s in "${sapHanaSr[@]}"; do
                 awk -F'[/=]'  '$0 ~ regExp { print $2 }' regExp="$regExp" <<<"$s";
             done
         )
@@ -121,7 +121,7 @@ function search4getKeyValue() {
     local regExp="$1" s r
     local -a results
     mapfile -t results < <(
-            for s in "${sapHanaSr[@]}"; do 
+            for s in "${sapHanaSr[@]}"; do
                 awk -F'/'  '$0 ~ regExp { print $3 }' regExp="$regExp" <<<"$s";
             done
         )
@@ -133,8 +133,8 @@ function search4getKeyValue() {
 function checkKeyValue() {
         # purpose: search in given array1 for patterns in array2
         # remark keyValues and patterns are both arrays. Each array member MUST be in the form key=value
-        # output: all failed tests with leading 'ft:' at the begin of the line; 'rc:' for return codes 
-        local -a keyValues 
+        # output: all failed tests with leading 'ft:' at the begin of the line; 'rc:' for return codes
+        local -a keyValues
         local -a patterns
         local nowPatterns=1 kV p
         local rc=0
@@ -174,16 +174,16 @@ function checkKeyValue() {
                     fi
                     rc=1
                     ;;
-                2)  #  
+                2)  #
                     failedTests=( "${failedTests[@]}" "$purpose: missing $p" )
                     if [ "$verbose" == "1" ]; then
-                        message "$purpose: missing $p" 
+                        message "$purpose: missing $p"
                     fi
                     rc=1
                     ;;
             esac
         done
-        if [[ "$rc" == 1 ]]; then 
+        if [[ "$rc" == 1 ]]; then
             for ft in "${failedTests[@]}"; do
                 echo "ft:$ft"
             done
@@ -205,9 +205,9 @@ function getAllKeyValue() {
 
 function checkAllKeyValueHelp() {
     # output: output of checkKeyValue()
-    checkKeyValue --purpose=pSite --keyValue "${primarySite[@]}"   --pattern "${patternsPrimarySite[@]}";   
-    checkKeyValue --purpose=sSite --keyValue "${secondarySite[@]}" --pattern "${patternsSecondarySite[@]}"; 
-    checkKeyValue --purpose=pHost --keyValue "${primaryHost[@]}"   --pattern "${patternsPrimaryHost[@]}";   
+    checkKeyValue --purpose=pSite --keyValue "${primarySite[@]}"   --pattern "${patternsPrimarySite[@]}";
+    checkKeyValue --purpose=sSite --keyValue "${secondarySite[@]}" --pattern "${patternsSecondarySite[@]}";
+    checkKeyValue --purpose=pHost --keyValue "${primaryHost[@]}"   --pattern "${patternsPrimaryHost[@]}";
     checkKeyValue --purpose=sHost --keyValue "${secondaryHost[@]}" --pattern "${patternsSecondaryHost[@]}";
     return 0
 }
@@ -226,7 +226,7 @@ function checkAllKeyValue() {
             rc:* ) # return code entry
                    lrc=${out#*:}
                    if [[ "$lrc" -gt "$rc" ]]; then
-                       rc="$lrc"    
+                       rc="$lrc"
                    fi
         esac
     done
@@ -304,7 +304,7 @@ function loopForStatusJson() {
         getAllKeyValue
         if [ "$verbose" == "1" ]; then
             echo "loops $loops (maxLoops=$maxLoops)" >&2
-        else 
+        else
             printf "." >&2
         fi
         lastFailedTests="$(checkAllKeyValue)"; rc="$?"
@@ -336,7 +336,7 @@ function loopForStatusJson() {
 function action {
     local theActionCode="$1"
     case "$theActionCode" in
-        ksi ) # kill secondary instance 
+        ksi ) # kill secondary instance
             local sidadm="${SID,,}adm"
             local node="$sHost"
             local rc=0
@@ -345,7 +345,7 @@ function action {
             timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null'; rc="$?"
             message "ACTION: HDB kill-9 on node $node rc=$rc"
             ;;
-        kpi ) # kill primary instance 
+        kpi ) # kill primary instance
             local sidadm="${SID,,}adm"
             local node="$pHost"
             local rc=0
@@ -353,7 +353,7 @@ function action {
             timeout 10 ssh "$node" 'su - '"$sidadm"' -c "HDB kill-9" 2>/dev/null 1>/dev/null'; rc="$?"
             message "ACTION: HDB kill-9 on node $node rc=$rc"
             ;;
-        cleanup ) # cleanup cluster resource 
+        cleanup ) # cleanup cluster resource
             local sidadm="${SID,,}adm"
             local node="$pHost"
             local resource="$mstResource"
