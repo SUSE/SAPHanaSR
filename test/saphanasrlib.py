@@ -61,6 +61,7 @@ class saphanasrtest:
             self.remoteNode = args.remoteNode
 
     def insertToArea(self, area, object):
+        """ insert an object dictionary to an area dictionary """
         lSR = self.SR.copy()
         if area in lSR:
             lDic = lSR[area].copy()
@@ -72,6 +73,7 @@ class saphanasrtest:
         self.SR = lSR.copy()
 
     def getObject(self, area, objectName):
+        """ get an onject dictionary inside the area dictionary """
         lSR = self.SR.copy()
         if area in lSR:
             if objectName in lSR[area]:
@@ -82,10 +84,12 @@ class saphanasrtest:
             return None
 
     def createObject(self, objectName, key, val):
+        """ create a key: value dictionary for object objectName """
         lObj = { objectName: { key: val } }
         return lObj
 
     def insertToObject(self, object, key, value):
+        """ insert a key-value pair into the object dictionary """
         lObj = object
         lDic = { key: value }
         lObj.update(lDic)
@@ -168,6 +172,7 @@ class saphanasrtest:
             self.testData = json.load(f)
 
     def runChecks(self, checks, areaName, objectName ):
+        """ run all checks for area and object """
         lSR = self.SR
         checkResult = -1
         for c in checks:
@@ -208,6 +213,7 @@ class saphanasrtest:
         return checkResult
 
     def processStep(self, step):
+        """ process a single step including otional loops """
         stepID = step['step']
         stepName = step['name']
         stepNext = step['next']
@@ -244,6 +250,47 @@ class saphanasrtest:
             """
             
             """ TODO add also pHost and sHost """
+            if 'pSite' in step:
+                checks = step['pSite']
+                #print("checks: {}".format(checks))
+                topolo = self.topolo
+                #print("topolo: {}".format(topolo))
+                if 'pSite' in topolo:
+                    site = topolo['pSite']
+                    rcChecks = self.runChecks(checks, 'Sites', site)
+                    if processResult < rcChecks:
+                        processResult = rcChecks
+            if 'sSite' in step:
+                checks = step['sSite']
+                #print("checks: {}".format(checks))
+                topolo = self.topolo
+                #print("topolo: {}".format(topolo))
+                if 'sSite' in topolo:
+                    site = topolo['sSite']
+                    rcChecks = self.runChecks(checks, 'Sites', site)
+                    if processResult < rcChecks:
+                        processResult = rcChecks
+            if 'pHost' in step:
+                checks = step['pHost']
+                #print("checks: {}".format(checks))
+                topolo = self.topolo
+                #print("topolo: {}".format(topolo))
+                if 'pHost' in topolo:
+                    host = topolo['pHost']
+                    rcChecks = self.runChecks(checks, 'Hosts', host)
+                    if processResult < rcChecks:
+                        processResult = rcChecks
+            if 'sHost' in step:
+                checks = step['sHost']
+                #print("checks: {}".format(checks))
+                topolo = self.topolo
+                #print("topolo: {}".format(topolo))
+                if 'sHost' in topolo:
+                    host = topolo['sHost']
+                    rcChecks = self.runChecks(checks, 'Hosts', host)
+                    if processResult < rcChecks:
+                        processResult = rcChecks
+
             loops = loops + 1
             if processResult == 0:
                 self.action(stepAction)
@@ -253,6 +300,7 @@ class saphanasrtest:
         return processResult
 
     def processSteps(self):
+        """ process a seria of steps till next-step is "END" or there is no next-step """
         testStart = self.testData['start']
         step=self.getStep(testStart)
         stepStep = step['step']
@@ -273,6 +321,7 @@ class saphanasrtest:
                 break
 
     def processTest(self):
+        """ process the entire test defined in testData """
         testID = self.testData['test']
         testName = self.testData['name']
         testStart = self.testData['start']
@@ -280,6 +329,7 @@ class saphanasrtest:
         self.processSteps()
 
     def getStep(self, stepName):
+        """ query for a given step with stepName in testData """
         step = None
         for s in self.testData['steps']:
             if s['step'] == stepName:
@@ -288,6 +338,7 @@ class saphanasrtest:
         return step
 
     def action(self, actionName):
+        """ perform a given action """
         remote = self.remoteNode
         aRc = 1
         if actionName == "":
@@ -312,6 +363,7 @@ class saphanasrtest:
             self.message("ACTFAIL: action {} at {} rc={}".format(actionName, remote, aRc))
 
     def doSSH(self, remoteHost, cmdArray):
+        """ ssh remote cmd exectution """
         if remoteHost:
             Connection = connection.get('ssh')
             remConn = Connection(remoteHost)
