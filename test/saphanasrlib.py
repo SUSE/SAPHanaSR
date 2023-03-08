@@ -1,9 +1,8 @@
-""" saphanasrtest.py """
 """
-# saphanasrtest.py
-# Author:       Fabian Herschel, Mar 2023
-# License:      GNU General Public License (GPL)
-# Copyright:    (c) 2023 SUSE LLC
+ saphanasrtest.py
+ Author:       Fabian Herschel, Mar 2023
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2023 SUSE LLC
 """
 
 
@@ -20,25 +19,34 @@ from remoto import connection
 from remoto.process import check
 
 class saphanasrtest:
+    """
+    class to check SAP HANA cluster during tests
+    """
 
     def message(self,msg):
+        """
+        message with formatted timestamp
+        """
         dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
         print("{} {}".format(dateTime, msg))
 
     def __init__(self, *args):
+        """
+        constructor
+        """
         self.message("INIT():")
         self.SR = {}
         self.testData = {}
         """ TODO: set testFile via cli-option (e.g. --testFile=xxx) """
         #self.testFile = "json/kpi.json"
         self.testFile = "-"
-        """ old style checks """
+        """ old topology attributes """
         self.pSite = None
         self.sSite = None
         self.sHost = None
         self.pHost = None
-        """ new style checks """
-        # self.checks={ pSite: [], sSite: [], pHost: [], sHost: [] )
+        """ new topology attributes """
+        self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.remoteNode = None
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
@@ -222,6 +230,7 @@ class saphanasrtest:
             processResult = -1
             self.readSAPHanaSR()
             """ TODO: alternative store checks in self.checks['pSite'] ( 'pSite', 'sSite', ...) to allow to move that redundant code to a method """
+            """
             if 'pSite' in step:
                 stepPSite = step['pSite']
                 rcPsite = self.runChecks(stepPSite, 'Sites', self.pSite )
@@ -232,6 +241,8 @@ class saphanasrtest:
                 rcSsite = self.runChecks(stepSsite, 'Sites', self.sSite )
                 if processResult < rcSsite:
                     processResult = rcSsite
+            """
+            
             """ TODO add also pHost and sHost """
             loops = loops + 1
             if processResult == 0:
@@ -313,10 +324,18 @@ class saphanasrtest:
 if __name__ == "__main__":
     test01 = saphanasrtest()
     test01.readSAPHanaSR()
+    """ old style checks """
     test01.pSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')
     test01.sSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')
     test01.pHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.pSite)
     test01.sHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.sSite)
+    """ new style checks """
+    test01.topolo = {  'pSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P'),
+                       'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S'),
+                       'pHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.pSite),
+                       'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.sSite)
+    }
+    print(test01.topolo)
     test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.pSite, test01.sSite, test01.pHost, test01.sHost))
     #test01.prettyPrint(test01.SR,0)
     test01.readTestFile()
