@@ -32,10 +32,13 @@ class saphanasrtest:
         """ TODO: set testFile via cli-option (e.g. --testFile=xxx) """
         #self.testFile = "json/kpi.json"
         self.testFile = "-"
+        """ old style checks """
         self.pSite = None
         self.sSite = None
         self.sHost = None
         self.pHost = None
+        """ new style checks """
+        # self.checks={ pSite: [], sSite: [], pHost: [], sHost: [] )
         self.remoteNode = None
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
@@ -64,7 +67,7 @@ class saphanasrtest:
         lSR = self.SR.copy()
         if area in lSR:
             if objectName in lSR[area]:
-                return lSR[area][objectName] 
+                return lSR[area][objectName]
             else:
                 return None
         else:
@@ -86,12 +89,12 @@ class saphanasrtest:
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = [ 'ssh', self.remoteNode, 'SAPHanaSR-showAttr', '--format=script'  ]
         self.SR={}
-        self.message("CALL(): {}".format(cmd)) 
+        # self.message("CALL(): {}".format(cmd))
         result = subprocess.run(cmd, stdout=subprocess.PIPE)
         resultStr = result.stdout.decode()
-        
-        #print(type(result.stdout)) 
-        #print((result.stdout)) 
+
+        #print(type(result.stdout))
+        #print((result.stdout))
         for line in resultStr.splitlines():
             #print("PRE SR: {}".format(self.SR))
             # <area>/<object>/<key-value>
@@ -218,6 +221,7 @@ class saphanasrtest:
             print("loop: {}".format(loops))
             processResult = -1
             self.readSAPHanaSR()
+            """ TODO: alternative store checks in self.checks['pSite'] ( 'pSite', 'sSite', ...) to allow to move that redundant code to a method """
             if 'pSite' in step:
                 stepPSite = step['pSite']
                 rcPsite = self.runChecks(stepPSite, 'Sites', self.pSite )
@@ -267,7 +271,7 @@ class saphanasrtest:
     def getStep(self, stepName):
         step = None
         for s in self.testData['steps']:
-            if s['step'] == stepName: 
+            if s['step'] == stepName:
                 step = s
                 break
         return step
@@ -280,6 +284,7 @@ class saphanasrtest:
         elif actionName == "ksi":
             remote = self.sHost
             self.message("ACTION: {} at {}".format(actionName, remote))
+            """ TODO: get sidadm from testData """
             aRc = self.doSSH(self.sHost, ['su', '-', 'ha1adm', 'HDB', 'kill-9'])
         elif actionName == "kpi":
             kpi = 1
@@ -288,7 +293,10 @@ class saphanasrtest:
         elif actionName == "spn":
             spn = 1
         elif actionName == "cleanup":
-            cleanup = 1
+            remote = self.remoteNode
+            self.message("ACTION: {} at {}".format(actionName, remote))
+            """ TODO: get resource name from testData """
+            aRc = self.doSSH(self.sHost, ['crm', 'resource', 'cleanup', 'ms_SAPHanaCon_HA1_HDB00'])
         if aRc != 0:
             self.message("ACTFAIL: action {} at {} rc={}".format(actionName, remote, aRc))
 
