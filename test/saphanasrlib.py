@@ -232,7 +232,7 @@ class saphanasrtest:
             stepAction = ""
         self.message("PROC: stepID={} stepName='{}' stepNext={} stepAction={}".format(stepID, stepName, stepNext, stepAction))
         while loops <= maxLoops:
-            print("loop: {}".format(loops))
+            print(".", end='', flush=True)
             processResult = -1
             self.readSAPHanaSR()
             """ TODO: alternative store checks in self.checks['pSite'] ( 'pSite', 'sSite', ...) to allow to move that redundant code to a method """
@@ -248,13 +248,11 @@ class saphanasrtest:
                 if processResult < rcSsite:
                     processResult = rcSsite
             """
-            
+ 
             """ TODO add also pHost and sHost """
             if 'pSite' in step:
                 checks = step['pSite']
-                #print("checks: {}".format(checks))
                 topolo = self.topolo
-                #print("topolo: {}".format(topolo))
                 if 'pSite' in topolo:
                     site = topolo['pSite']
                     rcChecks = self.runChecks(checks, 'Sites', site)
@@ -262,9 +260,7 @@ class saphanasrtest:
                         processResult = rcChecks
             if 'sSite' in step:
                 checks = step['sSite']
-                #print("checks: {}".format(checks))
                 topolo = self.topolo
-                #print("topolo: {}".format(topolo))
                 if 'sSite' in topolo:
                     site = topolo['sSite']
                     rcChecks = self.runChecks(checks, 'Sites', site)
@@ -272,9 +268,7 @@ class saphanasrtest:
                         processResult = rcChecks
             if 'pHost' in step:
                 checks = step['pHost']
-                #print("checks: {}".format(checks))
                 topolo = self.topolo
-                #print("topolo: {}".format(topolo))
                 if 'pHost' in topolo:
                     host = topolo['pHost']
                     rcChecks = self.runChecks(checks, 'Hosts', host)
@@ -282,9 +276,7 @@ class saphanasrtest:
                         processResult = rcChecks
             if 'sHost' in step:
                 checks = step['sHost']
-                #print("checks: {}".format(checks))
                 topolo = self.topolo
-                #print("topolo: {}".format(topolo))
                 if 'sHost' in topolo:
                     host = topolo['sHost']
                     rcChecks = self.runChecks(checks, 'Hosts', host)
@@ -293,10 +285,13 @@ class saphanasrtest:
 
             loops = loops + 1
             if processResult == 0:
-                self.action(stepAction)
                 break
             else:
                 time.sleep(wait)
+        print(" (loops: {})".format(loops))
+        if processResult == 0:
+            aRc = self.action(stepAction)
+            print(" (rc={})".format(aRc))
         return processResult
 
     def processSteps(self):
@@ -347,7 +342,8 @@ class saphanasrtest:
             remote = self.sHost
             self.message("ACTION: {} at {}".format(actionName, remote))
             """ TODO: get sidadm from testData """
-            aRc = self.doSSH(self.sHost, ['su', '-', 'ha1adm', 'HDB', 'kill-9'])
+            cmd = "su - ha1adm HDB kill-9"
+            aRc = self.doSSH(self.sHost, cmd.split(" "))
         elif actionName == "kpi":
             kpi = 1
         elif actionName == "ssn":
@@ -358,9 +354,11 @@ class saphanasrtest:
             remote = self.remoteNode
             self.message("ACTION: {} at {}".format(actionName, remote))
             """ TODO: get resource name from testData """
-            aRc = self.doSSH(self.sHost, ['crm', 'resource', 'cleanup', 'ms_SAPHanaCon_HA1_HDB00'])
+            cmd = "crm resource cleanup ms_SAPHanaCon_HA1_HDB00"
+            aRc = self.doSSH(self.sHost, cmd.split(" "))
         if aRc != 0:
             self.message("ACTFAIL: action {} at {} rc={}".format(actionName, remote, aRc))
+        return(aRc)
 
     def doSSH(self, remoteHost, cmdArray):
         """ ssh remote cmd exectution """
@@ -387,8 +385,7 @@ if __name__ == "__main__":
                        'pHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.pSite),
                        'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.sSite)
     }
-    print(test01.topolo)
-    test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.pSite, test01.sSite, test01.pHost, test01.sHost))
+    test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
     #test01.prettyPrint(test01.SR,0)
     test01.readTestFile()
     # print("test: {}".format(test01.testData))
