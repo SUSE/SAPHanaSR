@@ -99,10 +99,10 @@ class saphanasrtest:
         """ method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary structure representing the data """
         """ TODO: use the 'real' program - maybe fallback to helpSAPHanaSR-showAttr for local testing """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
-        cmd = [ 'ssh', self.remoteNode, 'SAPHanaSR-showAttr', '--format=script'  ]
+        cmd = "ssh {} SAPHanaSR-showAttr --format=script".format(self.remoteNode)
         self.SR={}
-        # self.message("CALL(): {}".format(cmd))
-        result = subprocess.run(cmd, stdout=subprocess.PIPE)
+        self.message("CALL(): {}".format(cmd))
+        result = subprocess.run(cmd.split(" "), stdout=subprocess.PIPE)
         resultStr = result.stdout.decode()
 
         #print(type(result.stdout))
