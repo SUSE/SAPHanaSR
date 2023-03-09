@@ -5,18 +5,14 @@
  Copyright:    (c) 2023 SUSE LLC
 """
 
-
 import time
 import subprocess
 import re
 import sys, json
 import argparse
 
-""" for ssh remote calls this module uses remoto """
-
-from remoto.process import run
-from remoto import connection
-from remoto.process import check
+""" for ssh remote calls this module uses paramiko """
+from paramiko import SSHClient
 
 class saphanasrtest:
     """
@@ -37,15 +33,7 @@ class saphanasrtest:
         self.message("INIT():")
         self.SR = {}
         self.testData = {}
-        """ TODO: set testFile via cli-option (e.g. --testFile=xxx) """
-        #self.testFile = "json/kpi.json"
         self.testFile = "-"
-        """ old topology attributes """
-        self.pSite = None
-        self.sSite = None
-        self.sHost = None
-        self.pHost = None
-        """ new topology attributes """
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.remoteNode = None
         parser = argparse.ArgumentParser()
@@ -97,39 +85,26 @@ class saphanasrtest:
 
     def readSAPHanaSR(self):
         """ method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary structure representing the data """
-        """ TODO: use the 'real' program - maybe fallback to helpSAPHanaSR-showAttr for local testing """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
-        cmd = "ssh {} SAPHanaSR-showAttr --format=script".format(self.remoteNode)
+        cmd = "SAPHanaSR-showAttr --format=script"
         self.SR={}
-        self.message("CALL(): {}".format(cmd))
-        result = subprocess.run(cmd.split(" "), stdout=subprocess.PIPE)
-        resultStr = result.stdout.decode()
-
-        #print(type(result.stdout))
-        #print((result.stdout))
-        for line in resultStr.splitlines():
-            #print("PRE SR: {}".format(self.SR))
-            # <area>/<object>/<key-value>
+        resultSR = self.doSSH(self.remoteNode, "root", cmd)
+        for line in resultSR[0].splitlines():
+            """ match and split: <area>/<object>/<key-value> """
             mo = re.search("(.*)/(.*)/(.*)", line)
             area = mo.group(1)
             objectName = mo.group(2)
             kV = mo.group(3)
-            # <key>="<value>"
+            """ match and split <key>="<value>" """
             mo = re.search("(.*)=\"(.*)\"", kV)
             key = mo.group(1)
             val = mo.group(2)
-            # print("area='{}' object='{}' kV='{}' key='{}' val='{}'\n".format(area, objectName, kV, key, val))
             lObj=self.getObject(area, objectName)
-            #lObj=None
             if lObj:
-                # print("ADDTO lObj: {}".format(lObj))
                 self.insertToObject(lObj,key,val)
-                # print("ADDED: {}".format(self.getObject(area, objectName)))
             else:
                 lObj = self.createObject(objectName, key, val)
-                # print("CREATE lObj: {}".format(lObj))
                 self.insertToArea(area, lObj)
-            # print("POST SR: {}".format(self.SR))
         return 0
 
     def searchInAreaForObjectByKeyValue(self, areaName, key, value):
@@ -142,7 +117,6 @@ class saphanasrtest:
                 lObj = lArea[k]
                 if key in lObj:
                     if lObj[key] == value:
-                        #print("DBG: area={} k={} key={} valueSearch={} valueFound={}".format(areaName, k, key, value, lObj[key]))
                         objectName = k
                         """ currently we only return the first match """
                         break
@@ -181,35 +155,27 @@ class saphanasrtest:
             cKey = mo.group(1)
             cComp = mo.group(2)
             cRegExp = mo.group(3)
-            # print("check: {}".format(c))
             if areaName in lSR:
                 lArea = lSR[areaName]
                 if objectName in lArea:
                     lObj = lArea[objectName]
-                    #print("DBG: lObj: {}".format(lObj))
                     if cKey in lObj:
                         lVal = lObj[cKey]
                         if re.search(cRegExp, lVal):
-                            #self.message("MATCH: {}={} matched {}={}".format(cKey, lVal, cKey, cRegExp))
                             if checkResult <0:
                                 checkResult = 0
                         else:
-                            #self.message("NO-MATCH: {}={} does not match {}={}".format(cKey, lVal, cKey, cRegExp))
                             if checkResult <1:
                                 checkResult = 1
                     else:
-                        #self.message("MISSING: entry {} missing in SR".format(cKey))
                         if checkResult <2:
                             checkResult = 2
                 else:
-                    #self.message("MISSING: object {} missing in SR".format(objectName))
                     if checkResult <2:
                         checkResult = 2
             else:
-                #self.message("MISSING: area {} missing in SR".format(areaName))
                 if checkResult <2:
                     checkResult = 2
-            #print("DBG: checkResult={}".format(checkResult))
         return checkResult
 
     def processStep(self, step):
@@ -235,21 +201,6 @@ class saphanasrtest:
             print(".", end='', flush=True)
             processResult = -1
             self.readSAPHanaSR()
-            """ TODO: alternative store checks in self.checks['pSite'] ( 'pSite', 'sSite', ...) to allow to move that redundant code to a method """
-            """
-            if 'pSite' in step:
-                stepPSite = step['pSite']
-                rcPsite = self.runChecks(stepPSite, 'Sites', self.pSite )
-                if processResult < rcPsite:
-                    processResult = rcPsite
-            if 'sSite' in step:
-                stepSsite = step['sSite']
-                rcSsite = self.runChecks(stepSsite, 'Sites', self.sSite )
-                if processResult < rcSsite:
-                    processResult = rcSsite
-            """
- 
-            """ TODO add also pHost and sHost """
             if 'pSite' in step:
                 checks = step['pSite']
                 topolo = self.topolo
@@ -339,11 +290,12 @@ class saphanasrtest:
         if actionName == "":
             aRc = 0
         elif actionName == "ksi":
-            remote = self.sHost
+            remote = self.topolo['sHost']
             self.message("ACTION: {} at {}".format(actionName, remote))
             """ TODO: get sidadm from testData """
             cmd = "su - ha1adm HDB kill-9"
-            aRc = self.doSSH(self.sHost, cmd.split(" "))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
         elif actionName == "kpi":
             kpi = 1
         elif actionName == "ssn":
@@ -355,38 +307,40 @@ class saphanasrtest:
             self.message("ACTION: {} at {}".format(actionName, remote))
             """ TODO: get resource name from testData """
             cmd = "crm resource cleanup ms_SAPHanaCon_HA1_HDB00"
-            aRc = self.doSSH(self.sHost, cmd.split(" "))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
         if aRc != 0:
             self.message("ACTFAIL: action {} at {} rc={}".format(actionName, remote, aRc))
         return(aRc)
 
-    def doSSH(self, remoteHost, cmdArray):
-        """ ssh remote cmd exectution """
+    def doSSH(self, remoteHost, user, cmd):
+        """ 
+        ssh remote cmd exectution 
+        returns a tuple ( stdout-string, stderr, string, rc )
+        """
         if remoteHost:
-            Connection = connection.get('ssh')
-            remConn = Connection(remoteHost)
-            checkResult=check(remConn, cmdArray)
-            rc = checkResult[2]
+            sshCl = SSHClient() 
+            sshCl.load_system_host_keys()
+            sshCl.connect(remoteHost, username=user)
+            (cmdStdin, cmdStdout, cmdStderr) = sshCl.exec_command(cmd)
+            resultStdout = cmdStdout.read().decode("utf8")
+            resultStderr = cmdStderr.read().decode("utf8")
+            resultRc = cmdStdout.channel.recv_exit_status()
+            checkResult = (resultStdout, resultStderr, resultRc)
         else:
-            rc = 20000
-        return rc
+            checkResult=("", "", 20000)
+        return(checkResult)
 
 if __name__ == "__main__":
     test01 = saphanasrtest()
     test01.readSAPHanaSR()
     """ old style checks """
-    test01.pSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')
-    test01.sSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')
-    test01.pHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.pSite)
-    test01.sHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.sSite)
+    pSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')
+    sSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')
+    pHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', pSite)
+    sHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', sSite)
     """ new style checks """
-    test01.topolo = {  'pSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P'),
-                       'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S'),
-                       'pHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.pSite),
-                       'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.sSite)
-    }
+    test01.topolo = { 'pSite': pSite, 'sSite': sSite, 'pHost': pHost, 'sHost': sHost }
     test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
-    #test01.prettyPrint(test01.SR,0)
     test01.readTestFile()
-    # print("test: {}".format(test01.testData))
     test01.processTest()
