@@ -18,6 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
+    version = "0.1.20230310.1427"
 
     def message(self,msg):
         """
@@ -27,13 +28,13 @@ class saphanasrtest:
         """ TODO: specify, if message should be written to stdout, stderr and/or log file """
         dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
         msgArr = msg.split(" ")
-        print("{0} {1:<9s} {2}".format(dateTime, msgArr[0], msgArr[1:]))
+        print("{0} {1:<9s} {2}".format(dateTime, msgArr[0], " ".join(msgArr[1:])))
 
     def __init__(self, *args):
         """
         constructor
         """
-        self.message("INIT():")
+        self.message("INIT(): {}".format(self.version))
         self.SR = {}
         self.testData = {}
         self.testFile = "-"
@@ -247,10 +248,10 @@ class saphanasrtest:
                 break
             else:
                 time.sleep(wait)
-        print(" (loops: {})".format(loops))
+        print("")
+        self.message("STATUS: step {} checked in {} loops)".format(stepID, loops))
         if processResult == 0:
             aRc = self.action(stepAction)
-            print(" (rc={})".format(aRc))
         return processResult
 
     def processSteps(self):
@@ -294,56 +295,43 @@ class saphanasrtest:
     def action(self, actionName):
         """ perform a given action """
         remote = self.remoteNode
+        cmd = ""
         aRc = 1
         if actionName == "":
             aRc = 0
         elif actionName == "ksi":
+            """ TODO: get sidadm from testData """
             remote = self.topolo['sHost']
-            """ TODO: get sidadm from testData """
             cmd = "su - ha1adm HDB kill-9"
-            self.message("ACTION: {} at {}: {}".format(actionName, remote))
-            aResult = self.doSSH(remote, "root", cmd)
-            aRc = aResult[2]
         elif actionName == "kpi":
-            remote = self.topolo['pHost']
             """ TODO: get sidadm from testData """
+            remote = self.topolo['pHost']
             cmd = "su - ha1adm HDB kill-9"
-            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.doSSH(remote, "root", cmd)
-            aRc = aResult[2]
         elif actionName == "ssn":
             remote = self.remoteNode
             cmd = "crm node standby {}".format(self.topolo['sHost'])
-            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.doSSH(remote, "root", cmd)
-            aRc = aResult[2]
         elif actionName == "osn":
             remote = self.remoteNode
             cmd = "crm node online {}".format(self.topolo['sHost'])
-            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.doSSH(remote, "root", cmd)
-            aRc = aResult[2]
         elif actionName == "spn":
             remote = self.remoteNode
             cmd = "crm node standby {}".format(self.topolo['pHost'])
-            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.doSSH(remote, "root", cmd)
-            aRc = aResult[2]
         elif actionName == "opn":
             remote = self.remoteNode
             cmd = "crm node online {}".format(self.topolo['pHost'])
-            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.doSSH(remote, "root", cmd)
-            aRc = aResult[2]
         elif actionName == "cleanup":
-            remote = self.remoteNode
             """ TODO: get resource name from testData """
+            remote = self.remoteNode
             cmd = "crm resource cleanup ms_SAPHanaCon_HA1_HDB00"
+        elif actionName == "sleep":
+            """ TODO: get sleep time from testData """
+            remote = self.remoteNode
+            cmd = "sleep 60"
+        if cmd != "":
             self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
             aResult = self.doSSH(remote, "root", cmd)
             aRc = aResult[2]
-        if aRc != 0:
-            self.message("ACTFAIL: action {} at {} rc={}".format(actionName, remote, aRc))
+            self.message("ACTION: {} at {}: {} rc={}".format(actionName, remote, cmd, aRc))
         return(aRc)
 
     def doSSH(self, remoteHost, user, cmd):
