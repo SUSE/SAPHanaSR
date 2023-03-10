@@ -291,22 +291,47 @@ class saphanasrtest:
             aRc = 0
         elif actionName == "ksi":
             remote = self.topolo['sHost']
-            self.message("ACTION: {} at {}".format(actionName, remote))
             """ TODO: get sidadm from testData """
             cmd = "su - ha1adm HDB kill-9"
+            self.message("ACTION: {} at {}: {}".format(actionName, remote))
             aResult = self.doSSH(remote, "root", cmd)
             aRc = aResult[2]
         elif actionName == "kpi":
-            kpi = 1
+            remote = self.topolo['pHost']
+            """ TODO: get sidadm from testData """
+            cmd = "su - ha1adm HDB kill-9"
+            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
         elif actionName == "ssn":
-            ssn = 1
+            remote = self.remoteNode
+            cmd = "crm node standby {}".format(self.topolo['sHost'])
+            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
+        elif actionName == "osn":
+            remote = self.remoteNode
+            cmd = "crm node online {}".format(self.topolo['sHost'])
+            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
         elif actionName == "spn":
-            spn = 1
+            remote = self.remoteNode
+            cmd = "crm node standby {}".format(self.topolo['pHost'])
+            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
+        elif actionName == "opn":
+            remote = self.remoteNode
+            cmd = "crm node online {}".format(self.topolo['pHost'])
+            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
+            aResult = self.doSSH(remote, "root", cmd)
+            aRc = aResult[2]
         elif actionName == "cleanup":
             remote = self.remoteNode
-            self.message("ACTION: {} at {}".format(actionName, remote))
             """ TODO: get resource name from testData """
             cmd = "crm resource cleanup ms_SAPHanaCon_HA1_HDB00"
+            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
             aResult = self.doSSH(remote, "root", cmd)
             aRc = aResult[2]
         if aRc != 0:
