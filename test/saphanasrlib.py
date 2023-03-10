@@ -23,8 +23,11 @@ class saphanasrtest:
         """
         message with formatted timestamp
         """
+        """ TODO: field-with for first word (like TEST:, ACTION: and others) """
+        """ TODO: specify, if message should be written to stdout, stderr and/or log file """
         dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
-        print("{} {}".format(dateTime, msg))
+        msgArr = msg.split(" ")
+        print("{0} {1:<9s} {2}".format(dateTime, msgArr[0], msgArr[1:]))
 
     def __init__(self, *args):
         """
