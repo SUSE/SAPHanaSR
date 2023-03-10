@@ -354,18 +354,16 @@ class saphanasrtest:
 
 if __name__ == "__main__":
     test01 = saphanasrtest()
-    test01.readSAPHanaSR()
-    """ old style checks """
-    pSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')
-    sSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')
-    pHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', pSite)
-    sHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', sSite)
-    """ new style checks """
-    test01.topolo = { 'pSite': pSite, 'sSite': sSite, 'pHost': pHost, 'sHost': sHost }
-    test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
-    test01.readTestFile()
     test01.count = 1
     while test01.count <= test01.repeat:
+        test01.readSAPHanaSR()
+        pSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')
+        sSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')
+        pHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', pSite)
+        sHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', sSite)
+        test01.topolo = { 'pSite': pSite, 'sSite': sSite, 'pHost': pHost, 'sHost': sHost }
+        test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
+        test01.readTestFile()
         if test01.repeat != 1:
             testID = test01.testData['test']
             test01.message("TEST: {} testNr={} ######".format(testID, test01.count))
