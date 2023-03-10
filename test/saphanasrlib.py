@@ -18,7 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230310.1427"
+    version = "0.1.20230310.1719"
 
     def message(self,msg):
         """
@@ -280,7 +280,9 @@ class saphanasrtest:
         testID = self.testData['test']
         testName = self.testData['name']
         testStart = self.testData['start']
-        self.message("PROC: testID={} testName={} testStart={}".format(testID, testName, testStart))
+        testSID = self.testData['sid']
+        testResource = self.testData['mstResource']
+        self.message("PROC: testID={} testName={} testStart={} testSID={}".format(testID, testName, testStart, testSID, testResource))
         self.processSteps()
 
     def getStep(self, stepName):
@@ -297,16 +299,18 @@ class saphanasrtest:
         remote = self.remoteNode
         cmd = ""
         aRc = 1
+        resource = "ms_SAPHanaCon_HA1_HDB00"
+        testSID = self.testData['sid']
         if actionName == "":
             aRc = 0
         elif actionName == "ksi":
             """ TODO: get sidadm from testData """
             remote = self.topolo['sHost']
-            cmd = "su - ha1adm HDB kill-9"
+            cmd = "su - {}adm HDB kill-9".format(testDID.lower())
         elif actionName == "kpi":
             """ TODO: get sidadm from testData """
             remote = self.topolo['pHost']
-            cmd = "su - ha1adm HDB kill-9"
+            cmd = "su - {}adm HDB kill-9".format(testDID.lower())
         elif actionName == "ssn":
             remote = self.remoteNode
             cmd = "crm node standby {}".format(self.topolo['sHost'])
