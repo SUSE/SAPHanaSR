@@ -34,19 +34,24 @@ class saphanasrtest:
         self.SR = {}
         self.testData = {}
         self.testFile = "-"
+        self.repeat = 1
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.remoteNode = None
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
         parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
         parser.add_argument("--simulate", help="only simulate, dont call actions", action="store_true")
+        parser.add_argument("--repeat", help="how often to repeat the test")
         args = parser.parse_args()
         if args.testFile:
-            print("testFile: {}".format(args.testFile))
+            self.message("PARAM: testFile: {}".format(args.testFile))
             self.testFile = args.testFile
         if args.remoteNode:
-            print("remoteNode: {}".format(args.remoteNode))
+            self.message("PARAM: remoteNode: {}".format(args.remoteNode))
             self.remoteNode = args.remoteNode
+        if args.repeat:
+            self.message("PARAM: repeat: {}".format(args.repeat))
+            self.repeat = int(args.repeat)
 
     def insertToArea(self, area, object):
         """ insert an object dictionary to an area dictionary """
@@ -368,4 +373,10 @@ if __name__ == "__main__":
     test01.topolo = { 'pSite': pSite, 'sSite': sSite, 'pHost': pHost, 'sHost': sHost }
     test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
     test01.readTestFile()
-    test01.processTest()
+    test01.count = 1
+    while test01.count <= test01.repeat:
+        if test01.repeat != 1:
+            testID = test01.testData['test']
+            test01.message("TEST: {} testNr={} ######".format(testID, test01.count))
+        test01.processTest()
+        test01.count += 1
