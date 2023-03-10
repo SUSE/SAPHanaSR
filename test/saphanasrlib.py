@@ -299,18 +299,19 @@ class saphanasrtest:
         remote = self.remoteNode
         cmd = ""
         aRc = 1
-        resource = "ms_SAPHanaCon_HA1_HDB00"
+        # resource = "ms_SAPHanaCon_HA1_HDB00"
         testSID = self.testData['sid']
+        resource = self.testData['mstResource']
         if actionName == "":
             aRc = 0
         elif actionName == "ksi":
             """ TODO: get sidadm from testData """
             remote = self.topolo['sHost']
-            cmd = "su - {}adm HDB kill-9".format(testDID.lower())
+            cmd = "su - {}adm HDB kill-9".format(testSID.lower())
         elif actionName == "kpi":
             """ TODO: get sidadm from testData """
             remote = self.topolo['pHost']
-            cmd = "su - {}adm HDB kill-9".format(testDID.lower())
+            cmd = "su - {}adm HDB kill-9".format(testSID.lower())
         elif actionName == "ssn":
             remote = self.remoteNode
             cmd = "crm node standby {}".format(self.topolo['sHost'])
@@ -326,7 +327,7 @@ class saphanasrtest:
         elif actionName == "cleanup":
             """ TODO: get resource name from testData """
             remote = self.remoteNode
-            cmd = "crm resource cleanup ms_SAPHanaCon_HA1_HDB00"
+            cmd = "crm resource cleanup {}".format(resource)
         elif actionName == "sleep":
             """ TODO: get sleep time from testData """
             remote = self.remoteNode
