@@ -353,6 +353,7 @@ class saphanasrtest:
             resultStderr = cmdStderr.read().decode("utf8")
             resultRc = cmdStdout.channel.recv_exit_status()
             checkResult = (resultStdout, resultStderr, resultRc)
+            sshCl.close()
         else:
             checkResult=("", "", 20000)
         return(checkResult)
