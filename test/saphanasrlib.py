@@ -18,7 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230310.1719"
+    version = "0.1.20230313.1257"
 
     def message(self,msg):
         """
@@ -164,27 +164,22 @@ class saphanasrtest:
             cKey = mo.group(1)
             cComp = mo.group(2)
             cRegExp = mo.group(3)
+            found = 0
             if areaName in lSR:
                 lArea = lSR[areaName]
                 if objectName in lArea:
                     lObj = lArea[objectName]
                     if cKey in lObj:
                         lVal = lObj[cKey]
+                        found = 1
                         if re.search(cRegExp, lVal):
                             if checkResult <0:
                                 checkResult = 0
                         else:
                             if checkResult <1:
                                 checkResult = 1
-                    else:
-                        if checkResult <2:
-                            checkResult = 2
-                else:
-                    if checkResult <2:
-                        checkResult = 2
-            else:
-                if checkResult <2:
-                    checkResult = 2
+            if (found == 0) and (checkResult < 2 ):
+                checkResult = 2
         return checkResult
 
     def processStep(self, step):
@@ -363,11 +358,10 @@ if __name__ == "__main__":
     test01.count = 1
     while test01.count <= test01.repeat:
         test01.readSAPHanaSR()
-        pSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')
-        sSite = test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')
-        pHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', pSite)
-        sHost = test01.searchInAreaForObjectByKeyValue('Hosts', 'site', sSite)
-        test01.topolo = { 'pSite': pSite, 'sSite': sSite, 'pHost': pHost, 'sHost': sHost }
+        test01.topolo.update({'pSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')})
+        test01.topolo.update({'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')})
+        test01.topolo.update({'pHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['pSite'])})
+        test01.topolo.update({'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['sSite'])})
         test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.readTestFile()
         if test01.repeat != 1:
