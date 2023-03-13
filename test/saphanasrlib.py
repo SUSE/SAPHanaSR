@@ -18,7 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230313.1257"
+    version = "0.1.20230313.1359"
 
     def message(self,msg):
         """
@@ -34,7 +34,7 @@ class saphanasrtest:
         """
         constructor
         """
-        self.message("INIT(): {}".format(self.version))
+        self.message("INIT: {}".format(self.version))
         self.SR = {}
         self.testData = {}
         self.testFile = "-"
@@ -182,6 +182,16 @@ class saphanasrtest:
                 checkResult = 2
         return checkResult
 
+    def processTopologyObject(self, step, topologyObjectName, areaName):
+        rcChecks = -1
+        if topologyObjectName in step:
+            checks = step[topologyObjectName]
+            topolo = self.topolo
+            if topologyObjectName in topolo:
+                objectName = topolo[topologyObjectName]
+                rcChecks = self.runChecks(checks, areaName, objectName)
+        return(rcChecks)
+
     def processStep(self, step):
         """ process a single step including otional loops """
         stepID = step['step']
@@ -205,39 +215,10 @@ class saphanasrtest:
             print(".", end='', flush=True)
             processResult = -1
             self.readSAPHanaSR()
-            if 'pSite' in step:
-                checks = step['pSite']
-                topolo = self.topolo
-                if 'pSite' in topolo:
-                    site = topolo['pSite']
-                    rcChecks = self.runChecks(checks, 'Sites', site)
-                    if processResult < rcChecks:
-                        processResult = rcChecks
-            if 'sSite' in step:
-                checks = step['sSite']
-                topolo = self.topolo
-                if 'sSite' in topolo:
-                    site = topolo['sSite']
-                    rcChecks = self.runChecks(checks, 'Sites', site)
-                    if processResult < rcChecks:
-                        processResult = rcChecks
-            if 'pHost' in step:
-                checks = step['pHost']
-                topolo = self.topolo
-                if 'pHost' in topolo:
-                    host = topolo['pHost']
-                    rcChecks = self.runChecks(checks, 'Hosts', host)
-                    if processResult < rcChecks:
-                        processResult = rcChecks
-            if 'sHost' in step:
-                checks = step['sHost']
-                topolo = self.topolo
-                if 'sHost' in topolo:
-                    host = topolo['sHost']
-                    rcChecks = self.runChecks(checks, 'Hosts', host)
-                    if processResult < rcChecks:
-                        processResult = rcChecks
-
+            processResult = max ( self.processTopologyObject(step, 'pSite', 'Sites'),
+                                  self.processTopologyObject(step, 'sSite', 'Sites'),
+                                  self.processTopologyObject(step, 'pHost', 'Hosts'),
+                                  self.processTopologyObject(step, 'sHost', 'Hosts'))
             loops = loops + 1
             if processResult == 0:
                 break
@@ -335,12 +316,12 @@ class saphanasrtest:
         return(aRc)
 
     def doSSH(self, remoteHost, user, cmd):
-        """ 
-        ssh remote cmd exectution 
+        """
+        ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
         """
         if remoteHost:
-            sshCl = SSHClient() 
+            sshCl = SSHClient()
             sshCl.load_system_host_keys()
             sshCl.connect(remoteHost, username=user)
             (cmdStdin, cmdStdout, cmdStderr) = sshCl.exec_command(cmd)
@@ -362,7 +343,7 @@ if __name__ == "__main__":
         test01.topolo.update({'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')})
         test01.topolo.update({'pHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['pSite'])})
         test01.topolo.update({'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['sSite'])})
-        test01.message("TOPO(): pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
+        test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.readTestFile()
         if test01.repeat != 1:
             testID = test01.testData['test']
