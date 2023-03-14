@@ -36,7 +36,7 @@
 #######################################################################
 # TODO PRIO2: NG - use SAPHanaControllerLibVersion=
 # shellcheck disable=SC2034
-SAPHanaControllerLibVersion="1.001.10"
+SAPHanaControllerLibVersion="1.001.20"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -1358,6 +1358,7 @@ function saphana_check_down_primary() {
     # params: TODO
     # globals: TODO
     # TODO PRIO1: NG - check which params /  globals are used/set ...
+    local rc="$OCF_NOT_RUNNING"
     super_ocf_log info "DEC: scoring_crm_master **03**"
     scoring_crm_master "$gFullRole" "$gSrHook"
     if ocf_is_probe; then
@@ -1368,11 +1369,6 @@ function saphana_check_down_primary() {
     else
         if [ "$promoted" == 1 ]; then
             # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
-            # DONE: PRIO2: Adjust with set_crm_master?
-            #       For Migration it would be good to decrease master score
-            #       For Reload locally we should NOT adjust the master score
-            # ===>  Should we rely on the migration threshold?
-            #       set_crm_master
             if ocf_is_true "${PreferSiteTakeover}" ; then
                 #
                 # DONE: PRIO1: first check, if remote site is already (and still) in sync
@@ -1424,13 +1420,15 @@ function saphana_check_down_primary() {
             rc="$OCF_NOT_RUNNING"
         fi
     fi
+    return "$rc"
 } # end function saphana_check_down_primary
 
 function saphana_check_up_primary() {
     # function saphana_check_up_primary - check and handle primary detected as 'up'
-    # params: TODO
+    # params: TODO init_attribute
     # globals: TODO
     # TODO PRIO1: NG - check which params /  globals are used/set ...
+    local init_attribute="$1" rc="$OCF_NOT_RUNNING"
     if dual_primary_detection "$promote_attr"; then
         # dual primary handling and we need to restart this site
         # TODO PRIO2: NG - is it better to use OCF_GENERIC_ERROR or OCF_NOT_RUNNING?
@@ -1527,76 +1525,52 @@ function saphana_check_up_primary() {
             scoring_crm_master "$gFullRole" "$my_sync"
         fi
     fi
+    return "$rc"
 } # end function saphana_check_up_primary
 
-#
-# function: saphana_monitor_primary - monitor a hana clone instance
-# params:   -
-# globals:  HANA_STATE_*(r), remoteHost, NODENAME, ATTR_NAME_*, OCF_*, PreferSiteTakeover
-#
 function saphana_monitor_primary() {
-    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
+    #
+    # function: saphana_monitor_primary - monitor a hana clone instance configures as PRIMARY
+    # params:   TODO
+    # globals:  HANA_STATE_*(r), remoteHost, NODENAME, ATTR_NAME_*, OCF_*, PreferSiteTakeover
+    #
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc="$OCF_ERR_GENERIC"
-    local promoted=0
-    local init_attribute=0
-    local LPTloc=-1
-    local lparc=4
-    local lss
-    local remoteSync=""
-    local node=""
-    local nodeSite=""
-    #
-    # OK, we are running/are configured as HANA PRIMARY
-    #
+    local rc="$OCF_ERR_GENERIC" promoted=0  init_attribute=0 LPTloc=-1 lparc=4 lss remoteSync="" node="" nodeSite=""
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_PRIMARY"
     #
     ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
     #
     promote_attr=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
-    super_ocf_log debug "DBG: saphana_monitor_clone: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
     if [ -z "$promote_attr" ]; then
-        # TODO PRIO1: NG - could we move that part to "UNDEFINED" below?
+        promote_attr="EMPTY"
         init_attribute=1
-        promoted=0;
-        # TODO PRIO1: NG - emergency exit, if clone attribute is not already existing during a probe (might be cluster start)
-        # TODO PRIO1: NG -  checking, if OCF_SUCCESS woule be better here?
-        if ocf_is_probe; then
-            get_hana_landscape_status; lss=$?
-            case "$lss" in
-                0 | 1     ) return "$OCF_NOT_RUNNING" ;;
-                2 | 3 | 4 ) return "$OCF_SUCCESS";;
-            esac
-        fi
-    else
-        case "$promote_attr" in
-            PROMOTED )
-                promoted=1;
-                ;;
-            DEMOTED )
-                promoted=0;
-                ;;
-            WAITING* )
-                promoted=0;
-                saphana_check_waiting_primary; rc="$?"
-                return "$rc"
-                ;;
-            UNDEFINED )
-                if ocf_is_probe; then
-                   promoted=0;
-                else
-                   set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                   promoted=0;
-                fi
-                ;;
-            * )
-                promoted=0;
-                ;;
-        esac
     fi
-    # TODO PRIO1: NG - we have the local (current) lss here and also have gLss from SAPHanaTopology Attribute. Do we need both?
+    super_ocf_log debug "DBG: saphana_monitor_clone: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
+    case "$promote_attr" in
+        PROMOTED )
+            promoted=1;
+            ;;
+        DEMOTED )
+            promoted=0;
+            ;;
+        WAITING* )
+            promoted=0;
+            saphana_check_waiting_primary; rc="$?"
+            return "$rc"
+            ;;
+        UNDEFINED | EMPTY )
+            if ocf_is_probe; then
+               promoted=0;
+            else
+               set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+               promoted=0;
+            fi
+            ;;
+        * )
+            promoted=0;
+            ;;
+    esac
     get_hana_landscape_status; lss=$?
-    # TODO PRIO1: NG - use life lss
     gLss="$lss"
     gFullRole="${gLss}:${gSrr}:${gRole}"
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss gLss=$gLss"
@@ -1606,10 +1580,10 @@ function saphana_monitor_primary() {
             ;;
         1 ) # DOWN or ERROR
             # DONE: PRIO2: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
-            saphana_check_down_primary; xxRc="$?"
+            saphana_check_down_primary; rc="$?"
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
-            saphana_check_up_primary; xxRc="$?"
+            saphana_check_up_primary "$init_attribute"; rc="$?"
             ;;
         * ) # UNDEFINED STATUS
             if ocf_is_probe; then
