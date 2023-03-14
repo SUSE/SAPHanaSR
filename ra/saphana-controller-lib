@@ -76,22 +76,8 @@ EOF
     return "$rc"
 } # end function saphana_usage
 
-#
-# function: saphana_meta_data - print resource agent meta-data for cluster
-# params:   -
-# globals:  -
-#
-function saphana_meta_data() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=0
-# TODO PRIO2: Description including parameters to be reviewed for scale-out
-# TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
-    cat <<END
-<?xml version="1.0"?>
-<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
-<resource-agent name="SAPHanaController" version="$raVersion">
-<version>1.0</version>
-
+function saphana_print_description() {
+    cat <<END_OF_DESCR
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
 The SAPHanaSR resource agent manages two SAP HANA database systems which are configured
@@ -134,6 +120,11 @@ The resource agent uses the following four interfaces provided by SAP:
    SAP HANA instance. This is the hostname used during the HANA installation.
 
 </longdesc>
+END_OF_DESCR
+} # end function saphana_print_description
+
+function saphana_print_parameters() {
+    cat <<END
 <parameters>
     <parameter name="SID" unique="0" required="1">
         <longdesc lang="en">SAP System Identifier (SID) like "SLE" or "HAE"</longdesc>
@@ -204,7 +195,29 @@ The resource agent uses the following four interfaces provided by SAP:
         <content type="string" default="" />
     </parameter>
 </parameters>
+END
+} # end function saphana_print_parameters
 
+#
+# function: saphana_meta_data - print resource agent meta-data for cluster
+# params:   -
+# globals:  -
+#
+function saphana_meta_data() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+# TODO PRIO2: Description including parameters to be reviewed for scale-out
+# TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
+    cat <<END_OF_HEADER
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="SAPHanaController" version="$raVersion">
+<version>1.0</version>
+END_OF_HEADER
+    saphana_print_description
+    saphana_print_parameters
+
+    cat <<END_OF_ACTIONS
 <actions>
     <action name="start"   timeout="3600" />
     <action name="stop"    timeout="3600" />
@@ -220,7 +233,7 @@ The resource agent uses the following four interfaces provided by SAP:
     <action name="reload" timeout="5" />
 </actions>
 </resource-agent>
-END
+END_OF_ACTIONS
 return "$rc"
 } # end function saphana_meta_data
 
@@ -383,7 +396,7 @@ function saphana_init_get_ocf_parameters() {
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid="${SID,,}"
     sidadm="${sid}adm"
-    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
+    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER^^" # upper case
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
     RemoveSAPSockets="${OCF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
@@ -423,7 +436,7 @@ function saphana_init() {
     topology=$(get_hana_attribute "global" "${ATTR_NAME_HANA_TOPOLOGY[@]}")    # ScaleUp ScaleOut
     if ocf_is_true "$PreferSiteTakeover"; then
         preferRecover="remote"
-    elif [[ "${PreferSiteTakeover,,}" == "never" ]]; then
+    elif [[ "${PreferSiteTakeover}" == "NEVER" ]]; then
         preferRecover="localOnly"
     else
         preferRecover="local"
@@ -1038,7 +1051,7 @@ function saphana_start_secondary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     case "$PreferSiteTakeover" in
-        never | NEVER | Never )
+        NEVER )
             set_crm_master -INFINITY
             ;;
         * )
@@ -1362,7 +1375,6 @@ function saphana_check_down_primary() {
                 #
                 # DONE: PRIO1: first check, if remote site is already (and still) in sync
                 # TODO: PRIO4: Decide if penalty (-9000) or weak (5) is better here to cover situations where other clone is gone
-                #
                 # TODO PRIO1: NG - REMOVE remoteNode dependency - get_sync_status
                 # saphana_monitor_primary - get_SRHOOK for "the" remote site (TODO: PRIO3: multi-tier may need multiple remote sites)
                 remoteSync=$(get_SRHOOK "$gRemSite")
@@ -1482,25 +1494,15 @@ function saphana_check_up_primary() {
                     ;;
                 [34]:P:*:*:*  ) # primary is up and should now be able to answer hdbsql query
                         case "$PreferSiteTakeover" in
-                            never | NEVER | Never )
-                                # TODO: PRIO 2: How to handle this attribute for srHOOK with NEVER?
+                            NEVER )
                                 # Currently it is NOT allowed to implement the srHook together with the (unsupported) preferSitetakeover 'never'
-                                # DONE: PRIO0: Check, if we need also to set the HOOK value or not??
                                 set_hana_site_attribute "$gRemSite" "SNA" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
                                 set_SRHOOK "$gRemSite" "SNA"
                                 ;;
                             * )
-                                # TODO: PRIO 5: We could limit the analyze_hana_sync_statusSRS later
-                                #       (only call analyze_hana_sync_statusSRS, if Hook is on SWAIT)
-                                #       currently we still poll the old method to track differences
-                                #       of results of the SAP interfaces
                                 super_ocf_log info "DEC: call analyze_hana_sync_statusSRS()"
                                 analyze_hana_sync_statusSRS
                                 if [ "$my_rem_sync" = "SWAIT" ]; then
-                                    # DONE: PRIO0: Check, if we really should overwrite "SWAIT" or keep that value
-                                    # if we still did not got a hook time since the cluster start-up maybe the
-                                    # HANA was already in (stable) sync, so the HANA Hook would never been called till
-                                    # a new event comes up. This is why we transfer the 'polled' attribute to the Hook attribute.
                                     my_rem_sync=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
                                     set_SRHOOK "$gRemSite" "$my_sync"
                                     super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SITE_SYNC_STATUS[0]} ($my_sync)"
@@ -1855,13 +1857,7 @@ function saphana_monitor_clone() {
     # first check with the status function (OS tools) if there could be something like a SAP instance running
     # as we do not know here, if we are in primary or secondary state we do not want to start our monitoring
     # agents (sapstartsrv) on the wrong host
-    local rc="$OCF_ERR_GENERIC"
-    local promoted=0
-    local init_attribute=0
-    local nState=""
-    local primary_status="$HANA_STATE_DEFECT"
-    local mRc=0
-    local myMaster=-1
+    local rc="$OCF_ERR_GENERIC" promoted=0 init_attribute=0 nState="" primary_status="$HANA_STATE_DEFECT" mRc=0 myMaster=-1
     #
     # reset possible left SRACTION_HISTORY
     #
@@ -1956,9 +1952,7 @@ function saphana_monitor_clone() {
 #
 function saphana_promote_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc="$OCF_ERR_GENERIC";
-    local hana_sync;
-    local primary_status="$HANA_STATE_DEFECT";
+    local rc="$OCF_ERR_GENERIC" hana_sync primary_status="$HANA_STATE_DEFECT"
     #
     # first check, if we WILL be PRIMARY (checking HANA status)
     #
@@ -1972,89 +1966,84 @@ function saphana_promote_clone() {
         super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
 	    set_SRHOOK_PRIM
         rc="$OCF_SUCCESS";
-    else
-        if [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
-            #
-            # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
-            # promote on the replica side...
-            #
-            # TODO PRIO2: NG for DR we keep code for PreferSiteTakeover==never for research
-            #             PreferSiteTakeover==never MUST NOT BE USED FOR PRODUCTIVE SYSTEMS
-            case "$PreferSiteTakeover" in
-                never | Never | NEVER )
-                    super_ocf_log err "ACT: PreferSiteTakeover is set to never, so refusing promote on secondary side"
-                    # TODO PRIO2: NG for DR OCF_ERR_GENERIC is not a good rc
-                    rc="$OCF_ERR_GENERIC"
-                    ;;
-                * )
-                    hana_sync=$(get_SRHOOK "$gSite")
-                    case "$hana_sync" in
-                        SOK )
-                            if is_the_master_nameserver; then
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."
-                                LPTloc=$(date '+%s')
-                                # TODO PRIO1: NG - check if we need to set remSite to 20
-                                # lpa_set_lpt 20 $remoteNode
-                                lpa_set_lpt "$LPTloc" "$gSite"
-                                lpa_push_lpt "$LPTloc"
-                                backup_global_and_nameserver
-                                set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
-                                # TODO PRIO5: 145 should not be static but come from the scoring table
-                                set_crm_master 145
-                                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
-                                set_SRHOOK "$gSite" "PRIM"
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
-                                #
-                                # set SRACTION to "T"; also set SRACTION_HISTORY
-                                #
-                                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
-                                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-                                #
-                                # do the takeover
-                                #
-                                HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"; srt_rc=$?
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
-                                # TODO PRIO2: NG handle errors of the new takeover
-                                #
-                                # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
-                                #
-                                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
-                                backup_global_and_nameserver
-                                #
-                                # now gain check, if we are primary NOW
-                                #
-                                # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-                                #
-                            fi
-                            #
-                            # check, if we now are primary
-                            #
-                            primary_status="$(check_for_primary)"
-                            if [[ "$primary_status" == "P" ]]; then
-                                rc="$OCF_SUCCESS";
-                                # DONE: PRIO0: !!!
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"
-                                set_SRHOOK "$gRemSite" "SWAIT"
-                            else
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: TAKEOVER FAILED? STILL NOT PRIMARY"
-                                rc="$OCF_FAILED_MASTER"
-                            fi
-                            ;;
-                        * )
-                            super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
-                            rc="$OCF_ERR_GENERIC"
-                            ;;
-                    esac
+    elif [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
+        #
+        # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
+        #
+        # TODO PRIO2: NG for DR we keep code for PreferSiteTakeover==never for research
+        #             PreferSiteTakeover==never MUST NOT BE USED FOR PRODUCTIVE SYSTEMS
+        case "$PreferSiteTakeover" in
+            NEVER )
+                super_ocf_log err "ACT: PreferSiteTakeover is set to never, so refusing promote on secondary side; PreferSiteTakeover==NEVER is NOT supported and only implemented for future research"
+                # TODO PRIO2: NG for DR OCF_ERR_GENERIC is not a good rc
+                rc="$OCF_ERR_GENERIC"
                 ;;
-            esac
-        else
-            #
-            # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
-            # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct
-            # Let next monitor find, if that HANA instance is available or not
-            rc="$OCF_SUCCESS";
-        fi
+            * )
+                hana_sync=$(get_SRHOOK "$gSite")
+                case "$hana_sync" in
+                    SOK )
+                        if is_the_master_nameserver; then
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."
+                            LPTloc=$(date '+%s')
+                            # TODO PRIO1: NG - check if we need to set remSite to 20
+                            # lpa_set_lpt 20 $remoteNode
+                            lpa_set_lpt "$LPTloc" "$gSite"
+                            lpa_push_lpt "$LPTloc"
+                            backup_global_and_nameserver
+                            set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
+                            # TODO PRIO5: 145 should not be static but come from the scoring table
+                            set_crm_master 145
+                            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
+                            set_SRHOOK "$gSite" "PRIM"
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
+                            #
+                            # set SRACTION to "T"; also set SRACTION_HISTORY
+                            #
+                            set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
+                            set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                            #
+                            # do the takeover
+                            #
+                            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"; srt_rc=$?
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
+                            # TODO PRIO2: NG handle errors of the new takeover
+                            #
+                            # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
+                            #
+                            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
+                            backup_global_and_nameserver
+                            #
+                            # now gain check, if we are primary NOW
+                            #
+                            # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+                            #
+                        fi
+                        #
+                        # check, if we now are primary
+                        #
+                        primary_status="$(check_for_primary)"
+                        if [[ "$primary_status" == "P" ]]; then
+                            rc="$OCF_SUCCESS";
+                            # DONE: PRIO0: !!!
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"
+                            set_SRHOOK "$gRemSite" "SWAIT"
+                        else
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: TAKEOVER FAILED? STILL NOT PRIMARY"
+                            rc="$OCF_FAILED_MASTER"
+                        fi
+                        ;;
+                    * )
+                        super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
+                        rc="$OCF_ERR_GENERIC"
+                        ;;
+                esac
+            ;;
+        esac
+    else
+        # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
+        # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct. Let next monitor find, if that HANA instance is available or not
+        rc="$OCF_SUCCESS";
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
