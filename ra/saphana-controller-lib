@@ -1596,23 +1596,75 @@ function saphana_monitor_primary() {
     return "$rc"
 } # end function saphana_monitor_primary
 
-#
-# function: saphana_monitor_secondary - monitor a hana clone instance
-# params:   -
-# globals:  OCF_*, ATTR_NAME_*, NODENAME
-# saphana_monitor_secondary
-#
+function saphana_monitor_running_secondary() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global: OCF_*, gSite, gFullRole, remoteNode, remSite
+    # prarams: promoted
+    # achtung: !! my_sync
+    local promoted="$1" rc="$OCF_SUCCESS" sync_attr hanaOM="" hanaOut1="" hanaOut1="" ATTR_*
+    # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
+    if [ "$promoted" == 1 ]; then
+        # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
+        rc="$OCF_RUNNING_MASTER"
+    else
+        rc="$OCF_SUCCESS"
+    fi
+    lpa_set_lpt  30 "$gSite"
+    sync_attr=$(get_SRHOOK "$gSite")
+    # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the operationMode
+    hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
+    hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+    hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
+    set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
+    if [[ -n "$remoteNode" && -n "$remSite" ]]; then
+        set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
+    fi
+    super_ocf_log debug "DBG: sync_attr=$sync_attr"
+    case "$sync_attr" in
+        SOK ) # This is a possible node to promote, when primary is missing
+            lpa_set_lpt  30 "$gSite"
+            super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
+            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$sync_attr)"
+            scoring_crm_master "$gFullRole" "$sync_attr"
+            ;;
+        SFAIL ) # This is currently NOT a possible node to promote
+            super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $gSite"
+            lpa_set_lpt  10 "$gSite"
+            super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
+            set_crm_master -INFINITY
+            ;;
+        SNA ) # This is a never-takeover-node
+            super_ocf_log debug "DBG: 013b * lpa_set_lpt 10 $gSite"
+            lpa_set_lpt  10 "$gSite"
+            super_ocf_log info "DEC: secondary with sync status n/a ==> EXCLUDE as possible takeover node"
+            set_crm_master -INFINITY
+            ;;
+        * ) # Unknown sync status
+            super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
+            my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$my_sync)"
+            # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
+            scoring_crm_master "$gFullRole" "$gSrHook"
+            ;;
+    esac
+    return "$rc"
+} # end function saphana_monitor_running_secondary
+
+
 function saphana_monitor_secondary() {
+    #
+    # function: saphana_monitor_secondary - monitor a hana clone instance
+    # params:   -
+    # globals:  OCF_*, ATTR_NAME_*, NODENAME, gSite
+    # check: init_attribute
+    #
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc="$OCF_ERR_GENERIC"
-    local promoted=0
-    local init_attribute=0
-    local lss
+    local rc="$OCF_NOT_RUNNING" promote_attr promoted=0 init_attribute=0 lss
     #
     # OK, we are running as HANA SECONDARY
     #
     if ! lpa_get_lpt "${gSite}"; then
-        super_ocf_log debug "DBG: 010 * lpa_set_lpt 10 $gSite"
         lpa_set_lpt  10 "$gSite"
         lpa_push_lpt 10
     fi
@@ -1620,7 +1672,6 @@ function saphana_monitor_secondary() {
     super_ocf_log debug "DBG: saphana_monitor_secondary: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
-        #  DONE: PRIO3: do we need to initialise also the DEMOTED attribute value?
         set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
         promoted=0;
     else
@@ -1631,14 +1682,12 @@ function saphana_monitor_secondary() {
             DEMOTED )  # This is the status we expect
                 promoted=0;
                 ;;
-            # DONE: PRIO0 - Need to differ logs for different WAITING4*
             WAITING4PRIM ) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
                 # TODO PRIO2: NG - do we still need to wait for the primary to start the secondary?
                 #             in the past we have seen that the secondary fails to start, if the primary is (still) not available
                 if check_for_primary_master; then
                     super_ocf_log info "ACT: SECONDARY still in status WAITING - Primary now available - try a new start"
-                    saphana_start_clone
-                    rc=$?
+                    saphana_start_clone; rc="$?"
                 else
                     super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing"
                     return "$OCF_SUCCESS"
@@ -1650,6 +1699,7 @@ function saphana_monitor_secondary() {
                 super_ocf_log info "ACT: Site still in status WAITING4NODES."
                 saphana_start_clone
                 promoted=0;
+                rc="$OCF_SUCCESS" # could be overwritten in case of lss=0 or lss=2,3,4 for lss=1 hide this error, if we still in WAITING4NODES
                 ;;
             WAITING* )
                 # WAITING4REG (which should not happen for a secondary - answer by lss)
@@ -1666,15 +1716,11 @@ function saphana_monitor_secondary() {
                 ;;
         esac
     fi
-    #
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_SECONDARY"
-    #
-    # old method was: saphana_monitor - new method is get_hana_landscape_status
     get_hana_landscape_status; lss=$?
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
         0 ) # FATAL
-            # DONE: PRIO1: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
             super_ocf_log debug "DBG: 011 * lpa_set_lpt 10 $gSite"
             lpa_set_lpt  10 "$gSite"
@@ -1683,70 +1729,9 @@ function saphana_monitor_secondary() {
         1 ) # ERROR
             super_ocf_log debug "DBG: 012 * lpa_set_lpt 10 $gSite"
             lpa_set_lpt  10 "$gSite"
-            # Hide this error, if we still in WAITING4NODES
-            case "$promote_attr" in
-                WAITING4NODES ) # hide error
-                                rc="$OCF_SUCCESS"
-                                ;;
-                * )
-                                rc="$OCF_NOT_RUNNING"
-                                ;;
-            esac
             ;;
-        2 | 3 | 4 ) # WARN INFO OK
-            rc="$OCF_SUCCESS"
-            # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
-            if [ "$promoted" == 1 ]; then
-                # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
-                rc="$OCF_RUNNING_MASTER"
-            else
-                rc="$OCF_SUCCESS"
-            fi
-            lpa_set_lpt  30 "$gSite"
-            sync_attr=$(get_SRHOOK "$gSite")
-            local hanaOM=""
-            local hanaOut1=""
-            # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
-            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
-            hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-            hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
-            set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
-            if [[ -n "$remoteNode" && -n "$remSite" ]]; then
-                set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
-            fi
-            super_ocf_log debug "DBG: sync_attr=$sync_attr"
-            case "$sync_attr" in
-                SOK ) # This is a possible node to promote, when primary is missing
-                    lpa_set_lpt  30 "$gSite"
-                    super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
-                    super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$sync_attr)"
-    super_ocf_log info "DEC: scoring_crm_master **08**"
-                    scoring_crm_master "$gFullRole" "$sync_attr"
-                    ;;
-                SFAIL ) # This is currently NOT a possible node to promote
-                    super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $gSite"
-                    lpa_set_lpt  10 "$gSite"
-                    super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
-                    ;;
-                SNA ) # This is a never-takeover-node
-                    super_ocf_log debug "DBG: 013b * lpa_set_lpt 10 $gSite"
-                    lpa_set_lpt  10 "$gSite"
-                    super_ocf_log info "DEC: secondary with sync status n/a ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
-                    ;;
-                * ) # Unknown sync status
-                    super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
-                    my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
-                    super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$my_sync)"
-                    # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
-    super_ocf_log info "DEC: scoring_crm_master **09**"
-                    scoring_crm_master "$gFullRole" "$gSrHook"
-                    ;;
-            esac
-            ;;
-        * ) # UNDEFINED STATUS
-            rc="$OCF_NOT_RUNNING"
+        2 | 3 | 4 ) # WARN / INFO / OK
+            saphana_monitor_running_secondary "$promoted"; rc="$?"
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
