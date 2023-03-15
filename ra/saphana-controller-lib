@@ -847,16 +847,131 @@ function saphana_validate() {
     return "$rc"
 } # end function saphana_validate
 
-#
-# function: saphana_start_primary - handle startup of PRIMARY in M/S
-# params: current_landsscape_status
-# globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
-#
+
+function saphana_start_primary_handle_wait_advice() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global:
+    # prarams: lss
+    local lss="$1" rc="$OCF_NOT_RUNNING"
+    set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
+    case "$lss" in
+        2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
+            # TODO: PRIO3: I now change from "just keep it up to take that down"
+            # TODO: PRIO3: differ lpt_advice, if rc=3 will get implemted
+            # 2 => DOWN
+            # 3 => KEEP
+            # TODO: PRIO3: OCF_SUCCESS, OCF_NOT_RUNNING or OCF_ERR_xxxx ?
+            # lpa_dec
+            super_ocf_log err "LPA: Timestamp (lpt) attribute inconsistency detected"
+            set_crm_master -9000
+            rc="$OCF_ERR_GENERIC"
+            ;;
+        1 ) # we are down, so we should wait --> followup in next monitor
+            super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
+            if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
+                set_hana_attribute "${NODENAME}" "WAITING4LPA" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                set_crm_master -9000
+                rc="$OCF_SUCCESS"
+            else
+                super_ocf_log warn "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
+                set_hana_attribute "${NODENAME}" "WAITING4REG" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                set_crm_master -9000
+                rc="$OCF_NOT_RUNNING"
+            fi
+            ;;
+    esac
+    return "$rc"
+} # end function saphana_start_primary_handle_wait_advice
+
+function saphana_start_primary_handle_register_advice() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global: OCF_*, gSite, gMasters[@], HANA_STATE_*
+    # params: lss
+    local rc="$OCF_NOT_RUNNING" my_sync m primary_status
+    set_SRHOOK "$gSite" "SREG"; my_sync="SREG"
+    case "$lss" in
+        2 | 3 | 4 ) # upps we are up - but shouldn't? - we should not register with started HDB
+            super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
+            set_crm_master -inf
+            rc="$OCF_NOT_RUNNING"
+            ;;
+        1 ) # lets try to register
+            super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
+            super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
+            #
+            # prevent that any part of the local site will be promoted at this moment
+            #
+            set_crm_master  0
+            for m in "${gMasters[@]}"; do
+                set_crm_master  0 "$m"
+            done
+            if wait_for_primary_master 1; then
+                register_hana_secondary
+                primary_status="$(check_for_primary)";
+                if [[ "$primary_status" == "$HANA_STATE_SECONDARY" ]]; then
+                    super_ocf_log info "ACT: Register successful"
+                    lpa_push_lpt 10
+                    lpa_set_lpt  10 "$gSite"
+                    set_crm_master  0
+                    saphana_start_secondary "$lss"; rc="$?"
+                    lpa_set_lpt  10 "$gSite"
+                else
+                    super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
+                    rc="$OCF_NOT_RUNNING"
+                fi
+            else
+                # lets check next monitor, if we can register
+                rc="$OCF_SUCCESS"
+            fi
+            ;;
+    esac
+    return "$rc"
+} # end function saphana_start_primary_handle_register_advice
+
+
+function saphana_start_primary_handle_start_advice() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global: gSite, fFullRole, gRole, gLss, gSrr, OCF_*, 
+    # params: lss
+    local lss="$1" rc="$OCF_NOT_RUNNING" my_sync LPTLoc lLss
+    set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
+    case "$lss" in
+        2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
+            super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
+            LPTloc=$(date '+%s')
+            lpa_set_lpt "$LPTloc" "$gSite"
+            rc="$OCF_SUCCESS"
+            ;;
+        1 ) # landscape says we are down, lets start and adjust scores and return code
+            super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
+            saphana_start; rc="$?"
+            LPTloc=$(date '+%s')
+            lpa_set_lpt "$LPTloc" "$gSite"
+            ;;
+    esac
+    super_ocf_log info "DEC: saphana_start_primary_handle_start_advice: scoring_crm_master($gFullRole,$my_sync)"
+    # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology and get updaptes roles from SAPHanaTopology
+    get_hana_landscape_status; lLss="$?"
+    gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+    gLss="$lLss"
+    gFullRole="${lLss}:${gSrr}:${gRole}"
+    scoring_crm_master "$gFullRole" "$my_sync"
+    return "$rc"
+} # end function saphana_start_primary_handle_start_advice
+
 function saphana_start_primary() {
-    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    #
+    # function: saphana_start_primary - handle startup of PRIMARY in M/S
+    # params: current_landsscape_status
+    # globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss
+    #
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     #
     # we will be a PRIMARY so checking, if there is anOTHER primary
     #
@@ -870,174 +985,63 @@ function saphana_start_primary() {
     fi
     #
     lpa_check_lpt_status; lpa_dec=$?
-    # TODO PRIO2: scale-out was to get lss as param; scale-up was to query lss
-    # we take first lss from the parameter $1
-    # get_hana_landscape_status; lss=$?
-    # TODO PRIO2: NG reduce number of queries for role, sync, lss, srr
     my_sync="$gSrPoll"
-    # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
-    if [[ "$lss" == 0 ]]; then
-       super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
-       # DONE: PRIO1: what to do for lss=0?
-       # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
-       lpa_advice="skip"
-       rc="$OCF_ERR_GENERIC"
+    if [[ "$lss" != 0 ]]; then
+        super_ocf_log info "DEC: scoring_crm_master **01**"
+        scoring_crm_master "$gFullRole" "$my_sync"
+        # saphana_start_primary - set SR attribute of primary to "PRIM"
+        case "$lpa_dec" in
+            0) # LPA says start
+                lpa_advice="start"
+                # TODO PRIO1: NG - scale-out only set lpa_advice, scale-up had additionally the following code
+                # TODO PRIO1: NG - We need to do a special handling for remote being a 234-Secondary in SR Status SOK
+                # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
+                #   then lpa_advice="wait"
+                remoteRole=$(get_hana_attribute "$remoteNode" "${ATTR_NAME_HANA_ROLES[@]}")
+                remoteSync=$(get_SRHOOK "$gRemSite" "$remoteNode")
+                super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
+                if ocf_is_true "${PreferSiteTakeover}"; then
+                    remoteStatus="$remoteRole:$remoteSync"
+                    case "$remoteStatus" in
+                        [234]:S:*:SOK | [234]:S:*:PRIM )
+                            lpa_advice="wait"
+                            # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
+                            super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
+                            ;;
+                        * )
+                            super_ocf_log info "DEC: saphana_primary - remoteStatus is: $remoteStatus"
+                            ;;
+                    esac
+                else
+                    super_ocf_log info "DEC: saphana_primary - PreferSiteTakeover set to false"
+                fi
+                saphana_start_primary_handle_start_advice "$lss"; rc="$?"
+                ;;
+            1)  # LPA says register!
+                lpa_advice="register"
+                saphana_start_primary_handle_register_advice "$lss"; rc="$?"
+                ;;
+            2 | 3 | 4 )  # LPA 2 says wait for older LPA to expire
+                         # LPA 3 says to wait for remote LPA to be reported/announced
+                         # LPA 4 says something is completely wrong - FAIL resource # TODO PRIO1: NG - RC3 for waiting remote side to report lss
+                lpa_advice="fail"
+                saphana_start_primary_handle_wait_advice "$lss"; rc="$?"
+                ;;
+            *)  # LPA failed with an unknown status - FAIL resource
+                lpa_advice="fail"
+                super_ocf_log info "LPA: LPA reports FAIL"
+                set_crm_master -inf
+                rc="$OCF_NOT_RUNNING"
+                ;;
+        esac
+    else # lss is FATAL (0)
+        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
+        # DONE: PRIO1: what to do for lss=0?
+        # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
+        lpa_advice="skip"
+        rc="$OCF_ERR_GENERIC"
+        return "$rc"
     fi
-    super_ocf_log info "DEC: scoring_crm_master **01**"
-    scoring_crm_master "$gFullRole" "$my_sync"
-    # saphana_start_primary - set SR attribute of primary to "PRIM"
-    case "$lpa_dec" in
-        0) # LPA says start
-            lpa_advice="start"
-            # TODO PRIO1: NG - scale-out only set lpa_advice, scale-up had additionally the following code
-            # TODO PRIO1: NG - We need to do a special handling for remote being a 234-Secondary in SR Status SOK
-            # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
-            #   then lpa_advice="wait"
-            remoteRole=$(get_hana_attribute "$remoteNode" "${ATTR_NAME_HANA_ROLES[@]}")
-            remoteSync=$(get_SRHOOK "$gRemSite" "$remoteNode")
-            super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
-            if ocf_is_true "${PreferSiteTakeover}"; then
-                remoteStatus="$remoteRole:$remoteSync"
-                case "$remoteStatus" in
-                    [234]:S:*:SOK | [234]:S:*:PRIM )
-                        lpa_advice="wait"
-                        # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
-                        super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
-                        ;;
-                    * )
-                        super_ocf_log info "DEC: saphana_primary - remoteStatus is: $remoteStatus"
-                        ;;
-                esac
-            else
-                super_ocf_log info "DEC: saphana_primary - PreferSiteTakeover set to false"
-            fi
-            ;;
-        1)  # LPA says register!
-            lpa_advice="register"
-            ;;
-        2)  # LPA says wait for older LPA to expire
-            lpa_advice="wait"
-            ;;
-        3)  # LPA says to wait for remote LPA to be reported/announced
-            lpa_advice="wait"
-            ;;
-        4)  # LPA says something is completely wrong - FAIL resource # TODO PRIO1: NG - RC3 for waiting remote side to report lss
-            lpa_advice="fail"
-            ;;
-        *)  # LPA failed with an unknown status - FAIL resource
-            lpa_advice="fail"
-            ;;
-    esac
-
-    my_sync="$gSrHook"
-    case "$lpa_advice" in
-        start )  # process a normal START
-            set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
-            case "$lss" in
-                2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
-                    super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
-                    LPTloc=$(date '+%s')
-                    lpa_set_lpt "$LPTloc" "$gSite"
-                    rc="$OCF_SUCCESS"
-                    ;;
-                1 ) # landscape says we are down, lets start and adjust scores and return code
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
-                    saphana_start
-                    rc=$?
-                    LPTloc=$(date '+%s')
-                    lpa_set_lpt "$LPTloc" "$gSite"
-                    ;;
-            esac
-            super_ocf_log info "DEC: saphana_start_primary: scoring_crm_master($gFullRole,$my_sync)"
-            # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology and get updaptes roles from SAPHanaTopology
-            get_hana_landscape_status; lLss="$?"
-            gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-            gLss="$lLss"
-            gFullRole="${lLss}:${gSrr}:${gRole}"
-    super_ocf_log info "DEC: scoring_crm_master **02**"
-            scoring_crm_master "$gFullRole" "$my_sync"
-            ;;
-        register ) # process a REGISTER
-            set_SRHOOK "$gSite" "SREG"; my_sync="SREG"
-            case "$lss" in
-                2 | 3 | 4 ) # upps we are up - but shouldn't? - we could not register with started HDB
-                    # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
-                    super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
-                    set_crm_master -inf
-                    rc="$OCF_NOT_RUNNING"
-                    ;;
-                1 ) # lets try to register
-                    # DONE: PRIO2: Like Action in start_secondary
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
-                    super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
-                    #
-                    # prevent that any part of the local site will be promoted at this moment
-                    #
-                    set_crm_master  0
-                    # TODO PRIO2: NG - normally only needed for scale-out:
-                    for m in "${gMasters[@]}"; do
-                        set_crm_master  0 "$m"
-                    done
-                    if wait_for_primary_master 1; then
-                        register_hana_secondary
-                        primary_status="$(check_for_primary)";
-                        if [[ "$primary_status" == "$HANA_STATE_SECONDARY" ]]; then
-                            super_ocf_log info "ACT: Register successful"
-                            lpa_push_lpt 10
-                            super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $gSite"
-                            lpa_set_lpt  10 "$gSite"
-                            set_crm_master  0
-                            saphana_start_secondary "$lss"
-                            rc=$?
-                            super_ocf_log debug "DBG: 004 * lpa_set_lpt 10 $gSite"
-                            lpa_set_lpt  10 "$gSite"
-                        else
-                            super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
-                            rc="$OCF_NOT_RUNNING"
-                        fi
-                    else
-                        # lets check next monitor, if we can register
-                        rc="$OCF_SUCCESS"
-                    fi
-                    ;;
-            esac
-            ;;
-        wait )  # process a WAIT
-            set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
-            case "$lss" in
-                2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
-                    # TODO: PRIO3: I now change from "just keep it up to take that down"
-                    # TODO: PRIO3: differ lpt_advice, if rc=3 will get implemted
-                    # 2 => DOWN
-                    # 3 => KEEP
-                    # TODO: PRIO3: OCF_SUCCESS, OCF_NOT_RUNNING or OCF_ERR_xxxx ?
-                    # lpa_dec
-                    super_ocf_log err "LPA: Timestamp (lpt) attribute inconsistency detected"
-                    set_crm_master -9000
-                    rc="$OCF_ERR_GENERIC"
-                    ;;
-                1 ) # we are down, so we should wait --> followup in next monitor
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
-                    if ocf_is_true "$AUTOMATED_REGISTER" ; then
-                        super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
-                        set_hana_attribute "${NODENAME}" "WAITING4LPA" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                        set_crm_master -9000
-                        rc="$OCF_SUCCESS"
-                    else
-                        super_ocf_log warn "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
-                        set_hana_attribute "${NODENAME}" "WAITING4REG" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                        set_crm_master -9000
-                        rc="$OCF_NOT_RUNNING"
-                    fi
-                    ;;
-            esac
-            ;;
-        fail )   # process a lpa FAIL
-            super_ocf_log info "LPA: LPA reports FAIL"
-            set_crm_master -inf
-            rc="$OCF_NOT_RUNNING"
-            ;;
-    esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function saphana_start_primary
