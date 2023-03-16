@@ -92,13 +92,11 @@ install -m 0755 ra/SAPHana* %{buildroot}/usr/lib/ocf/resource.d/suse/
 install -m 0644 ra/saphana-*-lib %{buildroot}/usr/lib/%{name}
 
 # HA/DR hook provider
-install -m 0644 srHook/SAPHanaSR.py %{buildroot}/usr/share/%{name}/
+install -m 0644 srHook/susHanaSR.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
-install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
-install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
-install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_* %{buildroot}/usr/share/%{name}/samples
 
 # icons for SAPHanaSR-monitor
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
