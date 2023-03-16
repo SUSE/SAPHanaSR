@@ -76,7 +76,7 @@ tar xf %{S:0}
 gzip man/*
 
 %install
-mkdir -p %{buildroot}/usr/sbin
+mkdir -p %{buildroot}/usr/bin
 mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/icons
 mkdir -p %{buildroot}/usr/share/%{name}/tests
