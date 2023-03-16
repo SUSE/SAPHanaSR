@@ -109,12 +109,12 @@ install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 # auxiliary Perl library and test scripts
 #install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
-install -m 0555 tools/SAPHanaSR-monitor %{buildroot}/usr/sbin
-install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/sbin
-install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/sbin
-install -m 0555 tools/SAPHanaSR-filter %{buildroot}/usr/sbin
-install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
-install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
+install -m 0555 tools/SAPHanaSR-monitor %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-filter %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # README and LICENSE
@@ -136,12 +136,12 @@ install -m 0444 doc/README  %{buildroot}%{_docdir}/%{name}
 %dir /usr/lib/%{name}
 /usr/lib/%{name}/SAPHanaSRTools.pm
 /usr/lib/%{name}/saphana-*-lib
-/usr/sbin/SAPHanaSR-monitor
-/usr/sbin/SAPHanaSR-showAttr
-/usr/sbin/SAPHanaSR-replay-archive
-/usr/sbin/SAPHanaSR-filter
-/usr/sbin/SAPHanaSR-hookHelper
-/usr/sbin/SAPHanaSR-manageProvider
+/usr/bin/SAPHanaSR-monitor
+/usr/bin/SAPHanaSR-showAttr
+/usr/bin/SAPHanaSR-replay-archive
+/usr/bin/SAPHanaSR-filter
+/usr/bin/SAPHanaSR-hookHelper
+/usr/bin/SAPHanaSR-manageProvider
 
 ## HAWK2 wizard for SLES 12 SP1+
 #%if 0%{?sle_version} >= 120100
