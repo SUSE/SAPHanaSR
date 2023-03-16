@@ -864,7 +864,7 @@ function saphana_start_primary_handle_wait_advice() {
             # TODO: PRIO3: OCF_SUCCESS, OCF_NOT_RUNNING or OCF_ERR_xxxx ?
             # lpa_dec
             super_ocf_log err "LPA: Timestamp (lpt) attribute inconsistency detected"
-            set_crm_master -9000
+            set_crm_promote -9000
             rc="$OCF_ERR_GENERIC"
             ;;
         1 ) # we are down, so we should wait --> followup in next monitor
@@ -872,12 +872,12 @@ function saphana_start_primary_handle_wait_advice() {
             if ocf_is_true "$AUTOMATED_REGISTER" ; then
                 super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
                 set_hana_attribute "${NODENAME}" "WAITING4LPA" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                set_crm_master -9000
+                set_crm_promote -9000
                 rc="$OCF_SUCCESS"
             else
                 super_ocf_log warn "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
                 set_hana_attribute "${NODENAME}" "WAITING4REG" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                set_crm_master -9000
+                set_crm_promote -9000
                 rc="$OCF_NOT_RUNNING"
             fi
             ;;
@@ -895,7 +895,7 @@ function saphana_start_primary_handle_register_advice() {
     case "$lss" in
         2 | 3 | 4 ) # upps we are up - but shouldn't? - we should not register with started HDB
             super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
-            set_crm_master -inf
+            set_crm_promote -inf
             rc="$OCF_NOT_RUNNING"
             ;;
         1 ) # lets try to register
@@ -904,9 +904,9 @@ function saphana_start_primary_handle_register_advice() {
             #
             # prevent that any part of the local site will be promoted at this moment
             #
-            set_crm_master  0
+            set_crm_promote  0
             for m in "${gMasters[@]}"; do
-                set_crm_master  0 "$m"
+                set_crm_promote  0 "$m"
             done
             if wait_for_primary_master 1; then
                 register_hana_secondary
@@ -915,7 +915,7 @@ function saphana_start_primary_handle_register_advice() {
                     super_ocf_log info "ACT: Register successful"
                     lpa_push_lpt 10
                     lpa_set_lpt  10 "$gSite"
-                    set_crm_master  0
+                    set_crm_promote  0
                     saphana_start_secondary "$lss"; rc="$?"
                     lpa_set_lpt  10 "$gSite"
                 else
@@ -1030,7 +1030,7 @@ function saphana_start_primary() {
             *)  # LPA failed with an unknown status - FAIL resource
                 lpa_advice="fail"
                 super_ocf_log info "LPA: LPA reports FAIL"
-                set_crm_master -inf
+                set_crm_promote -inf
                 rc="$OCF_NOT_RUNNING"
                 ;;
         esac
@@ -1056,10 +1056,10 @@ function saphana_start_secondary() {
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     case "$PreferSiteTakeover" in
         NEVER )
-            set_crm_master -INFINITY
+            set_crm_promote -INFINITY
             ;;
         * )
-            set_crm_master 0
+            set_crm_promote 0
             ;;
     esac
     #
@@ -1091,7 +1091,7 @@ function saphana_start_secondary() {
                #    so this is a WAITING situation
                super_ocf_log info "ACT: PRIMARY seems to be down now ==> WAITING"
                set_hana_attribute "${NODENAME}" "WAITING4PRIM" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-               set_crm_master -INFINITY
+               set_crm_promote -INFINITY
                rc="$OCF_SUCCESS"
            fi
        else
@@ -1101,7 +1101,7 @@ function saphana_start_secondary() {
     else
        super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
        set_hana_attribute "${NODENAME}" "WAITING4PRIM" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-       set_crm_master -INFINITY
+       set_crm_promote -INFINITY
        rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1242,7 +1242,7 @@ function saphana_start_clone() {
                 esac
             fi
         fi
-        set_crm_master -INFINITY
+        set_crm_promote -INFINITY
         rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1395,7 +1395,7 @@ function saphana_check_down_primary() {
                          #
                          # DOWNSCORING CRM_MASTER TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NO TO RISK CANCELLATION OF THE MONITOR
                          #
-                         set_crm_master 5
+                         set_crm_promote 5
                          ;;
                     SFAIL )
                          super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync (SFAIL) ==> local restart preferred"
@@ -1417,7 +1417,7 @@ function saphana_check_down_primary() {
             rc="$OCF_FAILED_MASTER"
         else
             # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
-            # TODO PRIO1: NG - Adjust with set_crm_master?
+            # TODO PRIO1: NG - Adjust with set_crm_promote?
             #       Current decision: Do NOT adjust master score now as other
             #       steps should already have done that
             #
@@ -1437,7 +1437,7 @@ function saphana_check_up_primary() {
     if dual_primary_detection "$promote_attr"; then
         # dual primary handling and we need to restart this site
         # TODO PRIO2: NG - is it better to use OCF_GENERIC_ERROR or OCF_NOT_RUNNING?
-        set_crm_master -9000
+        set_crm_promote -9000
         rc="$OCF_NOT_RUNNING"
     else
         # no dual primary detected, normal operation
@@ -1632,13 +1632,13 @@ function saphana_monitor_running_secondary() {
             super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $gSite"
             lpa_set_lpt  10 "$gSite"
             super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
-            set_crm_master -INFINITY
+            set_crm_promote -INFINITY
             ;;
         SNA ) # This is a never-takeover-node
             super_ocf_log debug "DBG: 013b * lpa_set_lpt 10 $gSite"
             lpa_set_lpt  10 "$gSite"
             super_ocf_log info "DEC: secondary with sync status n/a ==> EXCLUDE as possible takeover node"
-            set_crm_master -INFINITY
+            set_crm_promote -INFINITY
             ;;
         * ) # Unknown sync status
             super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
@@ -1884,9 +1884,9 @@ function saphana_monitor_clone() {
             if ocf_is_probe; then
                 myMaster=$(get_crm_master); mRc=$?
                 if [[ "$mRc" != 0 ]]; then
-                   set_crm_master 5
+                   set_crm_promote 5
                 elif [[ "$myMaster" == -1 ]]; then
-                   set_crm_master 5
+                   set_crm_promote 5
                 fi
             else
                 saphana_check_local_instance
@@ -1902,7 +1902,7 @@ function saphana_monitor_clone() {
             # OK, we are neither HANA PRIMARY nor HANA SECONDARY
             #
             super_ocf_log warn "ACT: saphana_monitor_clone: HANA_STATE_DEFECT"
-            # TODO: PRIO2: Or only set_crm_master -INFINITY ?
+            # TODO: PRIO2: Or only set_crm_promote -INFINITY ?
             # TODO: PRIO9: Currently pacemaker-remote nodes does not support 'reboot' attributes
             # DONE: PRIO1: OCF_ERR_GENERIC is quite fatal, if "only" hdbnsutil has a small problem
             nState=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
@@ -1981,7 +1981,7 @@ function saphana_promote_clone() {
                             backup_global_and_nameserver
                             set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
                             # TODO PRIO5: 145 should not be static but come from the scoring table
-                            set_crm_master 145
+                            set_crm_promote 145
                             set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
                             set_SRHOOK "$gSite" "PRIM"
                             super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
