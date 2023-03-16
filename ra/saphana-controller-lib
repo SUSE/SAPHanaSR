@@ -953,13 +953,13 @@ function saphana_start_primary_handle_start_advice() {
             lpa_set_lpt "$LPTloc" "$gSite"
             ;;
     esac
-    super_ocf_log info "DEC: saphana_start_primary_handle_start_advice: scoring_crm_master($gFullRole,$my_sync)"
+    super_ocf_log info "DEC: saphana_start_primary_handle_start_advice: scoring_crm_promote($gFullRole,$my_sync)"
     # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology and get updaptes roles from SAPHanaTopology
     get_hana_landscape_status; lLss="$?"
     gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
     gLss="$lLss"
     gFullRole="${lLss}:${gSrr}:${gRole}"
-    scoring_crm_master "$gFullRole" "$my_sync"
+    scoring_crm_promote "$gFullRole" "$my_sync"
     return "$rc"
 } # end function saphana_start_primary_handle_start_advice
 
@@ -987,8 +987,8 @@ function saphana_start_primary() {
     lpa_check_lpt_status; lpa_dec=$?
     my_sync="$gSrPoll"
     if [[ "$lss" != 0 ]]; then
-        super_ocf_log info "DEC: scoring_crm_master **01**"
-        scoring_crm_master "$gFullRole" "$my_sync"
+        super_ocf_log info "DEC: scoring_crm_promote **01**"
+        scoring_crm_promote "$gFullRole" "$my_sync"
         # saphana_start_primary - set SR attribute of primary to "PRIM"
         case "$lpa_dec" in
             0) # LPA says start
@@ -1365,8 +1365,8 @@ function saphana_check_down_primary() {
     # globals: TODO
     # TODO PRIO1: NG - check which params /  globals are used/set ...
     local rc="$OCF_NOT_RUNNING"
-    super_ocf_log info "DEC: scoring_crm_master **03**"
-    scoring_crm_master "$gFullRole" "$gSrHook"
+    super_ocf_log info "DEC: scoring_crm_promote **03**"
+    scoring_crm_promote "$gFullRole" "$gSrHook"
     if ocf_is_probe; then
         #
         # leave master score untouched, only set return code
@@ -1410,8 +1410,8 @@ function saphana_check_down_primary() {
                 # saphana_monitor_primary - get SR attribute of OWN site (TODO: PRIO3: allow multi targets in the cluster in the future)
                 # TODO PRIO3: Check, if we need that query as for a real primary this should always be "PRIM"
                 my_sync=$(get_SRHOOK "$gRemSite")
-                super_ocf_log info "DEC: scoring_crm_master **04**"
-                scoring_crm_master "$gFullRole" "$my_sync"
+                super_ocf_log info "DEC: scoring_crm_promote **04**"
+                scoring_crm_promote "$gFullRole" "$my_sync"
                 rc="$OCF_FAILED_MASTER"
             fi
             rc="$OCF_FAILED_MASTER"
@@ -1441,8 +1441,8 @@ function saphana_check_up_primary() {
         rc="$OCF_NOT_RUNNING"
     else
         # no dual primary detected, normal operation
-        super_ocf_log info "DEC: scoring_crm_master **05**"
-        scoring_crm_master "$gFullRole" "$my_sync"
+        super_ocf_log info "DEC: scoring_crm_promote **05**"
+        scoring_crm_promote "$gFullRole" "$my_sync"
         #
         # get local-site(s) LSS, SRR and nodes ROLES; set PRIM
         #
@@ -1476,8 +1476,8 @@ function saphana_check_up_primary() {
             #
             # get local site(s) LSS, SRR and nodes ROLES
             #
-            super_ocf_log info "DEC: scoring_crm_master **06**"
-            scoring_crm_master "$gFullRole" "$my_sync"
+            super_ocf_log info "DEC: scoring_crm_promote **06**"
+            scoring_crm_promote "$gFullRole" "$my_sync"
             #
             # first check, if we have a pending HA/DR provider attribute in the interface files
             #
@@ -1515,9 +1515,9 @@ function saphana_check_up_primary() {
                         esac
                     ;;
             esac
-            super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($gFullRole,$my_sync)"
-            super_ocf_log info "DEC: scoring_crm_master **07**"
-            scoring_crm_master "$gFullRole" "$my_sync"
+            super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_promote($gFullRole,$my_sync)"
+            super_ocf_log info "DEC: scoring_crm_promote **07**"
+            scoring_crm_promote "$gFullRole" "$my_sync"
         fi
     fi
     return "$rc"
@@ -1625,8 +1625,8 @@ function saphana_monitor_running_secondary() {
         SOK ) # This is a possible node to promote, when primary is missing
             lpa_set_lpt  30 "$gSite"
             super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
-            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$sync_attr)"
-            scoring_crm_master "$gFullRole" "$sync_attr"
+            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_promote($gFullRole,$sync_attr)"
+            scoring_crm_promote "$gFullRole" "$sync_attr"
             ;;
         SFAIL ) # This is currently NOT a possible node to promote
             super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $gSite"
@@ -1643,9 +1643,9 @@ function saphana_monitor_running_secondary() {
         * ) # Unknown sync status
             super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
             my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
-            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$my_sync)"
+            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_promote($gFullRole,$my_sync)"
             # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
-            scoring_crm_master "$gFullRole" "$gSrHook"
+            scoring_crm_promote "$gFullRole" "$gSrHook"
             ;;
     esac
     return "$rc"
@@ -1813,8 +1813,8 @@ function saphana_monitor_clone_not_msn() {
           # code, if we still have ANY master nameserver candidates
           #
           super_ocf_log info "DEC: scoring $gFullRole : $gSrHook"
-    super_ocf_log info "DEC: scoring_crm_master **10**"
-          scoring_crm_master "$gFullRole" "$gSrHook"
+    super_ocf_log info "DEC: scoring_crm_promote **10**"
+          scoring_crm_promote "$gFullRole" "$gSrHook"
           # TODO PRIO2: So far we do NOT monitor the swarm, if we are NOT the master nameserver
           #              This reflects the situation that swarm members get be started (as resource)
           #              before the master nameserver runs the StartSystem command
@@ -1868,8 +1868,8 @@ function saphana_monitor_clone() {
             fi
         fi
     else
-        super_ocf_log info "DEC: scoring_crm_master **11**"
-        scoring_crm_master "$gFullRole" "$gSrHook"
+        super_ocf_log info "DEC: scoring_crm_promote **11**"
+        scoring_crm_promote "$gFullRole" "$gSrHook"
         # shellcheck disable=SC2154
         super_ocf_log info "DEC: REGULAR MONITOR interval=${OCF_RESKEY_CRM_meta_interval}"
     fi

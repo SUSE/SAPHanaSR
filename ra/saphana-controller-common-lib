@@ -187,11 +187,11 @@ function set_crm_master() {
 } # end function set_crm_master
 
 #
-# function: scoring_crm_master - score instance due to role and sync match (table SCORING_TABLE)
+# function: scoring_crm_promote - score instance due to role and sync match (table SCORING_TABLE)
 # params:   NODE_ROLES NODE_SYNC_STATUS
 # globals:  SCORING_TABLE[@],
 #
-function scoring_crm_master() {
+function scoring_crm_promote() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local hana_roles="$1"
     local hana_sync="$2"
@@ -203,18 +203,18 @@ function scoring_crm_master() {
         read -r lssPattern srrPattern rolePattern syncPattern myScore patternDescription <<< "$scoring_rule"
         fullRolePattern="$lssPattern:$srrPattern:$rolePattern"
         if [[ "${hana_roles}" =~ $fullRolePattern ]] && [[ "${hana_sync}" =~ $syncPattern ]]; then
-              super_ocf_log info "DEC: scoring_crm_master: roles($hana_roles) are matching pattern ($fullRolePattern)"
-              super_ocf_log info "DEC: scoring_crm_master: sync($hana_sync) is matching syncPattern ($syncPattern)"
-              super_ocf_log info "DEC: scoring_crm_master: set score $myScore ($patternDescription)"
+              super_ocf_log info "DEC: scoring_crm_promote: roles($hana_roles) are matching pattern ($fullRolePattern)"
+              super_ocf_log info "DEC: scoring_crm_promote: sync($hana_sync) is matching syncPattern ($syncPattern)"
+              super_ocf_log info "DEC: scoring_crm_promote: set score $myScore ($patternDescription)"
               break;  # end scanning, best rule already found
         fi
     done
-    super_ocf_log debug "DBG: scoring_crm_master adjust score $myScore"
+    super_ocf_log debug "DBG: scoring_crm_promote adjust score $myScore"
     # Do not score, if we did not found our role/sync at this moment - bsc#919925
     if [ -n "$myScore" ]; then
         set_crm_master "$myScore"
     fi
-} # end function scoring_crm_master
+} # end function scoring_crm_promote
 
 #
 # function: get_crm_master - get the crm master score of the local node
