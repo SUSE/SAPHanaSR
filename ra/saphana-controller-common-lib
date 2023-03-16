@@ -155,6 +155,18 @@ function assert() {
 } # end function assert
 
 #
+# function: get_crm_promote - get the crm master score of the local node
+# params:   -
+# globals:  HA_SBIN_DIR(r)
+#
+function get_crm_promote() {
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+  local rc=0
+   "${HA_SBIN_DIR}/crm_master" -G -q -l reboot; rc=$?
+   return "$rc"
+} # end function get_crm_promote
+
+#
 # function: set_crm_promote - set the crm master score of the local or remote node
 # params:   SCORE  [NODE]
 # globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
@@ -170,13 +182,6 @@ function set_crm_promote() {
     fi
     # shellcheck disable=SC2154
     ocf_version_cmp "3.9.0" "$OCF_RESKEY_crm_feature_set"
-    if [ $? -le 1 ]; then
-        CRM_PROMO="crm_attribute"
-        CRM_PROMO_PARAMS="--promotion"
-    else
-        CRM_PROMO="crm_master"
-        CRM_PROMO_PARAMS="-l reboot"
-    fi
     # DONE: PRIO2: Only adjust master if value is really different (try to check that)
     oldscore=$("${HA_SBIN_DIR}/$CRM_PROMO" "$CRM_PROMO_PARAMS" "$node" -G -q )
     if [ "$oldscore" != "$score" ]; then
@@ -222,19 +227,6 @@ function scoring_crm_promote() {
         set_crm_promote "$myScore"
     fi
 } # end function scoring_crm_promote
-
-#
-# function: get_crm_promote - get the crm master score of the local node
-# params:   -
-# globals:  HA_SBIN_DIR(r)
-#
-function get_crm_promote() {
-  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-  local rc=0
-   "${HA_SBIN_DIR}/crm_master" -G -q -l reboot; rc=$?
-   return "$rc"
-} # end function get_crm_promote
-
 
 #
 # function get_SRHOOK_plain

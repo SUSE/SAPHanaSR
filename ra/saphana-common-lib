@@ -70,12 +70,27 @@ function super_ocf_log() {
     fi
 } # end function super_ocf_log
 
+function cluster_commands_init() {
+    # globals: CRM_NODE(w), NODENAME(w), CRM_PROMO(w), CRM_PROMO_PARAMS(w)
+    CRM_NODE="crm_node"
+    if [ $? -le 1 ]; then
+        CRM_PROMO="crm_attribute"
+        CRM_PROMO_PARAMS="--promotion"
+    else
+        CRM_PROMO="crm_master"
+        CRM_PROMO_PARAMS="-l reboot"
+    fi
+    # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
+    NODENAME="$("$CRM_NODE" -n)"
+} # end function cluster_commands_init
+
 #
 # function core_init - lightwight variable initialization without SAP HANA interaction
 # params: TODO raVersion timeBegin log_attributes
 # globals: -
 #
 function core_init() {
+    cluster_commands_init
     # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of raVersion later
     raVersion="$1"
     # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of timeBegin later
@@ -113,16 +128,6 @@ function core_init() {
     HANA_STATE_DEFECT="D"      # was 3
     # shellcheck disable=SC2034
     HANA_STD_ACTION_TIMEOUT=3600
-    # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
-    NODENAME="$(crm_node -n)"
-    #
-    # TODO PRIO1: NG - check. if we really could/should initialize such missing variables
-    #
-    OCF_RESKEY_CRM_meta_timeout="${OCF_RESKEY_CRM_meta_timeout:-3600}"   # cluster should always set these values
-    OCF_RESKEY_CRM_meta_clone_max="${OCF_RESKEY_CRM_meta_clone_max:-0}"  # cluster must always set this value
-    OCF_RESKEY_CRM_meta_clone_node_max="${OCF_RESKEY_CRM_meta_clone_node_max:-0}"
-    OCF_RESKEY_CRM_meta_master_max="${OCF_RESKEY_CRM_meta_master_max:-0}"
-    OCF_RESKEY_CRM_meta_master_node_max="${OCF_RESKEY_CRM_meta_master_node_max:-0}"
     log_attributes=false
     #debug_attributes=0   # TODO PRIO3: variable currently unused - remove or use
     return 0
