@@ -968,6 +968,7 @@ function saphana_start_primary() {
     # function: saphana_start_primary - handle startup of PRIMARY in M/S
     # params: current_landsscape_status
     # globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
+    # TODO PRIO2: NG - Do we need to detect situations, where cluster restarts the instance before promoting the secondary (in PreferredSizeTakeover==true mode) 
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss
     #
@@ -1447,8 +1448,11 @@ function saphana_check_up_primary() {
         # get local-site(s) LSS, SRR and nodes ROLES; set PRIM
         #
         set_SRHOOK "$gSite" "PRIM"
-        # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the
+        # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the cluster)
         my_sync=$(get_SRHOOK "$gRemSite")
+        LPTloc=$(date '+%s')
+        lpa_set_lpt "$LPTloc" "$gSite"
+        lpa_push_lpt "$LPTloc"
         if ocf_is_probe; then
             if [ "$promoted" == 1 ]; then
                 rc="$OCF_RUNNING_MASTER"
@@ -1456,9 +1460,6 @@ function saphana_check_up_primary() {
                 rc="$OCF_SUCCESS"
             fi
         else
-            LPTloc=$(date '+%s')
-            lpa_set_lpt "$LPTloc" "$gSite"
-            lpa_push_lpt "$LPTloc"
             if [ "$promoted" == 1 ]; then
                 # TODO PRIO1: NG - check which attribute to be set
                 set_hana_attribute "X" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
@@ -1575,9 +1576,11 @@ function saphana_monitor_primary() {
             ;;
         1 ) # DOWN or ERROR
             # DONE: PRIO2: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
+            super_ocf_log info "RA: checking saphana_check_down_primary"
             saphana_check_down_primary; rc="$?"
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
+            super_ocf_log info "RA: checking saphana_check_up_primary"
             saphana_check_up_primary "$init_attribute"; rc="$?"
             ;;
         * ) # UNDEFINED STATUS
@@ -1855,6 +1858,7 @@ function saphana_monitor_clone() {
         super_ocf_log info "DEC: PROBE ONLY"
         # TODO PRIO1: NG - could check the Master status in a probe - after a refresh this status should be lost?
         # TODO PRIO1: NG - score, if CLONE_ATTRIBUTE is known 
+        # TODO PRIO1: NG - is 'Master' still correct for promoted clones?
         #
         # check during probe, if this instance is *NOT* running as master
         # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
