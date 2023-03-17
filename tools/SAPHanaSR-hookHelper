@@ -86,13 +86,26 @@ sid_is_in_cluster() {
 # check, if the multi-state resource is in maintenance
 chk_msres_maintenance() {
     mmaint="false"
-    # get multi-state resource name
-    rname=$(xmllint -xpath "string(//master/primitive[@class='ocf' and @provider='suse']/instance_attributes/nvpair[@name='SID' and @value='$RSID']/../../../@id)" "$cibtmp")
-    if [ -n "$rname" ]; then
+    # get promotable clone resource name (select first promotable=true clone, then by provider=SUSE and SID)
+    rnameNew=$(xmllint -xpath "string(//clone/meta_attributes/nvpair[@name='promotable' and @value='true']/../../primitive[@class='ocf' and @provider='suse']/instance_attributes/nvpair[@name='SID' and @value='$RSID']/../../../@id)" "$cibtmp")
+    if [ -n "$rnameNew" ]; then
         # check for maintenance
-        mmaint=$(xmllint -xpath "string(//master[@id='$rname']/meta_attributes/nvpair[@name='maintenance']/@value)" "$cibtmp")
+        mmaint=$(xmllint -xpath "string(//clone[@id='$rnameNew']/meta_attributes/nvpair[@name='maintenance']/@value)" "$cibtmp")
         if [ -z "$mmaint" ]; then
             mmaint="false"
+		fi
+    else
+        #
+        # for als ms configured multi state resource
+        # 
+        # get multi-state resource name (select masters by provider=SUSE and SID)
+        rname=$(xmllint -xpath "string(//master/primitive[@class='ocf' and @provider='suse']/instance_attributes/nvpair[@name='SID' and @value='$RSID']/../../../@id)" "$cibtmp")
+        if [ -n "$rname" ]; then
+            # check for maintenance
+            mmaint=$(xmllint -xpath "string(//master[@id='$rname']/meta_attributes/nvpair[@name='maintenance']/@value)" "$cibtmp")
+            if [ -z "$mmaint" ]; then
+                mmaint="false"
+            fi
         fi
     fi
     echo "$mmaint"
