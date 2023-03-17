@@ -1993,9 +1993,17 @@ function saphana_promote_clone() {
                             #
                             # do the takeover
                             #
-                            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"; srt_rc=$?
+                            tkMessage=$(HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"); srt_rc=$?
                             super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
-                            # TODO PRIO2: NG handle errors of the new takeover
+                            if [[ "$srt_rc" != 0 ]]; then
+                                # TODO PRIO2: NG handle errors of the new takeover
+                                super_ocf_log error "ACT: SAP HANA TAKEOVER FAILED. $tkMessage"
+                                echo "$tkMessage"
+                                if grep 'rc=50277' <<<"$tkMessage"; then
+                                    super_ocf_log error "ACT: SAP HANA TAKEOVER BLOCKED. Most likely misconfigured takeover blocker hook script. Check sudoers and global.ini."
+                                fi
+                                set_hana_attribute "$NODENAME" "F" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                            fi
                             #
                             # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
                             #
