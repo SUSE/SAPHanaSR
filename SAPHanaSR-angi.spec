@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        1.001.2
+Version:        1.001.3
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
