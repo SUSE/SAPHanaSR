@@ -105,10 +105,9 @@ function version() {
 function get_action_timeout() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action in ms
-    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
-    local stdTimeOut="$HANA_STD_ACTION_TIMEOUT"
+    # shellcheck disable=SC2154
+    local hanaAction="$1" actionTimeOut="$OCF_RESKEY_CRM_meta_timeout" stdTimeOut="$HANA_STD_ACTION_TIMEOUT"
     local actTimeOutPercent=95 # 95% to left 5% for the rest of the resource agent action
-    local hanaAction="$1"
     if [ -z "$actionTimeOut" ]; then
         actionTimeOut="$stdTimeOut"
     else
@@ -129,7 +128,6 @@ function get_action_timeout() {
     echo "$timeout"
 } # end function get_action_timeout
 
-# TODO PRIO0: HANA_CALL   saphana_init_attribute_definitions   chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
 #
 # function: assert - quickly go out of here with minimal error/return code handling and log
 # params:   MESSAGE
@@ -156,43 +154,55 @@ function assert() {
 } # end function assert
 
 #
-# function: set_crm_master - set the crm master score of the local or remote node
+# function: get_crm_promote - get the crm master score of the local node
+# params:   -
+# globals:  HA_SBIN_DIR(r)
+#
+function get_crm_promote() {
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+  local rc=0
+   "${HA_SBIN_DIR}/$CRM_PROMO" -G -q "$CRM_PROMO_PARAMS"; rc=$?
+   return "$rc"
+} # end function get_crm_promote
+
+#
+# function: set_crm_promote - set the crm master score of the local or remote node
 # params:   SCORE  [NODE]
 # globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
 #
-function set_crm_master() {
+function set_crm_promote() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=0
-    local score=0
-    local node=""
+    local rc=0 score=0 node=""
     if [ -n "$1" ]; then
         score=$1
     fi
     if [ -n "$2" ]; then
         node="-N $2"
     fi
+    # shellcheck disable=SC2154
+    ocf_version_cmp "3.9.0" "$OCF_RESKEY_crm_feature_set"
     # DONE: PRIO2: Only adjust master if value is really different (try to check that)
-    oldscore=$("${HA_SBIN_DIR}/crm_master" "$node" -G -q -l reboot)
+    oldscore=$("${HA_SBIN_DIR}/$CRM_PROMO" "$node" -G -q "$CRM_PROMO_PARAMS" )
     if [ "$oldscore" != "$score" ]; then
        dstr=$(date)
        if ocf_is_true "$log_attributes"; then
-           echo "$dstr: SAPHanaController: crm_master $node -v $score -l reboot " >> "$log_attr_file"
+           echo "$dstr: SAPHanaController: $CRM_PROMO $node -v $score $CRM_PROMO_PARAMS" >> "$log_attr_file"
        fi
-       super_ocf_log debug "DBG: SET crm master: $node $score (old: $oldscore)"
-       "${HA_SBIN_DIR}/crm_master" "$node" -v "$score" -l reboot; rc="$?"
+       super_ocf_log debug "DBG: SET crm promo: $node $score (old: $oldscore)"
+       "${HA_SBIN_DIR}/$CRM_PROMO" "$node" -v "$score" "$CRM_PROMO_PARAMS" ; rc="$?"
     else
-       super_ocf_log debug "DBG: LET crm master: $score"
+       super_ocf_log debug "DBG: LET crm promo: $score"
        rc=0
     fi
     return "$rc"
-} # end function set_crm_master
+} # end function set_crm_promote
 
 #
-# function: scoring_crm_master - score instance due to role and sync match (table SCORING_TABLE)
+# function: scoring_crm_promote - score instance due to role and sync match (table SCORING_TABLE)
 # params:   NODE_ROLES NODE_SYNC_STATUS
 # globals:  SCORING_TABLE[@],
 #
-function scoring_crm_master() {
+function scoring_crm_promote() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local hana_roles="$1"
     local hana_sync="$2"
@@ -204,32 +214,18 @@ function scoring_crm_master() {
         read -r lssPattern srrPattern rolePattern syncPattern myScore patternDescription <<< "$scoring_rule"
         fullRolePattern="$lssPattern:$srrPattern:$rolePattern"
         if [[ "${hana_roles}" =~ $fullRolePattern ]] && [[ "${hana_sync}" =~ $syncPattern ]]; then
-              super_ocf_log info "DEC: scoring_crm_master: roles($hana_roles) are matching pattern ($fullRolePattern)"
-              super_ocf_log info "DEC: scoring_crm_master: sync($hana_sync) is matching syncPattern ($syncPattern)"
-              super_ocf_log info "DEC: scoring_crm_master: set score $myScore ($patternDescription)"
+              super_ocf_log info "DEC: scoring_crm_promote: roles($hana_roles) are matching pattern ($fullRolePattern)"
+              super_ocf_log info "DEC: scoring_crm_promote: sync($hana_sync) is matching syncPattern ($syncPattern)"
+              super_ocf_log info "DEC: scoring_crm_promote: set score $myScore ($patternDescription)"
               break;  # end scanning, best rule already found
         fi
     done
-    super_ocf_log debug "DBG: scoring_crm_master adjust score $myScore"
+    super_ocf_log debug "DBG: scoring_crm_promote adjust score $myScore"
     # Do not score, if we did not found our role/sync at this moment - bsc#919925
     if [ -n "$myScore" ]; then
-        set_crm_master "$myScore"
+        set_crm_promote "$myScore"
     fi
-} # end function scoring_crm_master
-
-#
-# function: get_crm_master - get the crm master score of the local node
-# params:   -
-# globals:  HA_SBIN_DIR(r)
-#
-function get_crm_master() {
-  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-  local rc=0
-   "${HA_SBIN_DIR}/crm_master" -G -q -l reboot; rc=$?
-   return "$rc"
-} # end function get_crm_master
-
-# TODO PRIO0: saphana_init_attribute_definitions   chk4systemdsupport   start_saphostagent   stop_saphostagent   check_saphostagent   master_walk #### get...
+} # end function scoring_crm_promote
 
 #
 # function get_SRHOOK_plain
@@ -324,7 +320,7 @@ function saphana_init_scoring_tables() {
     )
     SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU=(
        "[0-9]   P [^:]*:master         .*     150               'primary - any running status, active master nameserver role'"
-       "[0-9]   P [^:]*:.*             .*     140               'primary - any running status, any other active namesrever role (even still not detected)'"
+       "[0-9]   P [^:]*:.*             .*     140               'primary - any running status, any other active nameserver role (even still not detected)'"
        "[0-9]   S [^:]*:master         SOK    100               'secondary - any running status, active master nameserver role, in sync'"
        "[0-9]   S [^:]*:master         PRIM   100               'secondary - any running status, active master nameserver role, already marked as PRIMary'"
        "[0-9]   S [^:]*:master         SFAIL  -INFINITY         'secondary - any running status, active master nameserver role, not in sync'"
@@ -337,8 +333,8 @@ function saphana_init_scoring_tables() {
     SCORING_TABLE_PREFERRED_NEVER_SU=(
        "[234]   P [^:]*:master         .*     150               'primary - running, active master nameserver role'"
        "[015-9] P [^:]*:master         .*      90               'primary - not running, but active master nameserver role'"
-       "[0-9]   P [^:]*:.*             .*     -INFINITY         'primary - any running status, any other active namesrever role (even still not detected)'"
-       "[0-9]   S [^:]*:.*             .*     -INFINITY         'secondary - any running status, any other active namesrever role (even still not detected)'"
+       "[0-9]   P [^:]*:.*             .*     -INFINITY         'primary - any running status, any other active nameserver role (even still not detected)'"
+       "[0-9]   S [^:]*:.*             .*     -INFINITY         'secondary - any running status, any other active nameserver role (even still not detected)'"
        ".*      . .*                   .*     -INFINITY         'any case, not catched before'"
     )
     SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SO=(

@@ -39,6 +39,7 @@ class saphanasrtest:
         self.testData = {}
         self.testFile = "-"
         self.repeat = 1
+        self.dumpFailures = False
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.remoteNode = None
         parser = argparse.ArgumentParser()
@@ -46,6 +47,7 @@ class saphanasrtest:
         parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
         parser.add_argument("--simulate", help="only simulate, dont call actions", action="store_true")
         parser.add_argument("--repeat", help="how often to repeat the test")
+        parser.add_argument("--dumpFailures", help="print failed checks per loop", action="store_true")
         args = parser.parse_args()
         if args.testFile:
             self.message("PARAM: testFile: {}".format(args.testFile))
@@ -56,6 +58,10 @@ class saphanasrtest:
         if args.repeat:
             self.message("PARAM: repeat: {}".format(args.repeat))
             self.repeat = int(args.repeat)
+        if args.dumpFailures:
+            self.message("PARAM: repeat: {}".format(args.dumpFailures))
+            self.dumpFailures = args.dumpFailures
+
 
     def insertToArea(self, area, object):
         """ insert an object dictionary to an area dictionary """
@@ -158,6 +164,7 @@ class saphanasrtest:
         """ run all checks for area and object """
         lSR = self.SR
         checkResult = -1
+        failedChecks = ""
         for c in checks:
             """ match <key>=<regExp> """
             mo = re.search("(.*)(=)(.*)",c)
@@ -176,10 +183,16 @@ class saphanasrtest:
                             if checkResult <0:
                                 checkResult = 0
                         else:
+                            if failedChecks == "":
+                                failedChecks = "{}={}: {}={} !~ {}".format(areaName,objectName,cKey,lVal,cRegExp)
+                            else:
+                                failedChecks += "; {}={} !~ {}".format(cKey,lVal,cRegExp)
                             if checkResult <1:
                                 checkResult = 1
             if (found == 0) and (checkResult < 2 ):
                 checkResult = 2
+        if self.dumpFailures and failedChecks != "":
+            self.message("FAILED: {}".format(failedChecks))
         return checkResult
 
     def processTopologyObject(self, step, topologyObjectName, areaName):
@@ -212,7 +225,8 @@ class saphanasrtest:
             stepAction = ""
         self.message("PROC: stepID={} stepName='{}' stepNext={} stepAction={}".format(stepID, stepName, stepNext, stepAction))
         while loops <= maxLoops:
-            print(".", end='', flush=True)
+            if self.dumpFailures == False:
+                print(".", end='', flush=True)
             processResult = -1
             self.readSAPHanaSR()
             processResult = max ( self.processTopologyObject(step, 'pSite', 'Sites'),
@@ -224,7 +238,8 @@ class saphanasrtest:
                 break
             else:
                 time.sleep(wait)
-        print("")
+        if self.dumpFailures == False:
+            print("")
         self.message("STATUS: step {} checked in {} loops)".format(stepID, loops))
         if processResult == 0:
             aRc = self.action(stepAction)
@@ -235,21 +250,29 @@ class saphanasrtest:
         testStart = self.testData['start']
         step=self.getStep(testStart)
         stepStep = step['step']
+        rc = 0
+        """ onfail for first step is 'break' """
+        onfail = 'break' 
         while stepStep != "END":
             stepNext = step['next']
             processResult = self.processStep(step)
             if processResult == 0:
                 self.message("STATUS: Test step {} passed successfully".format(stepStep))
             else:
+                rc = 1
                 self.message("STATUS: Test step {} FAILED successfully ;-)".format(stepStep))
-                """ TODO: add onfail handling """
-                break
+                """ TODO: add onfail handling (cuurently only brak for furst step and continue for others) """
+                if onfail == 'break':
+                    break
             step=self.getStep(stepNext)
             if step:
                 stepStep = step['step']
             else:
                 """ check, why we run into this code path """
                 break
+            """ onfail for all next steps is 'continue' to run also the recovery steps """
+            onfail = 'continue'
+        return(rc)
 
     def processTest(self):
         """ process the entire test defined in testData """
@@ -259,7 +282,8 @@ class saphanasrtest:
         testSID = self.testData['sid']
         testResource = self.testData['mstResource']
         self.message("PROC: testID={} testName={} testStart={} testSID={}".format(testID, testName, testStart, testSID, testResource))
-        self.processSteps()
+        rc = self.processSteps()
+        return(rc)
 
     def getStep(self, stepName):
         """ query for a given step with stepName in testData """
@@ -345,8 +369,12 @@ if __name__ == "__main__":
         test01.topolo.update({'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['sSite'])})
         test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.readTestFile()
+        testID = test01.testData['test']
         if test01.repeat != 1:
-            testID = test01.testData['test']
             test01.message("TEST: {} testNr={} ######".format(testID, test01.count))
-        test01.processTest()
+        rc = test01.processTest()
+        if rc == 0:
+            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(testID, test01.count)) 
+        else:
+            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(testID, test01.count)) 
         test01.count += 1

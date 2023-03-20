@@ -36,7 +36,7 @@
 #######################################################################
 # TODO PRIO2: NG - use SAPHanaControllerLibVersion=
 # shellcheck disable=SC2034
-SAPHanaControllerLibVersion="1.001.10"
+SAPHanaControllerLibVersion="1.001.20"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -76,22 +76,8 @@ EOF
     return "$rc"
 } # end function saphana_usage
 
-#
-# function: saphana_meta_data - print resource agent meta-data for cluster
-# params:   -
-# globals:  -
-#
-function saphana_meta_data() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=0
-# TODO PRIO2: Description including parameters to be reviewed for scale-out
-# TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
-    cat <<END
-<?xml version="1.0"?>
-<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
-<resource-agent name="SAPHanaController" version="$raVersion">
-<version>1.0</version>
-
+function saphana_print_description() {
+    cat <<END_OF_DESCR
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
 The SAPHanaSR resource agent manages two SAP HANA database systems which are configured
@@ -134,6 +120,11 @@ The resource agent uses the following four interfaces provided by SAP:
    SAP HANA instance. This is the hostname used during the HANA installation.
 
 </longdesc>
+END_OF_DESCR
+} # end function saphana_print_description
+
+function saphana_print_parameters() {
+    cat <<END
 <parameters>
     <parameter name="SID" unique="0" required="1">
         <longdesc lang="en">SAP System Identifier (SID) like "SLE" or "HAE"</longdesc>
@@ -204,7 +195,29 @@ The resource agent uses the following four interfaces provided by SAP:
         <content type="string" default="" />
     </parameter>
 </parameters>
+END
+} # end function saphana_print_parameters
 
+#
+# function: saphana_meta_data - print resource agent meta-data for cluster
+# params:   -
+# globals:  -
+#
+function saphana_meta_data() {
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+# TODO PRIO2: Description including parameters to be reviewed for scale-out
+# TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
+    cat <<END_OF_HEADER
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="SAPHanaController" version="$raVersion">
+<version>1.0</version>
+END_OF_HEADER
+    saphana_print_description
+    saphana_print_parameters
+
+    cat <<END_OF_ACTIONS
 <actions>
     <action name="start"   timeout="3600" />
     <action name="stop"    timeout="3600" />
@@ -220,7 +233,7 @@ The resource agent uses the following four interfaces provided by SAP:
     <action name="reload" timeout="5" />
 </actions>
 </resource-agent>
-END
+END_OF_ACTIONS
 return "$rc"
 } # end function saphana_meta_data
 
@@ -337,83 +350,10 @@ function saphana_init_handle_update() {
     fi
 } # end function saphana_init_handle_update
 
-#
-# function: saphana_init - initialize variables for the resource agent
-# params:   InstanceName
-# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
-# globals:  gSite(w), remoteHost(w), otherNodes(w), gRemSite(w)
-# TODO PRIO1: NG - replace ATTR_NAME_HANA_SEC_SYNC_STATUS+ATTR_NAME_HANA_SYNC_STATUS by site specific attribute
-# globals:  ATTR_NAME_HANA_*SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
-# globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
-# globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w)
-# globals:  NODENAME(w), vNAME(w), hdbver(w),
-# saphana_init : Define global variables with default values, if optional parameters are not set
-#
-function saphana_init() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc="$OCF_SUCCESS"
-    local clN
-    SYSTEMCTL="/usr/bin/systemctl"
-    # local site
-    # two parameter models (for transition only)
-    # OLD: InstanceName
-    # NEW: SID InstanceNumber
-    NODENAME=$(crm_node -n)
-    SID="${OCF_RESKEY_SID:-}"
-    InstanceNr="${OCF_RESKEY_InstanceNumber:-}"
-    InstanceName="HDB${InstanceNr}"
-    SIDInstanceName="${SID}_${InstanceName}"
-    export SAPSYSTEMNAME="$SID"
-    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
-    super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
-    sid="${SID,,}"
-    sidadm="${sid}adm"
-    #
-    # get sap virtual host name
-    #
-    get_local_virtual_name
-    SAPVIRHOST=${gVirtName}
-    PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
-    AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
-    RemoveSAPSockets="${CF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
-    LPA_DIRECTORY=/var/lib/SAPHanaRA
-    #
-    # init attribute definitions
-    #
-    saphana_init_attribute_definitions
-    super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
-    ocf_env=$(env | grep 'OCF_RESKEY_CRM')
-    super_ocf_log debug "DBG: OCF: $ocf_env"
-    #
-    # init scoring tables
-    #
-    topology=$(get_hana_attribute "global" "${ATTR_NAME_HANA_TOPOLOGY[@]}")    # ScaleUp ScaleOut
-    if ocf_is_true "$PreferSiteTakeover"; then
-        preferRecover="remote"
-    elif [[ "${PreferSiteTakeover,,}" == "never" ]]; then
-        preferRecover="localOnly"
-    else
-        preferRecover="local"
-    fi
-    saphana_init_scoring_tables
-    super_ocf_log info "RA: set scoring table for scenario ${topology}_${preferRecover}"
-    case "${topology}_${preferRecover}" in
-        ScaleUp_remote      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;
-        ScaleUp_local       ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU[@]}");;
-        ScaleOut_remote     ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SO[@]}");;
-        ScaleOut_local      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SO[@]}");;
-        ScaleUp_localOnly   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SU[@]}");;
-        ScaleOut_localOnly  ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SO[@]}");;
-        *                   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;  # use ScaleUp_remote as default, if takeover and/or PreferSiteTakeover are not already detected
-    esac
-
-    #
-    DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
-    super_ocf_log debug "DBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
-    #
-    # Determine list of other cluster nodes and store in otherNodes variable
-    otherNodes=()
-    mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
+function saphana_init_sap_paths() {
+    # function: saphana_init_sap_paths - set variables used for SAP paths (directories, config files and executables)
+    # globals: TODO OCF_RESKEY_DIR_EXECUTABLE, SID, InstanceName, DIR_EXECUTABLE, SAPSTARTSRV, SAPCONTROL, OCF_RESKEY_DIR_PROFILE, SAPVIRHOST
+    # params: -
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         if have_binary "/usr/sap/$SID/$InstanceName/exe/sapstartsrv" && have_binary "/usr/sap/$SID/$InstanceName/exe/sapcontrol"
@@ -432,48 +372,8 @@ function saphana_init() {
     [ -z "$DIR_EXECUTABLE" ] && assert "Cannot find sapstartsrv and sapcontrol executable, please set DIR_EXECUTABLE parameter!"
     DIR_PROFILE="${OCF_RESKEY_DIR_PROFILE:-/usr/sap/$SID/SYS/profile}"
     #
-    # get local system replication config 
+    # serach for SAP instance profile for systemV integrated SAP HANA instances
     #
-    get_local_sr_config # sets gSrr gSrMode and gSite
-    super_ocf_log info "DEC: gSrr=$gSrr gSrMode=$gSrMode gSite=$gSite"
-    # TODO PRIO1: NG - check if gSite and others are now set
-    #
-    # get remote site
-    #
-    saphana_init_get_remote_site
-    super_ocf_log info "DEC: gRemSite=$gRemSite"
-    #
-    # get landscape config (lss and roles)
-    #
-    # TODO PRIO1: NG - if clone_state or roles are (still) empty, then do not trust in the cluster attributes
-    #                  if roles is not se, them SAPHanaTopology did not report that so far, so check for life values
-    # TODO PRIO1: NG - check for global variable gClone (set by clone_state attr)
-    #
-    # TODO PRIO1: NG - check in which cases we could (already) trust on the cluster attributre srr
-    #
-    gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-    # need to get these values life
-    local -a splitResult
-    mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --multiValue );
-    for splitResultLine in "${splitResult[@]}"; do
-        case "$splitResultLine" in
-            role=* ) gRole="${splitResultLine#*=}";;
-            retn=* ) gLss="${splitResultLine#*=}";;
-            #topo=* ) gTopology="${splitResultLine#*=}";;
-        esac
-    done
-
-    gFullRole="${gLss}:${gSrr}:${gRole}"
-    super_ocf_log info "DEC: init(): gFullRole=$gFullRole"
-
-    gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
-    gSrHook=$(get_SRHOOK "$gSite")
-
-    super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
-    #super_ocf_log debug "DBG: sr_name=$gSite, remoteHost=$remoteHost, remoteNode=$remoteNode, sr_mode=$sr_mode"
-    # optional OCF parameters, we try to guess which directories are correct
-    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
-    # check, if the following fall-back is ok, or if there could be multiple profiles matching this pattern
     if [ -n "${SAPVIRHOST}" ]; then
         SAPSTARTPROFILE="$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_${SAPVIRHOST}}"
     else
@@ -483,6 +383,109 @@ function saphana_init() {
         #
         SAPSTARTPROFILE="$(ls -1 "$DIR_PROFILE/${OCF_RESKEY_INSTANCE_PROFILE:-${SID}_${InstanceName}_*}")"
     fi
+    
+} # end function saphana_init_sap_paths
+
+function saphana_init_get_ocf_parameters() {
+    SID="${OCF_RESKEY_SID:-}"
+    InstanceNr="${OCF_RESKEY_InstanceNumber:-}"
+    InstanceName="HDB${InstanceNr}"
+    SIDInstanceName="${SID}_${InstanceName}"
+    export SAPSYSTEMNAME="$SID"
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
+    super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
+    sid="${SID,,}"
+    sidadm="${sid}adm"
+    PreferSiteTakeover="${OCF_RESKEY_PREFER_SITE_TAKEOVER^^}" # upper case
+    AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
+    RemoveSAPSockets="${OCF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
+    DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
+    ocf_env=$(env | grep 'OCF_RESKEY_CRM')
+    super_ocf_log debug "DBG: OCF: $ocf_env"
+    return 0
+} # end function saphana_init_get_ocf_parameters
+
+function saphana_init() {
+    #
+    # function: saphana_init - initialize variables for the resource agent
+    # params:   InstanceName
+    # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
+    # globals:  gSite(w), remoteHost(w), otherNodes(w), gRemSite(w), ATTR_NAME_HANA_*SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
+    # TODO PRIO1: NG - replace ATTR_NAME_HANA_SEC_SYNC_STATUS+ATTR_NAME_HANA_SYNC_STATUS by site specific attribute
+    # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
+    # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w), NODENAME(w), vNAME(w), hdbver(w),
+    #
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc="$OCF_SUCCESS" clN
+    SYSTEMCTL="/usr/bin/systemctl"
+    NODENAME=$(crm_node -n)
+    saphana_init_get_ocf_parameters # set SID, sid, sidadm, InstanceNr, InstanceName HANA_CALL_TIMEOUT, PreferSiteTakeover, AUTOMATED_REGISTER, RemoveSAPSockets
+    #
+    # get sap virtual host name
+    #
+    get_local_virtual_name; SAPVIRHOST=${gVirtName}
+    LPA_DIRECTORY=/var/lib/SAPHanaRA
+    #
+    # init attribute definitions
+    #
+    saphana_init_attribute_definitions
+    super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
+    #
+    # init scoring tables
+    #
+    topology=$(get_hana_attribute "global" "${ATTR_NAME_HANA_TOPOLOGY[@]}")    # ScaleUp ScaleOut
+    if ocf_is_true "$PreferSiteTakeover"; then
+        preferRecover="remote"
+    elif [[ "${PreferSiteTakeover}" == "NEVER" ]]; then
+        preferRecover="localOnly"
+    else
+        preferRecover="local"
+    fi
+    saphana_init_scoring_tables
+    super_ocf_log info "RA: set scoring table for scenario ${topology}_${preferRecover}"
+    case "${topology}_${preferRecover}" in
+        ScaleUp_remote      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;
+        ScaleUp_local       ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU[@]}");;
+        ScaleOut_remote     ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SO[@]}");;
+        ScaleOut_local      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_LOCAL_RESTART_SO[@]}");;
+        ScaleUp_localOnly   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SU[@]}");;
+        ScaleOut_localOnly  ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_NEVER_SO[@]}");;
+        *                   ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;  # use ScaleUp_remote as default, if takeover and/or PreferSiteTakeover are not already detected
+    esac
+    super_ocf_log debug "DBG: DUPLICATE_PRIMARY_TIMEOUT=$DUPLICATE_PRIMARY_TIMEOUT"
+    otherNodes=()
+    mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
+    saphana_init_sap_paths
+    #
+    # get local system replication config and remote site
+    #
+    get_local_sr_config # sets gSrr gSrMode and gSite; 
+    super_ocf_log info "DEC: gSrr=$gSrr gSrMode=$gSrMode gSite=$gSite"
+    saphana_init_get_remote_site # sets gRemSite
+    super_ocf_log info "DEC: gRemSite=$gRemSite"
+    #
+    # get landscape config (lss and roles)
+    #
+    # TODO PRIO1: NG - if clone_state or roles are (still) empty, then do not trust in the cluster attributes
+    #                  if roles is not se, them SAPHanaTopology did not report that so far, so check for life values
+    # TODO PRIO1: NG - check for global variable gClone (set by clone_state attr)
+    #
+    gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+    local -a splitResult
+    mapfile -t splitResult < <( get_role_by_landscape "$gVirtName" --multiValue ); # need to get these values life
+    for splitResultLine in "${splitResult[@]}"; do
+        case "$splitResultLine" in
+            role=* ) gRole="${splitResultLine#*=}";;
+            retn=* ) gLss="${splitResultLine#*=}";;
+            #topo=* ) gTopology="${splitResultLine#*=}";;
+        esac
+    done
+    gFullRole="${gLss}:${gSrr}:${gRole}"
+    super_ocf_log info "DEC: init(): gFullRole=$gFullRole"
+    gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+    gSrHook=$(get_SRHOOK "$gSite")
+    super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     #
     # get HANA version
     #
@@ -491,14 +494,13 @@ function saphana_init() {
     # set sap commands
     #
     saphana_init_sap_commands
-
-    # TODO PRIO2: Only, if scale-out do the master_walk
+    # TODO PRIO2: Only, if scale-out do the node_role_walk
     if is_master_nameserver; then
-       master_walk "$standbyFilter"
+       node_role_walk "$standbyFilter"
     elif is_active_nameserver_slave; then
-       master_walk "$standbyFilter"
+       node_role_walk "$standbyFilter"
     elif is_lost_nameserver_slave; then
-       master_walk "$standbyFilter"
+       node_role_walk "$standbyFilter"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return "$OCF_SUCCESS"
@@ -845,16 +847,132 @@ function saphana_validate() {
     return "$rc"
 } # end function saphana_validate
 
-#
-# function: saphana_start_primary - handle startup of PRIMARY in M/S
-# params: current_landsscape_status
-# globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
-#
+
+function saphana_start_primary_handle_wait_advice() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global:
+    # prarams: lss
+    local lss="$1" rc="$OCF_NOT_RUNNING"
+    set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
+    case "$lss" in
+        2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
+            # TODO: PRIO3: I now change from "just keep it up to take that down"
+            # TODO: PRIO3: differ lpt_advice, if rc=3 will get implemted
+            # 2 => DOWN
+            # 3 => KEEP
+            # TODO: PRIO3: OCF_SUCCESS, OCF_NOT_RUNNING or OCF_ERR_xxxx ?
+            # lpa_dec
+            super_ocf_log err "LPA: Timestamp (lpt) attribute inconsistency detected"
+            set_crm_promote -9000
+            rc="$OCF_ERR_GENERIC"
+            ;;
+        1 ) # we are down, so we should wait --> followup in next monitor
+            super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
+            if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
+                set_hana_attribute "${NODENAME}" "WAITING4LPA" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                set_crm_promote -9000
+                rc="$OCF_SUCCESS"
+            else
+                super_ocf_log warn "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
+                set_hana_attribute "${NODENAME}" "WAITING4REG" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                set_crm_promote -9000
+                rc="$OCF_NOT_RUNNING"
+            fi
+            ;;
+    esac
+    return "$rc"
+} # end function saphana_start_primary_handle_wait_advice
+
+function saphana_start_primary_handle_register_advice() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global: OCF_*, gSite, gMasters[@], HANA_STATE_*
+    # params: lss
+    local rc="$OCF_NOT_RUNNING" my_sync m primary_status
+    set_SRHOOK "$gSite" "SREG"; my_sync="SREG"
+    case "$lss" in
+        2 | 3 | 4 ) # upps we are up - but shouldn't? - we should not register with started HDB
+            super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
+            set_crm_promote -inf
+            rc="$OCF_NOT_RUNNING"
+            ;;
+        1 ) # lets try to register
+            super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
+            super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
+            #
+            # prevent that any part of the local site will be promoted at this moment
+            #
+            set_crm_promote  0
+            for m in "${gMasters[@]}"; do
+                set_crm_promote  0 "$m"
+            done
+            if wait_for_primary_master 1; then
+                register_hana_secondary
+                primary_status="$(check_for_primary)";
+                if [[ "$primary_status" == "$HANA_STATE_SECONDARY" ]]; then
+                    super_ocf_log info "ACT: Register successful"
+                    lpa_push_lpt 10
+                    lpa_set_lpt  10 "$gSite"
+                    set_crm_promote  0
+                    saphana_start_secondary "$lss"; rc="$?"
+                    lpa_set_lpt  10 "$gSite"
+                else
+                    super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
+                    rc="$OCF_NOT_RUNNING"
+                fi
+            else
+                # lets check next monitor, if we can register
+                rc="$OCF_SUCCESS"
+            fi
+            ;;
+    esac
+    return "$rc"
+} # end function saphana_start_primary_handle_register_advice
+
+
+function saphana_start_primary_handle_start_advice() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global: gSite, fFullRole, gRole, gLss, gSrr, OCF_*, 
+    # params: lss
+    local lss="$1" rc="$OCF_NOT_RUNNING" my_sync LPTLoc lLss
+    set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
+    case "$lss" in
+        2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
+            super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
+            LPTloc=$(date '+%s')
+            lpa_set_lpt "$LPTloc" "$gSite"
+            rc="$OCF_SUCCESS"
+            ;;
+        1 ) # landscape says we are down, lets start and adjust scores and return code
+            super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
+            saphana_start; rc="$?"
+            LPTloc=$(date '+%s')
+            lpa_set_lpt "$LPTloc" "$gSite"
+            ;;
+    esac
+    super_ocf_log info "DEC: saphana_start_primary_handle_start_advice: scoring_crm_promote($gFullRole,$my_sync)"
+    # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology and get updaptes roles from SAPHanaTopology
+    get_hana_landscape_status; lLss="$?"
+    gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
+    gLss="$lLss"
+    gFullRole="${lLss}:${gSrr}:${gRole}"
+    scoring_crm_promote "$gFullRole" "$my_sync"
+    return "$rc"
+} # end function saphana_start_primary_handle_start_advice
+
 function saphana_start_primary() {
-    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    #
+    # function: saphana_start_primary - handle startup of PRIMARY in M/S
+    # params: current_landsscape_status
+    # globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
+    # TODO PRIO2: NG - Do we need to detect situations, where cluster restarts the instance before promoting the secondary (in PreferredSizeTakeover==true mode) 
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
-    local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss
+    local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss remoteSync=""
+    #
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     #
     # we will be a PRIMARY so checking, if there is anOTHER primary
     #
@@ -868,174 +986,63 @@ function saphana_start_primary() {
     fi
     #
     lpa_check_lpt_status; lpa_dec=$?
-    # TODO PRIO2: scale-out was to get lss as param; scale-up was to query lss
-    # we take first lss from the parameter $1
-    # get_hana_landscape_status; lss=$?
-    # TODO PRIO2: NG reduce number of queries for role, sync, lss, srr
     my_sync="$gSrPoll"
-    # DONE: PRIO2: Do we need to differ 0 and 1 here? While 0 is a fatal SAP error, 1 for down/error
-    if [[ "$lss" == 0 ]]; then
-       super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
-       # DONE: PRIO1: what to do for lss=0?
-       # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
-       lpa_advice="skip"
-       rc="$OCF_ERR_GENERIC"
+    if [[ "$lss" != 0 ]]; then
+        super_ocf_log info "DEC: scoring_crm_promote **01**"
+        scoring_crm_promote "$gFullRole" "$my_sync"
+        # saphana_start_primary - set SR attribute of primary to "PRIM"
+        case "$lpa_dec" in
+            0) # LPA says start
+                lpa_advice="start"
+                # TODO PRIO1: NG - scale-out only set lpa_advice, scale-up had additionally the following code
+                # TODO PRIO1: NG - We need to do a special handling for remote being a 234-Secondary in SR Status SOK
+                # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
+                #   then lpa_advice="wait"
+                remoteRole=$(get_hana_attribute "$remoteNode" "${ATTR_NAME_HANA_ROLES[@]}")
+                remoteSync=$(get_SRHOOK "$gRemSite" "$remoteNode")
+                super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
+                if ocf_is_true "${PreferSiteTakeover}"; then
+                    remoteStatus="$remoteRole:$remoteSync"
+                    case "$remoteStatus" in
+                        [234]:S:*:SOK | [234]:S:*:PRIM )
+                            lpa_advice="wait"
+                            # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
+                            super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
+                            ;;
+                        * )
+                            super_ocf_log info "DEC: saphana_primary - remoteStatus is: $remoteStatus"
+                            ;;
+                    esac
+                else
+                    super_ocf_log info "DEC: saphana_primary - PreferSiteTakeover set to false"
+                fi
+                saphana_start_primary_handle_start_advice "$lss"; rc="$?"
+                ;;
+            1)  # LPA says register!
+                lpa_advice="register"
+                saphana_start_primary_handle_register_advice "$lss"; rc="$?"
+                ;;
+            2 | 3 | 4 )  # LPA 2 says wait for older LPA to expire
+                         # LPA 3 says to wait for remote LPA to be reported/announced
+                         # LPA 4 says something is completely wrong - FAIL resource # TODO PRIO1: NG - RC3 for waiting remote side to report lss
+                lpa_advice="fail"
+                saphana_start_primary_handle_wait_advice "$lss"; rc="$?"
+                ;;
+            *)  # LPA failed with an unknown status - FAIL resource
+                lpa_advice="fail"
+                super_ocf_log info "LPA: LPA reports FAIL"
+                set_crm_promote -inf
+                rc="$OCF_NOT_RUNNING"
+                ;;
+        esac
+    else # lss is FATAL (0)
+        super_ocf_log err "ACT: get_hana_landscape_status reports FATAL"
+        # DONE: PRIO1: what to do for lss=0?
+        # TODO: PRIO3: Check, if OCF_ERR_GENERIC is best reaction
+        lpa_advice="skip"
+        rc="$OCF_ERR_GENERIC"
+        return "$rc"
     fi
-    super_ocf_log info "DEC: scoring_crm_master **01**"
-    scoring_crm_master "$gFullRole" "$my_sync"
-    # saphana_start_primary - set SR attribute of primary to "PRIM"
-    case "$lpa_dec" in
-        0) # LPA says start
-            lpa_advice="start"
-            # TODO PRIO1: NG - scale-out only set lpa_advice, scale-up had additionally the following code
-            # TODO PRIO1: NG - We need to do a special handling for remote being a 234-Secondary in SR Status SOK
-            # if ( remote_role like [234]:S )  && ( remote_sync_status is SOK|PRIM ) && ( PreferSiteTakeover )
-            #   then lpa_advice="wait"
-            remoteRole=$(get_hana_attribute "$remoteNode" "${ATTR_NAME_HANA_ROLES[@]}")
-            remoteSync=$(get_SRHOOK "$gRemSite" "$remoteNode")
-            super_ocf_log info "DEC: saphana_primary - checking remoteStatus"
-            if ocf_is_true "${PreferSiteTakeover}"; then
-                remoteStatus="$remoteRole:$remoteSync"
-                case "$remoteStatus" in
-                    [234]:S:*:SOK | [234]:S:*:PRIM )
-                        lpa_advice="wait"
-                        # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
-                        super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
-                        ;;
-                    * )
-                        super_ocf_log info "DEC: saphana_primary - remoteStatus is: $remoteStatus"
-                        ;;
-                esac
-            else
-                super_ocf_log info "DEC: saphana_primary - PreferSiteTakeover set to false"
-            fi
-            ;;
-        1)  # LPA says register!
-            lpa_advice="register"
-            ;;
-        2)  # LPA says wait for older LPA to expire
-            lpa_advice="wait"
-            ;;
-        3)  # LPA says to wait for remote LPA to be reported/announced
-            lpa_advice="wait"
-            ;;
-        4)  # LPA says something is completely wrong - FAIL resource # TODO PRIO1: NG - RC3 for waiting remote side to report lss
-            lpa_advice="fail"
-            ;;
-        *)  # LPA failed with an unknown status - FAIL resource
-            lpa_advice="fail"
-            ;;
-    esac
-
-    my_sync="$gSrHook"
-    case "$lpa_advice" in
-        start )  # process a normal START
-            set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
-            case "$lss" in
-                2 | 3 | 4 ) # as landscape says we are up - just set the scores and return code
-                    super_ocf_log info "LPA: landscape: UP, LPA: start ==> keep running"
-                    LPTloc=$(date '+%s')
-                    lpa_set_lpt "$LPTloc" "$gSite"
-                    rc="$OCF_SUCCESS"
-                    ;;
-                1 ) # landscape says we are down, lets start and adjust scores and return code
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: start ==> start system"
-                    saphana_start
-                    rc=$?
-                    LPTloc=$(date '+%s')
-                    lpa_set_lpt "$LPTloc" "$gSite"
-                    ;;
-            esac
-            super_ocf_log info "DEC: saphana_start_primary: scoring_crm_master($gFullRole,$my_sync)"
-            # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology and get updaptes roles from SAPHanaTopology
-            get_hana_landscape_status; lLss="$?"
-            gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
-            gLss="$lLss"
-            gFullRole="${lLss}:${gSrr}:${gRole}"
-    super_ocf_log info "DEC: scoring_crm_master **02**"
-            scoring_crm_master "$gFullRole" "$my_sync"
-            ;;
-        register ) # process a REGISTER
-            set_SRHOOK "$gSite" "SREG"; my_sync="SREG"
-            case "$lss" in
-                2 | 3 | 4 ) # upps we are up - but shouldn't? - we could not register with started HDB
-                    # DONE: PRIO3: check if this reaction is correct - tell cluster about failed start
-                    super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
-                    set_crm_master -inf
-                    rc="$OCF_NOT_RUNNING"
-                    ;;
-                1 ) # lets try to register
-                    # DONE: PRIO2: Like Action in start_secondary
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: register ==> try to register"
-                    super_ocf_log info "DEC: ANOTHER HANA IS AVAILABLE ==> LETS REGISTER"
-                    #
-                    # prevent that any part of the local site will be promoted at this moment
-                    #
-                    set_crm_master  0
-                    # TODO PRIO2: NG - normally only needed for scale-out:
-                    for m in "${gMasters[@]}"; do
-                        set_crm_master  0 "$m"
-                    done
-                    if wait_for_primary_master 1; then
-                        register_hana_secondary
-                        primary_status="$(check_for_primary)";
-                        if [[ "$primary_status" == "$HANA_STATE_SECONDARY" ]]; then
-                            super_ocf_log info "ACT: Register successful"
-                            lpa_push_lpt 10
-                            super_ocf_log debug "DBG: 003 * lpa_set_lpt 10 $gSite"
-                            lpa_set_lpt  10 "$gSite"
-                            set_crm_master  0
-                            saphana_start_secondary "$lss"
-                            rc=$?
-                            super_ocf_log debug "DBG: 004 * lpa_set_lpt 10 $gSite"
-                            lpa_set_lpt  10 "$gSite"
-                        else
-                            super_ocf_log err "ACT: Register failed. Expected:'$HANA_STATE_SECONDARY' Actual: '$primary_status'"
-                            rc="$OCF_NOT_RUNNING"
-                        fi
-                    else
-                        # lets check next monitor, if we can register
-                        rc="$OCF_SUCCESS"
-                    fi
-                    ;;
-            esac
-            ;;
-        wait )  # process a WAIT
-            set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
-            case "$lss" in
-                2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
-                    # TODO: PRIO3: I now change from "just keep it up to take that down"
-                    # TODO: PRIO3: differ lpt_advice, if rc=3 will get implemted
-                    # 2 => DOWN
-                    # 3 => KEEP
-                    # TODO: PRIO3: OCF_SUCCESS, OCF_NOT_RUNNING or OCF_ERR_xxxx ?
-                    # lpa_dec
-                    super_ocf_log err "LPA: Timestamp (lpt) attribute inconsistency detected"
-                    set_crm_master -9000
-                    rc="$OCF_ERR_GENERIC"
-                    ;;
-                1 ) # we are down, so we should wait --> followup in next monitor
-                    super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
-                    if ocf_is_true "$AUTOMATED_REGISTER" ; then
-                        super_ocf_log info "LPA: landscape: DOWN, LPA: wait ==> keep waiting"
-                        set_hana_attribute "${NODENAME}" "WAITING4LPA" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                        set_crm_master -9000
-                        rc="$OCF_SUCCESS"
-                    else
-                        super_ocf_log warn "LPA: OLD primary needs manual registration (AUTOMATED_REGISTER='false')"
-                        set_hana_attribute "${NODENAME}" "WAITING4REG" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                        set_crm_master -9000
-                        rc="$OCF_NOT_RUNNING"
-                    fi
-                    ;;
-            esac
-            ;;
-        fail )   # process a lpa FAIL
-            super_ocf_log info "LPA: LPA reports FAIL"
-            set_crm_master -inf
-            rc="$OCF_NOT_RUNNING"
-            ;;
-    esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function saphana_start_primary
@@ -1049,11 +1056,11 @@ function saphana_start_secondary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     case "$PreferSiteTakeover" in
-        never | NEVER | Never )
-            set_crm_master -INFINITY
+        NEVER )
+            set_crm_promote -INFINITY
             ;;
         * )
-            set_crm_master 0
+            set_crm_promote 0
             ;;
     esac
     #
@@ -1085,7 +1092,7 @@ function saphana_start_secondary() {
                #    so this is a WAITING situation
                super_ocf_log info "ACT: PRIMARY seems to be down now ==> WAITING"
                set_hana_attribute "${NODENAME}" "WAITING4PRIM" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-               set_crm_master -INFINITY
+               set_crm_promote -INFINITY
                rc="$OCF_SUCCESS"
            fi
        else
@@ -1095,7 +1102,7 @@ function saphana_start_secondary() {
     else
        super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
        set_hana_attribute "${NODENAME}" "WAITING4PRIM" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-       set_crm_master -INFINITY
+       set_crm_promote -INFINITY
        rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1236,7 +1243,7 @@ function saphana_start_clone() {
                 esac
             fi
         fi
-        set_crm_master -INFINITY
+        set_crm_promote -INFINITY
         rc="$OCF_SUCCESS"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1306,113 +1313,261 @@ function dual_primary_detection() {
     return "$rc"
 } # end function dual_primary_detection
 
-#
-# function: saphana_monitor_primary - monitor a hana clone instance
-# params:   -
-# globals:  HANA_STATE_*(r), remoteHost, NODENAME, ATTR_NAME_*, OCF_*, PreferSiteTakeover
-#
+function saphana_check_waiting_primary() {
+    # function: saphana_check_waiting_primary - monitor a WAITING primary
+    # params: TODO
+    # globals: TODO
+    # TODO PRIO1: NG - check which params /  globals are used/set ...
+    local lss lparc
+    get_hana_landscape_status; lss="$?"
+    if [ "$lss" -ge 2 ]; then
+        # seems admin already decided that for us? -> we are running - set DEMOTED
+        # TODO PRIO2: set "DEMOTED" attribute as described
+        LPTloc=$(date '+%s')
+        lpa_set_lpt "$LPTloc" "$gSite"
+    fi
+    lpa_check_lpt_status; lparc="$?"
+    case "$lparc" in
+       0 | 1 )
+            # lpa - no need to wait any longer - lets try a new start
+            saphana_start_clone; rc="$?"
+            super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+            return "$rc"
+            ;;
+        2 )
+            lpa_init_lpt "$HANA_STATE_PRIMARY"
+            # still waiting for second site to expire
+            if ocf_is_true "$AUTOMATED_REGISTER" ; then
+               super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+            else
+               super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
+               super_ocf_log info "LPA: You need to manually sr_register the older primary"
+            fi
+            return "$OCF_SUCCESS"
+        ;;
+        3 )
+            lpa_init_lpt "$HANA_STATE_PRIMARY"
+            # still waiting for second site to report lpa-lpt
+            super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
+            return "$OCF_SUCCESS"
+        ;;
+        4 )
+            # lpa internal error
+            # TODO PRIO3: Implement special handling for this issue - should we fail the ressource?
+            super_ocf_log info "LPA: LPA reports an internal error"
+            return "$OCF_SUCCESS"
+        ;;
+    esac
+} # end function saphana_check_waiting_primary
+
+function saphana_check_down_primary() {
+    # function saphana_check_down_primary - check and handle primary detected as 'down'
+    # params: TODO promoted PreferSiteTakeover
+    # globals: TODO gSite gFullRole gSrHook gRemSite OCF_* remoteNode(?)
+    # TODO PRIO1: NG - check which params /  globals are used/set ...
+    local promoted="$1" rc="$OCF_NOT_RUNNING" remoteSync my_sync
+    super_ocf_log info "DEC: scoring_crm_promote **03**"
+    scoring_crm_promote "$gFullRole" "$gSrHook"
+    if ocf_is_probe; then
+        #
+        # leave master score untouched, only set return code
+        #
+        rc="$OCF_NOT_RUNNING"
+    else
+        if ocf_is_true "${PreferSiteTakeover}" ; then
+            #
+            # DONE: PRIO1: first check, if remote site is already (and still) in sync
+            # TODO: PRIO4: Decide if penalty (-9000) or weak (5) is better here to cover situations where other clone is gone
+            # TODO PRIO1: NG - REMOVE remoteNode dependency - get_sync_status
+            # saphana_monitor_primary - get_SRHOOK for "the" remote site (TODO: PRIO3: multi-tier may need multiple remote sites)
+            remoteSync=$(get_SRHOOK "$gRemSite")
+            super_ocf_log info "DEC: PRIMDEFECT: remoteNode=$remoteNode SyncStatus=$remoteSync"
+            case "$remoteSync" in
+                SOK | PRIM )
+                     super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
+                     # TODO PRIO1: NG - scale-out has: 'if is_the_master_nameserver', scale-up has 'if check_for_primary_master'
+                     #if check_for_primary_master; then
+                     if is_the_master_nameserver; then
+                         super_ocf_log info "DEC: PreferSiteTakeover lpa_set_lpt 20 $gSite"
+                         lpa_set_lpt 20 "$gSite"
+                     fi
+                     #
+                     # DOWNSCORING CRM_PROMOTE TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NO TO RISK CANCELLATION OF THE MONITOR
+                     #
+                     set_crm_promote 5
+                     ;;
+                SFAIL )
+                     super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync (SFAIL) ==> local restart preferred"
+                     ;;
+                * )
+                     super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync ($remoteSync) ==> local restart preferred"
+                     ;;
+            esac
+        else
+            # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
+            #        It maybe that for the local restart we only need to decrease the secondaries promotion score
+            # saphana_monitor_primary - get SR attribute of OWN site (TODO: PRIO3: allow multi targets in the cluster in the future)
+            # TODO PRIO3: Check, if we need that query as for a real primary this should always be "PRIM"
+            my_sync=$(get_SRHOOK "$gRemSite")
+            super_ocf_log info "DEC: scoring_crm_promote **04**"
+            scoring_crm_promote "$gFullRole" "$my_sync"
+            rc="$OCF_FAILED_MASTER"
+        fi
+        if [ "$promoted" == 1 ]; then
+            # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
+            rc="$OCF_FAILED_MASTER"
+        else
+            # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
+            # TODO PRIO1: NG - Adjust with set_crm_promote?
+            #       Current decision: Do NOT adjust master score now as other
+            #       steps should already have done that
+            #
+            super_ocf_log info "DEC: PRIMDEFECT (in DEMOTED status)"
+            rc="$OCF_NOT_RUNNING"
+        fi
+    fi
+    return "$rc"
+} # end function saphana_check_down_primary
+
+function saphana_check_up_primary() {
+    # function saphana_check_up_primary - check and handle primary detected as 'up'
+    # params: TODO init_attribute promote
+    # globals: TODO
+    # TODO PRIO1: NG - check which params /  globals are used/set ...
+    local init_attribute="$1" promote="$2" rc="$OCF_NOT_RUNNING" my_rem_sync
+    if dual_primary_detection "$promote_attr"; then
+        # dual primary handling and we need to restart this site
+        # TODO PRIO2: NG - is it better to use OCF_GENERIC_ERROR or OCF_NOT_RUNNING?
+        set_crm_promote -9000
+        rc="$OCF_NOT_RUNNING"
+    else
+        # no dual primary detected, normal operation
+        super_ocf_log info "DEC: scoring_crm_promote **05**"
+        my_sync="PRIM"
+        scoring_crm_promote "$gFullRole" "$my_sync"
+        #
+        # get local-site(s) LSS, SRR and nodes ROLES; set PRIM
+        #
+        set_SRHOOK "$gSite" "PRIM"
+        # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the cluster)
+        # my_sync=$(get_SRHOOK "$gRemSite")
+        LPTloc=$(date '+%s')
+        lpa_set_lpt "$LPTloc" "$gSite"
+        lpa_push_lpt "$LPTloc"
+        if ocf_is_probe; then
+            if [ "$promoted" == 1 ]; then
+                rc="$OCF_RUNNING_MASTER"
+            else
+                rc="$OCF_SUCCESS"
+            fi
+        else
+            if [ "$promoted" == 1 ]; then
+                # TODO PRIO1: NG - check which attribute to be set
+                set_hana_attribute "X" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
+                set_hana_site_attribute "$gSite" "PRIM" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
+                rc="$OCF_RUNNING_MASTER"
+            else
+                if [ "$init_attribute" == 1 ]; then
+                    set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                    rc="$OCF_RUNNING_MASTER"
+                else
+                    rc="$OCF_SUCCESS"
+                fi
+            fi
+            # TODO PRIO1: NG - minimize the GETS on LSS, SRR and ROLES
+            #
+            # get local site(s) LSS, SRR and nodes ROLES
+            #
+            super_ocf_log info "DEC: scoring_crm_promote **06**"
+            scoring_crm_promote "$gFullRole" "$my_sync"
+            #
+            # first check, if we have a pending HA/DR provider attribute in the interface files
+            #
+            recover_site_attributes_from_file "/hana/shared/$SID/$InstanceName/.crm_attribute.$gRemSite"
+            #
+            # second check, if we have a pending HA/DR provider attribute in the interface files of "other" (cluster external) sites
+            #
+            for rFile in "/hana/shared/$SID/$InstanceName/.crm_attribute."*; do
+                recover_site_attributes_from_file "$rFile"
+            done
+            #
+            # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the
+            #
+            my_rem_sync=$(get_SRHOOK "$gRemSite")
+            case "$gFullRole" in
+                # TODO PRIO1: NG - scale-out pattern: [12]:P:*:*:*, scale-up pattern: [12]:P:*:master:*
+                [12]:P:*:*:*  ) # primary is down or may not answer analyze_hana_sync_statusSRS
+                    ;;
+                [34]:P:*:*:*  ) # primary is up and should now be able to answer hdbsql query
+                        case "$PreferSiteTakeover" in
+                            NEVER )
+                                # Currently it is NOT allowed to implement the srHook together with the (unsupported) preferSitetakeover 'never'
+                                set_hana_site_attribute "$gRemSite" "SNA" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
+                                set_SRHOOK "$gRemSite" "SNA"
+                                ;;
+                            * )
+                                super_ocf_log info "DEC: call analyze_hana_sync_statusSRS()"
+                                analyze_hana_sync_statusSRS
+                                if [ "$my_rem_sync" = "SWAIT" ]; then
+                                    my_rem_sync=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+                                    set_SRHOOK "$gRemSite" "$my_rem_sync"
+                                    super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SITE_SYNC_STATUS[0]} ($my_rem_sync)"
+                                fi
+                                ;;
+                        esac
+                    ;;
+            esac
+            super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_promote($gFullRole,$my_sync)"
+            super_ocf_log info "DEC: scoring_crm_promote **07**"
+            scoring_crm_promote "$gFullRole" "$my_sync"
+        fi
+    fi
+    return "$rc"
+} # end function saphana_check_up_primary
+
 function saphana_monitor_primary() {
-    # TODO PRIO2: NG shorten this function, make it easier to read and maintain
+    #
+    # function: saphana_monitor_primary - monitor a hana clone instance configures as PRIMARY
+    # params:   TODO
+    # globals:  HANA_STATE_*(r), remoteHost, NODENAME, ATTR_NAME_*, OCF_*, PreferSiteTakeover
+    #
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc="$OCF_ERR_GENERIC"
-    local promoted=0
-    local init_attribute=0
-    local LPTloc=-1
-    local lparc=4
-    local lss
-    local remoteSync=""
-    local node=""
-    local nodeSite=""
-    #
-    # OK, we are running/are configured as HANA PRIMARY
-    #
+    local rc="$OCF_ERR_GENERIC" promoted=0  init_attribute=0 LPTloc=-1 lparc=4 lss remoteSync="" node="" nodeSite=""
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_PRIMARY"
     #
     ##### CHECK, IF WE ARE DEMOTED (CLUSTER NODE ATTRIBUTE)
     #
     promote_attr=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
-    super_ocf_log debug "DBG: saphana_monitor_clone: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
     if [ -z "$promote_attr" ]; then
+        promote_attr="EMPTY"
         init_attribute=1
-        promoted=0;
-        # TODO PRIO1: NG - emergency exit, if clone attribute is not already existing during a probe (might be cluster start)
-        # TODO PRIO1: NG -  checking, if OCF_SUCCESS woule be better here?
-        if ocf_is_probe; then
-            get_hana_landscape_status; lss=$?
-            case "$lss" in
-                0 | 1     ) return "$OCF_NOT_RUNNING" ;;
-                2 | 3 | 4 ) return "$OCF_SUCCESS";;
-            esac
-        fi
-    else
-        case "$promote_attr" in
-            PROMOTED )
-                promoted=1;
-                ;;
-            DEMOTED )
-                promoted=0;
-                ;;
-            WAITING* )
-                # DONE: lpa_check_lpt_status to come out of here :)
-                # DONE: PRIO2: CHECK IF THE FIX FOR COMING OUT OF WAITING IS CORRECT
-                get_hana_landscape_status; lss=$?
-                if [ "$lss" -ge 2 ]; then
-                    # seems admin already decided that for us? -> we are running - set DEMOTED
-                    promoted=0;
-                    LPTloc=$(date '+%s')
-                    lpa_set_lpt "$LPTloc" "$gSite"
-                fi
-                lpa_check_lpt_status; lparc=$?
-                case "$lparc" in
-                   0 | 1 )
-                        # lpa - no need to wait any longer - lets try a new start
-                        saphana_start_clone
-                        rc=$?
-                        super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-                        return "$rc"
-                        ;;
-                    2 )
-                        lpa_init_lpt "$HANA_STATE_PRIMARY"
-                        # still waiting for second site to expire
-                        if ocf_is_true "$AUTOMATED_REGISTER" ; then
-                           super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
-                        else
-                           super_ocf_log info "LPA: Dual primary detected and AUTOMATED_REGISTER='false' ==> WAITING"
-                           super_ocf_log info "LPA: You need to manually sr_register the older primary"
-                        fi
-                        return "$OCF_SUCCESS"
-                    ;;
-                    3 )
-                        lpa_init_lpt "$HANA_STATE_PRIMARY"
-                        # still waiting for second site to report lpa-lpt
-                        super_ocf_log info "LPA: Still waiting for remote site to report LPA status"
-                        return "$OCF_SUCCESS"
-                    ;;
-                    4 )
-                        # lpa internal error
-                        # TODO PRIO3: Implement special handling for this issue - should we fail the ressource?
-                        super_ocf_log info "LPA: LPA reports an internal error"
-                        return "$OCF_SUCCESS"
-                    ;;
-                esac
-                promoted=0;
-                ;;
-            UNDEFINED )
-                if ocf_is_probe; then
-                   promoted=0;
-                else
-                   set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                   promoted=0;
-                fi
-                ;;
-            * )
-                promoted=0;
-                ;;
-        esac
     fi
-    # TODO PRIO1: NG - we have the local (current) lss here and also have gLss from SAPHanaTopology Attribute. Do we need both?
+    super_ocf_log debug "DBG: saphana_monitor_clone: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
+    case "$promote_attr" in
+        PROMOTED )
+            promoted=1;
+            ;;
+        DEMOTED )
+            promoted=0;
+            ;;
+        WAITING* )
+            promoted=0;
+            saphana_check_waiting_primary; rc="$?"
+            return "$rc"
+            ;;
+        UNDEFINED | EMPTY )
+            if ocf_is_probe; then
+               promoted=0;
+            else
+               set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+               promoted=0;
+            fi
+            ;;
+        * )
+            promoted=0;
+            ;;
+    esac
     get_hana_landscape_status; lss=$?
-    # TODO PRIO1: NG - use life lss
     gLss="$lss"
     gFullRole="${gLss}:${gSrr}:${gRole}"
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss gLss=$gLss"
@@ -1422,170 +1577,12 @@ function saphana_monitor_primary() {
             ;;
         1 ) # DOWN or ERROR
             # DONE: PRIO2: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
-    super_ocf_log info "DEC: scoring_crm_master **03**"
-            scoring_crm_master "$gFullRole" "$gSrHook"
-            if ocf_is_probe; then
-                #
-                # leave master score untouched, only set return code
-                #
-                rc="$OCF_NOT_RUNNING"
-            else
-                if [ "$promoted" == 1 ]; then
-                    # INSTANCE IS FAILED PRIMARY IN PROMOTED STATE
-                    # DONE: PRIO2: Adjust with set_crm_master?
-                    #       For Migration it would be good to decrease master score
-                    #       For Reload locally we should NOT adjust the master score
-                    # ===>  Should we rely on the migration threshold?
-                    #       set_crm_master
-                    if ocf_is_true "${PreferSiteTakeover}" ; then
-                        #
-                        # DONE: PRIO1: first check, if remote site is already (and still) in sync
-                        # TODO: PRIO4: Decide if penalty (-9000) or weak (5) is better here to cover situations where other clone is gone
-                        #
-                        # TODO PRIO1: NG - REMOVE remoteNode dependency - get_sync_status
-                        # saphana_monitor_primary - get_SRHOOK for "the" remote site (TODO: PRIO3: multi-tier may need multiple remote sites)
-                        remoteSync=$(get_SRHOOK "$gRemSite")
-                        super_ocf_log info "DEC: PRIMDEFECT: remoteNode=$remoteNode SyncStatus=$remoteSync"
-                        case "$remoteSync" in
-                            SOK | PRIM )
-                                 super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
-                                 # TODO PRIO1: NG - scale-out has: 'if is_the_master_nameserver', scale-up has 'if check_for_primary_master'
-                                 #if check_for_primary_master; then
-                                 if is_the_master_nameserver; then
-                                     super_ocf_log info "DEC: PreferSiteTakeover lpa_set_lpt 20 $gSite"
-                                     lpa_set_lpt 20 "$gSite"
-                                 fi
-                                 #
-                                 # DOWNSCORING CRM_MASTER TO DEMOTE THE PRIMARY MUST BE DONE AFTER THE LPT MARKING NO TO RISK CANCELLATION OF THE MONITOR
-                                 #
-                                 set_crm_master 5
-                                 ;;
-                            SFAIL )
-                                 super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync (SFAIL) ==> local restart preferred"
-                                 ;;
-                            * )
-                                 super_ocf_log info "DEC: PreferSiteTakeover selected BUT remote site is not in sync ($remoteSync) ==> local restart preferred"
-                                 ;;
-                        esac
-                    else
-                        # TODO:  PRIO5: SCALE-OUT ONLY? Implement for local restart
-                        #        It maybe that for the local restart we only need to decrease the secondaries promotion score
-                        # saphana_monitor_primary - get SR attribute of OWN site (TODO: PRIO3: allow multi targets in the cluster in the future)
-                        # TODO PRIO3: Check, if we need that query as for a real primary this should always be "PRIM"
-                        my_sync=$(get_SRHOOK "$gRemSite")
-    super_ocf_log info "DEC: scoring_crm_master **04**"
-                        scoring_crm_master "$gFullRole" "$my_sync"
-                        rc="$OCF_FAILED_MASTER"
-                    fi
-                    rc="$OCF_FAILED_MASTER"
-                else
-                    # INSTANCE IS FAILED PRIMARY IN DEMOTED STATE
-                    # TODO PRIO1: NG - Adjust with set_crm_master?
-                    #       Current decision: Do NOT adjust master score now as other
-                    #       steps should already have done that
-                    #
-                    super_ocf_log info "DEC: PRIMDEFECT (in DEMOTED status)"
-                    rc="$OCF_NOT_RUNNING"
-                fi
-            fi
+            super_ocf_log info "RA: checking saphana_check_down_primary $promoted"
+            saphana_check_down_primary "$promoted"; rc="$?"
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
-            if dual_primary_detection "$promote_attr"; then
-                # dual primary handling and we need to restart this site
-                # TODO PRIO2: NG - is it better to use OCF_GENERIC_ERROR or OCF_NOT_RUNNING?
-                set_crm_master -9000
-                rc="$OCF_NOT_RUNNING"
-            else
-                # no dual primary detected, normal operation
-    super_ocf_log info "DEC: scoring_crm_master **05**"
-                scoring_crm_master "$gFullRole" "$my_sync"
-                #
-                # get local-site(s) LSS, SRR and nodes ROLES; set PRIM
-                #
-                set_SRHOOK "$gSite" "PRIM"
-                # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the
-                my_sync=$(get_SRHOOK "$gRemSite")
-                if ocf_is_probe; then
-                    if [ "$promoted" == 1 ]; then
-                        rc="$OCF_RUNNING_MASTER"
-                    else
-                        rc="$OCF_SUCCESS"
-                    fi
-                else
-                    LPTloc=$(date '+%s')
-                    lpa_set_lpt "$LPTloc" "$gSite"
-                    lpa_push_lpt "$LPTloc"
-                    if [ "$promoted" == 1 ]; then
-                        # TODO PRIO1: NG - check which attribute to be set
-                        set_hana_attribute "X" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
-                        set_hana_site_attribute "$gSite" "PRIM" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
-                        rc="$OCF_RUNNING_MASTER"
-                    else
-                        if [ "$init_attribute" == 1 ]; then
-                            set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-                            rc="$OCF_RUNNING_MASTER"
-                        else
-                            rc="$OCF_SUCCESS"
-                        fi
-                    fi
-                    # TODO PRIO1: NG - minimize the GETS on LSS, SRR and ROLES
-                    #
-                    # get local site(s) LSS, SRR and nodes ROLES
-                    #
-    super_ocf_log info "DEC: scoring_crm_master **06**"
-                    scoring_crm_master "$gFullRole" "$my_sync"
-                    #
-                    # first check, if we have a pending HA/DR provider attribute in the interface files
-                    #
-                    recover_site_attributes_from_file "/hana/shared/$SID/$InstanceName/.crm_attribute.$gRemSite"
-                    #
-                    # second check, if we have a pending HA/DR provider attribute in the interface files of "other" (cluster external) sites
-                    #
-                    for rFile in "/hana/shared/$SID/$InstanceName/.crm_attribute."*; do
-                        recover_site_attributes_from_file "$rFile"
-                    done
-                    #
-                    # saphana_monitor_primary - get SR attribute of "the" remote site (TODO: PRIO3: allow multi targets in the
-                    #
-                    my_rem_sync=$(get_SRHOOK "$gRemSite")
-                    case "$gFullRole" in
-                        # TODO PRIO1: NG - scale-out pattern: [12]:P:*:*:*, scale-up pattern: [12]:P:*:master:*
-                        [12]:P:*:*:*  ) # primary is down or may not answer analyze_hana_sync_statusSRS
-                            ;;
-                        [34]:P:*:*:*  ) # primary is up and should now be able to answer hdbsql query
-                                case "$PreferSiteTakeover" in
-                                    never | NEVER | Never )
-                                        # TODO: PRIO 2: How to handle this attribute for srHOOK with NEVER?
-                                        # Currently it is NOT allowed to implement the srHook together with the (unsupported) preferSitetakeover 'never'
-                                        # DONE: PRIO0: Check, if we need also to set the HOOK value or not??
-                                        set_hana_site_attribute "$gRemSite" "SNA" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
-                                        set_SRHOOK "$gRemSite" "SNA"
-                                        ;;
-                                    * )
-                                        # TODO: PRIO 5: We could limit the analyze_hana_sync_statusSRS later
-                                        #       (only call analyze_hana_sync_statusSRS, if Hook is on SWAIT)
-                                        #       currently we still poll the old method to track differences
-                                        #       of results of the SAP interfaces
-                                        super_ocf_log info "DEC: call analyze_hana_sync_statusSRS()"
-                                        analyze_hana_sync_statusSRS
-                                        if [ "$my_rem_sync" = "SWAIT" ]; then
-                                            # DONE: PRIO0: Check, if we really should overwrite "SWAIT" or keep that value
-                                            # if we still did not got a hook time since the cluster start-up maybe the
-                                            # HANA was already in (stable) sync, so the HANA Hook would never been called till
-                                            # a new event comes up. This is why we transfer the 'polled' attribute to the Hook attribute.
-                                            my_rem_sync=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
-                                            set_SRHOOK "$gRemSite" "$my_sync"
-                                            super_ocf_log info "DEC: ${ATTR_NAME_HANA_SITE_SRHOOK[0]} was still SWAIT, so copy attribute ${ATTR_NAME_HANA_SITE_SYNC_STATUS[0]} ($my_sync)"
-                                        fi
-                                        ;;
-                                esac
-                            ;;
-                    esac
-                    super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($gFullRole,$my_sync)"
-    super_ocf_log info "DEC: scoring_crm_master **07**"
-                    scoring_crm_master "$gFullRole" "$my_sync"
-                fi
-            fi
+            super_ocf_log info "RA: checking saphana_check_up_primary $init_attribute $promote"
+            saphana_check_up_primary "$init_attribute" "$promote"; rc="$?"
             ;;
         * ) # UNDEFINED STATUS
             if ocf_is_probe; then
@@ -1603,23 +1600,75 @@ function saphana_monitor_primary() {
     return "$rc"
 } # end function saphana_monitor_primary
 
-#
-# function: saphana_monitor_secondary - monitor a hana clone instance
-# params:   -
-# globals:  OCF_*, ATTR_NAME_*, NODENAME
-# saphana_monitor_secondary
-#
+function saphana_monitor_running_secondary() {
+    # TODO PRIO1: NG - check global, local variables and needed params
+    # TODO PRIO1: NG - check return code
+    # global: OCF_*, gSite, gFullRole, remoteNode, remSite
+    # prarams: promoted
+    # achtung: !! my_sync
+    local promoted="$1" rc="$OCF_SUCCESS" sync_attr hanaOM="" hanaOut1="" hanaOut1="" ATTR_*
+    # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
+    if [ "$promoted" == 1 ]; then
+        # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
+        rc="$OCF_RUNNING_MASTER"
+    else
+        rc="$OCF_SUCCESS"
+    fi
+    lpa_set_lpt  30 "$gSite"
+    sync_attr=$(get_SRHOOK "$gSite")
+    # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the operationMode
+    hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
+    hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+    hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
+    set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
+    if [[ -n "$remoteNode" && -n "$remSite" ]]; then
+        set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
+    fi
+    super_ocf_log debug "DBG: sync_attr=$sync_attr"
+    case "$sync_attr" in
+        SOK ) # This is a possible node to promote, when primary is missing
+            lpa_set_lpt  30 "$gSite"
+            super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
+            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_promote($gFullRole,$sync_attr)"
+            scoring_crm_promote "$gFullRole" "$sync_attr"
+            ;;
+        SFAIL ) # This is currently NOT a possible node to promote
+            super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $gSite"
+            lpa_set_lpt  10 "$gSite"
+            super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
+            set_crm_promote -INFINITY
+            ;;
+        SNA ) # This is a never-takeover-node
+            super_ocf_log debug "DBG: 013b * lpa_set_lpt 10 $gSite"
+            lpa_set_lpt  10 "$gSite"
+            super_ocf_log info "DEC: secondary with sync status n/a ==> EXCLUDE as possible takeover node"
+            set_crm_promote -INFINITY
+            ;;
+        * ) # Unknown sync status
+            super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
+            my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+            super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_promote($gFullRole,$my_sync)"
+            # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
+            scoring_crm_promote "$gFullRole" "$gSrHook"
+            ;;
+    esac
+    return "$rc"
+} # end function saphana_monitor_running_secondary
+
+
 function saphana_monitor_secondary() {
+    #
+    # function: saphana_monitor_secondary - monitor a hana clone instance
+    # params:   -
+    # globals:  OCF_*, ATTR_NAME_*, NODENAME, gSite
+    # check: init_attribute
+    #
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local rc="$OCF_ERR_GENERIC"
-    local promoted=0
-    local init_attribute=0
-    local lss
+    local rc="$OCF_NOT_RUNNING" promote_attr promoted=0 init_attribute=0 lss
     #
     # OK, we are running as HANA SECONDARY
     #
     if ! lpa_get_lpt "${gSite}"; then
-        super_ocf_log debug "DBG: 010 * lpa_set_lpt 10 $gSite"
         lpa_set_lpt  10 "$gSite"
         lpa_push_lpt 10
     fi
@@ -1627,7 +1676,6 @@ function saphana_monitor_secondary() {
     super_ocf_log debug "DBG: saphana_monitor_secondary: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
     if [ -z "$promote_attr" ]; then
         init_attribute=1
-        #  DONE: PRIO3: do we need to initialise also the DEMOTED attribute value?
         set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
         promoted=0;
     else
@@ -1638,14 +1686,12 @@ function saphana_monitor_secondary() {
             DEMOTED )  # This is the status we expect
                 promoted=0;
                 ;;
-            # DONE: PRIO0 - Need to differ logs for different WAITING4*
             WAITING4PRIM ) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
                 # TODO PRIO2: NG - do we still need to wait for the primary to start the secondary?
                 #             in the past we have seen that the secondary fails to start, if the primary is (still) not available
                 if check_for_primary_master; then
                     super_ocf_log info "ACT: SECONDARY still in status WAITING - Primary now available - try a new start"
-                    saphana_start_clone
-                    rc=$?
+                    saphana_start_clone; rc="$?"
                 else
                     super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing"
                     return "$OCF_SUCCESS"
@@ -1657,6 +1703,7 @@ function saphana_monitor_secondary() {
                 super_ocf_log info "ACT: Site still in status WAITING4NODES."
                 saphana_start_clone
                 promoted=0;
+                rc="$OCF_SUCCESS" # could be overwritten in case of lss=0 or lss=2,3,4 for lss=1 hide this error, if we still in WAITING4NODES
                 ;;
             WAITING* )
                 # WAITING4REG (which should not happen for a secondary - answer by lss)
@@ -1673,15 +1720,11 @@ function saphana_monitor_secondary() {
                 ;;
         esac
     fi
-    #
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_SECONDARY"
-    #
-    # old method was: saphana_monitor - new method is get_hana_landscape_status
     get_hana_landscape_status; lss=$?
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
         0 ) # FATAL
-            # DONE: PRIO1: Maybe we need to differ between 0 and 1. While 0 is a fatal sap error, 1 is down/error
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
             super_ocf_log debug "DBG: 011 * lpa_set_lpt 10 $gSite"
             lpa_set_lpt  10 "$gSite"
@@ -1690,70 +1733,9 @@ function saphana_monitor_secondary() {
         1 ) # ERROR
             super_ocf_log debug "DBG: 012 * lpa_set_lpt 10 $gSite"
             lpa_set_lpt  10 "$gSite"
-            # Hide this error, if we still in WAITING4NODES
-            case "$promote_attr" in
-                WAITING4NODES ) # hide error
-                                rc="$OCF_SUCCESS"
-                                ;;
-                * )
-                                rc="$OCF_NOT_RUNNING"
-                                ;;
-            esac
             ;;
-        2 | 3 | 4 ) # WARN INFO OK
-            rc="$OCF_SUCCESS"
-            # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
-            if [ "$promoted" == 1 ]; then
-                # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
-                rc="$OCF_RUNNING_MASTER"
-            else
-                rc="$OCF_SUCCESS"
-            fi
-            lpa_set_lpt  30 "$gSite"
-            sync_attr=$(get_SRHOOK "$gSite")
-            local hanaOM=""
-            local hanaOut1=""
-            # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the set operationMode
-            hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
-            hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-            hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
-            set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
-            if [[ -n "$remoteNode" && -n "$remSite" ]]; then
-                set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
-            fi
-            super_ocf_log debug "DBG: sync_attr=$sync_attr"
-            case "$sync_attr" in
-                SOK ) # This is a possible node to promote, when primary is missing
-                    lpa_set_lpt  30 "$gSite"
-                    super_ocf_log info "DEC: secondary with sync status SOK ==> possible takeover node"
-                    super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$sync_attr)"
-    super_ocf_log info "DEC: scoring_crm_master **08**"
-                    scoring_crm_master "$gFullRole" "$sync_attr"
-                    ;;
-                SFAIL ) # This is currently NOT a possible node to promote
-                    super_ocf_log debug "DBG: 013a * lpa_set_lpt 10 $gSite"
-                    lpa_set_lpt  10 "$gSite"
-                    super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
-                    ;;
-                SNA ) # This is a never-takeover-node
-                    super_ocf_log debug "DBG: 013b * lpa_set_lpt 10 $gSite"
-                    lpa_set_lpt  10 "$gSite"
-                    super_ocf_log info "DEC: secondary with sync status n/a ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
-                    ;;
-                * ) # Unknown sync status
-                    super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
-                    my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
-                    super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_master($gFullRole,$my_sync)"
-                    # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
-    super_ocf_log info "DEC: scoring_crm_master **09**"
-                    scoring_crm_master "$gFullRole" "$gSrHook"
-                    ;;
-            esac
-            ;;
-        * ) # UNDEFINED STATUS
-            rc="$OCF_NOT_RUNNING"
+        2 | 3 | 4 ) # WARN / INFO / OK
+            saphana_monitor_running_secondary "$promoted"; rc="$?"
             ;;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1835,8 +1817,8 @@ function saphana_monitor_clone_not_msn() {
           # code, if we still have ANY master nameserver candidates
           #
           super_ocf_log info "DEC: scoring $gFullRole : $gSrHook"
-    super_ocf_log info "DEC: scoring_crm_master **10**"
-          scoring_crm_master "$gFullRole" "$gSrHook"
+    super_ocf_log info "DEC: scoring_crm_promote **10**"
+          scoring_crm_promote "$gFullRole" "$gSrHook"
           # TODO PRIO2: So far we do NOT monitor the swarm, if we are NOT the master nameserver
           #              This reflects the situation that swarm members get be started (as resource)
           #              before the master nameserver runs the StartSystem command
@@ -1868,13 +1850,7 @@ function saphana_monitor_clone() {
     # first check with the status function (OS tools) if there could be something like a SAP instance running
     # as we do not know here, if we are in primary or secondary state we do not want to start our monitoring
     # agents (sapstartsrv) on the wrong host
-    local rc="$OCF_ERR_GENERIC"
-    local promoted=0
-    local init_attribute=0
-    local nState=""
-    local primary_status="$HANA_STATE_DEFECT"
-    local mRc=0
-    local myMaster=-1
+    local rc="$OCF_ERR_GENERIC" promoted=0 init_attribute=0 nState="" primary_status="$HANA_STATE_DEFECT" mRc=0 myMaster=-1
     #
     # reset possible left SRACTION_HISTORY
     #
@@ -1883,6 +1859,7 @@ function saphana_monitor_clone() {
         super_ocf_log info "DEC: PROBE ONLY"
         # TODO PRIO1: NG - could check the Master status in a probe - after a refresh this status should be lost?
         # TODO PRIO1: NG - score, if CLONE_ATTRIBUTE is known 
+        # TODO PRIO1: NG - is 'Master' still correct for promoted clones?
         #
         # check during probe, if this instance is *NOT* running as master
         # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
@@ -1896,8 +1873,8 @@ function saphana_monitor_clone() {
             fi
         fi
     else
-        super_ocf_log info "DEC: scoring_crm_master **11**"
-        scoring_crm_master "$gFullRole" "$gSrHook"
+        super_ocf_log info "DEC: scoring_crm_promote **11**"
+        scoring_crm_promote "$gFullRole" "$gSrHook"
         # shellcheck disable=SC2154
         super_ocf_log info "DEC: REGULAR MONITOR interval=${OCF_RESKEY_CRM_meta_interval}"
     fi
@@ -1910,11 +1887,11 @@ function saphana_monitor_clone() {
             # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
             # TODO PRIO1: NG - Maybe we need a lpa-check here to
             if ocf_is_probe; then
-                myMaster=$(get_crm_master); mRc=$?
+                myMaster=$(get_crm_promote); mRc=$?
                 if [[ "$mRc" != 0 ]]; then
-                   set_crm_master 5
+                   set_crm_promote 5
                 elif [[ "$myMaster" == -1 ]]; then
-                   set_crm_master 5
+                   set_crm_promote 5
                 fi
             else
                 saphana_check_local_instance
@@ -1930,7 +1907,7 @@ function saphana_monitor_clone() {
             # OK, we are neither HANA PRIMARY nor HANA SECONDARY
             #
             super_ocf_log warn "ACT: saphana_monitor_clone: HANA_STATE_DEFECT"
-            # TODO: PRIO2: Or only set_crm_master -INFINITY ?
+            # TODO: PRIO2: Or only set_crm_promote -INFINITY ?
             # TODO: PRIO9: Currently pacemaker-remote nodes does not support 'reboot' attributes
             # DONE: PRIO1: OCF_ERR_GENERIC is quite fatal, if "only" hdbnsutil has a small problem
             nState=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
@@ -1969,9 +1946,7 @@ function saphana_monitor_clone() {
 #
 function saphana_promote_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc="$OCF_ERR_GENERIC";
-    local hana_sync;
-    local primary_status="$HANA_STATE_DEFECT";
+    local rc="$OCF_ERR_GENERIC" hana_sync primary_status="$HANA_STATE_DEFECT"
     #
     # first check, if we WILL be PRIMARY (checking HANA status)
     #
@@ -1985,89 +1960,92 @@ function saphana_promote_clone() {
         super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
 	    set_SRHOOK_PRIM
         rc="$OCF_SUCCESS";
-    else
-        if [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
-            #
-            # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
-            # promote on the replica side...
-            #
-            # TODO PRIO2: NG for DR we keep code for PreferSiteTakeover==never for research
-            #             PreferSiteTakeover==never MUST NOT BE USED FOR PRODUCTIVE SYSTEMS
-            case "$PreferSiteTakeover" in
-                never | Never | NEVER )
-                    super_ocf_log err "ACT: PreferSiteTakeover is set to never, so refusing promote on secondary side"
-                    # TODO PRIO2: NG for DR OCF_ERR_GENERIC is not a good rc
-                    rc="$OCF_ERR_GENERIC"
-                    ;;
-                * )
-                    hana_sync=$(get_SRHOOK "$gSite")
-                    case "$hana_sync" in
-                        SOK )
-                            if is_the_master_nameserver; then
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."
-                                LPTloc=$(date '+%s')
-                                # TODO PRIO1: NG - check if we need to set remSite to 20
-                                # lpa_set_lpt 20 $remoteNode
-                                lpa_set_lpt "$LPTloc" "$gSite"
-                                lpa_push_lpt "$LPTloc"
-                                backup_global_and_nameserver
-                                set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
-                                # TODO PRIO5: 145 should not be static but come from the scoring table
-                                set_crm_master 145
-                                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
-                                set_SRHOOK "$gSite" "PRIM"
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
-                                #
-                                # set SRACTION to "T"; also set SRACTION_HISTORY
-                                #
-                                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
-                                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-                                #
-                                # do the takeover
-                                #
-                                HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"; srt_rc=$?
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
-                                # TODO PRIO2: NG handle errors of the new takeover
-                                #
-                                # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
-                                #
-                                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
-                                backup_global_and_nameserver
-                                #
-                                # now gain check, if we are primary NOW
-                                #
-                                # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-                                #
-                            fi
-                            #
-                            # check, if we now are primary
-                            #
-                            primary_status="$(check_for_primary)"
-                            if [[ "$primary_status" == "P" ]]; then
-                                rc="$OCF_SUCCESS";
-                                # DONE: PRIO0: !!!
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"
-                                set_SRHOOK "$gRemSite" "SWAIT"
-                            else
-                                super_ocf_log info "ACT: SAP HANA TAKEOVER: TAKEOVER FAILED? STILL NOT PRIMARY"
-                                rc="$OCF_FAILED_MASTER"
-                            fi
-                            ;;
-                        * )
-                            super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
-                            rc="$OCF_ERR_GENERIC"
-                            ;;
-                    esac
+    elif [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
+        #
+        # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
+        #
+        # TODO PRIO2: NG for DR we keep code for PreferSiteTakeover==never for research
+        #             PreferSiteTakeover==never MUST NOT BE USED FOR PRODUCTIVE SYSTEMS
+        case "$PreferSiteTakeover" in
+            NEVER )
+                super_ocf_log err "ACT: PreferSiteTakeover is set to never, so refusing promote on secondary side; PreferSiteTakeover==NEVER is NOT supported and only implemented for future research"
+                # TODO PRIO2: NG for DR OCF_ERR_GENERIC is not a good rc
+                rc="$OCF_ERR_GENERIC"
                 ;;
-            esac
-        else
-            #
-            # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
-            # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct
-            # Let next monitor find, if that HANA instance is available or not
-            rc="$OCF_SUCCESS";
-        fi
+            * )
+                hana_sync=$(get_SRHOOK "$gSite")
+                case "$hana_sync" in
+                    SOK )
+                        if is_the_master_nameserver; then
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."
+                            LPTloc=$(date '+%s')
+                            # TODO PRIO1: NG - check if we need to set remSite to 20
+                            # lpa_set_lpt 20 $remoteNode
+                            lpa_set_lpt "$LPTloc" "$gSite"
+                            lpa_push_lpt "$LPTloc"
+                            backup_global_and_nameserver
+                            set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
+                            # TODO PRIO5: 145 should not be static but come from the scoring table
+                            set_crm_promote 145
+                            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
+                            set_SRHOOK "$gSite" "PRIM"
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
+                            #
+                            # set SRACTION to "T"; also set SRACTION_HISTORY
+                            #
+                            set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
+                            set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                            #
+                            # do the takeover
+                            #
+                            tkMessage=$(HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"); srt_rc=$?
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
+                            if [[ "$srt_rc" != 0 ]]; then
+                                # TODO PRIO2: NG handle errors of the new takeover
+                                super_ocf_log error "ACT: SAP HANA TAKEOVER FAILED. $tkMessage"
+                                echo "$tkMessage"
+                                if grep 'rc=50277' <<<"$tkMessage"; then
+                                    super_ocf_log error "ACT: SAP HANA TAKEOVER BLOCKED. Most likely misconfigured takeover blocker hook script. Check sudoers and global.ini."
+                                fi
+                                set_hana_attribute "$NODENAME" "F" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                            fi
+                            #
+                            # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
+                            #
+                            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
+                            backup_global_and_nameserver
+                            #
+                            # now gain check, if we are primary NOW
+                            #
+                            # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+                            #
+                        fi
+                        #
+                        # check, if we now are primary
+                        #
+                        primary_status="$(check_for_primary)"
+                        if [[ "$primary_status" == "P" ]]; then
+                            rc="$OCF_SUCCESS";
+                            # DONE: PRIO0: !!!
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: MARK FORMER PRIMARY AS SWAIT"
+                            set_SRHOOK "$gRemSite" "SWAIT"
+                        else
+                            super_ocf_log info "ACT: SAP HANA TAKEOVER: TAKEOVER FAILED? STILL NOT PRIMARY"
+                            rc="$OCF_FAILED_MASTER"
+                        fi
+                        ;;
+                    * )
+                        super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
+                        rc="$OCF_ERR_GENERIC"
+                        ;;
+                esac
+            ;;
+        esac
+    else
+        # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
+        # bsc#1027098 - do not stop SAP HANA if "only" HANA state is not correct. Let next monitor find, if that HANA instance is available or not
+        rc="$OCF_SUCCESS";
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"

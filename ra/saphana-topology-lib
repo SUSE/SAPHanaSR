@@ -170,7 +170,7 @@ function sht_methods() {
 # function: sht_init - initialize variables for the resource agent
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
-# globals:  meta_notify_master_uname(w), HANA_SR_TOLOPOGY(w), sr_name(w)
+# globals:  HANA_SR_TOLOPOGY(w), sr_name(w)
 # globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
 # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
 # globals:  NODENAME(w), hdbver(w)
@@ -317,8 +317,8 @@ function sht_stop() {
 function sht_monitor() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
-    # TODO PRIO 1: 'master_walk' is only needed for scale-out; how to differ that here?
-    master_walk --standbyFilter=off
+    # TODO PRIO 1: 'node_role_walk' is only needed for scale-out; how to differ that here?
+    node_role_walk --standbyFilter=off
     if [ -f "$HA_RSCTMP/SAPHana/SAPTopologyON.${SID}" ]; then
         rc="$OCF_SUCCESS"
     else
@@ -395,13 +395,10 @@ function sht_start_clone() {
 #
 function sht_stop_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=0
-    local tout=0
-    local nRole nNsConf
+    local rc=0  tout=0 nRole nNsConf
     hanaPrim="$(check_for_primary)";
-    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
-    local stdTimeOut=300
-    local actTimeOutPercent=50
+    # shellcheck disable=SC2154
+    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout" stdTimeOut=300 actTimeOutPercent=50
     if [ -z "$actionTimeOut" ]; then
         actionTimeOut="$stdTimeOut"
     else

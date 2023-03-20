@@ -70,12 +70,31 @@ function super_ocf_log() {
     fi
 } # end function super_ocf_log
 
+function cluster_commands_init() {
+    # globals: CRM_NODE(w), NODENAME(w), CRM_PROMO(w), CRM_PROMO_PARAMS(w)
+    CRM_NODE="crm_node"
+    if [ $? -le 1 ]; then
+        # shellcheck disable=SC2034
+        CRM_PROMO="crm_attribute";
+        # shellcheck disable=SC2034 
+        CRM_PROMO_PARAMS="--promotion"
+    else
+        # shellcheck disable=SC2034
+        CRM_PROMO="crm_master"; 
+        # shellcheck disable=SC2034
+        CRM_PROMO_PARAMS="-l reboot"
+    fi
+    # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
+    NODENAME="$("$CRM_NODE" -n)"
+} # end function cluster_commands_init
+
 #
 # function core_init - lightwight variable initialization without SAP HANA interaction
 # params: TODO raVersion timeBegin log_attributes
 # globals: -
 #
 function core_init() {
+    cluster_commands_init
     # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of raVersion later
     raVersion="$1"
     # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of timeBegin later
@@ -113,16 +132,6 @@ function core_init() {
     HANA_STATE_DEFECT="D"      # was 3
     # shellcheck disable=SC2034
     HANA_STD_ACTION_TIMEOUT=3600
-    # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
-    NODENAME="$(crm_node -n)"
-    #
-    # TODO PRIO1: NG - check. if we really could/should initialize such missing variables
-    #
-    OCF_RESKEY_CRM_meta_timeout="${OCF_RESKEY_CRM_meta_timeout:-3600}"   # cluster should always set these values
-    OCF_RESKEY_CRM_meta_clone_max="${OCF_RESKEY_CRM_meta_clone_max:-0}"  # cluster must always set this value
-    OCF_RESKEY_CRM_meta_clone_node_max="${OCF_RESKEY_CRM_meta_clone_node_max:-0}"
-    OCF_RESKEY_CRM_meta_master_max="${OCF_RESKEY_CRM_meta_master_max:-0}"
-    OCF_RESKEY_CRM_meta_master_node_max="${OCF_RESKEY_CRM_meta_master_node_max:-0}"
     log_attributes=false
     #debug_attributes=0   # TODO PRIO3: variable currently unused - remove or use
     return 0
@@ -294,16 +303,16 @@ function is_clone() {
         # TODO PRIO1: NG - scale-up was also checking '[ "$OCF_RESKEY_CRM_meta_clone_max" -ne 2 ]'
         case "$raType" in
             saphana* )
-                if [ "$OCF_RESKEY_CRM_meta_clone_node_max" != 1 ] || \
-                    [ "$OCF_RESKEY_CRM_meta_master_node_max" != 1 ] || \
-                    [ "$OCF_RESKEY_CRM_meta_master_max" != 1 ]; then
-                        # scale-up was: super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,master_node_max=1,master_max=1)"
-                        super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1,master_node_max=1,master_max=1)"
+                # shellcheck disable=SC2154
+                if [[ "$OCF_RESKEY_CRM_meta_clone_node_max" != 1 || "$OCF_RESKEY_CRM_meta_promoted_node_max" != 1 || "$OCF_RESKEY_CRM_meta_promoted_max" != 1 ]]; then
+                        # scale-up was: super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_max=2,clone_node_max=1,promoted_node_max=1,promoted_max=1)"
+                        super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1,promoted_node_max=1,promoted_max=1)"
                         # TODO PRIO1: NG - check which is the correct return code (scale-up was: OCF_ERR_CONFIGURED)
                         exit "$OCF_NOT_RUNNING"
                 fi
                 ;;
             sht* )
+                # shellcheck disable=SC2154
                 if [ "$OCF_RESKEY_CRM_meta_clone_node_max" != 1 ] ; then
                         super_ocf_log err "ACT: Clone options misconfigured. (expect: clone_node_max=1)"
                         exit "$OCF_ERR_CONFIGURED"
@@ -824,10 +833,10 @@ function get_role_by_cluster_or_landscape() {
     return 0
 } # end function get_role_by_cluster_or_landscape
 
-# function: master_walk - find master nodes of local site
+# function: node_role_walk - find master nodes of local site
 # params:   -
 # globals:  gTheMaster(w), gMasters[@](w), gNrSiteNode(w), gNodeRole(r)
-function master_walk() {
+function node_role_walk() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local active_master="" master1="" master2="" master3=""
     local nSite="" nodeRole=""
@@ -923,10 +932,10 @@ function master_walk() {
                     ;;
     esac
     #
-    super_ocf_log info "DEC: ===> master_walk: priorities for site $gSite master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
-    super_ocf_log info "DEC: ===> master_walk: the_master=$gTheMaster;"
+    super_ocf_log info "DEC: ===> node_role_walk: priorities for site $gSite master1=$master1 master2=$master2 master3=$master3 ==> active_master=$active_master best_cold_master=$best_cold_master"
+    super_ocf_log info "DEC: ===> node_role_walk: the_master=$gTheMaster;"
     super_ocf_log info "FLOW ${FUNCNAME[0]} the_master=$gTheMaster rc=0"
-} # end function master_walk
+} # end function node_role_walk
 
 #
 # function: cluster_get_other_nodes - list all 'other' cluster nodes, but not the local node

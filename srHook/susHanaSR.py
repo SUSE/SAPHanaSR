@@ -13,36 +13,35 @@ import os
 
 """
 To use this HA/DR hook provide please add the following lines to your global.ini:
-    [ha_dr_provider_SAPHanaSR]
-    provider = SAPHanaSR
-    path = /usr/share/SAPHanaSR
+    [ha_dr_provider_susHanaSR]
+    provider = susHanaSR
+    path = /usr/share/SAPHanaSR-angi
     execution_order = 1
 
     [trace]
     ha_dr_saphanasr = info
 """
-fhSRHookVersion = "0.162.0"
+fhSRHookVersion = "1.000.0"
 
 
 try:
-    class SAPHanaSR(HADRBase):
+    class susHanaSR(HADRBase):
 
         def __init__(self, *args, **kwargs):
             # delegate construction to base class
-            super(SAPHanaSR, self).__init__(*args, **kwargs)
-            self.tracer.info("SAPHanaSR init()") 
+            super(susHanaSR, self).__init__(*args, **kwargs)
+            self.tracer.info("susHanaSR init()") 
 
         def about(self):
             return {"provider_company": "SUSE",
-                    "provider_name": "SAPHanaSR",  # class name
+                    "provider_name": "susHanaSR",  # class name
                     "provider_description": "Inform Cluster about SR state",
                     "provider_version": "1.0"}
 
         def srConnectionChanged(self, ParamDict, **kwargs):
             """ finally we got the srConnection hook :) """
             method = "srConnectionChanged"
-            self.tracer.info("SAPHanaSR {0} {1}.srConnectionChanged method called with Dict={2}".format(fhSRHookVersion, self.__class__.__name__, ParamDict))
-            # self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged method called with Dict=%s" % (fhSRHookVersion, self.__class__.__name__, ParamDict))
+            self.tracer.info("susHanaSR {0} {1}.srConnectionChanged method called with Dict={2}".format(fhSRHookVersion, self.__class__.__name__, ParamDict))
             # myHostname = socket.gethostname()
             # myDatebase = ParamDict["database"]
             mySystemStatus = ParamDict["system_status"]
@@ -51,13 +50,13 @@ try:
             myInSync = ParamDict["is_in_sync"]
             myReason = ParamDict["reason"]
             mySite = ParamDict["siteName"]
-            self.tracer.info("SAPHanaSR {0}.srConnectionChanged mySystemStatus={1} mySID={2} myInSync={3} myReason={4}".format(self.__class__.__name__, mySystemStatus, mySID, myInSync, myReason))
+            self.tracer.info("susHanaSR {0}.srConnectionChanged mySystemStatus={1} mySID={2} myInSync={3} myReason={4}".format(self.__class__.__name__, mySystemStatus, mySID, myInSync, myReason))
             if mySystemStatus == 15:
                 mySRS = "SOK"
             else:
                 if myInSync:
                     # ignoring the SFAIL, because we are still in sync
-                    self.tracer.info("SAPHanaSR (%s) %s.srConnectionChanged ignoring bad SR status because of is_in_sync=True (reason=%s)" % (fhSRHookVersion, self.__class__.__name__, myReason))
+                    self.tracer.info("susHanaSR (%s) %s.srConnectionChanged ignoring bad SR status because of is_in_sync=True (reason=%s)" % (fhSRHookVersion, self.__class__.__name__, myReason))
                     mySRS = ""
                 else:
                     mySRS = "SFAIL"
@@ -68,7 +67,7 @@ try:
                 myMSG = "### Ignoring bad SR status because of empty site name in call params ###"
                 self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
             else:
-                myCMD = "sudo /usr/sbin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
+                myCMD = "sudo /usr/bin/crm_attribute -n hana_%s_site_srHook_%s -v %s -t crm_config -s SAPHanaSR" % (mysid, mySite, mySRS)
                 rc = os.system(myCMD)
                 myMSG = "CALLING CRM: <{0}> rc={1}".format(myCMD, rc)
                 self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
