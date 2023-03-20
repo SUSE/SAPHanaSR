@@ -250,21 +250,29 @@ class saphanasrtest:
         testStart = self.testData['start']
         step=self.getStep(testStart)
         stepStep = step['step']
+        rc = 0
+        """ onfail for first step is 'break' """
+        onfail = 'break' 
         while stepStep != "END":
             stepNext = step['next']
             processResult = self.processStep(step)
             if processResult == 0:
                 self.message("STATUS: Test step {} passed successfully".format(stepStep))
             else:
+                rc = 1
                 self.message("STATUS: Test step {} FAILED successfully ;-)".format(stepStep))
-                """ TODO: add onfail handling """
-                break
+                """ TODO: add onfail handling (cuurently only brak for furst step and continue for others) """
+                if onfail == 'break':
+                    break
             step=self.getStep(stepNext)
             if step:
                 stepStep = step['step']
             else:
                 """ check, why we run into this code path """
                 break
+            """ onfail for all next steps is 'continue' to run also the recovery steps """
+            onfail = 'continue'
+        return(rc)
 
     def processTest(self):
         """ process the entire test defined in testData """
@@ -274,7 +282,8 @@ class saphanasrtest:
         testSID = self.testData['sid']
         testResource = self.testData['mstResource']
         self.message("PROC: testID={} testName={} testStart={} testSID={}".format(testID, testName, testStart, testSID, testResource))
-        self.processSteps()
+        rc = self.processSteps()
+        return(rc)
 
     def getStep(self, stepName):
         """ query for a given step with stepName in testData """
@@ -360,8 +369,12 @@ if __name__ == "__main__":
         test01.topolo.update({'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['sSite'])})
         test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.readTestFile()
+        testID = test01.testData['test']
         if test01.repeat != 1:
-            testID = test01.testData['test']
             test01.message("TEST: {} testNr={} ######".format(testID, test01.count))
-        test01.processTest()
+        rc = test01.processTest()
+        if rc == 0:
+            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(testID, test01.count)) 
+        else:
+            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(testID, test01.count)) 
         test01.count += 1
