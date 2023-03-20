@@ -46,12 +46,11 @@ SAPHanaControllerLibVersion="1.001.20"
 # P004 - Monitor on "dying" primary and failing systemReplicationStatus script set secondary to SFAIL, so local restart was processed instead of takeover
 # DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
 
-#
-# function: saphana_usage - short usage info
-# params:   -
-# globals:  $0(r)
-#
 function saphana_usage() {
+    # function: saphana_usage - short usage info
+    # params:   -
+    # globals:  $0(r)
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     methods=$(saphana_methods)
@@ -77,6 +76,8 @@ EOF
 } # end function saphana_usage
 
 function saphana_print_description() {
+    # function saphana_print_description - ouput the XML description of the resource agent
+    # called by: saphana_meta_data
     cat <<END_OF_DESCR
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
@@ -124,6 +125,8 @@ END_OF_DESCR
 } # end function saphana_print_description
 
 function saphana_print_parameters() {
+    # function saphana_print_parameters - output the XML parameter description of the resource agent
+    # called by: saphana_meta_data
     cat <<END
 <parameters>
     <parameter name="SID" unique="0" required="1">
@@ -204,6 +207,8 @@ END
 # globals:  -
 #
 function saphana_meta_data() {
+    # saphana_meta_data - output complete XML meta data of the resource agent
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
 # TODO PRIO2: Description including parameters to be reviewed for scale-out
@@ -237,13 +242,11 @@ END_OF_ACTIONS
 return "$rc"
 } # end function saphana_meta_data
 
-#
-# function: saphana_methods - report supported cluster methods
-# params:   -
-# globals:  -
-# methods: What methods/operations do we support?
-#
 function saphana_methods() {
+    # function: saphana_methods - report supported cluster methods
+    # params:   -
+    # globals:  -
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0 m
     for m in start stop status monitor promote demote notify validate-all methods meta-data usage reload; do
@@ -253,6 +256,7 @@ function saphana_methods() {
 } # end function saphana_methods
 
 function saphana_init_handle_update() {
+    # called by: ?? (not found)
     # TODO PRIO2: check, if we still need this
     # handle RA update state
     node_updated=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_GRA[@]}")
@@ -354,6 +358,7 @@ function saphana_init_sap_paths() {
     # function: saphana_init_sap_paths - set variables used for SAP paths (directories, config files and executables)
     # globals: TODO OCF_RESKEY_DIR_EXECUTABLE, SID, InstanceName, DIR_EXECUTABLE, SAPSTARTSRV, SAPCONTROL, OCF_RESKEY_DIR_PROFILE, SAPVIRHOST
     # params: -
+    # called by: saphana_init
     if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
     then
         if have_binary "/usr/sap/$SID/$InstanceName/exe/sapstartsrv" && have_binary "/usr/sap/$SID/$InstanceName/exe/sapcontrol"
@@ -387,6 +392,7 @@ function saphana_init_sap_paths() {
 } # end function saphana_init_sap_paths
 
 function saphana_init_get_ocf_parameters() {
+    # called by: saphana_init
     SID="${OCF_RESKEY_SID:-}"
     InstanceNr="${OCF_RESKEY_InstanceNumber:-}"
     InstanceName="HDB${InstanceNr}"
@@ -406,6 +412,7 @@ function saphana_init_get_ocf_parameters() {
 } # end function saphana_init_get_ocf_parameters
 
 function saphana_init() {
+    # called by: RA
     #
     # function: saphana_init - initialize variables for the resource agent
     # params:   InstanceName
@@ -518,6 +525,7 @@ function saphana_init() {
 #    Syncing      = 14
 #    Active       = 15
 function analyze_hana_sync_statusSRS() {
+    # called by: saphana_check_up_primary
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     #local rc=-1 srRc=0 all_nodes_other_side="" n="" siteParam=""  # TODO PRIO2: NG - Do we need all_nodes_other_side, n?
     local rc=-1 srRc=0 siteParam=""
@@ -597,6 +605,7 @@ function analyze_hana_sync_statusSRS() {
 # register_hana_secondary
 #
 function register_hana_secondary() {
+    # called by: saphana_start_primary_handle_register_advice
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=2;
     local remoteInstance="";
@@ -644,6 +653,7 @@ function register_hana_secondary() {
 # params:   -
 # globals:  SIDInstanceName, OCF_*,
 function saphana_status() {
+    # called by: ?? (not found)
     local binDeam="hdb.sap${SIDInstanceName}" rc=0
     binDeam=${binDeam:0:15}   # Process name is limited to the first 15 characters
     if pgrep "$binDeam" 1>/dev/null; then rc="$OCF_SUCCESS"; else rc="$OCF_NOT_RUNNING"; fi
@@ -655,6 +665,7 @@ function saphana_status() {
 # globals:  OCF_*, SAPCONTROL, InstanceNr, SID, InstanceName,
 #
 function saphana_start() {
+    # called by: saphana_start_primary_handle_start_advice saphana_start_secondary
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_NOT_RUNNING"
     local output=""
@@ -720,6 +731,7 @@ function saphana_start() {
 # stopMode: StopSystem|Stop
 #
 function saphana_stopSystem() {
+    # called by: saphana_stop
     local rc=0 rcWfS=0
     local stopMode="StopSystem"
     # TODO PRIO1: NG - should scale-up ALWAYS use stop mode "Stop" and never "StopSystem" ?
@@ -790,6 +802,7 @@ function saphana_stopSystem() {
 # saphana_stop: Stop the SAP instance
 #
 function saphana_stop() {
+    # called by: saphana_stop_clone
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     local output=""
@@ -823,6 +836,7 @@ function saphana_stop() {
 # saphana_validate: Check the semantic of the input parameters
 #
 function saphana_validate() {
+    # called by: ?? (not found)
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_SUCCESS"
     #
@@ -849,6 +863,7 @@ function saphana_validate() {
 
 
 function saphana_start_primary_handle_wait_advice() {
+    # called by: saphana_start_primary
     # TODO PRIO1: NG - check global, local variables and needed params
     # TODO PRIO1: NG - check return code
     # global:
@@ -886,6 +901,7 @@ function saphana_start_primary_handle_wait_advice() {
 } # end function saphana_start_primary_handle_wait_advice
 
 function saphana_start_primary_handle_register_advice() {
+    # called by: saphana_start_primary
     # TODO PRIO1: NG - check global, local variables and needed params
     # TODO PRIO1: NG - check return code
     # global: OCF_*, gSite, gMasters[@], HANA_STATE_*
@@ -933,6 +949,7 @@ function saphana_start_primary_handle_register_advice() {
 
 
 function saphana_start_primary_handle_start_advice() {
+    # called by: saphana_start_primary
     # TODO PRIO1: NG - check global, local variables and needed params
     # TODO PRIO1: NG - check return code
     # global: gSite, fFullRole, gRole, gLss, gSrr, OCF_*, 
@@ -964,6 +981,7 @@ function saphana_start_primary_handle_start_advice() {
 } # end function saphana_start_primary_handle_start_advice
 
 function saphana_start_primary() {
+    # called by: saphana_start_clone
     #
     # function: saphana_start_primary - handle startup of PRIMARY in M/S
     # params: current_landsscape_status
@@ -1053,6 +1071,7 @@ function saphana_start_primary() {
 # globals: OCF_*(r), NODENAME, ATTR_NAME_*,
 #
 function saphana_start_secondary() {
+    # called by: saphana_start_clone saphana_start_primary_handle_register_advice
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
     case "$PreferSiteTakeover" in
@@ -1117,10 +1136,8 @@ function saphana_start_secondary() {
 # globals:
 #
 function saphana_check_local_instance() {
-    local rc=1
-    local count=0
-    local SERVNO
-    local output
+    # called by: saphana_start_clone saphana_monitor_clone_not_msn saphana_monitor_clone
+    local rc=1 count=0 SERVNO output
     local MONITOR_SERVICES="hdbnameserver|hdbdaemon" # TODO PRIO1: exact list of Services
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     check_sapstartsrv
@@ -1186,15 +1203,13 @@ function saphana_check_local_instance() {
     return "$rc"
 } # end function saphana_check_local_instance
 
-#
-# function: saphana_start_clone - start a hana clone instance
-# params:   -
-# globals:  TODO
-# saphana_start_clone
-#
 function saphana_start_clone() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    # function: saphana_start_clone - start a hana clone instance
+    # params:   -
+    # globals:  TODO
+    # called by: RA
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
     if is_the_master_nameserver; then
         primary_status="$(check_for_primary)";
@@ -1250,13 +1265,11 @@ function saphana_start_clone() {
     return "$rc"
 } # end function saphana_start_clone
 
-#
-# function: saphana_stop_clone - stop a hana clone instance
-# params:   -
-# globals:  NODENAME(r), HANA_STATE_*(r)
-# saphana_stop_clone
-#
 function saphana_stop_clone() {
+    # function: saphana_stop_clone - stop a hana clone instance
+    # params:   -
+    # globals:  NODENAME(r), HANA_STATE_*(r)
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     local primary_status="x"
@@ -1310,6 +1323,7 @@ function saphana_check_waiting_primary() {
     # function: saphana_check_waiting_primary - monitor a WAITING primary
     # params: TODO
     # globals: TODO
+    # called by: saphana_monitor_primary
     # TODO PRIO1: NG - check which params /  globals are used/set ...
     local lss lparc LPTloc
     get_hana_landscape_status; lss="$?"
@@ -1358,6 +1372,7 @@ function saphana_check_down_primary() {
     # params: promoted 
     # globals: gSite gFullRole gSrHook gRemSite OCF_* remoteNode(?) PreferSiteTakeover
     # variables TODO: remoteNode
+    # called by: saphana_monitor_primary
     local promoted="$1" rc="$OCF_NOT_RUNNING" remoteSync my_sync
     scoring_crm_promote "$gFullRole" "$gSrHook"
     if ocf_is_probe; then
@@ -1425,6 +1440,7 @@ function saphana_check_up_primary() {
     # function saphana_check_up_primary - check and handle primary detected as 'up'
     # params: init_attribute promoted promote_attr
     # globals: gFullRole gSite gRemSite OCF_* ATTR_NAME_HANA_* NODENAME SID InstanceName InstanceNr
+    # called by: saphana_monitor_primary
     local init_attribute="$1" promoted="$2" promote_attr="$3" rc="$OCF_NOT_RUNNING" my_sync my_rem_sync LPTloc
     if dual_primary_detection "$promote_attr"; then
         # dual primary handling and we need to restart this site
@@ -1594,6 +1610,7 @@ function saphana_monitor_running_secondary() {
     # TODO PRIO1: NG - check return code
     # global: OCF_*, gSite, gFullRole, remoteNode, remSite
     # prarams: promoted
+    # called by: saphana_monitor_primary
     local promoted="$1" rc="$OCF_SUCCESS" sync_attr hanaOM="" hanaOut1="" hanaOut1="" my_sync
     # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
     if [ "$promoted" == 1 ]; then
@@ -1644,6 +1661,7 @@ function saphana_monitor_running_secondary() {
 } # end function saphana_monitor_running_secondary
 
 function saphana_monitor_secondary() {
+    # called by: saphana_monitor_clone
     #
     # function: saphana_monitor_secondary - monitor a hana clone instance
     # params:   -
@@ -1924,16 +1942,13 @@ function saphana_monitor_clone() {
     return "$rc"
 } # end function saphana_monitor_clone
 
-#
-# function: saphana_promote_clone - promote a hana clone
-# params:   -
-# globals:  OCF_*(r), NODENAME(r), HANA_STATE_*, SID(r), InstanceName(r),
-# saphana_promote_clone:
-#    In a multi-state configuration get Master being the primary OR by running hana takeover
-#
 function saphana_promote_clone() {
-    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    # function: saphana_promote_clone - promote a hana clone
+    # params:   -
+    # globals:  OCF_*(r), NODENAME(r), HANA_STATE_*, SID(r), InstanceName(r),
+    # called by: RA
     local rc="$OCF_ERR_GENERIC" hana_sync primary_status="$HANA_STATE_DEFECT" LPTloc
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     #
     # first check, if we WILL be PRIMARY (checking HANA status)
     #
@@ -2038,16 +2053,11 @@ function saphana_promote_clone() {
     return "$rc"
 } # end function saphana_promote_clone
 
-#
-# function: saphana_demote_clone - demote a hana clone instance
-# params:   -
-# globals:  OCF_*(r), NODENAME(r),
-# saphana_demote_clone
-#   the HANA System Replication (SR) runs in a multi-state configuration
-#   While we could not change a HANA instance to be really demoted, we only mark the status for
-#   correct monitor return codes
-#
 function saphana_demote_clone() {
+    # function: saphana_demote_clone - demote a hana clone instance; the HANA System Replication (SR) runs in a multi-state configuration. While we could not change a HANA instance to be really demoted, we only mark the status for correct monitor return codes
+    # params:   -
+    # globals:  OCF_*(r), NODENAME(r),
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_ERR_GENERIC";
     set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
