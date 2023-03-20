@@ -30,15 +30,15 @@ saphana_common_lib_version="1.001.1"
 
 # TODO PRIO1: Set attribute version (if missing or old) during monitor action (not only probe)
 
-#
-# function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
-# params:   LOG_MESSAGE
-# globals:  SAPHanaFilter
+# global variables: OCF_*(r), CRM_NODE(w), NODENAME(w), CRM_PROMO(w), CRM_PROMO_PARAMS(w) SID(w) sidadm(w) InstanceName(w) 
+# global variables: InstanceNr(w) SAPVIRHOST(w) DIR_EXECUTABLE(w) SAPSTARTSRV(w) SAPCONTROL(w) DIR_PROFILE(w) SAPSTARTPROFILE(w)
+# global variables: SAPHanaFilter(w) HANA_STATE_*(w) HANA_STD_ACTION_TIMEOUT(w) log_attributes(w)
+
 function super_ocf_log() {
-    local level="$1"
-    local message="$2"
-    local skip=1
-    local mtype=""
+    # function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
+    # params:   LOG_MESSAGE
+    # globals:  SAPHanaFilter
+    local level="$1" message="$2" skip=1 mtype=""
     local -u shf="${SAPHanaFilter:-ALLBUTFLOW}"
     # message levels: (dbg)|info|warn|err|error
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC|DBG2...
@@ -88,12 +88,10 @@ function cluster_commands_init() {
     NODENAME="$("$CRM_NODE" -n)"
 } # end function cluster_commands_init
 
-#
-# function core_init - lightwight variable initialization without SAP HANA interaction
-# params: TODO raVersion timeBegin log_attributes
-# globals: -
-#
 function core_init() {
+    # function core_init - lightwight variable initialization without SAP HANA interaction
+    # params: raVersion timeBegin log_attributes
+    # globals: SID(w) sidadm(w) InstanceName(w) InstanceNr(w) SAPVIRHOST(w) DIR_EXECUTABLE(w) SAPSTARTSRV(w) SAPCONTROL(w) DIR_PROFILE(w) SAPSTARTPROFILE(w) SAPHanaFilter(w) HANA_STATE_*(w) HANA_STD_ACTION_TIMEOUT(w) log_attributes(w)
     cluster_commands_init
     # shellcheck disable=SC2034 # TODO PRIO3: NG - check usage of raVersion later
     raVersion="$1"
@@ -571,6 +569,7 @@ function get_local_sr_config() {
               break
               ;;
             none )
+              # shellcheck disable=SC2034
               gSrr="N"
               # we can leave the loop as we already got a result
               break
@@ -944,10 +943,8 @@ function node_role_walk() {
 # external commands: crm_node -l
 #
 function cluster_get_other_nodes() {
-    local NODENAME="$1"
+    local NODENAME="$1" ne="" ch=""
     local -a NODELIST
-    local ne=""
-    local ch=""
     # TODO PRIO1: NG - check this new code here
     #             lines are expected to have format <number><blank><nodename><blank><status>
     #             example: "1 grimsel01 member"

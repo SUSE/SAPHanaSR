@@ -853,7 +853,7 @@ function saphana_start_primary_handle_wait_advice() {
     # TODO PRIO1: NG - check return code
     # global:
     # prarams: lss
-    local lss="$1" rc="$OCF_NOT_RUNNING"
+    local lss="$1" rc="$OCF_NOT_RUNNING" my_sync
     set_SRHOOK "$gSite" "PRIM"; my_sync="PRIM"
     case "$lss" in
         2 | 3 | 4 ) # TODO PRIO3: as we ARE up we just keep it up
@@ -970,7 +970,7 @@ function saphana_start_primary() {
     # globals: OCF_*(r), NODENAME, ATTR_NAME_*, HANA_STATE_*,
     # TODO PRIO2: NG - Do we need to detect situations, where cluster restarts the instance before promoting the secondary (in PreferredSizeTakeover==true mode) 
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
-    local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss remoteSync=""
+    local lss="$1" rc=0 lpa_dec=4 lpa_advice="" rem_master=1 lLss remoteSync="" my_sync
     #
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     #
@@ -1271,20 +1271,13 @@ function saphana_stop_clone() {
     return "$rc"
 } # end function saphana_stop_clone
 
-# function dual_primary_detection - detect, if two primary sites are running (234:P) and other site is marked as promoted clone
-# globals: ATTR_NAME*(r)
-# rc=0; dual primary detected and remote site has promotion status
-# rc=1; otherwise
-# called-by: saphana_monitor_primary
 function dual_primary_detection() {
-    local rem_lss=""
-    local rem_srr=""
-    local rem_msn=""
-    local rem_clone_status=""
-    local rem_role=""
-    local promote_attr="$1"
-    local lpa_rc=0
-    local rc=1
+    # function dual_primary_detection - detect, if two primary sites are running (234:P) and other site is marked as promoted clone
+    # globals: ATTR_NAME*(r)
+    # rc=0; dual primary detected and remote site has promotion status
+    # rc=1; otherwise
+    # called-by: saphana_check_up_primary
+    local promote_attr="$1" rem_lss="" rem_srr="" rem_msn="" rem_clone_status="" rem_role="" lpa_rc=0 rc=1
     #
     # get REMOTE site(s) LSS, SRR and MNS and remote MNSs ROLES
     #
@@ -1318,7 +1311,7 @@ function saphana_check_waiting_primary() {
     # params: TODO
     # globals: TODO
     # TODO PRIO1: NG - check which params /  globals are used/set ...
-    local lss lparc
+    local lss lparc LPTloc
     get_hana_landscape_status; lss="$?"
     if [ "$lss" -ge 2 ]; then
         # seems admin already decided that for us? -> we are running - set DEMOTED
@@ -1362,11 +1355,10 @@ function saphana_check_waiting_primary() {
 
 function saphana_check_down_primary() {
     # function saphana_check_down_primary - check and handle primary detected as 'down'
-    # params: TODO promoted PreferSiteTakeover
-    # globals: TODO gSite gFullRole gSrHook gRemSite OCF_* remoteNode(?)
-    # TODO PRIO1: NG - check which params /  globals are used/set ...
+    # params: promoted 
+    # globals: gSite gFullRole gSrHook gRemSite OCF_* remoteNode(?) PreferSiteTakeover
+    # variables TODO: remoteNode
     local promoted="$1" rc="$OCF_NOT_RUNNING" remoteSync my_sync
-    super_ocf_log info "DEC: scoring_crm_promote **03**"
     scoring_crm_promote "$gFullRole" "$gSrHook"
     if ocf_is_probe; then
         #
@@ -1431,10 +1423,9 @@ function saphana_check_down_primary() {
 
 function saphana_check_up_primary() {
     # function saphana_check_up_primary - check and handle primary detected as 'up'
-    # params: TODO init_attribute promote
-    # globals: TODO
-    # TODO PRIO1: NG - check which params /  globals are used/set ...
-    local init_attribute="$1" promote="$2" rc="$OCF_NOT_RUNNING" my_rem_sync
+    # params: init_attribute promoted promote_attr
+    # globals: gFullRole gSite gRemSite OCF_* ATTR_NAME_HANA_* NODENAME SID InstanceName InstanceNr
+    local init_attribute="$1" promoted="$2" promote_attr="$3" rc="$OCF_NOT_RUNNING" my_sync my_rem_sync LPTloc
     if dual_primary_detection "$promote_attr"; then
         # dual primary handling and we need to restart this site
         # TODO PRIO2: NG - is it better to use OCF_GENERIC_ERROR or OCF_NOT_RUNNING?
@@ -1442,7 +1433,6 @@ function saphana_check_up_primary() {
         rc="$OCF_NOT_RUNNING"
     else
         # no dual primary detected, normal operation
-        super_ocf_log info "DEC: scoring_crm_promote **05**"
         my_sync="PRIM"
         scoring_crm_promote "$gFullRole" "$my_sync"
         #
@@ -1526,11 +1516,10 @@ function saphana_check_up_primary() {
 } # end function saphana_check_up_primary
 
 function saphana_monitor_primary() {
-    #
-    # function: saphana_monitor_primary - monitor a hana clone instance configures as PRIMARY
+    # function: saphana_monitor_primary - monitor an SAP HANA clone instance configured as PRIMARY
     # params:   TODO
     # globals:  HANA_STATE_*(r), remoteHost, NODENAME, ATTR_NAME_*, OCF_*, PreferSiteTakeover
-    #
+    # called by: saphana_monitor_clone
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_ERR_GENERIC" promoted=0  init_attribute=0 LPTloc=-1 lparc=4 lss remoteSync="" node="" nodeSite=""
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_PRIMARY"
@@ -1581,8 +1570,8 @@ function saphana_monitor_primary() {
             saphana_check_down_primary "$promoted"; rc="$?"
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
-            super_ocf_log info "RA: checking saphana_check_up_primary $init_attribute $promote"
-            saphana_check_up_primary "$init_attribute" "$promote"; rc="$?"
+            super_ocf_log info "RA: checking saphana_check_up_primary $init_attribute $promoted" "$promote_attr"
+            saphana_check_up_primary "$init_attribute" "$promoted"; rc="$?"
             ;;
         * ) # UNDEFINED STATUS
             if ocf_is_probe; then
@@ -1605,8 +1594,7 @@ function saphana_monitor_running_secondary() {
     # TODO PRIO1: NG - check return code
     # global: OCF_*, gSite, gFullRole, remoteNode, remSite
     # prarams: promoted
-    # achtung: !! my_sync
-    local promoted="$1" rc="$OCF_SUCCESS" sync_attr hanaOM="" hanaOut1="" hanaOut1="" ATTR_*
+    local promoted="$1" rc="$OCF_SUCCESS" sync_attr hanaOM="" hanaOut1="" hanaOut1="" my_sync
     # saphana_monitor_secondary - get SR attribute of OWN site (TODO: PRIO3: do we need to allow multi targets)
     if [ "$promoted" == 1 ]; then
         # if the clone_state is still promoted for a secondary we send OCF_RUNNNG_MASTER to get it demoted
@@ -1645,7 +1633,7 @@ function saphana_monitor_running_secondary() {
             set_crm_promote -INFINITY
             ;;
         * ) # Unknown sync status
-            super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
+            super_ocf_log info "DEC: secondary has unexpected sync status $sync_attr ==> RESCORE"
             my_sync=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
             super_ocf_log info "DEC: saphana_monitor_secondary: scoring_crm_promote($gFullRole,$my_sync)"
             # TODO PRIO1: NG - Use $gSrPoll or $gSrHook (consolidated) as scoring attribute here?
@@ -1654,7 +1642,6 @@ function saphana_monitor_running_secondary() {
     esac
     return "$rc"
 } # end function saphana_monitor_running_secondary
-
 
 function saphana_monitor_secondary() {
     #
@@ -1743,6 +1730,8 @@ function saphana_monitor_secondary() {
 } # end function saphana_monitor_secondary
 
 function saphana_monitor_clone_not_msn() {
+    # called by: saphana_monitor_clone
+    local nState
     nState=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     # TODO: PRIO2: Check, if we need to (re) start a failed SAP HANA instance in a swarm
     if ! saphana_check_local_instance; then
@@ -1834,14 +1823,13 @@ function saphana_monitor_clone_not_msn() {
     fi
 } # end function saphana_monitor_clone_not_msn
 
-#
-# function: saphana_monitor_clone - monitor a hana clone instance
-# params:   -
-# globals:  OCF_*, ATTR_NAME_*, HOSTNAME, HANA_STATE_*
-# saphana_monitor_clone
-#
 function saphana_monitor_clone() {
+    # function: saphana_monitor_clone - monitor a hana clone instance
+    # params:   -
+    # globals:  OCF_*, ATTR_NAME_*, HOSTNAME, HANA_STATE_*
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc="$OCF_ERR_GENERIC" promoted=0 init_attribute=0 nState="" primary_status="$HANA_STATE_DEFECT" mRc=0 myMaster=-1
     #
     # TODO: PRIO3: For the secondary, which is missing the primary (so in status WAITING) what is better:
     #       a) returning 7 here and force cluster a restart of the secondary
@@ -1850,7 +1838,6 @@ function saphana_monitor_clone() {
     # first check with the status function (OS tools) if there could be something like a SAP instance running
     # as we do not know here, if we are in primary or secondary state we do not want to start our monitoring
     # agents (sapstartsrv) on the wrong host
-    local rc="$OCF_ERR_GENERIC" promoted=0 init_attribute=0 nState="" primary_status="$HANA_STATE_DEFECT" mRc=0 myMaster=-1
     #
     # reset possible left SRACTION_HISTORY
     #
@@ -1946,7 +1933,7 @@ function saphana_monitor_clone() {
 #
 function saphana_promote_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc="$OCF_ERR_GENERIC" hana_sync primary_status="$HANA_STATE_DEFECT"
+    local rc="$OCF_ERR_GENERIC" hana_sync primary_status="$HANA_STATE_DEFECT" LPTloc
     #
     # first check, if we WILL be PRIMARY (checking HANA status)
     #
