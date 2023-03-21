@@ -188,15 +188,13 @@ class saphanasrtest:
             f = open(self.defaultChecksFile)
             self.testData.update(json.load(f))
             f.close()
-        print(type(self.testData))
-        print(self.testData)
         if self.testFile == "-":
             self.testData.update(json.load(sys.stdin))
         else:
             f = open(self.testFile)
             self.testData.update(json.load(f))
             f.close()
-        print(self.testData)
+        self.messageFH("DEBUG: testData: {}".format(str(self.testData)),self.logFileHandle)
 
     def runChecks(self, checks, areaName, objectName ):
         """ run all checks for area and object """
