@@ -20,24 +20,35 @@ class saphanasrtest:
     """
     version = "0.1.20230313.1359"
 
-    def message(self,msg):
+    def message(self, msg):
         """
         message with formatted timestamp
         """
-        """ TODO: field-with for first word (like TEST:, ACTION: and others) """
         """ TODO: specify, if message should be written to stdout, stderr and/or log file """
         dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
         msgArr = msg.split(" ")
         print("{0} {1:<9s} {2}".format(dateTime, msgArr[0], " ".join(msgArr[1:])))
+        try:
+            self.messageFH(msg, self.logFileHandle)
+        except:
+            print("{0} {1:<9s} {2}".format(dateTime, "ERROR:", "Could not write log logFile"))
+
+    def messageFH(self, msg, fileHandle):
+        dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
+        msgArr = msg.split(" ")
+        if fileHandle:
+            fileHandle.write("{0} {1:<9s} {2}\n".format(dateTime, msgArr[0], " ".join(msgArr[1:])))
 
     def __init__(self, *args):
         """
         constructor
         """
+        self.logFileHandle = None
         self.message("INIT: {}".format(self.version))
         self.SR = {}
         self.testData = {}
         self.testFile = "-"
+        self.logFile = ""
         self.repeat = 1
         self.dumpFailures = False
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -48,6 +59,7 @@ class saphanasrtest:
         parser.add_argument("--simulate", help="only simulate, dont call actions", action="store_true")
         parser.add_argument("--repeat", help="how often to repeat the test")
         parser.add_argument("--dumpFailures", help="print failed checks per loop", action="store_true")
+        parser.add_argument("--logFile", help="log file to write the messages")
         args = parser.parse_args()
         if args.testFile:
             self.message("PARAM: testFile: {}".format(args.testFile))
@@ -61,7 +73,10 @@ class saphanasrtest:
         if args.dumpFailures:
             self.message("PARAM: repeat: {}".format(args.dumpFailures))
             self.dumpFailures = args.dumpFailures
-
+        if args.logFile:
+            self.message("PARAM: logFile: {}".format(args.logFile))
+            self.logFile = args.logFile
+            self.logFileHandle = open(self.logFile, 'a')
 
     def insertToArea(self, area, object):
         """ insert an object dictionary to an area dictionary """
@@ -153,7 +168,6 @@ class saphanasrtest:
         print("}")
 
     def readTestFile(self):
-        """ TODO: read from file rather from stdin """
         if self.testFile == "-":
             self.testData = json.load(sys.stdin)
         else:
@@ -192,7 +206,7 @@ class saphanasrtest:
             if (found == 0) and (checkResult < 2 ):
                 checkResult = 2
         if self.dumpFailures and failedChecks != "":
-            self.message("FAILED: {}".format(failedChecks))
+            self.messageFH("FAILED: {}".format(failedChecks), self.logFileHandle)
         return checkResult
 
     def processTopologyObject(self, step, topologyObjectName, areaName):
