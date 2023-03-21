@@ -1917,29 +1917,20 @@ function saphana_promote_clone() {
     # called by: RA
     local rc="$OCF_ERR_GENERIC" hana_sync primary_status="$HANA_STATE_DEFECT" LPTloc
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    #
-    # first check, if we WILL be PRIMARY (checking HANA status)
-    #
+    # Differ SAP HANA primary and secondary
     set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     primary_status="$(check_for_primary)";
-    #
     if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
-        #
-        # as we are already planned to be PRIMARY we only mark the node as PROMOTED
-        #
+        # SAP HANA is already configured as PRIMARY,  only mark the clone as PROMOTED
         super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
 	    set_SRHOOK_PRIM
         rc="$OCF_SUCCESS";
     elif [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
-        #
-        # we are SECONDARY and need to takeover ...  promote on the replica (secondary) side...
-        #
-        # TODO PRIO2: NG for DR we keep code for PreferSiteTakeover==never for research
-        #             PreferSiteTakeover==never MUST NOT BE USED FOR PRODUCTIVE SYSTEMS
+        # SAP HANA is configured as SECONDARY, need to takeover/promote the replica/secondary site
         case "$PreferSiteTakeover" in
             NEVER )
-                super_ocf_log err "ACT: PreferSiteTakeover is set to never, so refusing promote on secondary side; PreferSiteTakeover==NEVER is NOT supported and only implemented for future research"
-                # TODO PRIO2: NG for DR OCF_ERR_GENERIC is not a good rc
+                # TODO PRIO2: NG for DR we keep code for PreferSiteTakeover==never for research; PreferSiteTakeover==never MUST NOT BE USED FOR PRODUCTIVE SYSTEMS; for DR OCF_ERR_GENERIC is not a good rc
+                super_ocf_log err "ACT: PreferSiteTakeover is set to never, so refusing promote on secondary side; PreferSiteTakeover==NEVER is NOT SUPPORTED and only implemented for future research"
                 rc="$OCF_ERR_GENERIC"
                 ;;
             * )
@@ -1960,13 +1951,11 @@ function saphana_promote_clone() {
                             set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
                             set_SRHOOK "$gSite" "PRIM"
                             super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
-                            #
                             # set SRACTION to "T"; also set SRACTION_HISTORY
-                            #
                             set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
                             set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
                             #
-                            # do the takeover
+                            # SAP HANA takeover
                             #
                             tkMessage=$(HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"); srt_rc=$?
                             super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
@@ -1979,21 +1968,13 @@ function saphana_promote_clone() {
                                 fi
                                 set_hana_attribute "$NODENAME" "F" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
                             fi
-                            #
                             # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
-                            #
                             set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
                             super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
                             backup_global_and_nameserver
-                            #
-                            # now gain check, if we are primary NOW
-                            #
-                            # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-                            #
                         fi
-                        #
-                        # check, if we now are primary
-                        #
+                        # check: SAP HANA is now PRIMARY? 
+                        # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
                         primary_status="$(check_for_primary)"
                         if [[ "$primary_status" == "P" ]]; then
                             rc="$OCF_SUCCESS";
