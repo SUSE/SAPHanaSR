@@ -18,7 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230313.1359"
+    version = "0.1.20230321.1552"
 
     def message(self, msg):
         """
@@ -48,6 +48,8 @@ class saphanasrtest:
         self.SR = {}
         self.testData = {}
         self.testFile = "-"
+        self.defaultChecksFile = None
+        self.propertiesFile = "properties.json"
         self.logFile = ""
         self.repeat = 1
         self.dumpFailures = False
@@ -55,6 +57,8 @@ class saphanasrtest:
         self.remoteNode = None
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
+        parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+        parser.add_argument("--propertiesFile", help="specify the properties file")
         parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
         parser.add_argument("--simulate", help="only simulate, dont call actions", action="store_true")
         parser.add_argument("--repeat", help="how often to repeat the test")
@@ -64,6 +68,12 @@ class saphanasrtest:
         if args.testFile:
             self.message("PARAM: testFile: {}".format(args.testFile))
             self.testFile = args.testFile
+        if args.defaultChecksFile:
+            self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
+            self.defaultChecksFile = args.defaultChecksFile
+        if args.propertiesFile:
+            self.message("PARAM: propertiesFile: {}".format(args.propertiesFile))
+            self.propertiesFile = args.propertiesFile
         if args.remoteNode:
             self.message("PARAM: remoteNode: {}".format(args.remoteNode))
             self.remoteNode = args.remoteNode
@@ -91,7 +101,7 @@ class saphanasrtest:
         self.SR = lSR.copy()
 
     def getObject(self, area, objectName):
-        """ get an onject dictionary inside the area dictionary """
+        """ get an object dictionary inside the area dictionary """
         lSR = self.SR.copy()
         if area in lSR:
             if objectName in lSR[area]:
@@ -168,11 +178,24 @@ class saphanasrtest:
         print("}")
 
     def readTestFile(self):
+        """ read Test Description, optionally defaultchecks and properties """
+        if self.propertiesFile:
+            f = open(self.propertiesFile)
+            self.testData.update(json.load(f))
+            f.close()
+        if self.defaultChecksFile:
+            f = open(self.defaultChecksFile)
+            self.testData.update(json.load(f))
+            f.close()
+        print(type(self.testData))
+        print(self.testData)
         if self.testFile == "-":
-            self.testData = json.load(sys.stdin)
+            self.testData.update(json.load(sys.stdin))
         else:
             f = open(self.testFile)
-            self.testData = json.load(f)
+            self.testData.update(json.load(f))
+            f.close()
+        print(self.testData)
 
     def runChecks(self, checks, areaName, objectName ):
         """ run all checks for area and object """
@@ -213,6 +236,12 @@ class saphanasrtest:
         rcChecks = -1
         if topologyObjectName in step:
             checks = step[topologyObjectName]
+            if type(checks) is str: 
+                checkPtr = checks
+                self.messageFH("DEBUG: checkPtr {}".format(checkPtr), self.logFileHandle)
+                checks = self.testData["checkPtr"][checkPtr]
+                #for c in checks:
+                #    self.message("DEBUG: checkPtr {} check {}".format(checkPtr,c))
             topolo = self.topolo
             if topologyObjectName in topolo:
                 objectName = topolo[topologyObjectName]
@@ -220,7 +249,7 @@ class saphanasrtest:
         return(rcChecks)
 
     def processStep(self, step):
-        """ process a single step including otional loops """
+        """ process a single step including optional loops """
         stepID = step['step']
         stepName = step['name']
         stepNext = step['next']
@@ -238,7 +267,8 @@ class saphanasrtest:
         else:
             stepAction = ""
         self.message("PROC: stepID={} stepName='{}' stepNext={} stepAction={}".format(stepID, stepName, stepNext, stepAction))
-        while loops <= maxLoops:
+        while loops < maxLoops:
+            loops = loops + 1
             if self.dumpFailures == False:
                 print(".", end='', flush=True)
             processResult = -1
@@ -247,14 +277,13 @@ class saphanasrtest:
                                   self.processTopologyObject(step, 'sSite', 'Sites'),
                                   self.processTopologyObject(step, 'pHost', 'Hosts'),
                                   self.processTopologyObject(step, 'sHost', 'Hosts'))
-            loops = loops + 1
             if processResult == 0:
                 break
             else:
                 time.sleep(wait)
         if self.dumpFailures == False:
             print("")
-        self.message("STATUS: step {} checked in {} loops)".format(stepID, loops))
+        self.message("STATUS: step {} checked in {} loop(s)".format(stepID, loops))
         if processResult == 0:
             aRc = self.action(stepAction)
         return processResult
@@ -316,6 +345,8 @@ class saphanasrtest:
         # resource = "ms_SAPHanaCon_HA1_HDB00"
         testSID = self.testData['sid']
         resource = self.testData['mstResource']
+        actionArr = actionName.split(" ")
+        actionNameShort = actionArr[0]
         if actionName == "":
             aRc = 0
         elif actionName == "ksi":
@@ -346,6 +377,10 @@ class saphanasrtest:
             """ TODO: get sleep time from testData """
             remote = self.remoteNode
             cmd = "sleep 60"
+        elif actionNameShort == "shell":
+            remote = 'localhost'
+            actionParameter = " ".join(actionArr[1:])
+            cmd = "bash {}".format(actionParameter)
         if cmd != "":
             self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
             aResult = self.doSSH(remote, "root", cmd)
@@ -392,3 +427,5 @@ if __name__ == "__main__":
         else:
             test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(testID, test01.count)) 
         test01.count += 1
+    if  test01.logFileHandle:
+        test01.logFileHandle.close()
