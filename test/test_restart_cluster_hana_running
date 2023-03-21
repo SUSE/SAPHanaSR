@@ -1,0 +1,33 @@
+#!/bin/bash
+node01="basf01"
+node02="basf02"
+mstResource="ms_SAPHanaCon_HA1_HDB00"
+clnResource="cl_SAPHanaTop_HA1_HDB00"
+sidadm="ha1adm"
+
+# shellcheck disable=SC2029
+ssh "$node01" "crm resource cleanup  $mstResource"
+ssh "$node01" "crm maintenance on"
+
+ssh "$node02" 'crm cluster run "crm cluster stop"'
+
+echo "==== SUSE Cluster Stopped ===="
+
+sleep 60
+
+ssh "$node01" 'crm cluster run "crm cluster start"'
+
+sleep 120
+ssh "$node01" "cs_wait_for_idle --sleep 60"
+
+
+ssh "$node01" "crm resource cleanup  $clnResource"
+ssh "$node01" "cs_wait_for_idle --sleep 10"
+ssh "$node01" "crm resource cleanup  $mstResource"
+
+
+ssh "$node01" "cs_wait_for_idle --sleep 10"
+ssh "$node01" "crm maintenance off"
+
+echo "==== SUSE Cluster Started ===="
+
