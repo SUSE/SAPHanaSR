@@ -18,7 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230321.1552"
+    version = "0.1.20230321.1753"
 
     def message(self, msg):
         """
@@ -132,19 +132,20 @@ class saphanasrtest:
         for line in resultSR[0].splitlines():
             """ match and split: <area>/<object>/<key-value> """
             mo = re.search("(.*)/(.*)/(.*)", line)
-            area = mo.group(1)
-            objectName = mo.group(2)
-            kV = mo.group(3)
-            """ match and split <key>="<value>" """
-            mo = re.search("(.*)=\"(.*)\"", kV)
-            key = mo.group(1)
-            val = mo.group(2)
-            lObj=self.getObject(area, objectName)
-            if lObj:
-                self.insertToObject(lObj,key,val)
-            else:
-                lObj = self.createObject(objectName, key, val)
-                self.insertToArea(area, lObj)
+            if mo:
+                area = mo.group(1)
+                objectName = mo.group(2)
+                kV = mo.group(3)
+                """ match and split <key>="<value>" """
+                mo = re.search("(.*)=\"(.*)\"", kV)
+                key = mo.group(1)
+                val = mo.group(2)
+                lObj=self.getObject(area, objectName)
+                if lObj:
+                    self.insertToObject(lObj,key,val)
+                else:
+                    lObj = self.createObject(objectName, key, val)
+                    self.insertToArea(area, lObj)
         return 0
 
     def searchInAreaForObjectByKeyValue(self, areaName, key, value):
