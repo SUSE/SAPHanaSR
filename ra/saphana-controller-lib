@@ -201,18 +201,14 @@ function saphana_print_parameters() {
 END
 } # end function saphana_print_parameters
 
-#
-# function: saphana_meta_data - print resource agent meta-data for cluster
-# params:   -
-# globals:  -
-#
 function saphana_meta_data() {
-    # saphana_meta_data - output complete XML meta data of the resource agent
+    # function: saphana_meta_data - print resource agent meta-data for cluster - output complete XML meta data of the resource agent
+    # globals:  -
+    # params:   -
     # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-# TODO PRIO2: Description including parameters to be reviewed for scale-out
-# TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
+    # TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
     cat <<END_OF_HEADER
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
@@ -412,16 +408,13 @@ function saphana_init_get_ocf_parameters() {
 } # end function saphana_init_get_ocf_parameters
 
 function saphana_init() {
-    # called by: RA
-    #
     # function: saphana_init - initialize variables for the resource agent
-    # params:   InstanceName
+    # params:   -
     # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w), SAPVIRHOST(w), PreferSiteTakeover(w),
-    # globals:  gSite(w), remoteHost(w), otherNodes(w), gRemSite(w), ATTR_NAME_HANA_*SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
-    # TODO PRIO1: NG - replace ATTR_NAME_HANA_SEC_SYNC_STATUS+ATTR_NAME_HANA_SYNC_STATUS by site specific attribute
+    # globals:  gSite(w), remoteHost(w), otherNodes(w), gRemSite(w), ATTR_NAME_HANA_*,
     # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
     # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w), NODENAME(w), vNAME(w), hdbver(w),
-    #
+    # called by: RA
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_SUCCESS" clN
     SYSTEMCTL="/usr/bin/systemctl"
@@ -513,18 +506,11 @@ function saphana_init() {
     return "$OCF_SUCCESS"
 } # end function saphana_init
 
-# function: analyze_hana_sync_statusSRS
-# params:   -
-# globals:  DIR_EXECUTABLE(r), FULL_SR_STATUS(w), remoteNode
-#
-# systemReplicationStatus.py return-codes:
-#    NoHSR        = 10
-#    Error        = 11
-#    Unknown      = 12
-#    Initializing = 13
-#    Syncing      = 14
-#    Active       = 15
 function analyze_hana_sync_statusSRS() {
+    # function: analyze_hana_sync_statusSRS
+    # params:   -
+    # globals:  DIR_EXECUTABLE(r), FULL_SR_STATUS(w), remoteNode
+    # systemReplicationStatus.py return-codes: NoHSR=10, Error=11, Unknown=12, Initializing=13, Syncing=14, Active=15
     # called by: saphana_check_up_primary
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     #local rc=-1 srRc=0 all_nodes_other_side="" n="" siteParam=""  # TODO PRIO2: NG - Do we need all_nodes_other_side, n?
@@ -598,13 +584,10 @@ function analyze_hana_sync_statusSRS() {
     return "$rc"
 } # end function analyze_hana_sync_statusSRS
 
-#
-# function: register_hana_secondary - register local hana as secondary to the other site
-# params:   -
-# globals:  sidadm(r), remoteHost(r), InstanceNr(r), sr_mode(r), gSite(r)
-# register_hana_secondary
-#
 function register_hana_secondary() {
+    # function: register_hana_secondary - register local hana as secondary to the other site
+    # params:   -
+    # globals:  sidadm(r), remoteHost(r), InstanceNr(r), sr_mode(r), gSite(r)
     # called by: saphana_start_primary_handle_register_advice
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=2;
@@ -647,12 +630,10 @@ function register_hana_secondary() {
     return "$rc";
 } # end function register_hana_secondary
 
-#
-#
-# function: saphana_status - pure status check
-# params:   -
-# globals:  SIDInstanceName, OCF_*,
 function saphana_status() {
+    # function: saphana_status - pure status check
+    # params:   -
+    # globals:  SIDInstanceName, OCF_*,
     # called by: ?? (not found)
     local binDeam="hdb.sap${SIDInstanceName}" rc=0
     binDeam=${binDeam:0:15}   # Process name is limited to the first 15 characters
@@ -660,11 +641,10 @@ function saphana_status() {
     return "$rc"
 } # end function saphana_status
 
-# function: saphana_start - start a hana instance
-# params:   -
-# globals:  OCF_*, SAPCONTROL, InstanceNr, SID, InstanceName,
-#
 function saphana_start() {
+    # function: saphana_start - start a hana instance
+    # params:   -
+    # globals:  OCF_*, SAPCONTROL, InstanceNr, SID, InstanceName,
     # called by: saphana_start_primary_handle_start_advice saphana_start_secondary
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_NOT_RUNNING"
@@ -726,11 +706,9 @@ function saphana_start() {
     return "$rc"
 } # end function saphana_start
 
-#
-# saphana_stopSystem [stopMode]
-# stopMode: StopSystem|Stop
-#
 function saphana_stopSystem() {
+    # saphana_stopSystem [stopMode]
+    # stopMode: StopSystem|Stop
     # called by: saphana_stop
     local rc=0 rcWfS=0
     local stopMode="StopSystem"
@@ -795,13 +773,10 @@ function saphana_stopSystem() {
     return "$rc"
 } # end function saphana_stopSystem
 
-#
-# function: saphana_stop - stop a hana instance
-# params:   -
-# globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
-# saphana_stop: Stop the SAP instance
-#
 function saphana_stop() {
+    # function: saphana_stop - stop a hana instance
+    # params:   -
+    # globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
     # called by: saphana_stop_clone
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
@@ -829,13 +804,10 @@ function saphana_stop() {
     return "$rc"
 } # end function saphana_stop
 
-#
-# function: saphana_validate - validation of (some) variables/parameters
-# params:   -
-# globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
-# saphana_validate: Check the semantic of the input parameters
-#
 function saphana_validate() {
+    # function: saphana_validate - validation of (some) variables/parameters - Check the semantic of the input parameters
+    # params:   -
+    # globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r), SAPVIRHOST(r)
     # called by: ?? (not found)
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_SUCCESS"
@@ -1065,12 +1037,10 @@ function saphana_start_primary() {
     return "$rc"
 } # end function saphana_start_primary
 
-#
-# function: saphana_start_secondary - handle startup of PRIMARY in M/S
-# params:
-# globals: OCF_*(r), NODENAME, ATTR_NAME_*,
-#
 function saphana_start_secondary() {
+    # function: saphana_start_secondary - handle startup of PRIMARY in M/S
+    # params:
+    # globals: OCF_*(r), NODENAME, ATTR_NAME_*,
     # called by: saphana_start_clone saphana_start_primary_handle_register_advice
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local primary_status sync_attr rc="$OCF_NOT_RUNNING"
@@ -1128,14 +1098,12 @@ function saphana_start_secondary() {
     return "$rc"
 } # end function saphana_start_secondary
 
-#
-# function: saphana_check_local_instance
-# params:
-# output:
-# rc:       rc=0 (UP) rc=1 (DOWN)
-# globals:
-#
 function saphana_check_local_instance() {
+    # function: saphana_check_local_instance
+    # params:
+    # output:
+    # rc:       rc=0 (UP) rc=1 (DOWN)
+    # globals:
     # called by: saphana_start_clone saphana_monitor_clone_not_msn saphana_monitor_clone
     local rc=1 count=0 SERVNO output
     local MONITOR_SERVICES="hdbnameserver|hdbdaemon" # TODO PRIO1: exact list of Services
