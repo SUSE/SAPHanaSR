@@ -349,13 +349,20 @@ class saphanasrtest:
         if actionName == "":
             aRc = 0
         elif actionName == "ksi":
-            """ TODO: get sidadm from testData """
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(testSID.lower())
         elif actionName == "kpi":
-            """ TODO: get sidadm from testData """
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(testSID.lower())
+        elif actionName == "kpx":
+            remote = self.topolo['pHost']
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(testSID.lower())
+        elif actionName == "ksx":
+            remote = self.topolo['sHost']
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(testSID.lower())
+        elif actionName == "bmt":
+            remote = self.topolo['sHost']
+            cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(testSID.lower())
         elif actionName == "ssn":
             remote = self.remoteNode
             cmd = "crm node standby {}".format(self.topolo['sHost'])
