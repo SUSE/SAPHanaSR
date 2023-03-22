@@ -1,0 +1,29 @@
+#!/usr/bin/bash
+
+function run() {
+    local node="$1" testID="$2" repeat="$3" sleep="$4"
+    python3 saphanasrlib.py --testFile="${testID}.json" \
+                            --remoteNode="$node" \
+                            --repeat="$repeat" \
+                            --dumpFailures \
+                            --defaultChecksFile="defaultChecks.json" \
+                            --logFile testLog"$(date +"%Y-%m-%d")".txt 
+    sleep "$sleep"; 
+    return 0
+}
+
+while true; do  
+    run basf02 restart_cluster_turn_hana  1 300
+    run basf02 kpi  3 300
+    run basf02 ssn  2 300
+    run basf02 ksi  3 300
+    run basf02 spn  2 300
+    run basf02 sap  1 300
+    run basf02 kpx  1 300
+    run basf02 nop  1  10 
+    run basf02 ksx  1 300
+    run basf02 maintenance_cluster_turn_hana 1 300
+    run basf02 restart_cluster  1 300
+    run basf02 restart_cluster_hana_running   1 300
+    run basf02 bmt  1  60
+done 
