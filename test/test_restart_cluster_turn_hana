@@ -1,8 +1,17 @@
 #!/bin/bash
 #
-source test_properties
+# test_restart_cluster_turn_hana -
 #
-
+# - cleanup mst-resource
+# - stop cluster (including SAP HANA)
+# - start both SAP HANA sites
+# - takeover on secondary with suspend primary (gets the new primary)
+# - register on primary in online mode (gets the new secondary)
+# - start cluster
+#
+# expected outcome: cluster running, SAP HANA instances running, SR roles are exchanged
+#
+source test_properties
 # shellcheck disable=SC2029
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
@@ -21,9 +30,8 @@ ssh "${node02}" 'crm cluster run "crm cluster stop"'
 
 echo "==== SUSE Cluster Stopped ===="
 
- ssh "$node01" 'su - '"$sidadm"' -c "HDB start"' &
- ssh "$node02" 'su - '"$sidadm"' -c "HDB start"' &
-
+ssh "$node01" 'su - '"$sidadm"' -c "HDB start"' &
+ssh "$node02" 'su - '"$sidadm"' -c "HDB start"' &
 wait
 
 echo "==== SAP HANA DBs started ===="
