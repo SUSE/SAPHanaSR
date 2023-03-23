@@ -18,7 +18,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230321.1753"
+    version = "0.1.20230323.2029"
 
     def message(self, msg):
         """
@@ -265,7 +265,7 @@ class saphanasrtest:
             stepAction = step['post']
         else:
             stepAction = ""
-        self.message("PROC: stepID={} stepName='{}' stepNext={} stepAction={}".format(stepID, stepName, stepNext, stepAction))
+        self.message("PROC: stepID={} stepName='{}' stepNext={} stepAction='{}'".format(stepID, stepName, stepNext, stepAction))
         while loops < maxLoops:
             loops = loops + 1
             if self.dumpFailures == False:
@@ -379,10 +379,13 @@ class saphanasrtest:
             """ TODO: get resource name from testData """
             remote = self.remoteNode
             cmd = "crm resource cleanup {}".format(resource)
-        elif actionName == "sleep":
-            """ TODO: get sleep time from testData """
+        elif actionNameShort == "sleep":
             remote = self.remoteNode
-            cmd = "sleep 60"
+            if len(actionArr) == 2:
+                actionParameter = actionArr[1]
+            else:
+                actionParameter = "60"
+            cmd = "sleep {}".format(actionParameter)
         elif actionNameShort == "shell":
             remote = 'localhost'
             actionParameter = " ".join(actionArr[1:])
