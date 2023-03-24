@@ -10,6 +10,7 @@ import subprocess
 import re
 import sys, json
 import argparse
+import random
 
 """ for ssh remote calls this module uses paramiko """
 from paramiko import SSHClient
@@ -18,7 +19,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230323.2029"
+    version = "0.1.20230324.1239"
 
     def message(self, msg):
         """
@@ -26,8 +27,12 @@ class saphanasrtest:
         """
         """ TODO: specify, if message should be written to stdout, stderr and/or log file """
         dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
+        if self.rID:
+            rID = " [{}]".format(self.rID)
+        else:
+            rID = ""
         msgArr = msg.split(" ")
-        print("{0} {1:<9s} {2}".format(dateTime, msgArr[0], " ".join(msgArr[1:])))
+        print("{}{} {:<9s} {}".format(dateTime, rID, msgArr[0], " ".join(msgArr[1:])))
         try:
             self.messageFH(msg, self.logFileHandle)
         except:
@@ -35,15 +40,20 @@ class saphanasrtest:
 
     def messageFH(self, msg, fileHandle):
         dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
+        if self.rID:
+            rID = " [{}]".format(self.rID)
+        else:
+            rID = ""
         msgArr = msg.split(" ")
         if fileHandle:
-            fileHandle.write("{0} {1:<9s} {2}\n".format(dateTime, msgArr[0], " ".join(msgArr[1:])))
+            fileHandle.write("{}{} {:<9s} {}\n".format(dateTime, rID, msgArr[0], " ".join(msgArr[1:])))
 
     def __init__(self, *args):
         """
         constructor
         """
         self.logFileHandle = None
+        self.rID = None
         self.message("INIT: {}".format(self.version))
         self.SR = {}
         self.testData = {}
@@ -87,6 +97,7 @@ class saphanasrtest:
             self.message("PARAM: logFile: {}".format(args.logFile))
             self.logFile = args.logFile
             self.logFileHandle = open(self.logFile, 'a')
+        random.seed()
 
     def insertToArea(self, area, object):
         """ insert an object dictionary to an area dictionary """
@@ -420,6 +431,7 @@ if __name__ == "__main__":
     test01 = saphanasrtest()
     test01.count = 1
     while test01.count <= test01.repeat:
+        test01.rID = random.randrange(10000,99999,1)
         test01.readSAPHanaSR()
         test01.topolo.update({'pSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')})
         test01.topolo.update({'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')})
