@@ -1259,6 +1259,7 @@ function dual_primary_detection() {
     # rc=1; otherwise
     # called-by: saphana_check_up_primary
     local promote_attr="$1" rem_lss="" rem_srr="" rem_msn="" rem_clone_status="" rem_role="" lpa_rc=0 rc=1
+    super_ocf_log info "DEC: Dual primary detection"
     #
     # get REMOTE site(s) LSS, SRR and MNS and remote MNSs ROLES
     #
@@ -1268,6 +1269,7 @@ function dual_primary_detection() {
     rem_clone_status=$(get_hana_attribute "${rem_msn}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     rem_role=$(get_hana_attribute "${rem_msn}" "${ATTR_NAME_HANA_ROLES[@]}")
     rem_role="${rem_lss}:${rem_srr}:${rem_role}"
+    super_ocf_log info "DEC: Dual primary detection promote_attr=$promote_attr rem_clone_status=$rem_clone_status rem_lss=$rem_lss rem_role=$rem_role"
     if [[ "$promote_attr" = "DEMOTED" && "$rem_clone_status" = "PROMOTED" ]]; then
         case "$rem_role" in
             [234]:P:* )
@@ -1276,7 +1278,7 @@ function dual_primary_detection() {
                 lpa_check_lpt_status; lpa_rc=$?
                 if [[ "$lpa_rc" != 0 ]]; then
                     super_ocf_log info "DEC: Dual primary detected, other instance is PROMOTED and lpa_check_lpt_status != 0  ==> local restart"
-                    super_ocf_log debug "DBG: 009 * lpa_set_lpt 10 $gSite"
+                    super_ocf_log debug "DBG: 009 * lpa_set_lpt 05 $gSite"
                     lpa_set_lpt 05 "$gSite"
                     lpa_push_lpt 05
                     rc=0
@@ -1410,6 +1412,7 @@ function saphana_check_up_primary() {
     # globals: gFullRole gSite gRemSite OCF_* ATTR_NAME_HANA_* NODENAME SID InstanceName InstanceNr
     # called by: saphana_monitor_primary
     local init_attribute="$1" promoted="$2" promote_attr="$3" rc="$OCF_NOT_RUNNING" my_sync my_rem_sync LPTloc
+    super_ocf_log info "DEC: checking dual_primary promoted=$promoted promote_attr=$promote_attr"
     if dual_primary_detection "$promote_attr"; then
         # dual primary handling and we need to restart this site
         # TODO PRIO2: NG - is it better to use OCF_GENERIC_ERROR or OCF_NOT_RUNNING?
@@ -1554,8 +1557,8 @@ function saphana_monitor_primary() {
             saphana_check_down_primary "$promoted"; rc="$?"
             ;;
         2 | 3 | 4 ) # WARN, INFO or OK
-            super_ocf_log info "RA: checking saphana_check_up_primary $init_attribute $promoted" "$promote_attr"
-            saphana_check_up_primary "$init_attribute" "$promoted"; rc="$?"
+            super_ocf_log info "RA: checking saphana_check_up_primary init_attribute=$init_attribute promoted=$promoted promote_attr=$promote_attr"
+            saphana_check_up_primary "$init_attribute" "$promoted" "$promote_attr"; rc="$?"
             ;;
         * ) # UNDEFINED STATUS
             if ocf_is_probe; then
