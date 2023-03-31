@@ -1,19 +1,19 @@
 #!/bin/bash
 #
-# SAPHanaTopology
+# SAPHanaController
 #
-# Description:	Analyses two  SAP HANA Databases in System Replication
+# Description:  Manages two SAP HANA Databases in System Replication
 #               SAPHanaTopology and SAPHanaController are both needed
 #               SAPHanaController is dependent of the analysis of
 #               SAPHanaTopology
 #
 ##############################################################################
 #
-# SAPHanaTopology: (short sht)
-# Author:       Fabian Herschel, February 2014
+# SAPHanaController (short saphana)
+# Author:       Fabian Herschel, November 2013
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
-# Copyright:    (c) 2014 SUSE Linux Products GmbH
+# Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
 #               (c) 2015-2023 SUSE LLC
 #
 # An example usage:
@@ -23,6 +23,11 @@
 #   OCF_RESKEY_SID
 #   OCF_RESKEY_InstanceNumber
 #   OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#   OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
+#   OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
+#   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
+#   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
+#   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
 #
 # HANA must support the following commands:
 #     hdbnsutil -sr_stateConfiguration
@@ -32,25 +37,31 @@
 #     systemReplicationStatus.py
 #
 #######################################################################
-SAPHanaTopologyVersion="1.001.3"
+SAPHanaControllerVersion="1.001.6"
 #
 # Initialization:
 timeB=$(date '+%s')
 
-raType="sht_"
+export raType="saphana_"
 OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
 # shellcheck source=/dev/null
 source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
 # TODO PRIO1: NG - adjust the correct path and file name for the library to be sourced for first testing use current directory
 # shellcheck source=./saphana-common-lib
 source /usr/lib/SAPHanaSR-angi/saphana-common-lib
-# shellcheck source=./saphana-topology-lib
-source /usr/lib/SAPHanaSR-angi/saphana-topology-lib
+# shellcheck source=./saphana-controller-common-lib
+source /usr/lib/SAPHanaSR-angi/saphana-controller-common-lib
+# shellcheck source=./saphana-controller-lib
+source /usr/lib/SAPHanaSR-angi/saphana-controller-lib
 
 #
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
+# P001 - Setup with scale-out and PREFER_SITE_TAKEOVER=true, AUTOMATED_REGISTER=true. If you kill a primary instance it could happen that the primary sets itself to lpt=10 and the secondary will be set to SFAIL and lpt=10 this results in a WAITING4LPA situation. ==> A down/dying primary may never set SFAIL for a secondary!
+# P002 - in the swarm non master-nameserver nodes may never set the lpt=date
+# P003 - in the swarm non master nodes may NOT do a full master-walk
+# P004 - Monitor on "dying" primary and failing systemReplicationStatus script set secondary to SFAIL, so local restart was processed instead of takeover
 
 #
 # function: main - main function to operate
@@ -76,7 +87,7 @@ then
 else
     if [[ "$ACTION" = "promote" || "$ACTION" = "demote" ]]
     then
-        super_ocf_log err "ACT: $ACTION called in a non clone environment"
+        super_ocf_log err "ACT: $ACTION called in a non multi-state environment"
         exit "$OCF_ERR_ARGS"
     fi
 fi
@@ -90,8 +101,8 @@ case "$ACTION" in
     notify)         # just ignore
                     exit "$OCF_SUCCESS";;
     *)
-                    super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
-                    core_init "$SAPHanaTopologyVersion"
+                    super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaControllerVersion) ===="
+                    core_init "$SAPHanaControllerVersion"
                     ;;
 esac
 "${raType}"init
@@ -117,12 +128,16 @@ fi
 
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
-    start|stop|monitor) # Standard controlling actions
+    start|stop|monitor|promote|demote) # Standard controlling actions
         "${raType}""$ACTION$CLACT"
         ra_rc="$?"
         ;;
     validate-all)
         "${raType}"validate
+        ra_rc="$?"
+        ;;
+    lpa_check)
+        lpa_check_lpt_status
         ra_rc="$?"
         ;;
     reload)
@@ -135,6 +150,6 @@ case "$ACTION" in
 esac
 timeE="$(date '+%s')"
 (( timeR = timeE - timeB ))
-super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
+super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaControllerVersion) (${timeR}s)===="
 exit "${ra_rc}"
 # set ts=4 sw=4 sts=4 et

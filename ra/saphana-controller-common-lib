@@ -1,0 +1,1044 @@
+#!/bin/bash
+
+#
+# saphana-controller-lib
+#
+# Description:  library for SAPHanaController
+#
+##############################################################################
+#
+# SAPHana
+# Author:       Fabian Herschel, November 2013
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
+# Copyright:    (c) 2015-2023 SUSE LLC
+#
+# An example usage:
+#      See usage() function below for more details...
+#
+# OCF instance parameters:
+#   OCF_RESKEY_SID
+#   OCF_RESKEY_InstanceNumber
+#   OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#   OCF_RESKEY_DIR_PROFILE      (optional, well known directories will be searched by default)
+#   OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
+#   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
+#   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
+#   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
+#
+# HANA must support the following commands:
+#     hdbnsutil -sr_stateConfiguration (unsure, if this means >= SPS110, SPS111 or SPS10x)
+#     hdbnsutil -sr_takeover
+#     hdbnsutil -sr_register
+#     landscapeHostConfiguration.py
+#     systemReplicationStatus.py (>= SPS090)
+#
+#######################################################################
+# SAPHanaControllerLibVersion="1.001.10"
+#######################################################################
+#
+# KNOWN PROBLEMS TO BE FIXED:
+# P001 - Setup with scale-out and PREFER_SITE_TAKEOVER=true, AUTOMATED_REGISTER=true. If you kill a primary instance it could happen that the primary sets itself to lpt=10 and the secondary will be set to SFAIL and lpt=10 this results in a WAITING4LPA situation. ==> A down/dying primary may never set SFAIL for a secondary!
+# P002 - in the swarm non master-nameserver nodes may never set the lpt=date
+# P003 - in the swarm non master nodes may NOT do a full master-walk
+# P004 - Monitor on "dying" primary and failing systemReplicationStatus script set secondary to SFAIL, so local restart was processed instead of takeover
+# DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
+
+
+function backup_global_and_nameserver() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=0
+    local epochseconds=""
+    epochseconds="$(date +%s)"  # $EPOCHSECONDS was not available on two lab systems, so fallback to date
+    cp "/hana/shared/${SID}/global/hdb/custom/config/global.ini"     "/hana/shared/${SID}/global/hdb/custom/config/global.ini.${epochseconds}"
+    cp "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini" "/hana/shared/${SID}/global/hdb/custom/config/nameserver.ini.${epochseconds}"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function backup_global_and_nameserver
+
+# function: version: compare two HANA version strings
+function ver_lt() {
+    # called by: TODO
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 0 && return 0 || return 1
+} # end function ver_lt
+
+function ver_le() {
+    # called by: TODO
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 0 -o "$?" -eq 1 && return 0 || return 1
+} # end function ver_le
+
+function ver_gt() {
+    # called by: TODO
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 2 && return 0 || return 1
+} # end function ver_gt
+
+function ver_ge() {
+    # called by: TODO
+    ocf_version_cmp "$1" "$2"
+    test "$?" -eq 2 -o "$?" -eq 1 && return 0 || return 1
+} # end function ver_ge
+#
+# function: version: compare two HANA version strings
+#
+function version() {
+    # called by: TODO
+    if [[ "$#" == 3 ]]; then
+        case "$2" in
+            LE | le | "<=" ) ver_le "$1" "$3";;
+            LT | lt | "<" ) ver_lt "$1" "$3";;
+            GE | ge | ">=" ) ver_ge "$1" "$3";;
+            GT | gt | ">" ) ver_gt "$1" "$3";;
+            * ) return 1;
+        esac
+    elif [ $# -ge 5 ]; then
+        version "$1" "$2" "$3" && shift 2 && version "$@"
+    else
+        return 1;
+    fi
+} # end function version
+
+#
+# function: get_action_timeout
+# output:  action timeout
+#
+# timeOut = max(3600, 95%(actionTimeOut))
+#
+function get_action_timeout() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    # $OCF_RESKEY_CRM_meta_timeout is the timeout of the current running action in ms
+    # shellcheck disable=SC2154
+    local hanaAction="$1" actionTimeOut="$OCF_RESKEY_CRM_meta_timeout" stdTimeOut="$HANA_STD_ACTION_TIMEOUT"
+    local actTimeOutPercent=95 # 95% to left 5% for the rest of the resource agent action
+    if [ -z "$actionTimeOut" ]; then
+        actionTimeOut="$stdTimeOut"
+    else
+        # actionTimeOut in seconds
+        ((actionTimeOut = actionTimeOut/1000))
+    fi
+
+    # 95%(actionTimeOut)
+    ((timeout = actionTimeOut * actTimeOutPercent/100))
+    # max(3600, 95%(actionTimeOut))
+    if [ -z "$timeout" ] || [ "$timeout" -lt "$stdTimeOut" ]; then
+        timeout="$stdTimeOut"
+        super_ocf_log info "DEC: SAP HANA $hanaAction timeout is '$stdTimeOut'"
+    else
+        super_ocf_log info "DEC: SAP HANA $hanaAction timeout is '$timeout', was default '$stdTimeOut'"
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]}"
+    echo "$timeout"
+} # end function get_action_timeout
+
+#
+# function: assert - quickly go out of here with minimal error/return code handling and log
+# params:   MESSAGE
+# globals:  OCF_*(r)
+#
+function assert() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local err_msg=$1
+    # local default_exit="$OCF_NOT_RUNNING" # TODO PRIO3: variable currently unused - remove or use
+    # TODO PRIO3: NG - decide, if assert in normal actions (not probe) needs to return OCF_ERR_CONFIGURED
+    # for now we use the scale-out solution; check with upstream documentation, if OCF_NOT_RUNNING is better reaction here
+    #if ocf_is_probe; then
+    #    default_exit="$OCF_NOT_RUNNING"
+    #else
+    #    # TODO PRIO3: NG - scale-up was OCF_ERR_CONFIGURED, scale-out OCF_NOT_RUNNING - which is the better option?
+    #    default_exit="$OCF_NOT_RUNNING"
+    #fi
+    if [ "$ACTION" = "stop" ]; then
+        cleanup_instance
+        exit "$OCF_SUCCESS"
+    fi
+    super_ocf_log err "ACT: $err_msg"
+    exit "$OCF_NOT_RUNNING"
+} # end function assert
+
+#
+# function: get_crm_promote - get the crm master score of the local node
+# params:   -
+# globals:  HA_SBIN_DIR(r)
+#
+function get_crm_promote() {
+    # called by: TODO
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+  local rc=0
+   "${HA_SBIN_DIR}/$CRM_PROMO" -G -q "$CRM_PROMO_PARAMS"; rc=$?
+   return "$rc"
+} # end function get_crm_promote
+
+#
+# function: set_crm_promote - set the crm master score of the local or remote node
+# params:   SCORE  [NODE]
+# globals:  HA_SBIN_DIR(r), OCF_RESOURCE_INSTANCE(r)
+#
+function set_crm_promote() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0 score=0 node=""
+    if [ -n "$1" ]; then
+        score=$1
+    fi
+    if [ -n "$2" ]; then
+        node="-N $2"
+    fi
+    # shellcheck disable=SC2154
+    ocf_version_cmp "3.9.0" "$OCF_RESKEY_crm_feature_set"
+    # DONE: PRIO2: Only adjust master if value is really different (try to check that)
+    oldscore=$("${HA_SBIN_DIR}/$CRM_PROMO" "$node" -G -q "$CRM_PROMO_PARAMS" )
+    if [ "$oldscore" != "$score" ]; then
+       dstr=$(date)
+       if ocf_is_true "$log_attributes"; then
+           echo "$dstr: SAPHanaController: $CRM_PROMO $node -v $score $CRM_PROMO_PARAMS" >> "$log_attr_file"
+       fi
+       super_ocf_log debug "DBG: SET crm promo: $node $score (old: $oldscore)"
+       "${HA_SBIN_DIR}/$CRM_PROMO" "$node" -v "$score" "$CRM_PROMO_PARAMS" ; rc="$?"
+    else
+       super_ocf_log debug "DBG: LET crm promo: $score"
+       rc=0
+    fi
+    return "$rc"
+} # end function set_crm_promote
+
+#
+# function: scoring_crm_promote - score instance due to role and sync match (table SCORING_TABLE)
+# params:   NODE_ROLES NODE_SYNC_STATUS
+# globals:  SCORING_TABLE[@],
+#
+function scoring_crm_promote() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local hana_roles="$1"
+    local hana_sync="$2"
+    local myScore=""
+    local scoring_rule
+    local lssPattern srrPattern rolePattern syncPattern myScore patternDescription fullRolePattern
+    for scoring_rule in "${SCORING_TABLE[@]}"; do
+        # parts are: lss-pattern srr-pattern role-pattern sync-pattern description
+        read -r lssPattern srrPattern rolePattern syncPattern myScore patternDescription <<< "$scoring_rule"
+        fullRolePattern="$lssPattern:$srrPattern:$rolePattern"
+        if [[ "${hana_roles}" =~ $fullRolePattern ]] && [[ "${hana_sync}" =~ $syncPattern ]]; then
+              super_ocf_log info "DEC: scoring_crm_promote: roles($hana_roles) are matching pattern ($fullRolePattern)"
+              super_ocf_log info "DEC: scoring_crm_promote: sync($hana_sync) is matching syncPattern ($syncPattern)"
+              super_ocf_log info "DEC: scoring_crm_promote: set score $myScore ($patternDescription)"
+              break;  # end scanning, best rule already found
+        fi
+    done
+    super_ocf_log debug "DBG: scoring_crm_promote adjust score $myScore"
+    # Do not score, if we did not found our role/sync at this moment - bsc#919925
+    if [ -n "$myScore" ]; then
+        set_crm_promote "$myScore"
+    fi
+} # end function scoring_crm_promote
+
+#
+# function get_SRHOOK_plain
+# fetches site specific Hook SR status ONLY
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r)
+# locals:  get_sr_name
+#
+function get_SRHOOK_plain() {
+    # called by: TODO
+    local get_sr_name="$1"
+    get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}"
+    return 0
+} # end function get_SRHOOK_plain
+
+#
+# function get_SRHOOK
+# fetches site specific Hook SR status or (as fallback) the polling-attribute
+# params: site-name site-host
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SITE_SYNC_STATUS[@](r)
+# locals:  my_sync, get_sr_name
+#
+function get_SRHOOK() {
+    # called by: TODO
+    local my_sync
+    local get_sr_name="$1"
+    # We assume for NG, that SR attributes are site specific
+    my_sync=$(get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}")
+    #
+    # fallback to polling attribute, if hook attribute is unset or SWAIT
+    #
+    if [ -z "$my_sync" ] || [ "$my_sync" = "SWAIT" ]; then
+        super_ocf_log info "RA: hook attribute is empty or 'SWAIT': SRHOOK=$my_sync"
+        my_sync=$(get_hana_site_attribute "$get_sr_name" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
+        super_ocf_log info "RA: fallback to polling attribute SRHOOK=$my_sync"
+    fi
+    # still unable to determine any SR attribute, so be pessimistic
+    if [ -z "$my_sync" ]; then
+        my_sync="SFAIL"
+    fi
+    super_ocf_log info "DEC: Finally get_SRHOOK()=$my_sync"
+    echo "$my_sync"
+    return 0
+} # end function get_SRHOOK
+
+#
+# function set_SRHOOK - sets the site specific Hook SR status
+# params: site-name, value
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# locals:  get_sr_name value
+# SAPHanaSR ANGI already uses multi-target aware SR Hook attribute there is not global fallback attribute
+#
+function set_SRHOOK() {
+    # called by: TODO
+    local get_sr_name="$1"
+    local value="$2"
+    set_hana_site_attribute "$get_sr_name" "$value" "${ATTR_NAME_HANA_SITE_SRHOOK[@]}"
+    return 0
+} # end function set_SRHOOK
+
+#
+# function set_SRHOOK_PRIM - sets the site specific Hook SR status
+# params: site-name, value
+# globals: ATTR_NAME_HANA_SITE_SRHOOK[@](r), ATTR_NAME_HANA_SYNC_STATUS[@](r)
+# SAPHanaSR Scale-Up already uses multi-target aware SR Hook attribute there is not global fallback attribute
+#
+function set_SRHOOK_PRIM() {
+    # called by: TODO
+    set_SRHOOK "$gSite" "PRIM"
+} # end function set_SRHOOK_PRIM
+
+function saphana_init_scoring_tables() {
+    # called by: TODO
+    # SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU is the default table, if topology PreferSiteTakeover are not detected. So the table also covers some basic checks for scale-out
+    # format of the scoring table lines:
+    # <lss> <primary-secondary> <configured-mns-role>[:<actice-mns-role>]  <sync-status>   <score> ['<score-description>']
+    SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU=(
+       "[234]   P [^:]*:master         .*       150             'primary - running, active master nameserver role'"
+       "[234]   P master[123]          .*       140             'primary - running, configured master nameserver role (failover candidate)'"
+       "[015-9] P master[123]          .*        90             'primary - not running, but configured master nameserver role '"
+       "[0-9]   P [^:]*:slave          .*        60             'primary - any running status, slave master nameserver role (should not happen for ScaleUp)'"
+       "[234]   P [^:]*:[?:-]          .*         3             'primary - running, but nameserver role not detected'"
+       "[015-9] P [^:]*:[?:-]          .*         2             'primary - not running and nameserver role not detected'"
+       ".*      P [^:]*:[?:-]          .*         1             'primary - unknown lss'"
+       "[234]   S [^:]*:master         SOK      100             'secondary - running, active master nameserver role, in sync'"
+       "[234]   S master[123]          SOK      100             'secondary - running, configured master nameserver role, in sync'"
+       "[234]   S [^:]*:master         PRIM     100             'secondary - running, active master nameserver role, already marked as PRIMary'"
+       "[234]   S master[123]          PRIM     100             'secondary - running, configured master nameserver role, already marked as PRIMary'"
+       "[015-9] S master[123]          SOK       80             'secondary - not running, but configured master nameserver role and in sync'"
+       "[0-9]   S master[123]          SFAIL    -INFINITY       'secondary - any running status, configured master nameserver role, not in sync (exclude for promote)'"
+       "[0-9]   S slave                SOK       10             'secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)'"
+       "[0-9]   S slave                SFAIL    -INFINITY       'secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)'"
+       "[234]   S [^:]*:[?:-]          .*         0             'secondary - running, but nameserver role not detected'"
+       "[015-9] S [^:]*:[?:-]          .*        -1             'secondary - not running and nameserver role not detected'"
+       ".*      S [^:]*:[?:-]          .*        -2             'secondary - unknown lss'"
+       ".*      . .*                   .*        -3             'any case, not catched before'"
+    )
+    SCORING_TABLE_PREFERRED_LOCAL_RESTART_SU=(
+       "[0-9]   P [^:]*:master         .*     150               'primary - any running status, active master nameserver role'"
+       "[0-9]   P [^:]*:.*             .*     140               'primary - any running status, any other active nameserver role (even still not detected)'"
+       "[0-9]   S [^:]*:master         SOK    100               'secondary - any running status, active master nameserver role, in sync'"
+       "[0-9]   S [^:]*:master         PRIM   100               'secondary - any running status, active master nameserver role, already marked as PRIMary'"
+       "[0-9]   S [^:]*:master         SFAIL  -INFINITY         'secondary - any running status, active master nameserver role, not in sync'"
+       "[0-9]   S [^:]*:slave          SOK     10               'secondary - any running status, slave master nameserver role and in sync (should not happen for ScaleUp)'"
+       "[0-9]   S [^:]*:slave          SFAIL  -INFINITY         'secondary - any running status, slave master nameserver role and not in sync (should not happen for ScaleUp)'"
+       "[234]   S [^:]*:[?:-]          .*      -1               'secondary - running, but nameserver role not detected'"
+       "[015-9] S [^:]*:[?:-]          .*      -1               'secondary - not running and nameserver role not detected'"
+       ".*      . .*                   .*      -1               'any case, not catched before'"
+    )
+    SCORING_TABLE_PREFERRED_NEVER_SU=(
+       "[234]   P [^:]*:master         .*     150               'primary - running, active master nameserver role'"
+       "[015-9] P [^:]*:master         .*      90               'primary - not running, but active master nameserver role'"
+       "[0-9]   P [^:]*:.*             .*     -INFINITY         'primary - any running status, any other active nameserver role (even still not detected)'"
+       "[0-9]   S [^:]*:.*             .*     -INFINITY         'secondary - any running status, any other active nameserver role (even still not detected)'"
+       ".*      . .*                   .*     -INFINITY         'any case, not catched before'"
+    )
+    SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SO=(
+       "[234]   P master[123]:master            .*          150 'not described yet'"
+       "[234]   P master[123]                   .*          140 'not described yet'"
+       "[234]   P master[123]:slave:.*:standby  .*          115 'not described yet'"
+       "[234]   P master[123]:slave             .*          110 'not described yet'"
+       "[015]   P master[123]:                  .*           70 'not described yet'"
+       "[0-9]   P master[123]:*:standby         .*           60 'not described yet'"
+       "[0-9]   P slave:                        .*       -10000 'not described yet'"
+       "[234]   S master[123]:master            SOK         100 'not described yet'"
+       "[234]   S master[123]:slave             SOK          80 'not described yet'"
+       "[015]   S master[123]:                  SOK          70 'not described yet'"
+       "[0-9]   S master[124]:*:standby         SFAIL    -22100 'not described yet'"
+       "[0-9]   S slave:                        SOK      -12200 'not described yet'"
+       "[0-9]   S slave:                        SFAIL    -22200 'not described yet'"
+       "[0-9]   S .*                              .*       -32300 'not described yet'"
+       ".*      . .*                              .*       -33333 'not described yet'"
+    )
+    SCORING_TABLE_PREFERRED_LOCAL_RESTART_SO=(
+       "[0-9]   P [^:]*:master           .*          150 'not described yet'"
+       "[0-9]   P [^:]*:slave            .*          140 'not described yet'"
+       "[0-9]   P [^:]*:\?               .*            0 'not described yet'"
+       "[0-9]   P [^:]*:-                .*            0 'not described yet'"
+       "[0-9]   S [^:]*:master           SOK         100 'not described yet'"
+       "[0-9]   S [^:]*:master           SFAIL -INFINITY 'not described yet'"
+       "[0-9]   S [^:]*:slave            SOK          10 'not described yet'"
+       "[0-9]   S [^:]*:slave            SFAIL -INFINITY 'not described yet'"
+       "[0-9]   S [^:]*:\?               .*            0 'not described yet'"
+       "[0-9]   S [^:]*:-                .*            0 'not described yet'"
+       ".*      . .*                     .*           -1 'not described yet'"
+    )
+    SCORING_TABLE_PREFERRED_NEVER_SO=(
+       "[234]   P master[123]:master     .*          150 'not described yet'"
+       "[234]   P master[123]:slave      .*          110 'not described yet'"
+       "[015]   P master[123]:           .*           70 'not described yet'"
+       "[0-9]   P master[123]:*:standby  .*           60 'not described yet'"
+       "[0-9]   P slave:                 .*       -10000 'not described yet'"
+       "[0-9]   S [^:]*:*:              SNA    -INFINITY 'not described yet'"
+       "[0-9]   S [^:]*:*:               .*    -INFINITY 'not described yet'"
+       ".*      . .*                     .*    -INFINITY 'not described yet'"
+    )
+} # end function saphana_init_scoring_tables
+
+function saphana_init_sap_commands() {
+    # called by: TODO
+    # TODO PRIO2: NG also set --sapcontrol=1 here
+    hdbState="hdbnsutil -sr_stateConfiguration"
+    #hdbMap="hdbnsutil -sr_stateHostMapping"   # TODO PRIO2: NG - do we need hdbMap again?
+    local standbyFilter=""
+    if [ "$ACTION" = "stop" ]; then
+       standbyFilter="--standbyFilter=off"
+    fi
+} # end function saphana_init_sap_commands
+
+#
+# handle_unix_domain_sockets
+# params: -
+# globals: OCF_RESKEY_REMOVE_SAP_SOCKETS
+#
+function handle_unix_domain_sockets() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]}"
+
+    if ocf_is_true "$RemoveSAPSockets"; then
+        # previous and new default handling
+        # removing the unix domain socket files as they might have
+        # wrong permissions or ownership
+        # they will be recreated by sapstartsrv during next start
+        rm -f /tmp/.sapstream5"${InstanceNr}"13
+        rm -f /tmp/.sapstream5"${InstanceNr}"14
+    else
+        # try to change permission and ownership of the unix domain socket files
+        for sockFile in /tmp/.sapstream5"${InstanceNr}"13 /tmp/.sapstream5"${InstanceNr}"14; do
+            sockError=false
+            if [ -S "$sockFile" ]; then
+                if ! chown "${sid}"adm "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+                if ! chgrp sapsys "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+                if chmod 700 "$sockFile" > /dev/null 2>&1; then
+                    sockError=true
+                fi
+            else
+                if [ -f "$sockFile" ]; then
+                    super_ocf_log error "RA: file '$sockFile' still exists, but is NO longer a socket."
+                    super_ocf_log info "DEC: remove file '$sockFile' to give sapstartsrv a chance to create it the right way during next start"
+                    sockError=true
+                else
+                    super_ocf_log info "RA: file '$sockFile' not found. Nothing to do, let sapstartsrv create a new one during start"
+                fi
+            fi
+            if ocf_is_true "$sockError"; then
+                # fallback - if there are Errors, remove unix domain socket as
+                # last resort
+                rm -f "$sockFile"
+            fi
+        done
+    fi
+} # end function handle_unix_domain_sockets
+
+#
+# function: check_sapstartsrv - check for sapstartsrv - optional start
+# params:   -
+# globals:  DIR_PROFILE(w), SAPSTARTPROFILE(r), SAPCONTROL(r), SID(r), InstanceName(r), InstanceNr(r), OCF_*(r)
+# check_sapstartsrv : Before using sapcontrol we make sure that the sapstartsrv is running.
+#
+function check_sapstartsrv() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local restart=0
+    local runninginst=""
+    local rc="$OCF_SUCCESS"
+    local output=""
+    if chk4systemdsupport; then
+        # use systemd to control sapstartsrv
+        local systemd_unit_name="SAP${SID}_${InstanceNr}.service"
+
+        if "$SYSTEMCTL" is-active --quiet "$systemd_unit_name"; then
+            super_ocf_log info "ACT: systemd service $systemd_unit_name is active"
+        else
+            super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
+            # use start, because restart does also stop sap instance
+            "$SYSTEMCTL" start "$systemd_unit_name" >/dev/null 2>&1; src=$?
+            if [[ "$src" != 0 ]]; then
+                super_ocf_log error "ACT: error during start of systemd unit ${systemd_unit_name}!"
+                rc="$OCF_ERR_GENERIC"
+                ocf_is_probe && rc="$OCF_NOT_RUNNING"
+            fi
+        fi
+    else
+        # no SAP systemd unit available, continue with old code...
+        if [ ! -S "/tmp/.sapstream5${InstanceNr}13" ]; then
+            super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
+            restart=1
+        else
+            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
+            then
+                runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
+                if [ "$runninginst" != "$InstanceName" ]
+                then
+                    super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
+                    restart=1
+                else
+                    if ! output=$("$SAPCONTROL" -nr "$InstanceNr" -function AccessCheck Start)
+                    then
+                        super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 "/tmp/.sapstream5${InstanceNr}13"))"
+                        super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
+                        restart=1
+                    fi
+                fi
+            else
+                super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+                restart=1
+            fi
+        fi
+        if [ -z "$runninginst" ]; then runninginst="$InstanceName"; fi
+        if [[ "$restart" == 1 ]]
+        then
+            if [ -d "/usr/sap/$SID/SYS/profile/" ]
+            then
+                DIR_PROFILE="/usr/sap/$SID/SYS/profile"
+            else
+                assert "Expected /usr/sap/$SID/SYS/profile/ to be a directory, please set DIR_PROFILE parameter!"
+            fi
+            [ ! -r "$SAPSTARTPROFILE" ] && assert "Expected $SAPSTARTPROFILE to be the instance START profile, please set INSTANCE_PROFILE parameter!"
+            pkill -9 -f "sapstartsrv.*$runninginst"
+
+            handle_unix_domain_sockets
+            (
+              export PATH="$DIR_EXECUTABLE${PATH:+:}$PATH"
+              export LD_LIBRARY_PATH="$DIR_EXECUTABLE${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
+              "$SAPSTARTSRV" pf="$SAPSTARTPROFILE" -D -u "$sidadm"
+            )
+            # now make sure the daemon has been started and is able to respond
+            local srvrc=1
+            while [[ "$srvrc" == "1" ]] && pgrep -f "sapstartsrv.*$runninginst"
+            do
+                sleep 1
+                "$SAPCONTROL" -nr "$InstanceNr" -function GetProcessList > /dev/null 2>&1
+                srvrc=$?
+            done
+            if [[ "$srvrc" != 1 ]]
+            then
+                super_ocf_log info "ACT: sapstartsrv for instance $SID-$InstanceName was restarted!"
+                rc="$OCF_SUCCESS"
+            else
+                super_ocf_log error "ACT: sapstartsrv for instance $SID-$InstanceName could not be started!"
+                rc="$OCF_ERR_GENERIC"
+                ocf_is_probe && rc="$OCF_NOT_RUNNING"
+            fi
+        fi
+    fi
+    return "$rc"
+} # end function check_sapstartsrv
+
+#
+# function: cleanup_instance - remove resources from a crashed instance
+# params:   -
+# globals:  -
+#
+function cleanup_instance() {
+    # called by: TODO
+  super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+  local rc=0
+  # TODO: PRIO5: Check, if we need HANA cleanup procedure (processes, ipc obj, pid files); Currently not needed
+  super_ocf_log debug "DBG: cleanup_instance currently not implemented"
+  rc=0
+  super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+} # end function cleanup_instance
+
+#
+# function: get_hana_landscape_status - figure out hana landscape status
+# params:   -
+# globals:  sidadm(r), DIR_EXECUTABLE(r), hana_LSS_Out(w)
+#
+function get_hana_landscape_status() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=0
+    hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
+    if [[ "$rc" == 124 ]]; then
+        # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
+        # landscape timeout
+        super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds"
+        sleep 20
+        hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
+        if [ "$rc" == 124 ]; then
+           super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
+           # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL" - Maybe we should return the stored attribute value?
+           rc=0
+        fi
+    fi
+    return "$rc";
+} # end function get_hana_landscape_status
+
+#
+# check_for_primary_master
+# checks for a "remote" primary master
+# params: -
+# globals: ATTR_NAME_HANA_SITE_SRR(r), ATTR_NAME_HANA_SITE_LSS(r), gRemSite(r)
+# rc: 0 for available primary (lss is 3 or 4); ( can be used as "true" )
+#     2 warning (lss is 2) ( can be used as "false" )
+#     1 otherwise (lss is 1 or 0) ( can be used as false )
+#
+function check_for_primary_master() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1
+    #
+    # get landscape-status and sr-role from "remote" site
+    #
+    rem_lss=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+    rem_srr=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+    case "$rem_lss:$rem_srr" in
+        3:P | 4:P ) rc=0;;
+        2:P )       rc=2;;
+        * )         rc=1;;
+    esac
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function check_for_primary_master
+
+#
+# wait_for_primary_master: wait some time till a running primary master is shown in attributes
+# params: optional: loop count - currently time in 10s waiting loop
+# globals: -
+#
+function wait_for_primary_master() {
+    # called by: TODO
+    local wait=1
+    local rc=1
+    local loops=${1:-0}
+    local count=0
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    #
+    # hana_ndb_roles=primary:master1:master:worker:master
+    #
+    while [ "$wait" == 1 ]; do
+        if check_for_primary_master; then
+           wait=0
+           rc=0
+        else
+           if [ "$loops" -gt 0 ]; then
+              (( count++ ))
+              if [ "$count" -gt "$loops" ]; then
+                 wait=0
+                 rc=1
+              fi
+           fi
+           sleep 10
+        fi
+    done
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function wait_for_primary_master
+
+#
+# function: lpa_get_lpt - get lpt from cluster
+# params:   SITE
+# output:   LPT
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
+# globals:  ATTR_NAME_HANA_SITE_LPA_*,
+#
+function lpa_get_lpt() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=1
+    local mysite=$1
+    local lpt=""
+    super_ocf_log debug "DBG: ${FUNCNAME[0]} get_hana_attribute X " "${ATTR_NAME_HANA_SITE_LPA[@]}"
+    lpt=$(get_hana_site_attribute "${mysite}" "${ATTR_NAME_HANA_SITE_LPA[@]}")
+    if [ -n "$lpt" ]; then
+        rc=0
+        echo "$lpt"
+    else
+        rc=2
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function lpa_get_lpt
+
+#
+# function: lpa_set_lpt - set lpt in cluster
+# params:   LPT [site]
+# globals:  ATTR_NAME_HANA_SITE_LPA(r), NODENAME(r),
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
+#
+function lpa_set_lpt() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=1
+    #local crm_rc=1
+    local lpt=$1
+    local clpt=-1
+    local mysite=$2
+    if [ -n "$mysite" ]; then
+        set_hana_site_attribute "${mysite}" "$lpt" "${ATTR_NAME_HANA_SITE_LPA[@]}" || super_ocf_log error "LPA: setting cluster attribute failed"
+        clpt=$(lpa_get_lpt "$mysite")
+        if [ "$lpt" != "$clpt" ]; then
+            super_ocf_log error "LPA: lpa_set_lpt failed for lpt=$lpt and mysite=$mysite"
+            rc=2
+        else
+            rc=0
+        fi
+    else
+       super_ocf_log info "DEC: lpa_set_lpt - ignore changing lpt due to lost site name"
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function lpa_set_lpt
+
+#
+# function: lpa_pull_lpt - fetch lpt from file
+# params:   -
+# globals:  LPA_DIRECTORY(r), sid, NODENAME
+# output:   LPT
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
+#
+function lpa_pull_lpt() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1
+    local lpt=-1
+    local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
+    #
+    # only fetch the first word of the first line as lpt
+    #
+    mapfile <"$lpa_file";
+    lpt="${MAPFILE[0]%% *}" # only catch first word of first line
+    if [ -n "$lpt" ]; then
+        echo "$lpt"
+        rc=0
+    else
+        rc=2
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function lpa_pull_lpt
+
+#
+# function: lpa_push_lpt - put lpt to file
+# params:   LPT
+# globals:  LPA_DIRECTORY(r), sid, NODENAME
+# output:   --
+# rc:       rc=0: OK, rc=1: InternalERROR, rc=2: ERROR
+#
+function lpa_push_lpt() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local lpt=$1
+    local clpt=-1
+    local rc=1
+    local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
+    #
+    mkdir -p "$LPA_DIRECTORY"
+    echo "$lpt" > "$lpa_file"
+    clpt=$(lpa_pull_lpt); lpt_rc=$?
+    if [[ "$clpt" != "$lpt" || "$lpt_rc" != 0 ]]; then
+        rc=2
+    else
+        rc=0
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function lpa_push_lpt
+
+#
+# function: lpa_init_lpt - initialize local lpt, if needed
+# params:   HANA_STATE
+# globals:  HANA_STATE_*(r), LPA_DIRECTORY(r), sid(r), NODENAME(r),
+# lpa_init_lpt
+#
+# Returncodes:
+#    rc=0: OK,  rc=1 InternalERROR,  rc=2: ERROR
+#
+# Initializing (if NO local LPT-file):
+#    SECONDARY sets to 0
+#    PRIMARY   sets to 1
+#
+function lpa_init_lpt() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=1 LPTloc=-1 LPTrem=-1 hana_state=$1
+    local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
+    mkdir -p "$LPA_DIRECTORY"
+    LPTloc=$(lpa_get_lpt "${gSite}") || LPTloc=$(lpa_pull_lpt) || \
+        if   [ "$hana_state" == "$HANA_STATE_PRIMARY" ];  then    # Initialize for Primary
+            # init primary
+            LPTloc=20
+            lpa_push_lpt "20"; rc=$?
+        elif [ "$hana_state" == "$HANA_STATE_SECONDARY" ]; then   # Initialize for Secondary
+            # init secondary
+            LPTloc=10
+            lpa_push_lpt "10"; rc=$?
+        else
+            rc=2
+        fi
+    lpa_set_lpt "$LPTloc" "$gSite"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function lpa_init_lpt
+
+#
+# function: lpa_check_lpt_status - start a hana clone instance
+# params:   -
+# globals:  DUPLICATE_PRIMARY_TIMEOUT, NODENAME, remoteNode
+# lpa_check_lpt_status
+#
+# Returncodes:
+#    0: start
+#    1: register    (then start)
+#    2: wait4gab    (WAIT4LPA - Older LPA needs to expire)
+#    3: wait4other  (WAIT4LPA - Remote LPA needs to be announced)
+#    4: lpa internal error
+#
+# Initializing (if NO local LPT-file):
+#    SECONDARY sets to 10
+#    PRIMARY   sets to 20
+#
+#    LPRlocal OR LPTremote ARE real lpt (>1000)
+#        THEN:
+#            Bigger LPR wins, if delta-gab is OK
+#               LPTlocal >> LPTremote ===> rc=0 (start)
+#               LPTRemote >> LPTlocal ===> rc=1 (register)
+#            Stalemate in all other cases ==> STALEMATE-HANDLING ===> rc=2 (wait4gab)
+#    LPRlocal AND LPTremote ARE NOT real lpt (<=1000)
+#        THEN:
+#            Bigger LPT wins
+#               LPTlocal > LPTremote ===> rc=0 (start)
+#               LPTRemote > LPTlocal ===> rc=1 (register)
+#            Stalemate in all other cases ==> STALEMATE-HANDLING ===> rc=2 (wait4gab)
+#    LPTRemote is not initialized or node/site not known to the cluster (0)
+#    TODO PRIO1: NG - Need to introduce a return-code 3 for remote sides lpa not ready
+#        THEN:
+#            WAIT ==> LOST REMOTE HANDLING ===> rc=3 (wait4other)
+#
+function lpa_check_lpt_status() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=4 LPTloc=-1 LPTrem=-1 LPTMark=1000 delta=0
+    #
+    # First GET LPT from ATTR-FILE-DEFAULT
+    #
+    LPTloc=$(lpa_get_lpt "$gSite"); lparc=$?   # ATTR
+    if [ "$lparc" != 0 ]; then
+        # as a fallback try to fetch the value from external status file
+        LPTloc=$(lpa_pull_lpt);                 # FILE
+        lparc=$?
+        if [[ -z "$LPTloc" || "$LPTloc" != -1 || "$lparc" != 0 ]]; then
+            # last option - try to initialize as PRIMARY
+            lpa_push_lpt 20
+            lpa_set_lpt  20 "$gSite"
+            LPTloc=20                           # DEFAULT
+        fi
+    fi
+    LPTrem=$(lpa_get_lpt "$gRemSite"); lparc="$?"
+    super_ocf_log info "LPA: LPTloc=$LPTloc LPTrem=$LPTrem"
+    if [[ "$lparc" != 0 ]]; then
+        # LPT of the other node could not be evaluated - LPA says WAIT
+        super_ocf_log debug "DBG: LPA: LPTloc=$LPTloc, LPTrem undefined ==> WAIT"
+        rc=3
+    else
+        super_ocf_log debug "DBG: LPA: LPTloc ($LPTloc) LPTrem ($LPTrem) delta ($delta)"
+        if [[ "$LPTloc" -lt "$LPTMark" && "$LPTrem" -lt "$LPTMark" ]]; then
+           delta=0   # both lpts are not a real timestamp so just take the greater one
+        else
+           delta="$DUPLICATE_PRIMARY_TIMEOUT"   # at least one of the lpts is a real timestamp so include delta-gap
+        fi
+        if (( delta < LPTloc - LPTrem )); then
+            # We are the winner - LPA says STARTUP
+            super_ocf_log debug "DBG: LPA: LPTloc wins $LPTloc > $LPTrem + $delta ==> START"
+            rc=0
+        elif (( delta < LPTrem - LPTloc )); then
+            if ocf_is_true "$AUTOMATED_REGISTER" ; then
+                # The other one has won - LPA says REGISTER
+                super_ocf_log debug "DBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta ==> REGISTER"
+                rc=1
+            else
+                super_ocf_log debug "DBG: LPA: LPTrem wins $LPTrem > $LPTloc + $delta BUT AUTOMATED_REGISTER='false' ==> WAIT"
+                rc=2
+            fi
+        else
+            super_ocf_log debug "DBG: LPA: Difference between LPTloc and LPTrem is less than delta ($delta) ==> WAIT"
+            # TODO: PRIO3: ADD STALEMATE-HANDLING HERE; currently admin should set one of the lpa to 20
+            rc=2
+        fi
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function lpa_check_lpt_status
+
+
+# function: is_active_nameserver_slave
+# params:   -
+# rc:       0: yes its an active nameserver slave (running)
+#           2: yes it is a configured but lost slave  # TODO PRIO2: NG - rc2 seems to got lost
+#           1: else
+# globals:
+#
+# true, if the node has an active (runnig) master nameserver slave role
+#
+function is_active_nameserver_slave() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1 nodeRole=""
+    nodeRole="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
+    case "$nodeRole" in
+        slave:slave:* )
+            # configured as slave and actual role also detected as slave
+            rc=0
+            ;;
+        * )
+            rc=1
+        ;;
+    esac
+    super_ocf_log info "DEC: is_active_nameserver_slave rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function is_active_nameserver_slave
+
+# function: is_lost_nameserver_slave
+# params:   -
+# rc:       0: yes it is a configured but lost slave
+#           1: else
+# globals:  ATTR_NAME_HANA_ROLES[@], NODENAME
+#
+# true, if the node has an active (runnig) master nameserver slave role
+#
+function is_lost_nameserver_slave() {
+    # called by: TODO
+    # TODO PRIO2: NG - check this new code carefully
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1 nodeRole=""
+    nodeRole="$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")"
+    case "$nodeRole" in
+        slave:* )
+            # configured as slave but actual role could not be figured out - treat as is_lost_nameserver_slave
+            rc=0
+            ;;
+        * )
+            rc=1
+            ;;
+    esac
+    super_ocf_log info "DEC: is_lost_nameserver_slave ($nodeRole) rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function is_lost_nameserver_slave
+
+
+# function: is_master_nameserver
+# params:   -
+# rc:       0: yes its a master nameserver
+#           1: else
+# globals:  ATTR_NAME_HANA_ROLES[@](r), NODENAME(r), gNodeRole(w), vName(r)
+#
+# true, if the node has an active or configured master nameserver role
+#
+function is_master_nameserver() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1
+    gNodeRole="$(get_role_by_cluster_or_landscape "${NODENAME}" "$gVirtName")"
+    # IFS=: read -a nodeFields <<<"$with_colon"
+    # nFields=( ${nRole//:/ } )
+    case "$gNodeRole" in
+        master[123]:master:* )
+           rc=0
+           ;;
+        master[123]:* )
+           rc=0
+           ;;
+        * )
+           rc=1
+           ;;
+    esac
+    super_ocf_log info "DEC: is_master_nameserver  rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function is_master_nameserver
+
+# function: is_the_master_nameserver
+# params:   -
+# rc:       0: yes, local node is THE master nameserver
+#           1: else
+# globals:
+function is_the_master_nameserver() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1
+    # TODO PRIO1: NG - always true for scale-up, for scale-out we need to check the_master
+    if [ "$gTheMaster" = "$NODENAME" ]; then
+        rc=0
+    fi
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function is_the_master_nameserver
+
+function recover_site_attributes_from_file() {
+    # called by: TODO
+    local srHookAttributeFile="$1"
+    local attrSite
+    local -a mapLines
+    local srAttr srValue
+
+    if [ -f "$srHookAttributeFile" ]; then
+        #
+        # need to read attribute from the file
+        #
+        mapfile -t mapLines <"$srHookAttributeFile"
+        for mapLine in "${mapLines[@]}"; do
+            srAttr="${mapLine%%=*}"   # cut-off right side of a = b
+            srAttr="${srAttr// /}"    # attribute must not contain blanks
+            srValue="${mapLine#*=}"   # cut-off left side of a = b
+            srValue="${srValue## }"   # cut-off leading blanks in value
+            srValue="${srValue%% }"   # cut-off trailing blanks in value
+            srValue="${srValue#\'}"   # cut-off leading single quote
+            srValue="${srValue%\'}"   # cut-off closing single quote
+            # TODO PRIO3: NG - check this new code-part
+            case "$srAttr" in
+                hana_${sid}_site_srHook_* )
+                    #
+                    # get site name from site attribute-name
+                    #
+                    attrSite="${srAttr#hana_"${sid}"_site_srHook_}"
+                    super_ocf_log info "DEC: srHookAttribute file found - recover lost SAP HA/DR event for site=$gSite ($srAttr=$srValue)"
+                    #
+                    # DONE: PRIO0 - add check for srATTR name here
+                    #
+                    case "$srValue" in
+                    SOK )
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $attrSite SOK"
+                          set_SRHOOK "$attrSite" "SOK"
+                          ;;
+                    SFAIL )
+                          super_ocf_log info "DEC: recover attributes from file $srHookAttributeFile - calling set_SRHOOK $attrSite SFAIL"
+                          set_SRHOOK "$attrSite" "SFAIL"
+                          ;;
+                    * )
+                          super_ocf_log info "DEC: failed recover attributes from file $srHookAttributeFile - Unknown value <<$srValue>>"
+                          ;;
+                    esac
+                    ;;
+            esac
+        done
+        rm "$srHookAttributeFile"
+    fi
+} # end function recover_site_attributes_from_file
+
+# set ts=4 sw=4 sts=4 et

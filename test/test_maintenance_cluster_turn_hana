@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# test_maintenance_cluster_turn_hana  - with resource in maintenace: exchange primary/secondary
+#
+# - set mst-resource in maintenance mode
+# - takeover on secondary with suspend primary (gets new primary)
+# - register on primary in online mode (gets new secondary)
+# - wait till cluster is idle
+# - refresh mst-resource
+# - wait till cluster is idle
+# - get mst-resource out of maintenance (normal operation)
+#
+# expected outcome: cluster running, SAP HANA instanes running, SR roles exchanged
+source test_properties
+
+# shellcheck disable=SC2029
+ssh "${node01}" "crm resource cleanup  $mstResource"
+
+currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+echo "p=$currPrimary, s=$currSecondary"
+
+sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary="${sitePrimary//\"/}"
+
+echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
+
+
+echo "==== SUSE Resource Maintenance Begin ===="
+# shellcheck disable=SC2029
+ssh "${node02}" "crm resource maintenance $mstResource on"
+
+ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
+ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$currSecondary"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
+
+sleep 30
+ssh "${node02}" 'cs_wait_for_idle -s 2'
+# shellcheck disable=SC2029
+ssh "${node02}" "crm resource refresh $mstResource"
+
+ssh "${node02}" 'cs_wait_for_idle -s 2'
+# shellcheck disable=SC2029
+ssh "${node02}" "crm resource maintenance $mstResource off"
+
+echo "==== SUSE Resource Maintenance End ===="

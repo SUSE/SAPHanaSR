@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+# test_restart_cluster_turn_hana -
+#
+# - cleanup mst-resource
+# - stop cluster (including SAP HANA)
+# - start both SAP HANA sites
+# - takeover on secondary with suspend primary (gets the new primary)
+# - register on primary in online mode (gets the new secondary)
+# - start cluster
+#
+# expected outcome: cluster running, SAP HANA instances running, SR roles are exchanged
+#
+source test_properties
+# shellcheck disable=SC2029
+ssh "${node01}" "crm resource cleanup  $mstResource"
+
+currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+echo "p=$currPrimary, s=$currSecondary"
+
+sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary="${sitePrimary//\"/}"
+
+echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
+
+
+ssh "${node02}" 'crm cluster run "crm cluster stop"'
+
+echo "==== SUSE Cluster Stopped ===="
+
+ssh "$node01" 'su - '"$sidadm"' -c "HDB start"' &
+ssh "$node02" 'su - '"$sidadm"' -c "HDB start"' &
+wait
+
+echo "==== SAP HANA DBs started ===="
+
+ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
+ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$currSecondary"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
+
+
+ssh "$node01" 'crm cluster run "crm cluster start"'
+
+echo "==== SUSE Cluster Started ===="

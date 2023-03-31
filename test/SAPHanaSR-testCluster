@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# test_ksi (ScaleUp)
+# 2023-02-24
+# test steps expected see ksi.json
+#
+########
+#
+# usage:
+# test_XX --node=<clusterNode> --testCase=<testCase> --testFile=<testFile> [--verbose]
+
+set -u
+source ./test-lib
+
+
+function usage() {
+    cat <<EOF
+    $0 --node=<clusterNode> --testCase=<testCase> --testFile=<testFileJson> [--verbose]
+    <clusterNode>:  any node of the cluster
+    <testCase>:     test code like 'ksi', 'kpi' 'ssn'
+    <testFileJson>: filename of the json-formatted test description
+EOF
+}
+
+#
+# globals testCase(r)
+#
+function main() {
+    local rc1 rc2
+    local rc=3
+    local startStep currStep
+    startStep="$(search4getValue "Tests/$testCase/start")"
+    message "testCase=$testCase, startStep=$startStep"
+    checkPrerequisites "${testCase}-$startStep"; rc1="$?"
+    if [[ "$rc1" != 0 ]]; then
+       message "RESULT: PREREQUISITES NOT MATCHED"
+       rc=2
+    else
+        currStep="$(search4getValue "Steps/${testCase}-${startStep}/next")"
+        checkSequence "$testCase" "$currStep"; rc2="$?"
+        if [[ "$rc2" == 0 ]]; then
+            message "RESULT: TEST SUCCESS"
+            rc=0
+        else
+            message "RESULT: TEST FAILED"
+            rc=1
+        fi
+    fi
+    return "$rc"
+}
+
+# --node=<clusterNode> --testCase=<testCase> --testFile=<testFile>
+init "$@"
+main

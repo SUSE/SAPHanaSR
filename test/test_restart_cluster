@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# test_restart_cluster - restart cluster, start SAP HANA instances while cluster is down
+#
+# - cleanup mst-resource
+# - stop cluster (including SAP HANA resources)
+# - start SAP HANA manually
+# - start cluster
+#
+# expected outcome: cluster running, SAP HANA instances running, SR roles NOT exchanged
+source test_properties
+
+
+# shellcheck disable=SC2029
+ssh "$node01" "crm resource cleanup  $mstResource"
+
+ssh "$node02" 'crm cluster run "crm cluster stop"'
+
+echo "==== SUSE Cluster Stopped ===="
+
+ssh "$node01" 'su - '"$sidadm"' -c "HDB start"' &
+ssh "$node02" 'su - '"$sidadm"' -c "HDB start"' &
+wait
+
+echo "==== SAP HANA DBs started ===="
+
+ssh "$node01" 'crm cluster run "crm cluster start"'
+
+echo "==== SUSE Cluster Started ===="
+

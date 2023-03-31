@@ -75,7 +75,7 @@ try:
                 # run pre-check, return != 0 in case of error => will abort takeover
                 my_sid = os.environ.get('SAPSYSTEMNAME')
                 tout_cmd = "timeout {0}s".format(self.time_out)
-                maint_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --sid={0} --case=checkTakeover".format(my_sid)
+                maint_cmd = "sudo /usr/bin/SAPHanaSR-hookHelper --sid={0} --case=checkTakeover".format(my_sid)
 
                 self.tracer.info("{0}.{1}() maint_cmd is: {2}, tout_cmd is: {3}".format(self.__class__.__name__, method, maint_cmd, tout_cmd))
                 cmdrc = os.WEXITSTATUS(os.system(tout_cmd + " " + maint_cmd))

@@ -242,7 +242,7 @@ try:
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
                 tout_cmd = ""
-                action_cmd = "sudo /usr/sbin/SAPHanaSR-hookHelper --sid={0} --case=fenceMe".format(mySID)
+                action_cmd = "sudo /usr/bin/SAPHanaSR-hookHelper --sid={0} --case=fenceMe".format(mySID)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {} {}".format("5", tout_cmd, action_cmd)))
                 # DONE add fence code here
             if (isLostIndexserver and self.action_on_lost == "kill"):
@@ -273,7 +273,7 @@ try:
                 msg = "LOST: firstStopThenKill instance. action_on_lost={}".format(self.action_on_lost)
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
-                action_cmd = "/usr/sbin/SAPHanaSR-hookHelper --sid={} --ino={} --case=firstStopThenKill".format(mySID, self.ino)
+                action_cmd = "/usr/bin/SAPHanaSR-hookHelper --sid={} --ino={} --case=firstStopThenKill".format(mySID, self.ino)
                 cmdrc = os.WEXITSTATUS(os.system("sleep {}; {}".format("5", action_cmd)))
             if (isLostIndexserver and self.action_on_lost == "attr"):
                 # this is lab code only. Do not use it in customer or partner systems.
