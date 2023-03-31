@@ -13,7 +13,7 @@ FILE_LIST = doc \
 			srHook \
 	 		wizard 
 
-TAR_EXTRAS = -X tools/SAPHanaSR-testDriver
+TAR_EXTRAS = --exclude=tools/SAPHanaSR-testDriver
 
 PKG = SAPHanaSR-angi
 SPECFILE = ${PKG}.spec
