@@ -2,12 +2,26 @@
 
 function run() {
     local node="$1" testID="$2" repeat="$3" sleep="$4"
+    logFile="testLog$(date +"%Y-%m-%d").txt"
+    logLink="testLog.curr.txt"
+    if [ ! -f "$logFile" ]; then
+        touch "$logFile"
+    fi
+    if [ -L "$logLink" ]; then
+        rl=$(readlink "$logLink")
+        if [[ "$rl" != "$logFile" ]]; then
+            ln -s -f "$logFile" "$logLink"
+        fi
+    else
+        ln -s "$logFile" "$logLink"
+    fi
     python3 saphanasrlib.py --testFile="${testID}.json" \
                             --remoteNode="$node" \
                             --repeat="$repeat" \
                             --dumpFailures \
                             --defaultChecksFile="defaultChecks.json" \
-                            --logFile testLog"$(date +"%Y-%m-%d")".txt 
+                            --logFile "$logFile"
+    # ln -s -f testLog2023-03-31.txt testLog.curr.txt
     sleep "$sleep"; 
     return 0
 }
