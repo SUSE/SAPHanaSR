@@ -1,4 +1,4 @@
-## How to contribute to SAPHanaSR
+## How to contribute to SAPHanaSR-angi
 
 #### **Did you find a bug?**
 
