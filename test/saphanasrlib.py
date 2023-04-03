@@ -59,11 +59,9 @@ class SaphanasrTest:
         self.log_file_handle = None
         self.r_id = None
         self.message("INIT: {}".format(self.version))
-        self.config = { 'test_file': "-", 'check_file': None, 'properties_file': "properties.json", 'log_file': "", 'repeat': 1, 'dump_failures': False, 'remote_node': None }
+        self.config = { 'test_file': "-", 'defaults_checks_file': None, 'properties_file': "properties.json", 'log_file': "", 'repeat': 1, 'dump_failures': False, 'remote_node': None }
         self.dict_sr = {}
         self.test_data = {}
-        #self.test_file = "-"
-        self.default_checks_file = None
         self.properties_file = "properties.json"
         self.log_file = ""
         self.repeat = 1
@@ -87,7 +85,7 @@ class SaphanasrTest:
             self.config['test_file'] = args.testFile
         if args.defaultChecksFile:
             self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-            self.default_checks_file = args.defaultChecksFile
+            self.config['defaults_checks_file'] = args.defaultChecksFile
         if args.properties:
             self.message("PARAM: properties: {}".format(args.properties))
             self.properties_file = args.properties
@@ -198,8 +196,8 @@ class SaphanasrTest:
         if self.properties_file:
             with open(self.properties_file, encoding="utf-8") as prop_fh:
                 self.test_data.update(json.load(prop_fh))
-        if self.default_checks_file:
-            with open(self.default_checks_file, encoding="utf-8") as dc_fh:
+        if self.config['defaults_checks_file']:
+            with open(self.config['defaults_checks_file'], encoding="utf-8") as dc_fh:
                 self.test_data.update(json.load(dc_fh))
         if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
