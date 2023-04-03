@@ -22,7 +22,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1622-lint16"
+    version = "0.1.20230403.1736-lint18"
 
     def message(self, msg):
         """
@@ -38,7 +38,7 @@ class SaphanasrTest:
         print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
             self.message_fh(msg, self.log_file_handle)
-        except:
+        except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
 
     def message_fh(self, msg, file_handle):
@@ -59,9 +59,10 @@ class SaphanasrTest:
         self.log_file_handle = None
         self.r_id = None
         self.message("INIT: {}".format(self.version))
+        self.config = { 'test_file': "-", 'check_file': None, 'properties_file': "properties.json", 'log_file': "", 'repeat': 1, 'dump_failures': False, 'remote_node': None }
         self.dict_sr = {}
         self.test_data = {}
-        self.test_file = "-"
+        #self.test_file = "-"
         self.default_checks_file = None
         self.properties_file = "properties.json"
         self.log_file = ""
@@ -83,7 +84,7 @@ class SaphanasrTest:
         args = parser.parse_args()
         if args.testFile:
             self.message("PARAM: testFile: {}".format(args.testFile))
-            self.test_file = args.testFile
+            self.config['test_file'] = args.testFile
         if args.defaultChecksFile:
             self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
             self.default_checks_file = args.defaultChecksFile
@@ -200,10 +201,10 @@ class SaphanasrTest:
         if self.default_checks_file:
             with open(self.default_checks_file, encoding="utf-8") as dc_fh:
                 self.test_data.update(json.load(dc_fh))
-        if self.test_file == "-":
+        if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
-            with open(self.test_file, encoding="utf-8") as tf_fh:
+            with open(self.config['test_file'], encoding="utf-8") as tf_fh:
                 self.test_data.update(json.load(tf_fh))
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.log_file_handle)
 
@@ -216,7 +217,7 @@ class SaphanasrTest:
             # match <key>=<regExp>
             match_obj = re.search("(.*)(=)(.*)", single_check)
             c_key = match_obj.group(1)
-            c_comp = match_obj.group(2)
+            #c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
             found = 0
             if area_name in l_sr:
@@ -245,7 +246,7 @@ class SaphanasrTest:
         rc_checks = -1
         if topology_object_name in step:
             checks = step[topology_object_name]
-            if type(checks) is str:
+            if isinstance(checks,str):
                 check_ptr = checks
                 self.message_fh("DEBUG: check_ptr {}".format(check_ptr), self.log_file_handle)
                 checks = self.test_data["checkPtr"][check_ptr]
@@ -293,7 +294,7 @@ class SaphanasrTest:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
-            action_rc = self.action(step_action)
+            self.action(step_action)
         return process_result
 
     def process_steps(self):
