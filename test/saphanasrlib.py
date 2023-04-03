@@ -21,7 +21,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1448-lint11"
+    version = "0.1.20230403.1448-lint14"
 
     def message(self, msg):
         """
@@ -67,6 +67,8 @@ class saphanasrtest:
         self.dump_failures = False
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.remote_node = None
+        self.test_rc = 0
+        self.count = 1
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
         parser.add_argument("--defaultChecksFile", help="specify the default checks file")
@@ -214,9 +216,9 @@ class saphanasrtest:
         l_sr = self.dict_sr
         check_result = -1
         failed_checks = ""
-        for c in checks:
+        for single_check in checks:
             # match <key>=<regExp>
-            match_obj = re.search("(.*)(=)(.*)",c)
+            match_obj = re.search("(.*)(=)(.*)", single_check)
             c_key = match_obj.group(1)
             c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
@@ -229,15 +231,13 @@ class saphanasrtest:
                         l_val = l_obj[c_key]
                         found = 1
                         if re.search(c_reg_exp, l_val):
-                            if check_result <0:
-                                check_result = 0
+                            check_result = max(check_result, 0)
                         else:
                             if failed_checks == "":
                                 failed_checks = "{}={}: {}={} !~ {}".format(area_name,object_name,c_key,l_val,c_reg_exp)
                             else:
                                 failed_checks += "; {}={} !~ {}".format(c_key,l_val,c_reg_exp)
-                            if check_result <1:
-                                check_result = 1
+                            check_result = max(check_result, 1)
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.dump_failures and failed_checks != "":
@@ -248,7 +248,7 @@ class saphanasrtest:
         rc_checks = -1
         if topology_object_name in step:
             checks = step[topology_object_name]
-            if type(checks) is str: 
+            if type(checks) is str:
                 check_ptr = checks
                 self.message_fh("DEBUG: check_ptr {}".format(check_ptr), self.log_file_handle)
                 checks = self.test_data["checkPtr"][check_ptr]
@@ -258,7 +258,7 @@ class saphanasrtest:
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
                 rc_checks = self.run_checks(checks, area_name, object_name)
-        return(rc_checks)
+        return rc_checks
 
     def process_step(self, step):
         """ process a single step including optional loops """
@@ -307,7 +307,7 @@ class saphanasrtest:
         step_step = step['step']
         r_code = 0
         # onfail for first step is 'break'
-        onfail = 'break' 
+        onfail = 'break'
         while step_step != "END":
             step_next = step['next']
             process_result = self.process_step(step)
@@ -327,7 +327,7 @@ class saphanasrtest:
                 break
             # onfail for all next steps is 'continue' to run also the recovery steps
             onfail = 'continue'
-        return(r_code)
+        return r_code
 
     def process_test(self):
         """ process the entire test defined in test_data """
@@ -336,9 +336,9 @@ class saphanasrtest:
         test_start = self.test_data['start']
         test_sid = self.test_data['sid']
         test_resource = self.test_data['mstResource']
-        self.message("PROC: test_id={} test_name={} test_start={} test_sid={}".format(test_id, test_name, test_start, test_sid, test_resource))
+        self.message("PROC: test_id={} test_name={} test_start={} test_sid={} test_res={}".format(test_id, test_name, test_start, test_sid, test_resource))
         r_code = self.process_steps()
-        return(r_code)
+        return r_code
 
     def get_step(self, step_name):
         """ query for a given step with step_name in test_data """
@@ -408,7 +408,7 @@ class saphanasrtest:
             a_result = self.do_ssh(remote, "root", cmd)
             action_rc = a_result[2]
             self.message("ACTION: {} at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
-        return(action_rc)
+        return action_rc
 
     def do_ssh(self, remote_host, user, cmd):
         """
@@ -427,11 +427,10 @@ class saphanasrtest:
             ssh_client.close()
         else:
             check_result=("", "", 20000)
-        return(check_result)
+        return check_result
 
 if __name__ == "__main__":
     test01 = saphanasrtest()
-    test01.count = 1
     while test01.count <= test01.repeat:
         test01.r_id = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
@@ -444,11 +443,11 @@ if __name__ == "__main__":
         test_id = test01.test_data['test']
         if test01.repeat != 1:
             test01.message("TEST: {} testNr={} ######".format(test_id, test01.count))
-        rc = test01.process_test()
-        if rc == 0:
-            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(test_id, test01.count)) 
+        test01.test_rc = test01.process_test()
+        if test01.test_rc == 0:
+            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(test_id, test01.count))
         else:
-            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(test_id, test01.count)) 
+            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(test_id, test01.count))
         test01.count += 1
     if  test01.log_file_handle:
         test01.log_file_handle.close()
