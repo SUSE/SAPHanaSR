@@ -96,7 +96,7 @@ class SaphanasrTest:
             self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         random.seed()
 
-    def insert_to_area(self, area, the_object):
+    def __insert_to_area__(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
         l_sr = self.dict_sr.copy()
         if area in l_sr:
@@ -108,7 +108,7 @@ class SaphanasrTest:
             l_sr.update(l_dic)
         self.dict_sr = l_sr.copy()
 
-    def get_object(self, area, object_name):
+    def __get_object__(self, area, object_name):
         """ get an object dictionary inside the area dictionary """
         l_sr = self.dict_sr.copy()
         if area in l_sr:
@@ -121,7 +121,7 @@ class SaphanasrTest:
         l_obj = { object_name: { key: val } }
         return l_obj
 
-    def insert_to_object(self, the_object, key, value):
+    def __insert_to_object__(self, the_object, key, value):
         """ insert a key-value pair into the object dictionary """
         l_obj = the_object
         l_dic = { key: value }
@@ -133,7 +133,7 @@ class SaphanasrTest:
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=script"
         self.dict_sr={}
-        result_sr = self.do_ssh(self.config['remote_node'], "root", cmd)
+        result_sr = self.__do_ssh__(self.config['remote_node'], "root", cmd)
         for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
@@ -145,12 +145,12 @@ class SaphanasrTest:
                 match_obj = re.search("(.*)=\"(.*)\"", key_val)
                 key = match_obj.group(1)
                 val = match_obj.group(2)
-                l_obj=self.get_object(area, object_name)
+                l_obj=self.__get_object__(area, object_name)
                 if l_obj:
-                    self.insert_to_object(l_obj,key,val)
+                    self.__insert_to_object__(l_obj,key,val)
                 else:
                     l_obj = self.create_object(object_name, key, val)
-                    self.insert_to_area(area, l_obj)
+                    self.__insert_to_area__(area, l_obj)
         return 0
 
     def search_in_area_for_object_by_key_value(self, area_name, key, value):
@@ -196,6 +196,7 @@ class SaphanasrTest:
         else:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
                 self.test_data.update(json.load(tf_fh))
+        self.run['test_id'] = self.test_data['test']
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.run['log_file_handle'])
 
     def run_checks(self, checks, area_name, object_name ):
@@ -318,12 +319,12 @@ class SaphanasrTest:
 
     def process_test(self):
         """ process the entire test defined in test_data """
-        test_id = self.test_data['test']
+        self.run['test_id'] = self.test_data['test']
         test_name = self.test_data['name']
         test_start = self.test_data['start']
         test_sid = self.test_data['sid']
         test_resource = self.test_data['mstResource']
-        self.message("PROC: test_id={} test_name={} test_start={} test_sid={} test_res={}".format(test_id, test_name, test_start, test_sid, test_resource))
+        self.message("PROC: test_id={} test_name={} test_start={} test_sid={} test_res={}".format(self.run['test_id'], test_name, test_start, test_sid, test_resource))
         r_code = self.process_steps()
         return r_code
 
@@ -336,19 +337,22 @@ class SaphanasrTest:
                 break
         return step
 
-    def action(self, action_name):
-        """ perform a given action """
+    def action_call(self, action_name, cmd, remote):
+        """ do the action itself """
+        action_rc = 0
+        if cmd != "":
+            self.message("ACTION: {} at {}: {}".format(action_name, remote, cmd))
+            a_result = self.__do_ssh__(remote, "root", cmd)
+            action_rc = a_result[2]
+            self.message("ACTION: {} at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+        return action_rc
+
+    def action_on_hana(self, action_name):
+        """ perform a given action on SAP HANA primary or secondary """
         remote = self.config['remote_node']
-        cmd = ""
-        action_rc = 1
-        # resource = "ms_SAPHanaCon_HA1_HDB00"
         test_sid = self.test_data['sid']
-        resource = self.test_data['mstResource']
-        action_array = action_name.split(" ")
-        action_name_short = action_array[0]
-        if action_name == "":
-            action_rc = 0
-        elif action_name == "ksi":
+        cmd = ""
+        if action_name == "ksi":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kpi":
@@ -363,22 +367,32 @@ class SaphanasrTest:
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
-        elif action_name == "ssn":
+        return self.action_call(action_name, cmd, remote)
+
+    def action_on_cluster(self, action_name):
+        """ perform a given action on cluster node """
+        remote = self.config['remote_node']
+        resource = self.test_data['mstResource']
+        cmd = ""
+        if action_name == "ssn":
             cmd = "crm node standby {}".format(self.topolo['sHost'])
         elif action_name == "osn":
-            remote = self.config['remote_node']
             cmd = "crm node online {}".format(self.topolo['sHost'])
         elif action_name == "spn":
-            remote = self.config['remote_node']
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif action_name == "opn":
-            remote = self.config['remote_node']
             cmd = "crm node online {}".format(self.topolo['pHost'])
         elif action_name == "cleanup":
-            # TODO: get resource name from test_data
-            remote = self.config['remote_node']
             cmd = "crm resource cleanup {}".format(resource)
-        elif action_name_short == "sleep":
+        return self.action_call(action_name, cmd, remote)
+
+    def action_on_os(self, action_name):
+        """ perform a given action on cluster node """
+        remote = self.config['remote_node']
+        action_array = action_name.split(" ")
+        action_name_short = action_array[0]
+        cmd = ""
+        if action_name_short == "sleep":
             remote = self.config['remote_node']
             if len(action_array) == 2:
                 action_parameter = action_array[1]
@@ -389,14 +403,24 @@ class SaphanasrTest:
             remote = 'localhost'
             action_parameter = " ".join(action_array[1:])
             cmd = "bash {}".format(action_parameter)
-        if cmd != "":
-            self.message("ACTION: {} at {}: {}".format(action_name, remote, cmd))
-            a_result = self.do_ssh(remote, "root", cmd)
-            action_rc = a_result[2]
-            self.message("ACTION: {} at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+        return self.action_call(action_name, cmd, remote)
+
+    def action(self, action_name):
+        """ perform a given action """
+        action_array = action_name.split(" ")
+        action_name_short = action_array[0]
+        action_rc = 0
+        if action_name == "":
+            action_rc = 0
+        elif action_name_short in ("kpi", "ksi", "kpx", "ksx", "bmt"):
+            action_rc = self.action_on_hana(action_name)
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
+            action_rc = self.action_on_cluster(action_name)
+        elif action_name_short in ("sleep", "shell"):
+            action_rc = self.action_on_os(action_name)
         return action_rc
 
-    def do_ssh(self, remote_host, user, cmd):
+    def __do_ssh__(self, remote_host, user, cmd):
         """
         ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
@@ -405,7 +429,7 @@ class SaphanasrTest:
             ssh_client = SSHClient()
             ssh_client.load_system_host_keys()
             ssh_client.connect(remote_host, username=user)
-            (cmd_stdin, cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)
+            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
             result_stdout = cmd_stdout.read().decode("utf8")
             result_stderr = cmd_stderr.read().decode("utf8")
             result_rc = cmd_stdout.channel.recv_exit_status()
@@ -426,14 +450,14 @@ if __name__ == "__main__":
         test01.topolo.update({'sHost': test01.search_in_area_for_object_by_key_value('Hosts', 'site', test01.topolo['sSite'])})
         test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.read_test_file()
-        test_id = test01.test_data['test']
+        my_test_id = test01.run['test_id']
         if test01.config['repeat'] != 1:
-            test01.message("TEST: {} testNr={} ######".format(test_id, test01.run['count']))
+            test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
         test01.run['test_rc'] = test01.process_test()
         if test01.run['test_rc'] == 0:
-            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(test_id, test01.run['count']))
+            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(my_test_id, test01.run['count']))
         else:
-            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(test_id, test01.run['count']))
+            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(my_test_id, test01.run['count']))
         test01.run['count'] += 1
     if  test01.run['log_file_handle']:
         test01.run['log_file_handle'].close()
