@@ -93,6 +93,8 @@ class SaphanasrTest:
         if args.logFile:
             self.message("PARAM: logFile: {}".format(args.logFile))
             self.config['log_file'] = args.logFile
+            # disable 'consider to use with ...' - I am pretty sure with does not match here
+            # pylint: disable-next=R1732
             self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         random.seed()
 
