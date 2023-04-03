@@ -21,7 +21,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1420-lint01"
+    version = "0.1.20230403.1448-lint02"
 
     def message(self, msg):
         """
@@ -59,14 +59,14 @@ class saphanasrtest:
         self.message("INIT: {}".format(self.version))
         self.SR = {}
         self.test_data = {}
-        self.testFile = "-"
+        self.test_file = "-"
         self.default_checks_file = None
-        self.propertiesFile = "properties.json"
+        self.properties_file = "properties.json"
         self.log_file = ""
         self.repeat = 1
-        self.dumpFailures = False
+        self.dump_failures = False
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
-        self.remoteNode = None
+        self.remote_node = None
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
         parser.add_argument("--defaultChecksFile", help="specify the default checks file")
@@ -79,7 +79,7 @@ class saphanasrtest:
         args = parser.parse_args()
         if args.testFile:
             self.message("PARAM: testFile: {}".format(args.testFile))
-            self.testFile = args.testFile
+            self.test_file = args.testFile
         if args.defaultChecksFile:
             self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
             self.default_checks_file = args.defaultChecksFile
@@ -88,45 +88,45 @@ class saphanasrtest:
             self.properties_file = args.properties
         if args.remoteNode:
             self.message("PARAM: remoteNode: {}".format(args.remoteNode))
-            self.remoteNode = args.remoteNode
+            self.remote_node = args.remoteNode
         if args.repeat:
             self.message("PARAM: repeat: {}".format(args.repeat))
             self.repeat = int(args.repeat)
         if args.dumpFailures:
-            self.message("PARAM: repeat: {}".format(args.dumpFailures))
-            self.dumpFailures = args.dumpFailures
+            self.message("PARAM: dumpFailures")
+            self.dump_failures = args.dumpFailures
         if args.logFile:
             self.message("PARAM: logFile: {}".format(args.logFile))
             self.log_file = args.logFile
-            self.log_file_handle = open(self.log_file, 'a')
+            self.log_file_handle = open(self.log_file, 'a', encoding="utf-8")
         random.seed()
 
     def insertToArea(self, area, object):
         """ insert an object dictionary to an area dictionary """
-        lSR = self.SR.copy()
-        if area in lSR:
-            lDic = lSR[area].copy()
+        l_sr = self.SR.copy()
+        if area in l_sr:
+            lDic = l_sr[area].copy()
             lDic.update(object)
-            lSR[area].update(lDic)
+            l_sr[area].update(lDic)
         else:
             lDic = { area: object }
-            lSR.update(lDic)
-        self.SR = lSR.copy()
+            l_sr.update(lDic)
+        self.SR = l_sr.copy()
 
-    def getObject(self, area, objectName):
+    def getObject(self, area, object_name):
         """ get an object dictionary inside the area dictionary """
-        lSR = self.SR.copy()
-        if area in lSR:
-            if objectName in lSR[area]:
-                return lSR[area][objectName]
+        l_sr = self.SR.copy()
+        if area in l_sr:
+            if object_name in l_sr[area]:
+                return l_sr[area][object_name]
             else:
                 return None
         else:
             return None
 
-    def createObject(self, objectName, key, val):
-        """ create a key: value dictionary for object objectName """
-        lObj = { objectName: { key: val } }
+    def createObject(self, object_name, key, val):
+        """ create a key: value dictionary for object object_name """
+        lObj = { object_name: { key: val } }
         return lObj
 
     def insertToObject(self, object, key, value):
@@ -141,42 +141,42 @@ class saphanasrtest:
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=script"
         self.SR={}
-        resultSR = self.doSSH(self.remoteNode, "root", cmd)
+        resultSR = self.doSSH(self.remote_node, "root", cmd)
         for line in resultSR[0].splitlines():
-            """ match and split: <area>/<object>/<key-value> """
-            mo = re.search("(.*)/(.*)/(.*)", line)
-            if mo:
-                area = mo.group(1)
-                objectName = mo.group(2)
-                kV = mo.group(3)
-                """ match and split <key>="<value>" """
-                mo = re.search("(.*)=\"(.*)\"", kV)
-                key = mo.group(1)
-                val = mo.group(2)
-                lObj=self.getObject(area, objectName)
+            # match and split: <area>/<object>/<key-value>
+            match_obj = re.search("(.*)/(.*)/(.*)", line)
+            if match_obj:
+                area = match_obj.group(1)
+                object_name = match_obj.group(2)
+                key_val = match_obj.group(3)
+                # match and split <key>="<value>"
+                match_obj = re.search("(.*)=\"(.*)\"", key_val)
+                key = match_obj.group(1)
+                val = match_obj.group(2)
+                lObj=self.getObject(area, object_name)
                 if lObj:
                     self.insertToObject(lObj,key,val)
                 else:
-                    lObj = self.createObject(objectName, key, val)
+                    lObj = self.createObject(object_name, key, val)
                     self.insertToArea(area, lObj)
         return 0
 
-    def searchInAreaForObjectByKeyValue(self, areaName, key, value):
+    def searchInAreaForObjectByKeyValue(self, area_name, key, value):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
-        objectName = None
-        lSR = self.SR
-        if areaName in lSR:
-            lArea = lSR[areaName]
+        object_name = None
+        l_sr = self.SR
+        if area_name in l_sr:
+            lArea = l_sr[area_name]
             for k in lArea.keys():
                 lObj = lArea[k]
                 if key in lObj:
                     if lObj[key] == value:
-                        objectName = k
-                        """ currently we only return the first match """
+                        object_name = k
+                        # currently we only return the first match
                         break
-        return objectName
+        return object_name
 
-    def prettyPrint(self, dictionary,level):
+    def pretty_print(self, dictionary,level):
         """ debug method for nested dictionary """
         print("{")
         count = 0
@@ -185,7 +185,7 @@ class saphanasrtest:
                 print(",")
             if isinstance(dictionary[k],dict):
                 print("'{}': ".format(k))
-                self.prettyPrint(dictionary[k], level+1)
+                self.pretty_print(dictionary[k], level+1)
             else:
                 print("'{}': '{}'".format(k,dictionary[k]))
             count = count + 1
@@ -193,38 +193,38 @@ class saphanasrtest:
 
     def readTestFile(self):
         """ read Test Description, optionally defaultchecks and properties """
-        if self.propertiesFile:
-            f = open(self.propertiesFile)
-            self.test_data.update(json.load(f))
-            f.close()
+        if self.properties_file:
+            prop_fh = open(self.properties_file, encoding="utf-8")
+            self.test_data.update(json.load(prop_fh))
+            prop_fh.close()
         if self.default_checks_file:
-            f = open(self.default_checks_file)
-            self.test_data.update(json.load(f))
-            f.close()
-        if self.testFile == "-":
+            dc_fh = open(self.default_checks_file, encoding="utf-8")
+            self.test_data.update(json.load(dc_fh))
+            dc_fh.close()
+        if self.test_file == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
-            f = open(self.testFile)
-            self.test_data.update(json.load(f))
-            f.close()
+            tf_fh = open(self.test_file, encoding="utf-8")
+            self.test_data.update(json.load(tf_fh))
+            tf_fh.close()
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.log_file_handle)
 
-    def runChecks(self, checks, areaName, objectName ):
+    def run_checks(self, checks, area_name, object_name ):
         """ run all checks for area and object """
-        lSR = self.SR
+        l_sr = self.SR
         checkResult = -1
-        failedChecks = ""
+        failed_checks = ""
         for c in checks:
-            """ match <key>=<regExp> """
-            mo = re.search("(.*)(=)(.*)",c)
-            cKey = mo.group(1)
-            cComp = mo.group(2)
-            cRegExp = mo.group(3)
+            # match <key>=<regExp>
+            match_obj = re.search("(.*)(=)(.*)",c)
+            cKey = match_obj.group(1)
+            cComp = match_obj.group(2)
+            cRegExp = match_obj.group(3)
             found = 0
-            if areaName in lSR:
-                lArea = lSR[areaName]
-                if objectName in lArea:
-                    lObj = lArea[objectName]
+            if area_name in l_sr:
+                lArea = l_sr[area_name]
+                if object_name in lArea:
+                    lObj = lArea[object_name]
                     if cKey in lObj:
                         lVal = lObj[cKey]
                         found = 1
@@ -232,22 +232,22 @@ class saphanasrtest:
                             if checkResult <0:
                                 checkResult = 0
                         else:
-                            if failedChecks == "":
-                                failedChecks = "{}={}: {}={} !~ {}".format(areaName,objectName,cKey,lVal,cRegExp)
+                            if failed_checks == "":
+                                failed_checks = "{}={}: {}={} !~ {}".format(area_name,object_name,cKey,lVal,cRegExp)
                             else:
-                                failedChecks += "; {}={} !~ {}".format(cKey,lVal,cRegExp)
+                                failed_checks += "; {}={} !~ {}".format(cKey,lVal,cRegExp)
                             if checkResult <1:
                                 checkResult = 1
             if (found == 0) and (checkResult < 2 ):
                 checkResult = 2
-        if self.dumpFailures and failedChecks != "":
-            self.message_fh("FAILED: {}".format(failedChecks), self.log_file_handle)
+        if self.dump_failures and failed_checks != "":
+            self.message_fh("FAILED: {}".format(failed_checks), self.log_file_handle)
         return checkResult
 
-    def processTopologyObject(self, step, topologyObjectName, areaName):
+    def process_topology_object(self, step, topology_object_name, area_name):
         rcChecks = -1
-        if topologyObjectName in step:
-            checks = step[topologyObjectName]
+        if topology_object_name in step:
+            checks = step[topology_object_name]
             if type(checks) is str: 
                 checkPtr = checks
                 self.message_fh("DEBUG: checkPtr {}".format(checkPtr), self.log_file_handle)
@@ -255,49 +255,49 @@ class saphanasrtest:
                 #for c in checks:
                 #    self.message("DEBUG: checkPtr {} check {}".format(checkPtr,c))
             topolo = self.topolo
-            if topologyObjectName in topolo:
-                objectName = topolo[topologyObjectName]
-                rcChecks = self.runChecks(checks, areaName, objectName)
+            if topology_object_name in topolo:
+                object_name = topolo[topology_object_name]
+                rcChecks = self.run_checks(checks, area_name, object_name)
         return(rcChecks)
 
     def processStep(self, step):
         """ process a single step including optional loops """
         stepID = step['step']
         stepName = step['name']
-        stepNext = step['next']
+        step_next = step['next']
         if 'loop' in step:
-            maxLoops = step['loop']
+            max_loops = step['loop']
         else:
-            maxLoops = 1
+            max_loops = 1
         if 'wait' in step:
             wait = step['wait']
         else:
             wait = 2
         loops = 0
         if 'post' in step:
-            stepAction = step['post']
+            step_action = step['post']
         else:
-            stepAction = ""
-        self.message("PROC: stepID={} stepName='{}' stepNext={} stepAction='{}'".format(stepID, stepName, stepNext, stepAction))
-        while loops < maxLoops:
+            step_action = ""
+        self.message("PROC: stepID={} stepName='{}' step_next={} step_action='{}'".format(stepID, stepName, step_next, step_action))
+        while loops < max_loops:
             loops = loops + 1
-            if self.dumpFailures == False:
+            if self.dump_failures == False:
                 print(".", end='', flush=True)
             processResult = -1
             self.readSAPHanaSR()
-            processResult = max ( self.processTopologyObject(step, 'pSite', 'Sites'),
-                                  self.processTopologyObject(step, 'sSite', 'Sites'),
-                                  self.processTopologyObject(step, 'pHost', 'Hosts'),
-                                  self.processTopologyObject(step, 'sHost', 'Hosts'))
+            processResult = max ( self.process_topology_object(step, 'pSite', 'Sites'),
+                                  self.process_topology_object(step, 'sSite', 'Sites'),
+                                  self.process_topology_object(step, 'pHost', 'Hosts'),
+                                  self.process_topology_object(step, 'sHost', 'Hosts'))
             if processResult == 0:
                 break
             else:
                 time.sleep(wait)
-        if self.dumpFailures == False:
+        if self.dump_failures == False:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(stepID, loops))
         if processResult == 0:
-            aRc = self.action(stepAction)
+            aRc = self.action(step_action)
         return processResult
 
     def processSteps(self):
@@ -309,7 +309,7 @@ class saphanasrtest:
         """ onfail for first step is 'break' """
         onfail = 'break' 
         while stepStep != "END":
-            stepNext = step['next']
+            step_next = step['next']
             processResult = self.processStep(step)
             if processResult == 0:
                 self.message("STATUS: Test step {} passed successfully".format(stepStep))
@@ -319,7 +319,7 @@ class saphanasrtest:
                 """ TODO: add onfail handling (cuurently only brak for furst step and continue for others) """
                 if onfail == 'break':
                     break
-            step=self.getStep(stepNext)
+            step=self.getStep(step_next)
             if step:
                 stepStep = step['step']
             else:
@@ -351,7 +351,7 @@ class saphanasrtest:
 
     def action(self, actionName):
         """ perform a given action """
-        remote = self.remoteNode
+        remote = self.remote_node
         cmd = ""
         aRc = 1
         # resource = "ms_SAPHanaCon_HA1_HDB00"
@@ -377,23 +377,23 @@ class saphanasrtest:
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(testSID.lower())
         elif actionName == "ssn":
-            remote = self.remoteNode
+            remote = self.remote_node
             cmd = "crm node standby {}".format(self.topolo['sHost'])
         elif actionName == "osn":
-            remote = self.remoteNode
+            remote = self.remote_node
             cmd = "crm node online {}".format(self.topolo['sHost'])
         elif actionName == "spn":
-            remote = self.remoteNode
+            remote = self.remote_node
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif actionName == "opn":
-            remote = self.remoteNode
+            remote = self.remote_node
             cmd = "crm node online {}".format(self.topolo['pHost'])
         elif actionName == "cleanup":
             """ TODO: get resource name from test_data """
-            remote = self.remoteNode
+            remote = self.remote_node
             cmd = "crm resource cleanup {}".format(resource)
         elif actionNameShort == "sleep":
-            remote = self.remoteNode
+            remote = self.remote_node
             if len(actionArr) == 2:
                 actionParameter = actionArr[1]
             else:
