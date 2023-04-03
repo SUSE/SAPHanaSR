@@ -1,3 +1,5 @@
+# pylint: disable=consider-using-f-string
+# pylint: disable=C0301
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
@@ -12,55 +14,55 @@ import sys, json
 import argparse
 import random
 
-""" for ssh remote calls this module uses paramiko """
+# for ssh remote calls this module uses paramiko
 from paramiko import SSHClient
 
 class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230324.1239"
+    version = "0.1.20230403.1420-lint01"
 
     def message(self, msg):
         """
         message with formatted timestamp
         """
-        """ TODO: specify, if message should be written to stdout, stderr and/or log file """
-        dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
-        if self.rID:
-            rID = " [{}]".format(self.rID)
+        # TODO: specify, if message should be written to stdout, stderr and/or log file
+        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        if self.r_id:
+            r_id = " [{}]".format(self.r_id)
         else:
-            rID = ""
-        msgArr = msg.split(" ")
-        print("{}{} {:<9s} {}".format(dateTime, rID, msgArr[0], " ".join(msgArr[1:])))
+            r_id = ""
+        msg_arr = msg.split(" ")
+        print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
-            self.messageFH(msg, self.logFileHandle)
+            self.message_fh(msg, self.log_file_handle)
         except:
-            print("{0} {1:<9s} {2}".format(dateTime, "ERROR:", "Could not write log logFile"))
+            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
 
-    def messageFH(self, msg, fileHandle):
-        dateTime = time.strftime("%Y-%m-%d %H:%M:%S")
-        if self.rID:
-            rID = " [{}]".format(self.rID)
+    def message_fh(self, msg, file_handle):
+        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        if self.r_id:
+            r_id = " [{}]".format(self.r_id)
         else:
-            rID = ""
-        msgArr = msg.split(" ")
-        if fileHandle:
-            fileHandle.write("{}{} {:<9s} {}\n".format(dateTime, rID, msgArr[0], " ".join(msgArr[1:])))
+            r_id = ""
+        msg_arr = msg.split(" ")
+        if file_handle:
+            file_handle.write("{}{} {:<9s} {}\n".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
 
     def __init__(self, *args):
         """
         constructor
         """
-        self.logFileHandle = None
-        self.rID = None
+        self.log_file_handle = None
+        self.r_id = None
         self.message("INIT: {}".format(self.version))
         self.SR = {}
-        self.testData = {}
+        self.test_data = {}
         self.testFile = "-"
-        self.defaultChecksFile = None
+        self.default_checks_file = None
         self.propertiesFile = "properties.json"
-        self.logFile = ""
+        self.log_file = ""
         self.repeat = 1
         self.dumpFailures = False
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -68,7 +70,7 @@ class saphanasrtest:
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
         parser.add_argument("--defaultChecksFile", help="specify the default checks file")
-        parser.add_argument("--propertiesFile", help="specify the properties file")
+        parser.add_argument("--properties", help="specify the properties file")
         parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
         parser.add_argument("--simulate", help="only simulate, dont call actions", action="store_true")
         parser.add_argument("--repeat", help="how often to repeat the test")
@@ -80,10 +82,10 @@ class saphanasrtest:
             self.testFile = args.testFile
         if args.defaultChecksFile:
             self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-            self.defaultChecksFile = args.defaultChecksFile
-        if args.propertiesFile:
-            self.message("PARAM: propertiesFile: {}".format(args.propertiesFile))
-            self.propertiesFile = args.propertiesFile
+            self.default_checks_file = args.defaultChecksFile
+        if args.properties:
+            self.message("PARAM: properties: {}".format(args.properties))
+            self.properties_file = args.properties
         if args.remoteNode:
             self.message("PARAM: remoteNode: {}".format(args.remoteNode))
             self.remoteNode = args.remoteNode
@@ -95,8 +97,8 @@ class saphanasrtest:
             self.dumpFailures = args.dumpFailures
         if args.logFile:
             self.message("PARAM: logFile: {}".format(args.logFile))
-            self.logFile = args.logFile
-            self.logFileHandle = open(self.logFile, 'a')
+            self.log_file = args.logFile
+            self.log_file_handle = open(self.log_file, 'a')
         random.seed()
 
     def insertToArea(self, area, object):
@@ -193,19 +195,19 @@ class saphanasrtest:
         """ read Test Description, optionally defaultchecks and properties """
         if self.propertiesFile:
             f = open(self.propertiesFile)
-            self.testData.update(json.load(f))
+            self.test_data.update(json.load(f))
             f.close()
-        if self.defaultChecksFile:
-            f = open(self.defaultChecksFile)
-            self.testData.update(json.load(f))
+        if self.default_checks_file:
+            f = open(self.default_checks_file)
+            self.test_data.update(json.load(f))
             f.close()
         if self.testFile == "-":
-            self.testData.update(json.load(sys.stdin))
+            self.test_data.update(json.load(sys.stdin))
         else:
             f = open(self.testFile)
-            self.testData.update(json.load(f))
+            self.test_data.update(json.load(f))
             f.close()
-        self.messageFH("DEBUG: testData: {}".format(str(self.testData)),self.logFileHandle)
+        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.log_file_handle)
 
     def runChecks(self, checks, areaName, objectName ):
         """ run all checks for area and object """
@@ -239,7 +241,7 @@ class saphanasrtest:
             if (found == 0) and (checkResult < 2 ):
                 checkResult = 2
         if self.dumpFailures and failedChecks != "":
-            self.messageFH("FAILED: {}".format(failedChecks), self.logFileHandle)
+            self.message_fh("FAILED: {}".format(failedChecks), self.log_file_handle)
         return checkResult
 
     def processTopologyObject(self, step, topologyObjectName, areaName):
@@ -248,8 +250,8 @@ class saphanasrtest:
             checks = step[topologyObjectName]
             if type(checks) is str: 
                 checkPtr = checks
-                self.messageFH("DEBUG: checkPtr {}".format(checkPtr), self.logFileHandle)
-                checks = self.testData["checkPtr"][checkPtr]
+                self.message_fh("DEBUG: checkPtr {}".format(checkPtr), self.log_file_handle)
+                checks = self.test_data["checkPtr"][checkPtr]
                 #for c in checks:
                 #    self.message("DEBUG: checkPtr {} check {}".format(checkPtr,c))
             topolo = self.topolo
@@ -300,7 +302,7 @@ class saphanasrtest:
 
     def processSteps(self):
         """ process a seria of steps till next-step is "END" or there is no next-step """
-        testStart = self.testData['start']
+        testStart = self.test_data['start']
         step=self.getStep(testStart)
         stepStep = step['step']
         rc = 0
@@ -328,20 +330,20 @@ class saphanasrtest:
         return(rc)
 
     def processTest(self):
-        """ process the entire test defined in testData """
-        testID = self.testData['test']
-        testName = self.testData['name']
-        testStart = self.testData['start']
-        testSID = self.testData['sid']
-        testResource = self.testData['mstResource']
+        """ process the entire test defined in test_data """
+        testID = self.test_data['test']
+        testName = self.test_data['name']
+        testStart = self.test_data['start']
+        testSID = self.test_data['sid']
+        testResource = self.test_data['mstResource']
         self.message("PROC: testID={} testName={} testStart={} testSID={}".format(testID, testName, testStart, testSID, testResource))
         rc = self.processSteps()
         return(rc)
 
     def getStep(self, stepName):
-        """ query for a given step with stepName in testData """
+        """ query for a given step with stepName in test_data """
         step = None
-        for s in self.testData['steps']:
+        for s in self.test_data['steps']:
             if s['step'] == stepName:
                 step = s
                 break
@@ -353,8 +355,8 @@ class saphanasrtest:
         cmd = ""
         aRc = 1
         # resource = "ms_SAPHanaCon_HA1_HDB00"
-        testSID = self.testData['sid']
-        resource = self.testData['mstResource']
+        testSID = self.test_data['sid']
+        resource = self.test_data['mstResource']
         actionArr = actionName.split(" ")
         actionNameShort = actionArr[0]
         if actionName == "":
@@ -387,7 +389,7 @@ class saphanasrtest:
             remote = self.remoteNode
             cmd = "crm node online {}".format(self.topolo['pHost'])
         elif actionName == "cleanup":
-            """ TODO: get resource name from testData """
+            """ TODO: get resource name from test_data """
             remote = self.remoteNode
             cmd = "crm resource cleanup {}".format(resource)
         elif actionNameShort == "sleep":
@@ -431,7 +433,7 @@ if __name__ == "__main__":
     test01 = saphanasrtest()
     test01.count = 1
     while test01.count <= test01.repeat:
-        test01.rID = random.randrange(10000,99999,1)
+        test01.r_id = random.randrange(10000,99999,1)
         test01.readSAPHanaSR()
         test01.topolo.update({'pSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')})
         test01.topolo.update({'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')})
@@ -439,7 +441,7 @@ if __name__ == "__main__":
         test01.topolo.update({'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['sSite'])})
         test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.readTestFile()
-        testID = test01.testData['test']
+        testID = test01.test_data['test']
         if test01.repeat != 1:
             test01.message("TEST: {} testNr={} ######".format(testID, test01.count))
         rc = test01.processTest()
@@ -448,5 +450,5 @@ if __name__ == "__main__":
         else:
             test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(testID, test01.count)) 
         test01.count += 1
-    if  test01.logFileHandle:
-        test01.logFileHandle.close()
+    if  test01.log_file_handle:
+        test01.log_file_handle.close()
