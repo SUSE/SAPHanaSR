@@ -21,7 +21,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1448-lint02"
+    version = "0.1.20230403.1448-lint04"
 
     def message(self, msg):
         """
@@ -57,7 +57,7 @@ class saphanasrtest:
         self.log_file_handle = None
         self.r_id = None
         self.message("INIT: {}".format(self.version))
-        self.SR = {}
+        self.dict_sr = {}
         self.test_data = {}
         self.test_file = "-"
         self.default_checks_file = None
@@ -103,19 +103,19 @@ class saphanasrtest:
 
     def insertToArea(self, area, object):
         """ insert an object dictionary to an area dictionary """
-        l_sr = self.SR.copy()
+        l_sr = self.dict_sr.copy()
         if area in l_sr:
-            lDic = l_sr[area].copy()
-            lDic.update(object)
-            l_sr[area].update(lDic)
+            l_dic = l_sr[area].copy()
+            l_dic.update(object)
+            l_sr[area].update(l_dic)
         else:
-            lDic = { area: object }
-            l_sr.update(lDic)
-        self.SR = l_sr.copy()
+            l_dic = { area: object }
+            l_sr.update(l_dic)
+        self.dict_sr = l_sr.copy()
 
     def getObject(self, area, object_name):
         """ get an object dictionary inside the area dictionary """
-        l_sr = self.SR.copy()
+        l_sr = self.dict_sr.copy()
         if area in l_sr:
             if object_name in l_sr[area]:
                 return l_sr[area][object_name]
@@ -126,23 +126,23 @@ class saphanasrtest:
 
     def createObject(self, object_name, key, val):
         """ create a key: value dictionary for object object_name """
-        lObj = { object_name: { key: val } }
-        return lObj
+        l_obj = { object_name: { key: val } }
+        return l_obj
 
     def insertToObject(self, object, key, value):
         """ insert a key-value pair into the object dictionary """
-        lObj = object
-        lDic = { key: value }
-        lObj.update(lDic)
-        return lObj
+        l_obj = object
+        l_dic = { key: value }
+        l_obj.update(l_dic)
+        return l_obj
 
     def readSAPHanaSR(self):
         """ method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary structure representing the data """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=script"
-        self.SR={}
-        resultSR = self.doSSH(self.remote_node, "root", cmd)
-        for line in resultSR[0].splitlines():
+        self.dict_sr={}
+        result_sr = self.do_ssh(self.remote_node, "root", cmd)
+        for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
             if match_obj:
@@ -153,24 +153,24 @@ class saphanasrtest:
                 match_obj = re.search("(.*)=\"(.*)\"", key_val)
                 key = match_obj.group(1)
                 val = match_obj.group(2)
-                lObj=self.getObject(area, object_name)
-                if lObj:
-                    self.insertToObject(lObj,key,val)
+                l_obj=self.getObject(area, object_name)
+                if l_obj:
+                    self.insertToObject(l_obj,key,val)
                 else:
-                    lObj = self.createObject(object_name, key, val)
-                    self.insertToArea(area, lObj)
+                    l_obj = self.createObject(object_name, key, val)
+                    self.insertToArea(area, l_obj)
         return 0
 
     def searchInAreaForObjectByKeyValue(self, area_name, key, value):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         object_name = None
-        l_sr = self.SR
+        l_sr = self.dict_sr
         if area_name in l_sr:
-            lArea = l_sr[area_name]
-            for k in lArea.keys():
-                lObj = lArea[k]
-                if key in lObj:
-                    if lObj[key] == value:
+            l_area = l_sr[area_name]
+            for k in l_area.keys():
+                l_obj = l_area[k]
+                if key in l_obj:
+                    if l_obj[key] == value:
                         object_name = k
                         # currently we only return the first match
                         break
@@ -211,31 +211,31 @@ class saphanasrtest:
 
     def run_checks(self, checks, area_name, object_name ):
         """ run all checks for area and object """
-        l_sr = self.SR
+        l_sr = self.dict_sr
         checkResult = -1
         failed_checks = ""
         for c in checks:
             # match <key>=<regExp>
             match_obj = re.search("(.*)(=)(.*)",c)
-            cKey = match_obj.group(1)
-            cComp = match_obj.group(2)
-            cRegExp = match_obj.group(3)
+            c_key = match_obj.group(1)
+            c_comp = match_obj.group(2)
+            c_reg_exp = match_obj.group(3)
             found = 0
             if area_name in l_sr:
-                lArea = l_sr[area_name]
-                if object_name in lArea:
-                    lObj = lArea[object_name]
-                    if cKey in lObj:
-                        lVal = lObj[cKey]
+                l_area = l_sr[area_name]
+                if object_name in l_area:
+                    l_obj = l_area[object_name]
+                    if c_key in l_obj:
+                        l_val = l_obj[c_key]
                         found = 1
-                        if re.search(cRegExp, lVal):
+                        if re.search(c_reg_exp, l_val):
                             if checkResult <0:
                                 checkResult = 0
                         else:
                             if failed_checks == "":
-                                failed_checks = "{}={}: {}={} !~ {}".format(area_name,object_name,cKey,lVal,cRegExp)
+                                failed_checks = "{}={}: {}={} !~ {}".format(area_name,object_name,c_key,l_val,c_reg_exp)
                             else:
-                                failed_checks += "; {}={} !~ {}".format(cKey,lVal,cRegExp)
+                                failed_checks += "; {}={} !~ {}".format(c_key,l_val,c_reg_exp)
                             if checkResult <1:
                                 checkResult = 1
             if (found == 0) and (checkResult < 2 ):
@@ -245,20 +245,20 @@ class saphanasrtest:
         return checkResult
 
     def process_topology_object(self, step, topology_object_name, area_name):
-        rcChecks = -1
+        rc_checks = -1
         if topology_object_name in step:
             checks = step[topology_object_name]
             if type(checks) is str: 
-                checkPtr = checks
-                self.message_fh("DEBUG: checkPtr {}".format(checkPtr), self.log_file_handle)
-                checks = self.test_data["checkPtr"][checkPtr]
+                check_ptr = checks
+                self.message_fh("DEBUG: check_ptr {}".format(check_ptr), self.log_file_handle)
+                checks = self.test_data["checkPtr"][check_ptr]
                 #for c in checks:
-                #    self.message("DEBUG: checkPtr {} check {}".format(checkPtr,c))
+                #    self.message("DEBUG: check_ptr {} check {}".format(check_ptr,c))
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
-                rcChecks = self.run_checks(checks, area_name, object_name)
-        return(rcChecks)
+                rc_checks = self.run_checks(checks, area_name, object_name)
+        return(rc_checks)
 
     def processStep(self, step):
         """ process a single step including optional loops """
@@ -405,26 +405,26 @@ class saphanasrtest:
             cmd = "bash {}".format(actionParameter)
         if cmd != "":
             self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.doSSH(remote, "root", cmd)
+            aResult = self.do_ssh(remote, "root", cmd)
             aRc = aResult[2]
             self.message("ACTION: {} at {}: {} rc={}".format(actionName, remote, cmd, aRc))
         return(aRc)
 
-    def doSSH(self, remoteHost, user, cmd):
+    def do_ssh(self, remote_host, user, cmd):
         """
         ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
         """
-        if remoteHost:
-            sshCl = SSHClient()
-            sshCl.load_system_host_keys()
-            sshCl.connect(remoteHost, username=user)
-            (cmdStdin, cmdStdout, cmdStderr) = sshCl.exec_command(cmd)
+        if remote_host:
+            ssh_client = SSHClient()
+            ssh_client.load_system_host_keys()
+            ssh_client.connect(remote_host, username=user)
+            (cmdStdin, cmdStdout, cmdStderr) = ssh_client.exec_command(cmd)
             resultStdout = cmdStdout.read().decode("utf8")
             resultStderr = cmdStderr.read().decode("utf8")
             resultRc = cmdStdout.channel.recv_exit_status()
             checkResult = (resultStdout, resultStderr, resultRc)
-            sshCl.close()
+            ssh_client.close()
         else:
             checkResult=("", "", 20000)
         return(checkResult)
