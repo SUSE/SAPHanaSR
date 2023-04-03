@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2022 SUSE LLC.
+# Copyright (c) 2017-2023 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -47,15 +47,19 @@ BuildRequires:  crmsh-scripts
 %endif
 
 %description
-The resource agents SAPHanaController and SAPHanaTopology are responsible for controlling
-a SAP HANA Database which is running in system replication (SR) configuration.
+SAPHanaSR-angi is "SAP HANA SR - An Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
 
-For SAP HANA Databases in System Replication only the described or referenced scenarios 
-described at https://documentation.suse.com/sbp/sap/ are supported. For any scenario not matching the scenarios
-named or referenced in our setup guides please contact SUSE services.
+The current version of SAPHanaSR-angi is targeting SAP HANA SR scale-up setups.
 
-The following SUSE blog series gives a good overview about running SAP HANA in System Replication
-in the SUSE cluster:
+CIB attributes are not backward compatible between SAPHanaSR-angi and SAPHanaSR. So there is currently no easy migration path.
+
+SAPHanaSR-angi is shipped as technology preview.
+
+The resource agents SAPHanaController and SAPHanaTopology are responsible for controlling a SAP HANA Database which is running in system replication (SR) configuration.
+
+For SAP HANA Databases in System Replication only the listed scenarios at https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html are supported. For any scenario not matching the scenarios named or referenced in our setup guides please contact SUSE services.
+
+The following SUSE blog series gives a good overview about running SAP HANA in System Replication in the SUSE cluster:
 https://www.suse.com/c/tag/towardszerodowntime/
 
 Authors:
@@ -66,11 +70,7 @@ Authors:
 
 %prep
 tar xf %{S:0}
-
-%if 0%{?sle_version} >= 120100
-    %define crmscr_path /usr/share/crmsh/scripts/
-%endif
-
+%define crmscr_path /usr/share/crmsh/scripts/
 
 %build
 gzip man/*
@@ -106,7 +106,6 @@ install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 # auxiliary Perl library and test scripts
-#install -m 0555 test/SAPHanaSR-testDriver %{buildroot}/usr/share/%{name}/tests
 install -m 0555 tools/SAPHanaSR-monitor %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
@@ -116,13 +115,13 @@ install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 
 # README and LICENSE
-install -m 0444 doc/LICENSE %{buildroot}%{_docdir}/%{name}
-install -m 0444 doc/README  %{buildroot}%{_docdir}/%{name}
+#install -m 0444 LICENSE %{buildroot}%{_docdir}/%{name}
+#install -m 0444 README.md  %{buildroot}%{_docdir}/%{name}/README
 
-## TODO PRIO1: NG - check the wizard files
-#install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
-#install -D -m 0644 wizard/hawk2/saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
-#install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
+# wizard files for hawk2
+install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
+install -D -m 0644 wizard/hawk2/saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
+install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
 
 %files
 %defattr(-,root,root)
@@ -141,26 +140,17 @@ install -m 0444 doc/README  %{buildroot}%{_docdir}/%{name}
 /usr/bin/SAPHanaSR-hookHelper
 /usr/bin/SAPHanaSR-manageProvider
 
-## HAWK2 wizard for SLES 12 SP1+
-#%if 0%{?sle_version} >= 120100
-#%dir %{crmscr_path}/saphanasr/
-#%dir %{crmscr_path}/saphanasr-su-po/
-#%dir %{crmscr_path}/saphanasr-su-co/
-#%{crmscr_path}/saphanasr/main.yml
-#%{crmscr_path}/saphanasr-su-po/main.yml
-#%{crmscr_path}/saphanasr-su-co/main.yml
-#%else
-#%dir /srv/www/hawk
-#%dir /srv/www/hawk/config
-#%dir /srv/www/hawk/config/wizard
-#%dir /srv/www/hawk/config/wizard/templates
-#%dir /srv/www/hawk/config/wizard/workflows
-#/srv/www/hawk/config/wizard/templates/SAPHanaSR.xml
-#/srv/www/hawk/config/wizard/workflows/90-SAPHanaSR.xml
-#%endif
+## HAWK2 wizard
+%dir %{crmscr_path}/saphanasr/
+%dir %{crmscr_path}/saphanasr-su-po/
+%dir %{crmscr_path}/saphanasr-su-co/
+%{crmscr_path}/saphanasr/main.yml
+%{crmscr_path}/saphanasr-su-po/main.yml
+%{crmscr_path}/saphanasr-su-co/main.yml
+
+%license LICENSE
 %dir %{_docdir}/%{name}
-%doc %{_docdir}/%{name}/README
-%doc %{_docdir}/%{name}/LICENSE
+%doc README.md
 %doc %{_mandir}/man7/*
 %doc %{_mandir}/man8/*
 
