@@ -195,19 +195,16 @@ class SaphanasrTest:
     def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
         if self.properties_file:
-            prop_fh = open(self.properties_file, encoding="utf-8")
-            self.test_data.update(json.load(prop_fh))
-            prop_fh.close()
+            with open(self.properties_file, encoding="utf-8") as prop_fh:
+                self.test_data.update(json.load(prop_fh))
         if self.default_checks_file:
-            dc_fh = open(self.default_checks_file, encoding="utf-8")
-            self.test_data.update(json.load(dc_fh))
-            dc_fh.close()
+            with open(self.default_checks_file, encoding="utf-8") as dc_fh:
+                self.test_data.update(json.load(dc_fh))
         if self.test_file == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
-            tf_fh = open(self.test_file, encoding="utf-8")
-            self.test_data.update(json.load(tf_fh))
-            tf_fh.close()
+            with open(self.test_file, encoding="utf-8") as tf_fh:
+                self.test_data.update(json.load(tf_fh))
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.log_file_handle)
 
     def run_checks(self, checks, area_name, object_name ):
@@ -291,9 +288,8 @@ class SaphanasrTest:
                                   self.process_topology_object(step, 'sHost', 'Hosts'))
             if process_result == 0:
                 break
-            else:
-                time.sleep(wait)
-        if self.dump_failures == False:
+            time.sleep(wait)
+        if self.dump_failures:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
