@@ -1,5 +1,5 @@
 # pylint: disable=consider-using-f-string
-# pylint: disable=C0301
+# pylint: disable=C0301,W0511
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
@@ -30,22 +30,22 @@ class SaphanasrTest:
         """
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        if self.r_id:
-            r_id = " [{}]".format(self.r_id)
+        if self.run['r_id']:
+            r_id = " [{}]".format(self.run['r_id'])
         else:
             r_id = ""
         msg_arr = msg.split(" ")
         print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
-            self.message_fh(msg, self.log_file_handle)
+            self.message_fh(msg, self.run['log_file_handle'])
         except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
 
     def message_fh(self, msg, file_handle):
         """ print a message with fotmatted timestamp to a file handle """
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        if self.r_id:
-            r_id = " [{}]".format(self.r_id)
+        if self.run['r_id']:
+            r_id = " [{}]".format(self.run['r_id'])
         else:
             r_id = ""
         msg_arr = msg.split(" ")
@@ -56,20 +56,12 @@ class SaphanasrTest:
         """
         constructor
         """
-        self.log_file_handle = None
-        self.r_id = None
-        self.message("INIT: {}".format(self.version))
         self.config = { 'test_file': "-", 'defaults_checks_file': None, 'properties_file': "properties.json", 'log_file': "", 'repeat': 1, 'dump_failures': False, 'remote_node': None }
         self.dict_sr = {}
         self.test_data = {}
-        self.properties_file = "properties.json"
-        self.log_file = ""
-        self.repeat = 1
-        self.dump_failures = False
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
-        self.remote_node = None
-        self.test_rc = 0
-        self.count = 1
+        self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
+        self.message("INIT: {}".format(self.version))
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
         parser.add_argument("--defaultChecksFile", help="specify the default checks file")
@@ -88,20 +80,20 @@ class SaphanasrTest:
             self.config['defaults_checks_file'] = args.defaultChecksFile
         if args.properties:
             self.message("PARAM: properties: {}".format(args.properties))
-            self.properties_file = args.properties
+            self.config['properties_file'] = args.properties
         if args.remoteNode:
             self.message("PARAM: remoteNode: {}".format(args.remoteNode))
-            self.remote_node = args.remoteNode
+            self.config['remote_node'] = args.remoteNode
         if args.repeat:
             self.message("PARAM: repeat: {}".format(args.repeat))
-            self.repeat = int(args.repeat)
+            self.config['repeat'] = int(args.repeat)
         if args.dumpFailures:
             self.message("PARAM: dumpFailures")
-            self.dump_failures = args.dumpFailures
+            self.config['dump_failures'] = args.dumpFailures
         if args.logFile:
             self.message("PARAM: logFile: {}".format(args.logFile))
-            self.log_file = args.logFile
-            self.log_file_handle = open(self.log_file, 'a', encoding="utf-8")
+            self.config['log_file'] = args.logFile
+            self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         random.seed()
 
     def insert_to_area(self, area, the_object):
@@ -141,7 +133,7 @@ class SaphanasrTest:
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=script"
         self.dict_sr={}
-        result_sr = self.do_ssh(self.remote_node, "root", cmd)
+        result_sr = self.do_ssh(self.config['remote_node'], "root", cmd)
         for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
@@ -193,8 +185,8 @@ class SaphanasrTest:
 
     def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
-        if self.properties_file:
-            with open(self.properties_file, encoding="utf-8") as prop_fh:
+        if self.config['properties_file']:
+            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
                 self.test_data.update(json.load(prop_fh))
         if self.config['defaults_checks_file']:
             with open(self.config['defaults_checks_file'], encoding="utf-8") as dc_fh:
@@ -204,7 +196,7 @@ class SaphanasrTest:
         else:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
                 self.test_data.update(json.load(tf_fh))
-        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.log_file_handle)
+        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.run['log_file_handle'])
 
     def run_checks(self, checks, area_name, object_name ):
         """ run all checks for area and object """
@@ -235,8 +227,8 @@ class SaphanasrTest:
                             check_result = max(check_result, 1)
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
-        if self.dump_failures and failed_checks != "":
-            self.message_fh("FAILED: {}".format(failed_checks), self.log_file_handle)
+        if self.config['dump_failures'] and failed_checks != "":
+            self.message_fh("FAILED: {}".format(failed_checks), self.run['log_file_handle'])
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -246,7 +238,7 @@ class SaphanasrTest:
             checks = step[topology_object_name]
             if isinstance(checks,str):
                 check_ptr = checks
-                self.message_fh("DEBUG: check_ptr {}".format(check_ptr), self.log_file_handle)
+                self.message_fh("DEBUG: check_ptr {}".format(check_ptr), self.run['log_file_handle'])
                 checks = self.test_data["checkPtr"][check_ptr]
                 #for c in checks:
                 #    self.message("DEBUG: check_ptr {} check {}".format(check_ptr,c))
@@ -277,7 +269,7 @@ class SaphanasrTest:
         self.message("PROC: step_id={} step_name='{}' step_next={} step_action='{}'".format(step_id, step_name, step_next, step_action))
         while loops < max_loops:
             loops = loops + 1
-            if self.dump_failures:
+            if self.config['dump_failures']:
                 print(".", end='', flush=True)
             process_result = -1
             self.read_saphana_sr()
@@ -288,7 +280,7 @@ class SaphanasrTest:
             if process_result == 0:
                 break
             time.sleep(wait)
-        if self.dump_failures:
+        if self.config['dump_failures']:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
@@ -311,7 +303,7 @@ class SaphanasrTest:
             else:
                 r_code = 1
                 self.message("STATUS: Test step {} FAILED successfully ;-)".format(step_step))
-                # TODO: add onfail handling (cuurently only brak for furst step and continue for others)
+                # TODO: add onfail handling (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
             step=self.get_step(step_next)
@@ -346,7 +338,7 @@ class SaphanasrTest:
 
     def action(self, action_name):
         """ perform a given action """
-        remote = self.remote_node
+        remote = self.config['remote_node']
         cmd = ""
         action_rc = 1
         # resource = "ms_SAPHanaCon_HA1_HDB00"
@@ -372,23 +364,22 @@ class SaphanasrTest:
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
         elif action_name == "ssn":
-            remote = self.remote_node
             cmd = "crm node standby {}".format(self.topolo['sHost'])
         elif action_name == "osn":
-            remote = self.remote_node
+            remote = self.config['remote_node']
             cmd = "crm node online {}".format(self.topolo['sHost'])
         elif action_name == "spn":
-            remote = self.remote_node
+            remote = self.config['remote_node']
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif action_name == "opn":
-            remote = self.remote_node
+            remote = self.config['remote_node']
             cmd = "crm node online {}".format(self.topolo['pHost'])
         elif action_name == "cleanup":
             # TODO: get resource name from test_data
-            remote = self.remote_node
+            remote = self.config['remote_node']
             cmd = "crm resource cleanup {}".format(resource)
         elif action_name_short == "sleep":
-            remote = self.remote_node
+            remote = self.config['remote_node']
             if len(action_array) == 2:
                 action_parameter = action_array[1]
             else:
@@ -426,8 +417,8 @@ class SaphanasrTest:
 
 if __name__ == "__main__":
     test01 = SaphanasrTest()
-    while test01.count <= test01.repeat:
-        test01.r_id = random.randrange(10000,99999,1)
+    while test01.run['count'] <= test01.config['repeat']:
+        test01.run['r_id'] = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
         test01.topolo.update({'pSite': test01.search_in_area_for_object_by_key_value('Sites', 'srr', 'P')})
         test01.topolo.update({'sSite': test01.search_in_area_for_object_by_key_value('Sites', 'srr', 'S')})
@@ -436,13 +427,13 @@ if __name__ == "__main__":
         test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
         test01.read_test_file()
         test_id = test01.test_data['test']
-        if test01.repeat != 1:
-            test01.message("TEST: {} testNr={} ######".format(test_id, test01.count))
-        test01.test_rc = test01.process_test()
-        if test01.test_rc == 0:
-            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(test_id, test01.count))
+        if test01.config['repeat'] != 1:
+            test01.message("TEST: {} testNr={} ######".format(test_id, test01.run['count']))
+        test01.run['test_rc'] = test01.process_test()
+        if test01.run['test_rc'] == 0:
+            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(test_id, test01.run['count']))
         else:
-            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(test_id, test01.count))
-        test01.count += 1
-    if  test01.log_file_handle:
-        test01.log_file_handle.close()
+            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(test_id, test01.run['count']))
+        test01.run['count'] += 1
+    if  test01.run['log_file_handle']:
+        test01.run['log_file_handle'].close()
