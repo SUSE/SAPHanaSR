@@ -8,20 +8,21 @@
 """
 
 import time
-import subprocess
+#import subprocess
 import re
-import sys, json
+import sys
+import json
 import argparse
 import random
 
 # for ssh remote calls this module uses paramiko
 from paramiko import SSHClient
 
-class saphanasrtest:
+class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1448-lint14"
+    version = "0.1.20230403.1622-lint16"
 
     def message(self, msg):
         """
@@ -41,6 +42,7 @@ class saphanasrtest:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
 
     def message_fh(self, msg, file_handle):
+        """ print a message with fotmatted timestamp to a file handle """
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.r_id:
             r_id = " [{}]".format(self.r_id)
@@ -103,15 +105,15 @@ class saphanasrtest:
             self.log_file_handle = open(self.log_file, 'a', encoding="utf-8")
         random.seed()
 
-    def insert_to_area(self, area, object):
+    def insert_to_area(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
         l_sr = self.dict_sr.copy()
         if area in l_sr:
             l_dic = l_sr[area].copy()
-            l_dic.update(object)
+            l_dic.update(the_object)
             l_sr[area].update(l_dic)
         else:
-            l_dic = { area: object }
+            l_dic = { area: the_object }
             l_sr.update(l_dic)
         self.dict_sr = l_sr.copy()
 
@@ -121,19 +123,16 @@ class saphanasrtest:
         if area in l_sr:
             if object_name in l_sr[area]:
                 return l_sr[area][object_name]
-            else:
-                return None
-        else:
-            return None
+        return None
 
     def create_object(self, object_name, key, val):
         """ create a key: value dictionary for object object_name """
         l_obj = { object_name: { key: val } }
         return l_obj
 
-    def insert_to_object(self, object, key, value):
+    def insert_to_object(self, the_object, key, value):
         """ insert a key-value pair into the object dictionary """
-        l_obj = object
+        l_obj = the_object
         l_dic = { key: value }
         l_obj.update(l_dic)
         return l_obj
@@ -196,19 +195,16 @@ class saphanasrtest:
     def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
         if self.properties_file:
-            prop_fh = open(self.properties_file, encoding="utf-8")
-            self.test_data.update(json.load(prop_fh))
-            prop_fh.close()
+            with open(self.properties_file, encoding="utf-8") as prop_fh:
+                self.test_data.update(json.load(prop_fh))
         if self.default_checks_file:
-            dc_fh = open(self.default_checks_file, encoding="utf-8")
-            self.test_data.update(json.load(dc_fh))
-            dc_fh.close()
+            with open(self.default_checks_file, encoding="utf-8") as dc_fh:
+                self.test_data.update(json.load(dc_fh))
         if self.test_file == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
-            tf_fh = open(self.test_file, encoding="utf-8")
-            self.test_data.update(json.load(tf_fh))
-            tf_fh.close()
+            with open(self.test_file, encoding="utf-8") as tf_fh:
+                self.test_data.update(json.load(tf_fh))
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.log_file_handle)
 
     def run_checks(self, checks, area_name, object_name ):
@@ -245,6 +241,7 @@ class saphanasrtest:
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
+        """ process_topology_object """
         rc_checks = -1
         if topology_object_name in step:
             checks = step[topology_object_name]
@@ -281,7 +278,7 @@ class saphanasrtest:
         self.message("PROC: step_id={} step_name='{}' step_next={} step_action='{}'".format(step_id, step_name, step_next, step_action))
         while loops < max_loops:
             loops = loops + 1
-            if self.dump_failures == False:
+            if self.dump_failures:
                 print(".", end='', flush=True)
             process_result = -1
             self.read_saphana_sr()
@@ -291,9 +288,8 @@ class saphanasrtest:
                                   self.process_topology_object(step, 'sHost', 'Hosts'))
             if process_result == 0:
                 break
-            else:
-                time.sleep(wait)
-        if self.dump_failures == False:
+            time.sleep(wait)
+        if self.dump_failures:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
@@ -430,7 +426,7 @@ class saphanasrtest:
         return check_result
 
 if __name__ == "__main__":
-    test01 = saphanasrtest()
+    test01 = SaphanasrTest()
     while test01.count <= test01.repeat:
         test01.r_id = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
