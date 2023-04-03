@@ -21,7 +21,7 @@ class saphanasrtest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1448-lint04"
+    version = "0.1.20230403.1448-lint11"
 
     def message(self, msg):
         """
@@ -101,7 +101,7 @@ class saphanasrtest:
             self.log_file_handle = open(self.log_file, 'a', encoding="utf-8")
         random.seed()
 
-    def insertToArea(self, area, object):
+    def insert_to_area(self, area, object):
         """ insert an object dictionary to an area dictionary """
         l_sr = self.dict_sr.copy()
         if area in l_sr:
@@ -113,7 +113,7 @@ class saphanasrtest:
             l_sr.update(l_dic)
         self.dict_sr = l_sr.copy()
 
-    def getObject(self, area, object_name):
+    def get_object(self, area, object_name):
         """ get an object dictionary inside the area dictionary """
         l_sr = self.dict_sr.copy()
         if area in l_sr:
@@ -124,19 +124,19 @@ class saphanasrtest:
         else:
             return None
 
-    def createObject(self, object_name, key, val):
+    def create_object(self, object_name, key, val):
         """ create a key: value dictionary for object object_name """
         l_obj = { object_name: { key: val } }
         return l_obj
 
-    def insertToObject(self, object, key, value):
+    def insert_to_object(self, object, key, value):
         """ insert a key-value pair into the object dictionary """
         l_obj = object
         l_dic = { key: value }
         l_obj.update(l_dic)
         return l_obj
 
-    def readSAPHanaSR(self):
+    def read_saphana_sr(self):
         """ method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary structure representing the data """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=script"
@@ -153,15 +153,15 @@ class saphanasrtest:
                 match_obj = re.search("(.*)=\"(.*)\"", key_val)
                 key = match_obj.group(1)
                 val = match_obj.group(2)
-                l_obj=self.getObject(area, object_name)
+                l_obj=self.get_object(area, object_name)
                 if l_obj:
-                    self.insertToObject(l_obj,key,val)
+                    self.insert_to_object(l_obj,key,val)
                 else:
-                    l_obj = self.createObject(object_name, key, val)
-                    self.insertToArea(area, l_obj)
+                    l_obj = self.create_object(object_name, key, val)
+                    self.insert_to_area(area, l_obj)
         return 0
 
-    def searchInAreaForObjectByKeyValue(self, area_name, key, value):
+    def search_in_area_for_object_by_key_value(self, area_name, key, value):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         object_name = None
         l_sr = self.dict_sr
@@ -191,7 +191,7 @@ class saphanasrtest:
             count = count + 1
         print("}")
 
-    def readTestFile(self):
+    def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
         if self.properties_file:
             prop_fh = open(self.properties_file, encoding="utf-8")
@@ -212,7 +212,7 @@ class saphanasrtest:
     def run_checks(self, checks, area_name, object_name ):
         """ run all checks for area and object """
         l_sr = self.dict_sr
-        checkResult = -1
+        check_result = -1
         failed_checks = ""
         for c in checks:
             # match <key>=<regExp>
@@ -229,20 +229,20 @@ class saphanasrtest:
                         l_val = l_obj[c_key]
                         found = 1
                         if re.search(c_reg_exp, l_val):
-                            if checkResult <0:
-                                checkResult = 0
+                            if check_result <0:
+                                check_result = 0
                         else:
                             if failed_checks == "":
                                 failed_checks = "{}={}: {}={} !~ {}".format(area_name,object_name,c_key,l_val,c_reg_exp)
                             else:
                                 failed_checks += "; {}={} !~ {}".format(c_key,l_val,c_reg_exp)
-                            if checkResult <1:
-                                checkResult = 1
-            if (found == 0) and (checkResult < 2 ):
-                checkResult = 2
+                            if check_result <1:
+                                check_result = 1
+            if (found == 0) and (check_result < 2 ):
+                check_result = 2
         if self.dump_failures and failed_checks != "":
             self.message_fh("FAILED: {}".format(failed_checks), self.log_file_handle)
-        return checkResult
+        return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
         rc_checks = -1
@@ -260,10 +260,10 @@ class saphanasrtest:
                 rc_checks = self.run_checks(checks, area_name, object_name)
         return(rc_checks)
 
-    def processStep(self, step):
+    def process_step(self, step):
         """ process a single step including optional loops """
-        stepID = step['step']
-        stepName = step['name']
+        step_id = step['step']
+        step_name = step['name']
         step_next = step['next']
         if 'loop' in step:
             max_loops = step['loop']
@@ -278,137 +278,137 @@ class saphanasrtest:
             step_action = step['post']
         else:
             step_action = ""
-        self.message("PROC: stepID={} stepName='{}' step_next={} step_action='{}'".format(stepID, stepName, step_next, step_action))
+        self.message("PROC: step_id={} step_name='{}' step_next={} step_action='{}'".format(step_id, step_name, step_next, step_action))
         while loops < max_loops:
             loops = loops + 1
             if self.dump_failures == False:
                 print(".", end='', flush=True)
-            processResult = -1
-            self.readSAPHanaSR()
-            processResult = max ( self.process_topology_object(step, 'pSite', 'Sites'),
+            process_result = -1
+            self.read_saphana_sr()
+            process_result = max ( self.process_topology_object(step, 'pSite', 'Sites'),
                                   self.process_topology_object(step, 'sSite', 'Sites'),
                                   self.process_topology_object(step, 'pHost', 'Hosts'),
                                   self.process_topology_object(step, 'sHost', 'Hosts'))
-            if processResult == 0:
+            if process_result == 0:
                 break
             else:
                 time.sleep(wait)
         if self.dump_failures == False:
             print("")
-        self.message("STATUS: step {} checked in {} loop(s)".format(stepID, loops))
-        if processResult == 0:
-            aRc = self.action(step_action)
-        return processResult
+        self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
+        if process_result == 0:
+            action_rc = self.action(step_action)
+        return process_result
 
-    def processSteps(self):
+    def process_steps(self):
         """ process a seria of steps till next-step is "END" or there is no next-step """
-        testStart = self.test_data['start']
-        step=self.getStep(testStart)
-        stepStep = step['step']
-        rc = 0
-        """ onfail for first step is 'break' """
+        test_start = self.test_data['start']
+        step=self.get_step(test_start)
+        step_step = step['step']
+        r_code = 0
+        # onfail for first step is 'break'
         onfail = 'break' 
-        while stepStep != "END":
+        while step_step != "END":
             step_next = step['next']
-            processResult = self.processStep(step)
-            if processResult == 0:
-                self.message("STATUS: Test step {} passed successfully".format(stepStep))
+            process_result = self.process_step(step)
+            if process_result == 0:
+                self.message("STATUS: Test step {} passed successfully".format(step_step))
             else:
-                rc = 1
-                self.message("STATUS: Test step {} FAILED successfully ;-)".format(stepStep))
-                """ TODO: add onfail handling (cuurently only brak for furst step and continue for others) """
+                r_code = 1
+                self.message("STATUS: Test step {} FAILED successfully ;-)".format(step_step))
+                # TODO: add onfail handling (cuurently only brak for furst step and continue for others)
                 if onfail == 'break':
                     break
-            step=self.getStep(step_next)
+            step=self.get_step(step_next)
             if step:
-                stepStep = step['step']
+                step_step = step['step']
             else:
-                """ check, why we run into this code path """
+                # check, why we run into this code path
                 break
-            """ onfail for all next steps is 'continue' to run also the recovery steps """
+            # onfail for all next steps is 'continue' to run also the recovery steps
             onfail = 'continue'
-        return(rc)
+        return(r_code)
 
-    def processTest(self):
+    def process_test(self):
         """ process the entire test defined in test_data """
-        testID = self.test_data['test']
-        testName = self.test_data['name']
-        testStart = self.test_data['start']
-        testSID = self.test_data['sid']
-        testResource = self.test_data['mstResource']
-        self.message("PROC: testID={} testName={} testStart={} testSID={}".format(testID, testName, testStart, testSID, testResource))
-        rc = self.processSteps()
-        return(rc)
+        test_id = self.test_data['test']
+        test_name = self.test_data['name']
+        test_start = self.test_data['start']
+        test_sid = self.test_data['sid']
+        test_resource = self.test_data['mstResource']
+        self.message("PROC: test_id={} test_name={} test_start={} test_sid={}".format(test_id, test_name, test_start, test_sid, test_resource))
+        r_code = self.process_steps()
+        return(r_code)
 
-    def getStep(self, stepName):
-        """ query for a given step with stepName in test_data """
+    def get_step(self, step_name):
+        """ query for a given step with step_name in test_data """
         step = None
-        for s in self.test_data['steps']:
-            if s['step'] == stepName:
-                step = s
+        for step_element in self.test_data['steps']:
+            if step_element['step'] == step_name:
+                step = step_element
                 break
         return step
 
-    def action(self, actionName):
+    def action(self, action_name):
         """ perform a given action """
         remote = self.remote_node
         cmd = ""
-        aRc = 1
+        action_rc = 1
         # resource = "ms_SAPHanaCon_HA1_HDB00"
-        testSID = self.test_data['sid']
+        test_sid = self.test_data['sid']
         resource = self.test_data['mstResource']
-        actionArr = actionName.split(" ")
-        actionNameShort = actionArr[0]
-        if actionName == "":
-            aRc = 0
-        elif actionName == "ksi":
+        action_array = action_name.split(" ")
+        action_name_short = action_array[0]
+        if action_name == "":
+            action_rc = 0
+        elif action_name == "ksi":
             remote = self.topolo['sHost']
-            cmd = "su - {}adm HDB kill-9".format(testSID.lower())
-        elif actionName == "kpi":
+            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+        elif action_name == "kpi":
             remote = self.topolo['pHost']
-            cmd = "su - {}adm HDB kill-9".format(testSID.lower())
-        elif actionName == "kpx":
+            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+        elif action_name == "kpx":
             remote = self.topolo['pHost']
-            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(testSID.lower())
-        elif actionName == "ksx":
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "ksx":
             remote = self.topolo['sHost']
-            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(testSID.lower())
-        elif actionName == "bmt":
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "bmt":
             remote = self.topolo['sHost']
-            cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(testSID.lower())
-        elif actionName == "ssn":
+            cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
+        elif action_name == "ssn":
             remote = self.remote_node
             cmd = "crm node standby {}".format(self.topolo['sHost'])
-        elif actionName == "osn":
+        elif action_name == "osn":
             remote = self.remote_node
             cmd = "crm node online {}".format(self.topolo['sHost'])
-        elif actionName == "spn":
+        elif action_name == "spn":
             remote = self.remote_node
             cmd = "crm node standby {}".format(self.topolo['pHost'])
-        elif actionName == "opn":
+        elif action_name == "opn":
             remote = self.remote_node
             cmd = "crm node online {}".format(self.topolo['pHost'])
-        elif actionName == "cleanup":
-            """ TODO: get resource name from test_data """
+        elif action_name == "cleanup":
+            # TODO: get resource name from test_data
             remote = self.remote_node
             cmd = "crm resource cleanup {}".format(resource)
-        elif actionNameShort == "sleep":
+        elif action_name_short == "sleep":
             remote = self.remote_node
-            if len(actionArr) == 2:
-                actionParameter = actionArr[1]
+            if len(action_array) == 2:
+                action_parameter = action_array[1]
             else:
-                actionParameter = "60"
-            cmd = "sleep {}".format(actionParameter)
-        elif actionNameShort == "shell":
+                action_parameter = "60"
+            cmd = "sleep {}".format(action_parameter)
+        elif action_name_short == "shell":
             remote = 'localhost'
-            actionParameter = " ".join(actionArr[1:])
-            cmd = "bash {}".format(actionParameter)
+            action_parameter = " ".join(action_array[1:])
+            cmd = "bash {}".format(action_parameter)
         if cmd != "":
-            self.message("ACTION: {} at {}: {}".format(actionName, remote, cmd))
-            aResult = self.do_ssh(remote, "root", cmd)
-            aRc = aResult[2]
-            self.message("ACTION: {} at {}: {} rc={}".format(actionName, remote, cmd, aRc))
-        return(aRc)
+            self.message("ACTION: {} at {}: {}".format(action_name, remote, cmd))
+            a_result = self.do_ssh(remote, "root", cmd)
+            action_rc = a_result[2]
+            self.message("ACTION: {} at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+        return(action_rc)
 
     def do_ssh(self, remote_host, user, cmd):
         """
@@ -419,36 +419,36 @@ class saphanasrtest:
             ssh_client = SSHClient()
             ssh_client.load_system_host_keys()
             ssh_client.connect(remote_host, username=user)
-            (cmdStdin, cmdStdout, cmdStderr) = ssh_client.exec_command(cmd)
-            resultStdout = cmdStdout.read().decode("utf8")
-            resultStderr = cmdStderr.read().decode("utf8")
-            resultRc = cmdStdout.channel.recv_exit_status()
-            checkResult = (resultStdout, resultStderr, resultRc)
+            (cmd_stdin, cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)
+            result_stdout = cmd_stdout.read().decode("utf8")
+            result_stderr = cmd_stderr.read().decode("utf8")
+            result_rc = cmd_stdout.channel.recv_exit_status()
+            check_result = (result_stdout, result_stderr, result_rc)
             ssh_client.close()
         else:
-            checkResult=("", "", 20000)
-        return(checkResult)
+            check_result=("", "", 20000)
+        return(check_result)
 
 if __name__ == "__main__":
     test01 = saphanasrtest()
     test01.count = 1
     while test01.count <= test01.repeat:
         test01.r_id = random.randrange(10000,99999,1)
-        test01.readSAPHanaSR()
-        test01.topolo.update({'pSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'P')})
-        test01.topolo.update({'sSite': test01.searchInAreaForObjectByKeyValue('Sites', 'srr', 'S')})
-        test01.topolo.update({'pHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['pSite'])})
-        test01.topolo.update({'sHost': test01.searchInAreaForObjectByKeyValue('Hosts', 'site', test01.topolo['sSite'])})
+        test01.read_saphana_sr()
+        test01.topolo.update({'pSite': test01.search_in_area_for_object_by_key_value('Sites', 'srr', 'P')})
+        test01.topolo.update({'sSite': test01.search_in_area_for_object_by_key_value('Sites', 'srr', 'S')})
+        test01.topolo.update({'pHost': test01.search_in_area_for_object_by_key_value('Hosts', 'site', test01.topolo['pSite'])})
+        test01.topolo.update({'sHost': test01.search_in_area_for_object_by_key_value('Hosts', 'site', test01.topolo['sSite'])})
         test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
-        test01.readTestFile()
-        testID = test01.test_data['test']
+        test01.read_test_file()
+        test_id = test01.test_data['test']
         if test01.repeat != 1:
-            test01.message("TEST: {} testNr={} ######".format(testID, test01.count))
-        rc = test01.processTest()
+            test01.message("TEST: {} testNr={} ######".format(test_id, test01.count))
+        rc = test01.process_test()
         if rc == 0:
-            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(testID, test01.count)) 
+            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(test_id, test01.count)) 
         else:
-            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(testID, test01.count)) 
+            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(test_id, test01.count)) 
         test01.count += 1
     if  test01.log_file_handle:
         test01.log_file_handle.close()
