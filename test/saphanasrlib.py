@@ -217,13 +217,15 @@ class SaphanasrTest:
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),
                         self.run['log_file_handle'])
 
-    def __doc_failed__(self, area_name, object_name, c_key, l_val, c_reg_exp):
+    def __doc_failed__(self, area_object, key_val_reg):
         """ document failed checks """
         if 'failed' in self.run:
             _l_failed = self.run['failed']
         else:
-            _l_failed = f"{area_name}={object_name}: "
-        _l_failed += f"{c_key}={l_val} !~ {c_reg_exp}; "
+            ( _area, _obj ) = area_object
+            _l_failed = f"{_area}={_obj}: "
+        ( _key, _val, _reg ) = key_val_reg
+        _l_failed += f"{_key}={_val} !~ {_reg}; "
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
@@ -234,7 +236,7 @@ class SaphanasrTest:
         """ run all checks for area and object """
         l_sr = self.dict_sr
         check_result = -1
-        failed_checks = ""
+        self.__reset_failed__()
         for single_check in checks:
             # match <key>=<regExp>
             match_obj = re.search("(.*)(=)(.*)", single_check)
@@ -252,12 +254,12 @@ class SaphanasrTest:
                         if re.search(c_reg_exp, l_val):
                             check_result = max(check_result, 0)
                         else:
-                            self.__doc_failed__(area_name, object_name, c_key, l_val, c_reg_exp)
+                            self.__doc_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
                             check_result = max(check_result, 1)
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
-        if self.config['dump_failures'] and failed_checks != "":
-            self.message_fh("FAILED: {}".format(failed_checks), self.run['log_file_handle'])
+        if self.config['dump_failures'] and 'failed' in self.run:
+            self.message_fh(f"FAILED: {self.run['failed']}", self.run['log_file_handle'])
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -267,10 +269,8 @@ class SaphanasrTest:
             checks = step[topology_object_name]
             if isinstance(checks,str):
                 check_ptr = checks
-                self.message_fh("DEBUG: check_ptr {}".format(check_ptr), self.run['log_file_handle'])
+                self.message_fh(f"DEBUG: check_ptr {check_ptr}", self.run['log_file_handle'])
                 checks = self.test_data["checkPtr"][check_ptr]
-                #for c in checks:
-                #    self.message("DEBUG: check_ptr {} check {}".format(check_ptr,c))
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
@@ -339,7 +339,8 @@ class SaphanasrTest:
             else:
                 r_code = 1
                 self.message("STATUS: Test step {} FAILED successfully ;-)".format(step_step))
-                # TODO: add onfail handling (curently only break for first step and continue for others)
+                # TODO: add onfail handling
+                # (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
             step=self.get_step(step_next)
