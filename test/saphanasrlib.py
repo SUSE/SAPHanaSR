@@ -23,7 +23,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230404.1657-lint18"
+    version = "0.1.20230404.1848"
 
     def message(self, msg):
         """
@@ -53,7 +53,7 @@ class SaphanasrTest:
         if file_handle:
             _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
             _l_msg += ' '.join(msg_arr[1:])
-            file_handle.write(_l_msg)
+            file_handle.write(_l_msg + "\n")
 
     def __init__(self, *args):
         """
@@ -71,7 +71,7 @@ class SaphanasrTest:
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
-        self.message("INIT: {}".format(self.version))
+        self.message("INIT: tester version: {}".format(self.version))
         parser = argparse.ArgumentParser()
         parser.add_argument("--testFile", help="specify the test file")
         parser.add_argument("--defaultChecksFile", help="specify the default checks file")
@@ -217,7 +217,7 @@ class SaphanasrTest:
         self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),
                         self.run['log_file_handle'])
 
-    def __doc_failed__(self, area_object, key_val_reg):
+    def __add_failed__(self, area_object, key_val_reg):
         """ document failed checks """
         if 'failed' in self.run:
             _l_failed = self.run['failed']
@@ -226,11 +226,19 @@ class SaphanasrTest:
             _l_failed = f"{_area}={_obj}: "
         ( _key, _val, _reg ) = key_val_reg
         _l_failed += f"{_key}={_val} !~ {_reg}; "
+        self.run['failed'] = _l_failed
+        self.message_fh("DEBUG: add-failed: " + self.__get_failed__(), self.run['log_file_handle'])
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
         # wert für failed aus array entfernen
-        del self.run['failed']
+        if 'failed' in self.run:
+            del self.run['failed']
+
+    def __get_failed__(self):
+        if 'failed' in self.run:
+            return self.run['failed']
+        return None
 
     def run_checks(self, checks, area_name, object_name ):
         """ run all checks for area and object """
@@ -254,12 +262,12 @@ class SaphanasrTest:
                         if re.search(c_reg_exp, l_val):
                             check_result = max(check_result, 0)
                         else:
-                            self.__doc_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
+                            self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
                             check_result = max(check_result, 1)
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message_fh(f"FAILED: {self.run['failed']}", self.run['log_file_handle'])
+            self.message_fh(f"FAILED: {self.__get_failed__()}", self.run['log_file_handle'])
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
