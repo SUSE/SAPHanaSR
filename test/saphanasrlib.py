@@ -1,6 +1,5 @@
 # pylint: disable=consider-using-f-string
-## XXpylint: disable=C0301,W0511
-# pylint: disable=W0511
+# pylint: disable=fixme
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
