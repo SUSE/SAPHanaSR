@@ -1,5 +1,6 @@
 # pylint: disable=consider-using-f-string
-# pylint: disable=C0301,W0511
+## XXpylint: disable=C0301,W0511
+# pylint: disable=W0511
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
@@ -50,13 +51,22 @@ class SaphanasrTest:
             r_id = ""
         msg_arr = msg.split(" ")
         if file_handle:
-            file_handle.write("{}{} {:<9s} {}\n".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+            _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
+            _l_msg += ' '.join(msg_arr[1:])
+            file_handle.write(_l_msg)
 
     def __init__(self, *args):
         """
         constructor
         """
-        self.config = { 'test_file': "-", 'defaults_checks_file': None, 'properties_file': "properties.json", 'log_file': "", 'repeat': 1, 'dump_failures': False, 'remote_node': None }
+        self.config = { 'test_file': "-",
+                        'defaults_checks_file': None,
+                        'properties_file': "properties.json",
+                        'log_file': "",
+                        'repeat': 1,
+                        'dump_failures': False,
+                        'remote_node': None
+                      }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -155,7 +165,7 @@ class SaphanasrTest:
                     self.__insert_to_area__(area, l_obj)
         return 0
 
-    def search_in_area_for_object_by_key_value(self, area_name, key, value):
+    def get_area_object_by_key_val(self, area_name, key, value):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         object_name = None
         l_sr = self.dict_sr
@@ -322,11 +332,19 @@ class SaphanasrTest:
     def process_test(self):
         """ process the entire test defined in test_data """
         self.run['test_id'] = self.test_data['test']
+        test_id = self.run['test_id']
         test_name = self.test_data['name']
         test_start = self.test_data['start']
         test_sid = self.test_data['sid']
         test_resource = self.test_data['mstResource']
-        self.message("PROC: test_id={} test_name={} test_start={} test_sid={} test_res={}".format(self.run['test_id'], test_name, test_start, test_sid, test_resource))
+        _l_run = self.run
+        _l_msg = "PROC:"
+        _l_msg += f" test_id={test_id}"
+        _l_msg += f" test_sid={test_sid}"
+        _l_msg += f" test_name={test_name}"
+        _l_msg += f" test_start={test_start}"
+        _l_msg += f" test_resource={test_resource}"
+        self.message(_l_msg)
         r_code = self.process_steps()
         return r_code
 
@@ -446,20 +464,26 @@ if __name__ == "__main__":
     while test01.run['count'] <= test01.config['repeat']:
         test01.run['r_id'] = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
-        test01.topolo.update({'pSite': test01.search_in_area_for_object_by_key_value('Sites', 'srr', 'P')})
-        test01.topolo.update({'sSite': test01.search_in_area_for_object_by_key_value('Sites', 'srr', 'S')})
-        test01.topolo.update({'pHost': test01.search_in_area_for_object_by_key_value('Hosts', 'site', test01.topolo['pSite'])})
-        test01.topolo.update({'sHost': test01.search_in_area_for_object_by_key_value('Hosts', 'site', test01.topolo['sSite'])})
-        test01.message("TOPO: pSite={} sSite={} pHost={} sHost={}".format(test01.topolo['pSite'], test01.topolo['sSite'], test01.topolo['pHost'], test01.topolo['sHost']))
+        l_top = test01.topolo
+        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
+        l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
+        l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
+        l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
+        l_msg = f"TOPO: pSite={l_top['pSite']}"
+        l_msg += f" sSite={l_top['sSite']}"
+        l_msg += f" pHost={l_top['pHost']}"
+        l_msg += f" sHost={l_top['sHost']}"
+        test01.message(l_msg)
         test01.read_test_file()
         my_test_id = test01.run['test_id']
         if test01.config['repeat'] != 1:
             test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
         test01.run['test_rc'] = test01.process_test()
+        MSG_TEMPL = "TEST: {} testNr={} {} successfully :) ######"
         if test01.run['test_rc'] == 0:
-            test01.message("TEST: {} testNr={} PASSED successfully :) ######".format(my_test_id, test01.run['count']))
+            test01.message(MSG_TEMPL.format(my_test_id, 'PASSED', test01.run['count']))
         else:
-            test01.message("TEST: {} testNr={} FAILED successfully ;) ######".format(my_test_id, test01.run['count']))
+            test01.message(MSG_TEMPL.format(my_test_id, 'FAILED', test01.run['count']))
         test01.run['count'] += 1
     if  test01.run['log_file_handle']:
         test01.run['log_file_handle'].close()
