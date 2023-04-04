@@ -23,7 +23,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230403.1736-lint18"
+    version = "0.1.20230404.1657-lint18"
 
     def message(self, msg):
         """
@@ -77,9 +77,11 @@ class SaphanasrTest:
         parser.add_argument("--defaultChecksFile", help="specify the default checks file")
         parser.add_argument("--properties", help="specify the properties file")
         parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
-        parser.add_argument("--simulate", help="only simulate, dont call actions", action="store_true")
+        parser.add_argument("--simulate", help="only simulate, dont call actions",
+                            action="store_true")
         parser.add_argument("--repeat", help="how often to repeat the test")
-        parser.add_argument("--dumpFailures", help="print failed checks per loop", action="store_true")
+        parser.add_argument("--dumpFailures", help="print failed checks per loop",
+                            action="store_true")
         parser.add_argument("--logFile", help="log file to write the messages")
         args = parser.parse_args()
         if args.testFile:
@@ -141,7 +143,10 @@ class SaphanasrTest:
         return l_obj
 
     def read_saphana_sr(self):
-        """ method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary structure representing the data """
+        """
+        method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary
+        structure representing the data
+        """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=script"
         self.dict_sr={}
@@ -209,7 +214,21 @@ class SaphanasrTest:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
                 self.test_data.update(json.load(tf_fh))
         self.run['test_id'] = self.test_data['test']
-        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),self.run['log_file_handle'])
+        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),
+                        self.run['log_file_handle'])
+
+    def __doc_failed__(self, area_name, object_name, c_key, l_val, c_reg_exp):
+        """ document failed checks """
+        if 'failed' in self.run:
+            _l_failed = self.run['failed']
+        else:
+            _l_failed = f"{area_name}={object_name}: "
+        _l_failed += f"{c_key}={l_val} !~ {c_reg_exp}; "
+
+    def __reset_failed__(self):
+        """ deletes failed from the run dictionary """
+        # wert für failed aus array entfernen
+        del self.run['failed']
 
     def run_checks(self, checks, area_name, object_name ):
         """ run all checks for area and object """
@@ -233,10 +252,7 @@ class SaphanasrTest:
                         if re.search(c_reg_exp, l_val):
                             check_result = max(check_result, 0)
                         else:
-                            if failed_checks == "":
-                                failed_checks = "{}={}: {}={} !~ {}".format(area_name,object_name,c_key,l_val,c_reg_exp)
-                            else:
-                                failed_checks += "; {}={} !~ {}".format(c_key,l_val,c_reg_exp)
+                            self.__doc_failed__(area_name, object_name, c_key, l_val, c_reg_exp)
                             check_result = max(check_result, 1)
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
@@ -279,7 +295,14 @@ class SaphanasrTest:
             step_action = step['post']
         else:
             step_action = ""
-        self.message("PROC: step_id={} step_name='{}' step_next={} step_action='{}'".format(step_id, step_name, step_next, step_action))
+        _l_msg = (
+                     "PROC:"
+                     f" step_id={step_id}"
+                     f" step_name='{step_name}'"
+                     f" step_next={step_next}"
+                     f" step_action='{step_action}'"
+                 )
+        self.message(_l_msg)
         while loops < max_loops:
             loops = loops + 1
             if self.config['dump_failures']:
@@ -469,10 +492,12 @@ if __name__ == "__main__":
         l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
         l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
         l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
-        l_msg = f"TOPO: pSite={l_top['pSite']}"
-        l_msg += f" sSite={l_top['sSite']}"
-        l_msg += f" pHost={l_top['pHost']}"
-        l_msg += f" sHost={l_top['sHost']}"
+        l_msg = (
+                    f"TOPO: pSite={l_top['pSite']}"
+                    f" sSite={l_top['sSite']}"
+                    f" pHost={l_top['pHost']}"
+                    f" sHost={l_top['sHost']}"
+                )
         test01.message(l_msg)
         test01.read_test_file()
         my_test_id = test01.run['test_id']
