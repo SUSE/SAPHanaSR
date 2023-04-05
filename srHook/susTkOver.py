@@ -35,7 +35,7 @@ except ImportError as e:
     print(f"Module HADRBase not found - running outside of SAP HANA? - {e}")
 
 # parameter section
-FHSRHOOKVERSION = "0.160.2"
+FHSRHOOKVERSION = "1.000.1"
 TIME_OUT_DFLT = 30
 RC_TOB = 50277
 
@@ -88,7 +88,7 @@ try:
                 maint_cmd = ("sudo /usr/bin/SAPHanaSR-hookHelper"
                              f" --sid={my_sid} --case=checkTakeover")
                 self.tracer.info(f"{self.__class__.__name__}.{method}()"
-                                 f" maint_cmd is: {maint_cmd}, tout_cmd is: {tout_cmd3}")
+                                 f" maint_cmd is: {maint_cmd}, tout_cmd is: {tout_cmd}")
                 cmdrc = os.WEXITSTATUS(os.system(tout_cmd + " " + maint_cmd))
                 if cmdrc == 0:
                     # permit cluster action sr_takeover()

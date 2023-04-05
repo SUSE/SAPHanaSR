@@ -47,7 +47,7 @@ except ImportError as e:
 
 # hook section
 SRHookName = "susChkSrv"
-SRHookVersion = "0.7.7"
+SRHookVersion = "1.000.1"
 # parameter section
 TIME_OUT_DFLT = 20
 
@@ -173,7 +173,7 @@ try:
             databaseName = ParamDict['database_name']
             databaseStatus = ParamDict['database_status']
             msg = ( f"srv:{service}-{port}-{status}-{previousStatus}"
-                    f" db:{databaseName}-{databaseId}-{databaseStatus6} daem:{daemonStatus7}")
+                    f" db:{databaseName}-{databaseId}-{databaseStatus} daem:{daemonStatus}")
             logTimestamp(self, method, episode, msg)
             self.tracer.info(msg)
 

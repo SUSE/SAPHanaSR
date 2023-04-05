@@ -41,7 +41,7 @@ except ImportError as e:
     print(f"Module HADRBase not found - running outside of SAP HANA? - {e}")
 
 # parameter section
-FHSRHOOKVERSION = "0.160.1"
+FHSRHOOKVERSION = "1.000.1"
 USERKEY_DFLT = "saphanasr_<sid>_costopt"
 #
 
