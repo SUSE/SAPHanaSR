@@ -33,7 +33,7 @@ import os
 try:
     from hdbcli import dbapi
 except ImportError as e:
-    print("Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
+    print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 try:
     from hdb_ha_dr.client import HADRBase
@@ -125,13 +125,13 @@ class susCostOpt(HADRBase):
 
             cursor = connection.cursor()
             try:
-                self.tracer.info("sqlstatement: {self.sql_set_memory}")
+                self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
                 cursor.execute(self.sql_set_memory)
             except Exception as exerr:
                 self.tracer.info("error during execution of the sql statement"
                                 f" {self.sql_set_memory} - {exerr}.")
             try:
-                self.tracer.info("sqlstatement: {self.sql_set_preload}")
+                self.tracer.info(f"sqlstatement: {self.sql_set_preload}")
                 cursor.execute(self.sql_set_preload)
             except Exception as exerr:
                 self.tracer.info("error during execution of the sql statement"
