@@ -85,7 +85,7 @@ try:
                          f"  -v {my_srs} -t crm_config -s SAPHanaSR")
                 ret_code = os.system(my_cmd)
                 my_msg = f"CALLING CRM: <{my_cmd}> ret_code={ret_code}"
-                self.tracer.info("{self.__class__.__name__}.{method}() {my_msg}\n")
+                self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                 if ret_code != 0:
                     #
                     # FALLBACK
