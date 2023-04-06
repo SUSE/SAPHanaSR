@@ -16,7 +16,7 @@ except ImportError as e:
 import os
 
 
-#To use this HA/DR hook provide please add the following lines to your global.ini:
+# To use this HA/DR hook provide please add the following lines to your global.ini:
 #    [ha_dr_provider_susHanaSR]
 #    provider = susHanaSR
 #    path = /usr/share/SAPHanaSR-angi
@@ -85,8 +85,8 @@ try:
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
             else:
                 my_cmd = ("sudo /usr/sbin/crm_attribute"
-                         f" -n hana_{mysid_lower}_site_srHook_{my_site}"
-                         f"  -v {my_srs} -t crm_config -s SAPHanaSR")
+                          f" -n hana_{mysid_lower}_site_srHook_{my_site}"
+                          f"  -v {my_srs} -t crm_config -s SAPHanaSR")
                 ret_code = os.system(my_cmd)
                 my_msg = f"CALLING CRM: <{my_cmd}> ret_code={ret_code}"
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
@@ -95,7 +95,7 @@ try:
                     # FALLBACK
                     # sending attribute to the cluster failed - using fallback method and write
                     # status to a file - RA to pick-up the value during next SAPHanaController
-                    #monitor operation
+                    # monitor operation
                     #
                     my_msg = "sending attribute to the cluster failed - using file as fallback"
                     self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")

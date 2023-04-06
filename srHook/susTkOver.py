@@ -98,26 +98,26 @@ try:
                 elif cmdrc == 6:
                     # cluster connection not available, permit takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
-                                      "  permit non-cluster action sr_takeover()"
+                                     "  permit non-cluster action sr_takeover()"
                                      f" because cluster connection is not available cmdrc={cmdrc}")
                     sra_rc = 0
                 elif cmdrc == 99:
                     # unknown cluster command error, permit takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
-                                      " permit non-cluster action sr_takeover()"
+                                     " permit non-cluster action sr_takeover()"
                                      f" because cluster is not working properly cmdrc={cmdrc}")
                     sra_rc = 0
                 elif cmdrc == 5:
                     # multi-state resource in maintenance, permit takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
-                                      " permit non-cluster action sr_takeover()"
+                                     " permit non-cluster action sr_takeover()"
                                      f" because found cluster maintenance settings (cmdrc={cmdrc})")
                     sra_rc = 0
                 elif cmdrc == 7:
                     # given SID not configured in the cluster, block takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
-                                      " reject non-cluster action sr_takeover()"
-                                      " because related SID is not configured in the cluster"
+                                     " reject non-cluster action sr_takeover()"
+                                     " because related SID is not configured in the cluster"
                                      f"  - missing resources (cmdrc={cmdrc})")
                 elif cmdrc == 4:
                     # block takeover

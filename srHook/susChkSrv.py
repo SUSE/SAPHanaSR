@@ -34,7 +34,7 @@ TODO: action "kill" is only valid for Scale-Up and might break on SAP HANA insta
 
 # loading classes and libraries
 import os
-#import time
+# import time
 import random
 from datetime import datetime
 
@@ -110,9 +110,9 @@ try:
             else:
                 self.killSignal = "9"
             # TODO: logging the signal parameter, but only if it is the kill action
-            msg = ( f"{self.__class__.__name__}.{method}() version {SRHookVersion}, parameter"
-                    f" info: action_on_lost={self.action_on_lost} stop_timeout={self.stop_timeout}"
-                    f" kill_signal={self.killSignal}")
+            msg = (f"{self.__class__.__name__}.{method}() version {SRHookVersion}, parameter"
+                   f" info: action_on_lost={self.action_on_lost} stop_timeout={self.stop_timeout}"
+                   f" kill_signal={self.killSignal}")
             logTimestamp(self, method, episode, msg)
             self.tracer.info(msg)
             # TODO: use action specific init messages (e.g. for stop also report stop_timeout)
@@ -133,7 +133,7 @@ try:
             """ method to catch preTakeover events """
             self.takeover_active = True
             self.tracer.info(f"DBG: version={SRHookVersion} preTakeover"
-                              " - set takeover_active = True")
+                             " - set takeover_active = True")
             # TODO: what about "blocked" takeovers?
             # Test-Result: In a blocked takeover situation, postTakeover() is not called
             return 0
@@ -143,7 +143,7 @@ try:
             """ method to catch postTakeover events """
             self.takeover_active = False
             self.tracer.info(f"DBG: version={SRHookVersion} postTakeover"
-                              " - set takeover_active = False")
+                             " - set takeover_active = False")
             return 0
 
         # pylint: disable-next=too-many-statements,too-many-locals,too-many-branches,unused-argument
@@ -172,8 +172,8 @@ try:
             databaseId = ParamDict['database_id']
             databaseName = ParamDict['database_name']
             databaseStatus = ParamDict['database_status']
-            msg = ( f"srv:{service}-{port}-{status}-{previousStatus}"
-                    f" db:{databaseName}-{databaseId}-{databaseStatus} daem:{daemonStatus}")
+            msg = (f"srv:{service}-{port}-{status}-{previousStatus}"
+                   f" db:{databaseName}-{databaseId}-{databaseStatus} daem:{daemonStatus}")
             logTimestamp(self, method, episode, msg)
             self.tracer.info(msg)
 
@@ -209,8 +209,8 @@ try:
                     logTimestamp(self, method, episode, msg)
                     self.tracer.info(msg)
                 else:
-                    msg = ( "LOST: indexserver event looks like a lost indexserver"
-                            " (indexserver started)" )
+                    msg = ("LOST: indexserver event looks like a lost indexserver"
+                           " (indexserver started)")
                     logTimestamp(self, method, episode, msg)
                     self.tracer.info(msg)
                 eventKnown = True
@@ -222,8 +222,8 @@ try:
                 self.tracer.info(msg)
                 eventKnown = True
             if (isIndexserver and serviceDown and daemonStop):
-                msg = ( "STOP: indexserver event looks like graceful instance stop"
-                        " (indexserver stopped)")
+                msg = ("STOP: indexserver event looks like graceful instance stop"
+                       " (indexserver stopped)")
                 self.tracer.info(msg)
                 logTimestamp(self, method, episode, msg)
                 eventKnown = True
@@ -233,8 +233,8 @@ try:
                 self.tracer.info(msg)
                 eventKnown = True
             if (isIndexserver and serviceDown and daemonActive and databaseStop):
-                msg = ( "STOP: indexserver event looks like graceful tenant stop"
-                      " (indexserver stopped)" )
+                msg = ("STOP: indexserver event looks like graceful tenant stop"
+                       " (indexserver stopped)")
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
                 eventKnown = True
@@ -244,17 +244,17 @@ try:
                 self.tracer.info(msg)
                 eventKnown = True
             if (isIndexserver and serviceActive and daemonStarting and databaseActive):
-                msg = ( "START: indexserver event looks like graceful tenant start"
-                        " (indexserver started)")
+                msg = ("START: indexserver event looks like graceful tenant start"
+                       " (indexserver started)")
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
                 eventKnown = True
             if (isIndexserver and not eventKnown):
-                msg = ( f"DBG: version={SRHookVersion},serviceRestart={serviceRestart},"
-                        f" serviceStop={serviceStop}, serviceDown={serviceDown},"
-                        f" daemonActive={daemonActive}, daemonStop={daemonStop},"
-                        f" daemonStarting={daemonStarting},"
-                        f" databaseActive={databaseActive}, databaseStop={databaseStop}")
+                msg = (f"DBG: version={SRHookVersion},serviceRestart={serviceRestart},"
+                       f" serviceStop={serviceStop}, serviceDown={serviceDown},"
+                       f" daemonActive={daemonActive}, daemonStop={daemonStop},"
+                       f" daemonStarting={daemonStarting},"
+                       f" databaseActive={databaseActive}, databaseStop={databaseStop}")
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
             # event on secondary, if HA1 tenant is stopped on primary
@@ -311,15 +311,15 @@ try:
                 msg = f"LOST: firstStopThenKill instance. action_on_lost={self.action_on_lost}"
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
-                action_cmd = ( f"/usr/bin/SAPHanaSR-hookHelper --sid={mySID}"
-                               f" --ino={self.ino} --case=firstStopThenKill")
+                action_cmd = (f"/usr/bin/SAPHanaSR-hookHelper --sid={mySID}"
+                              f" --ino={self.ino} --case=firstStopThenKill")
                 os.WEXITSTATUS(os.system(f"sleep 5; {action_cmd}"))
             if (isLostIndexserver and self.action_on_lost == "attr"):
                 # this is lab code only. Do not use it in customer or partner systems.
                 # this code could be removed at any time without notice
                 # the code does not promise that it will be part of any product later
-                msg = ( f"LOST: set cluster attribute. action_on_lost={self.action_on_lost}"
-                         " is currently not implemented" )
+                msg = (f"LOST: set cluster attribute. action_on_lost={self.action_on_lost}"
+                       " is currently not implemented")
                 logTimestamp(self, method, episode, msg)
                 self.tracer.info(msg)
                 # TODO add attribute code here

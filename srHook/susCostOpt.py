@@ -70,30 +70,30 @@ class susCostOpt(HADRBase):
             # parameter costopt_primary_global_allocation_limit is set
             # so adjust global_allocation_limit to the defined value
             primary_global_alloc_limit = self.config.get("costopt_primary_global_allocation_limit")
-            self.sql_set_memory = ( "ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM')"
-                                    " SET ('memorymanager','global_allocation_limit') ="
+            self.sql_set_memory = ("ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM')"
+                                   " SET ('memorymanager','global_allocation_limit') ="
                                    f"'{primary_global_alloc_limit}' WITH RECONFIGURE")
         else:
             # parameter costopt_primary_global_allocation_limit is NOT set
             # so just unset global_allocation_limit
-            self.sql_set_memory = ( "ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM')"
-                                    " UNSET ('memorymanager','global_allocation_limit')"
-                                    " WITH RECONFIGURE" )
+            self.sql_set_memory = ("ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM')"
+                                   " UNSET ('memorymanager','global_allocation_limit')"
+                                   " WITH RECONFIGURE")
         # unset preload_column_tables
-        self.sql_set_preload = ( "ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM')"
-                                 " UNSET ('system_replication','preload_column_tables')"
-                                 " WITH RECONFIGURE" )
+        self.sql_set_preload = ("ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM')"
+                                " UNSET ('system_replication','preload_column_tables')"
+                                " WITH RECONFIGURE")
 
-        self.tracer.info( f"{self.__class__.__name__}.{method}() version {FHSRHOOKVERSION},"
-                          f" userkey {self.userkey}, sid {mysid},"
-                          f" primary_global_alloc_limit {primary_global_alloc_limit}")
+        self.tracer.info(f"{self.__class__.__name__}.{method}() version {FHSRHOOKVERSION},"
+                         f" userkey {self.userkey}, sid {mysid},"
+                         f" primary_global_alloc_limit {primary_global_alloc_limit}")
 
     def about(self):
         """ tell something about the HADR hook script """
         method = "about"
         self.tracer.info(f"{self.__class__.__name__}.{method}() version {FHSRHOOKVERSION}")
-        desc = ( "postTakeover script to reset parameters to default or set parameters as"
-                 " defined in global.ini.")
+        desc = ("postTakeover script to reset parameters to default or set parameters as"
+                " defined in global.ini.")
         return {"provider_company": "SUSE",
                 "provider_name": "susCostOpt",  # class name
                 "provider_description": desc,
@@ -129,13 +129,13 @@ class susCostOpt(HADRBase):
                 cursor.execute(self.sql_set_memory)
             except Exception as exerr:
                 self.tracer.info("error during execution of the sql statement"
-                                f" {self.sql_set_memory} - {exerr}.")
+                                 f" {self.sql_set_memory} - {exerr}.")
             try:
                 self.tracer.info(f"sqlstatement: {self.sql_set_preload}")
                 cursor.execute(self.sql_set_preload)
             except Exception as exerr:
                 self.tracer.info("error during execution of the sql statement"
-                                f" {self.sql_set_preload} - {exerr}.")
+                                 f" {self.sql_set_preload} - {exerr}.")
 
             # commit the changes in the database
             connection.commit()
