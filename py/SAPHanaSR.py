@@ -1,9 +1,12 @@
-# SAPHana.py
-#
-# Description:	Gets the overall SR status of the local site to
-#               a given remote site
-#               the script is able to work within muti tenyncy database
-#               installations
+# pylint: disable=invalid-name,import-error
+"""
+ SAPHana.py
+
+ Description:	Gets the overall SR status of the local site to
+               a given remote site
+               the script is able to work within muti tenyncy database
+               installations
+"""
 #
 ##############################################################################
 #
@@ -27,19 +30,20 @@ rc = 2
 # 2 : fatal - did not got SRs answer
 status2Rc = {"ACTIVE": 0, "SYNCING": 1, "INITIALIZING": 1, "UNKNOWN": 1, "ERROR": 1, "FATAL": 2}
 
-print "SR for site: " + remSite
+print("SR for site: " + remSite)
 
 srDict = sr.getLandscapeConfiguration(remSite)[0]
 for srEntry in srDict:
     noAnswer = 0
-    print srEntry["HOST"] + " / " + str(srEntry["PORT"]) + " / " + srEntry["DATABASE"] + " / " + srEntry["REPLICATION_STATUS"]
+    msg = (f"{srEntry['HOST']} / {str(srEntry['PORT'])} /"
+           f" {srEntry['DATABASE']} / srEntry['REPLICATION_STATUS']")
+    print(msg)
     currStatus = status2Rc[srEntry["REPLICATION_STATUS"]]
-    print "currStatus " + str(currStatus)
-    if (worstStatus < currStatus):
-        worstStatus = currStatus
+    print("currStatus " + str(currStatus))
+    worstStatus = max(worstStatus, currStatus)
 
-if (noAnswer == 1):
-    print "No Answer "
+if noAnswer == 1:
+    print("No Answer ")
     rc = status2Rc["FATAL"]
 else:
     rc = worstStatus

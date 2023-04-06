@@ -1,0 +1,46 @@
+#!/usr/bin/bash
+
+function run() {
+    local node="$1" testID="$2" repeat="$3" sleep="$4"
+    logFile="testLog$(date +"%Y-%m-%d").txt"
+    logLink="testLog.curr.txt"
+    if [ ! -f "$logFile" ]; then
+        touch "$logFile"
+    fi
+    if [ -L "$logLink" ]; then
+        rl=$(readlink "$logLink")
+        if [[ "$rl" != "$logFile" ]]; then
+            ln -s -f "$logFile" "$logLink"
+        fi
+    else
+        ln -s "$logFile" "$logLink"
+    fi
+    python3 saphanasrlib.py --testFile="${testID}.json" \
+                            --remoteNode="$node" \
+                            --repeat="$repeat" \
+                            --dumpFailures \
+                            --defaultChecksFile="defaultChecks.json" \
+                            --logFile "$logFile"
+    # ln -s -f testLog2023-03-31.txt testLog.curr.txt
+    sleep "$sleep"; 
+    return 0
+}
+
+while true; do  
+    run basf02 kpi  3 300
+    run basf02 free_log_area 1 60
+    run basf02 kpi  1 120
+    run basf02 free_log_area 1 60
+    run basf02 restart_cluster_turn_hana  1 300
+    run basf02 ssn  2 300
+    run basf02 ksi  3 300
+    run basf02 spn  2 300
+    run basf02 sap  1 300
+    run basf02 kpx  1 300
+    run basf02 nop  1  10 
+    run basf02 ksx  1 300
+    run basf02 maintenance_cluster_turn_hana 1 300
+    run basf02 restart_cluster  1 300
+    run basf02 restart_cluster_hana_running   1 300
+    run basf02 bmt  1  60
+done 
