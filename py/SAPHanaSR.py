@@ -30,7 +30,7 @@ rc = 2
 # 2 : fatal - did not got SRs answer
 status2Rc = {"ACTIVE": 0, "SYNCING": 1, "INITIALIZING": 1, "UNKNOWN": 1, "ERROR": 1, "FATAL": 2}
 
-print( "SR for site: " + remSite )
+print("SR for site: " + remSite)
 
 srDict = sr.getLandscapeConfiguration(remSite)[0]
 for srEntry in srDict:
