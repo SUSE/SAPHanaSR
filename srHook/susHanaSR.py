@@ -81,7 +81,7 @@ try:
                 my_msg = "### Ignoring bad SR status because of empty site name in call params ###"
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
             else:
-                my_cmd = (f"sudo /usr/bin/crm_attribute -n hana_{mysid_lower}_site_srHook_{my_site}"
+                my_cmd = (f"sudo /usr/sbin/crm_attribute -n hana_{mysid_lower}_site_srHook_{my_site}"
                          f"  -v {my_srs} -t crm_config -s SAPHanaSR")
                 ret_code = os.system(my_cmd)
                 my_msg = f"CALLING CRM: <{my_cmd}> ret_code={ret_code}"
