@@ -105,8 +105,8 @@ try:
                     # however we go one level up (..) to have the file accessible for all
                     # SAP HANA swarm nodes
                     #
-                    stage_file=f"../.crm_attribute.stage.{my_site}"
-                    attribute_name=f"hana_{mysid_lower}_site_srHook_{my_site}"
+                    stage_file = f"../.crm_attribute.stage.{my_site}"
+                    attribute_name = f"hana_{mysid_lower}_site_srHook_{my_site}"
                     with open(f"{stage_file}", "w", encoding="UTF-8") as fallback_file_obj:
                         fallback_file_obj.write(f"{attribute_name} = {my_srs}")
                     #
