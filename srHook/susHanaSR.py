@@ -37,8 +37,10 @@ try:
         def __init__(self, *args, **kwargs):
             """ constructor - delegate construction to base class """
             super().__init__(*args, **kwargs)
+            method = "init"
             self.my_sid = os.environ.get('SAPSYSTEMNAME')
-            self.tracer.info("susHanaSR init()")
+            self.tracer.info(f"{self.__class__.__name__}.{method}()"
+                             f" version {FH_SR_HOOK_VERSION}")
 
         def about(self):
             """ tell about the HADR hook """
@@ -81,7 +83,8 @@ try:
                 my_msg = "### Ignoring bad SR status because of empty site name in call params ###"
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
             else:
-                my_cmd = (f"sudo /usr/sbin/crm_attribute -n hana_{mysid_lower}_site_srHook_{my_site}"
+                my_cmd = ("sudo /usr/sbin/crm_attribute"
+                         f" -n hana_{mysid_lower}_site_srHook_{my_site}"
                          f"  -v {my_srs} -t crm_config -s SAPHanaSR")
                 ret_code = os.system(my_cmd)
                 my_msg = f"CALLING CRM: <{my_cmd}> ret_code={ret_code}"
@@ -102,15 +105,15 @@ try:
                     # SAP HANA swarm nodes
                     #
                     stage_file=f"../.crm_attribute.stage.{my_site}"
-                    crm_attribute=f"hana_{mysid_lower}_site_srHook_{my_site}"
+                    attribute_name=f"hana_{mysid_lower}_site_srHook_{my_site}"
                     with open(f"{stage_file}", "w", encoding="UTF-8") as fallback_file_obj:
-                        fallback_file_obj.write(f"{crm_attribute} = {my_srs}")
+                        fallback_file_obj.write(f"{attribute_name} = {my_srs}")
                     #
                     # release the stage file to the original name (move is used to be atomic)
                     #      .crm_attribute.stage.<site> is renamed to .crm_attribute.<site>
                     #
-                    os.rename(f"../.crm_attribute.stage.{0}".format(my_site),
-                              f"../.crm_attribute.{0}".format(my_site))
+                    os.rename(f"../.crm_attribute.stage.{my_site}",
+                              f"../.crm_attribute.{my_site}")
             return 0
 except NameError as e:
     print(f"Could not find base class ({e})")
