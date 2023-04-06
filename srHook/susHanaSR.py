@@ -25,7 +25,7 @@ import os
 #    [trace]
 #    ha_dr_saphanasr = info
 #
-FH_SR_HOOK_VERSION = "1.000.0"
+FH_SR_HOOK_VERSION = "1.001.1"
 
 
 try:
