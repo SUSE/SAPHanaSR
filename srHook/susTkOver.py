@@ -103,7 +103,7 @@ try:
                     sra_rc = 0
                 elif cmdrc == 99:
                     # unknown cluster command error, permit takeover
-                    self.tracer.info(f"{self.__class__.__name__}.{ethod}()"
+                    self.tracer.info(f"{self.__class__.__name__}.{method}()"
                                       " permit non-cluster action sr_takeover()"
                                      f" because cluster is not working properly cmdrc={cmdrc}")
                     sra_rc = 0
