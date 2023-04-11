@@ -25,6 +25,7 @@ Version:        1.001.4
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
+Conflicts:      SAPHanaSR SAPHanaSR-ScaleOut
 BuildArch:      noarch
 
 Source0:        %{name}-%{version}.tgz
@@ -113,10 +114,6 @@ install -m 0555 tools/SAPHanaSR-filter %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
-
-# README and LICENSE
-#install -m 0444 LICENSE %{buildroot}%{_docdir}/%{name}
-#install -m 0444 README.md  %{buildroot}%{_docdir}/%{name}/README
 
 # wizard files for hawk2
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
