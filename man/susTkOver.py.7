@@ -1,6 +1,6 @@
-.\" Version: 0.160.1
+.\" Version: 1.001
 .\"
-.TH susTkOver.py 7 "22 Nov 2022" "" "SAPHanaSR"
+.TH susTkOver.py 7 "13 Apr 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 susTkOver.py \- Provider for SAP HANA srHook method preTakeover().
@@ -17,7 +17,7 @@ that need to be executed. The method preTakeover() is called before the
 sr_takeover action.
 
 susTkOver.py allows manual takeover of the HANA primary if the SAP HANA
-multi-state resource (managed by SAPHana or SAPHanaController) is set into
+multi-state resource (managed by SAPHanaController) is set into
 maintenance or the Linux cluster is stopped.
 Otherwise the manual takeover is blocked. See also manual page
 SAPHanaSR_maintenance_examples(7).
@@ -35,8 +35,8 @@ ha_dr_provider_susTkOver section:
 \fBprovider = susTkOver\fP
 Mandatory. Must not be changed.
 .TP
-\fBpath = [ /usr/share/SAPHanaSR | /usr/share/SAPHanaSR-ScaleOut ]\fP
-Mandatory. Depending on path delivered within RPM package. Please change only if requested.
+\fBpath = /usr/share/SAPHanaSR-angi\fP
+Mandatory. Delivered within RPM package. Please change only if requested.
 .TP
 \fBexecution_order = [ INTEGER ]\fP
 Mandatory. Order might depend on other hook scripts.
@@ -51,7 +51,7 @@ Optional. Default is 30 seconds.
 \fBha_dr_sustkover = [ info | debug ]\fP
 Optional. Default is info. Will be added automatically, if not set.
 .PP
-* The SAPHanaController and SAPHana RAs are recognizing the pending takeover
+* The SAPHanaController RA is recognizing the pending takeover
 request via the following cluster attributes:
 .TP
 \fBsra = [ T | R | - ]\fP
@@ -59,7 +59,7 @@ request via the following cluster attributes:
 HANA system replication takeover action, indicated by preTakeover().
 .PP
 The node attribute system replication action is checked by the HA/DR provider API
-method preTakeover(). It is set by the resource agent SAPHana or SAPHanaController. 
+method preTakeover(). It is set by the resource agent SAPHanaController. 
 It indicates whether a takeover or registration is ongoing.
 .br
 T = Takeover on new primary (sr_takeover) ongoing.
@@ -91,9 +91,9 @@ Usage, syntax or execution errors.
 SID is HA1. See also manual page SAPHanaSR-hookHelper(8).
 .PP
 .RS 2
-# SAPHanaSR and SAPHanaSR-ScaleOut need for susTkOver
+# SAPHanaSR needs for susTkOver
 .br
-ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper *
+ha1adm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper *
 .RE
 .PP
 * Example for looking up the sudo permission for the hook script.
@@ -102,7 +102,7 @@ All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
 Example SID is HA1.
 .PP
 .RS 2
-# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/sbin/SAPHanaSR-hookHelper" 
+# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/bin/SAPHanaSR-hookHelper" 
 .RE
 .PP
 * Example for entry in SAP HANA scale-up global configuration
@@ -116,7 +116,7 @@ can be changed.
 .br
 provider = susTkOver
 .br
-path = /usr/share/SAPHanaSR
+path = /usr/share/SAPHanaSR-angi
 .br
 sustkover_timeout = 30
 .br
@@ -138,7 +138,7 @@ can be edited.
 .br
 provider = susTkOver
 .br
-path = /usr/share/SAPHanaSR-ScaleOut
+path = /usr/share/SAPHanaSR-angi
 .br
 sustkover_timeout = 30
 .br
@@ -192,10 +192,10 @@ Note: If you see such messages, you may want to read SAPHanaSR_maintenance_examp
 .\"
 .SH FILES
 .TP
-/usr/share/SAPHanaSR/susTkOver.py , /usr/share/SAPHanaSR-ScaleOut/susTkOver.py
+/usr/share/SAPHanaSR-angi/susTkOver.py
 the hook provider, delivered with the RPM
 .TP
-/usr/sbin/SAPHanaSR-hookHelper
+/usr/bin/SAPHanaSR-hookHelper
 the external script to check and update the CIB attribute
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
@@ -212,6 +212,7 @@ the HANA master nameserver tracefile
 1. SAP HANA 2.0 SPS06 or later provides the HA/DR provider hook method
 preTakeover() with multi-target aware parameters and separate return code
 for Linux HA clusters.
+.\" TODO does SPS05 rev.59 work?
 .PP
 2. No other HADR provider hook script should be configured for the
 preTakeover() method. Hook scripts for other methods, provided in
@@ -235,9 +236,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
-\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
-\fBocf_suse_SAPHanaController\fP(7) , 
+\fBsusHanaSR.py\fP(7) , \fBsusHanaSrMultiTarget.py\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) , 
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-hookHelper\fP(8) ,
 \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-manageProvider\fP(8) ,
 \fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython3\fP(8) ,
@@ -252,7 +252,7 @@ A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2022 SUSE LLC
+(c) 2022-2023 SUSE LLC
 .br
 susTkOver.py comes with ABSOLUTELY NO WARRANTY.
 .br
