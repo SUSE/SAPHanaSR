@@ -1,6 +1,6 @@
-.\" Version: 0.160.0
+.\" Version: 1.001 
 .\"
-.TH susChkSrv.py 7 "11 Nov 2022" "" "SAPHanaSR"
+.TH susChkSrv.py 7 "13 Apr 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 susChkSrv.py \- Provider for SAP HANA srHook method srServiceStateChanged().
@@ -53,8 +53,8 @@ ha_dr_provider_suschksrv section in global.ini:
 \fBprovider = susChkSrv\fP
 Mandatory. Must not be changed.
 .TP
-\fBpath = [ /usr/share/SAPHanaSR | /usr/share/SAPHanaSR-ScaleOut ]\fP
-Mandatory. Depending on path delivered within RPM package. Please change only if requested.
+\fBpath = /usr/share/SAPHanaSR-angi\fP
+Mandatory. Delivered within RPM package. Please change only if requested.
 .TP
 \fBexecution_order = [ INTEGER ]\fP
 Mandatory. Order might depend on other hook scripts.
@@ -68,10 +68,10 @@ Action to be processed when a lost indexserver is identified.
 - \fBstop\fP: do 'sapcontrol ... StopSystem'.
 If this is combined with SAPHana or SAPHanaController RA parameter 'AUTOMATED_REGISTER=true',
 HANA needs to release all OS resources prior to the automated registering. See
-also manual page ocf_suse_SAPHana(7) or ocf_suse_SAPHanaController(7). 
+also manual page ocf_suse_SAPHanaController(7). 
 .br
 - \fBkill\fP: do 'HDB kill-<signal>'. The signal can be defined by parameter 'kill_signal'.
-If this is combined with SAPHana or SAPHanaController RA parameter 'AUTOMATED_REGISTER=true',
+If this is combined with SAPHanaController RA parameter 'AUTOMATED_REGISTER=true',
 HANA needs to release all OS resources prior to the automated registering.
 .br
 - \fBfence\fP: do 'crm node fence <host>'. This needs a Linux cluster STONITH
@@ -168,7 +168,7 @@ The HANA has to be stopped before the file can be changed.
 .br
 provider = susChkSrv
 .br
-path = /usr/share/SAPHanaSR/
+path = /usr/share/SAPHanaSR-angi/
 .br
 execution_order = 3
 .RE
@@ -193,7 +193,7 @@ configuration, see manual page SAPHanaSR-manageProvider(8).
 .br
 provider = susChkSrv
 .br
-path = /usr/share/SAPHanaSR/
+path = /usr/share/SAPHanaSR-angi/
 .br
 execution_order = 2
 .br
@@ -224,7 +224,7 @@ No HANA host auto-failover.
 .br
 provider = susChkSrv
 .br
-path = /usr/share/SAPHanaSR-ScaleOut/
+path = /usr/share/SAPHanaSR-angi/
 .br
 execution_order = 2
 .br
@@ -259,9 +259,9 @@ gracetime = 6000
 SID is HA1. See also manual page SAPHanaSR-hookHelper(8).
 .PP
 .RS 2
-# SAPHanaSR and SAPHanaSR-ScaleOut need for susChkSrv
+# SAPHanaSR needs for susChkSrv
 .br
-ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/SAPHanaSR-hookHelper --sid=HA1 --case=fenceMe
+ha1adm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=HA1 --case=fenceMe
 .RE
 .PP
 \fB*\fP Example for looking up the sudo permission for the hook script.
@@ -270,7 +270,7 @@ All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
 Example SID is HA1.
 .PP
 .RS 2
-# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/sbin/SAPHanaSR-hookHelper"
+# sudo -U ha1adm -l | grep "NOPASSWD.*/usr/bin/SAPHanaSR-hookHelper"
 .RE
 .PP
 \fB*\fP Example for checking the HANA tracefiles for srServiceStateChanged() events.
@@ -354,10 +354,10 @@ It does not touch any fencing device.
 .\"
 .SH FILES
 .TP
-/usr/share/SAPHanaSR/susChkSrv.py or /usr/share/SAPHanaSR-ScaleOut/susChkSrv.py
+/usr/share/SAPHanaSR-angi/susChkSrv.py
 the hook provider, delivered with the RPM
 .TP
-/usr/sbin/SAPHanaSR-hookHelper
+/usr/bin/SAPHanaSR-hookHelper
 the external script for node fencing
 .TP
 /etc/sudoers, /etc/sudoers.d/*
@@ -417,8 +417,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,  \fBSAPHanaSR.py\fP(7) ,
-\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
-\fBocf_suse_SAPHanaController\fP(7) , \fBSAPHanaSR-hookHelper\fP(8) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBSAPHanaSR-hookHelper\fP(8) ,
 \fBSAPHanaSR-manageProvider\fP(8) , \fBcrm\fP(8) , \fBcrm_attribute\fP(8) ,
 \fBpython3\fP(8) ,
 .br
@@ -436,7 +436,7 @@ A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2022 SUSE LLC
+(c) 2022-2023 SUSE LLC
 .br
 susChkSrv.py comes with ABSOLUTELY NO WARRANTY.
 .br
