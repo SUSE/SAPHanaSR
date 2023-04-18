@@ -1,0 +1,456 @@
+.\" Version: 0.182.0
+.\"
+.TH SAPHanaSR-ScaleOut_basic_cluster 7 "26 Jan 2023" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR-ScaleOut_basic_cluster \- SAP HANA System Replication scale-out basic cluster configuration.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+The SAP HANA System Replication scale-out scenario needs a certain basic
+cluster configuration. Besides this necessary settings, some additional
+configurations might match specific needs.
+.\"
+.\" \fB* Corosync Basics\fR
+.\"
+.\".PP
+
+\fB* CRM Basics\fR
+
+\fBno-quorum-policy = freeze\fR
+
+The crm basic parameter no-quorum-policy defines how the cluster should act in
+case of quorum loss. With more than two nodes, the cluster must not ignore the
+quorum loss. For SAPHanaSR-ScaleOut, an odd number of nodes is required. Setting
+no-quorum-policy to 'freeze' won't allow the partition to shoot any other node
+when it doesn't have quorum. Cluster will not be able to add and start new resources,
+but running will stay alive.
+If the cluster uses disk-less SBD, the no-quorum-policy 'suicide' is required. 
+
+\fBdefault-resource-stickiness = 1000\fR
+
+The crm basic parameter default-resource-stickiness defines the 'stickiness'
+score a resource gets on the node where it is currently running. This prevents
+the cluster from moving resources around whithout an urgent need during a
+cluster transition. The correct value depends on number of resources, colocation
+rules and resource groups. Particularly additional groups colocated to the
+HANA primary master resource can affect cluster decisions. 
+Too high value might prevent not only unwanted but also useful actions.
+This is because SAPHanaSR uses an internal scoring table for placing the HANA
+roles on the right nodes.
+
+\fBconcurrent-fencing = true\fR
+
+The crm basic parameter concurrent-fencing allows the cluster to fence more
+than one node at a time. This helps to reduce the time needed for a take over in
+case a whole data center is lost. If nodes are fenced one by one, the time needed
+would be equal to the \fBnumber of nodes * stonith timeout\fR. With concurrent-fencing
+enabled the time needed is in the range of \fB2 * stonith timeout\fR, independent of
+the number of nodes. See also \fBpcmk_action_limit\fR below.
+
+\fBfailure-timeout = 86400\fR
+
+The crm basic parameter failure-timeout defines how long failed actions will
+be kept in the CIB. After that time the failure record will be deleted. The
+time is measured in seconds. See also \fBmigration-threshold\fR below.
+
+\fBmigration-threshold = 50\fR
+
+The crm basic parameter migration-threshold defines how many errors on a
+resource can be detected before this resource will be migrated to another node.
+See also \fBfailure-timeout\fR.
+
+\fBrecord-pending = false\fR
+
+The op_default record-pending defines, whether the intention of an action
+upon the resource is recorded in the Cluster Information Base (CIB).
+Setting this parameter to 'true' allows the user to see pending actions like 'starting'
+and 'stopping' in \fBcrm_mon\fR and \fBHawk\fR.
+
+.PP
+\fB* SBD STONITH Basics\fR
+
+\fBpcmk_action_limit = -1\fR
+
+The sbd stonith parameter pcmk_action_limit defines the maximum number of
+concurrent fencing actions. It allows parallel fencing of multiple nodes. 
+A value of '-1' means virtually unlimited. 
+See also \fBconcurrent-fencing\fR above.
+
+\fBpcmk_delay_max = 1s\fR
+
+The sbd stonith parameter pcmk_delay_max defines an upper limit for waiting
+before a fencing/stonith request will be triggerd.
+This parameter should prevent the cluster from unwanted double fencing in case
+of spilt-brain. A value around 30 seconds is required in two-node clusters. It
+is not needed in usual SAPHanaSR-ScaleOut setups.
+
+.PP
+\fB* systemd Basics\fR
+
+\fBsaphostagent.service enabled\fR
+.br
+\fBSAP${SID}_${INO}.service enabled\fR
+
+In case systemd-style init is used for the HANA database, the services saphostagent
+and SAP${SID}_${INO} need to be enabled and running inside the SAP slice.
+The instance profile Autostart feature needs to be off.
+The service saptune is highly recommended, see manual page saptune(8).
+
+\fB* pacemaker service dependency to SAP instance service\fR
+
+\fB[Unit]\fR
+.br
+\fBWants=SAP${SID}_${INO}.service\fR
+.br
+\fBAfter=SAP${SID}_${INO}.service\fR
+
+In case systemd-style init is used for the HANA database, it might be desired
+to have the SAP instance service stopping after pacemaker at system shutdown.
+Therefor a drop-in file for the pacemaker service might help. See examples below.
+
+.PP
+.\"
+.SH EXAMPLES
+
+\fB* crm basic configuration\fR
+
+Below is an example crm basic configuration for SAPHanaSR-ScaleOut. Shown are
+specific parameters which are needed. Some general parameters are left out.
+.br
+This example has been taken from SLE-HA 11 SP4 with disk-based SBD:
+.PP
+.RS 2
+.br
+property $id="cib-bootstrap-options" \\
+.br
+ expected-quorum-votes="31" \\
+.br
+ no-quorum-policy="freeze" \\
+.br
+ dc-deadtime="20s" \\
+.br
+ default-resource-stickiness="1000" \\
+.br
+ stonith-enabled="true" \\
+.br
+ stonith-timeout="180s" \\
+.br
+ concurrent-fencing="true"
+.br
+rsc_defaults $id="rsc_defaults-options" \\
+.br
+ resource-stickiness="1000" \\
+.br
+ migration-threshold="50" \\
+.br
+ failure-timeout="86400s"
+.br
+op_defaults $id="op-options" \\
+.br
+ record-pending="false" \\
+.br
+ timeout="600s"
+.br
+op_defaults $id="op_defaults-options" \\
+.br
+ timeout="300s"
+.RE
+.PP
+The following example is for SLE-HA 12 SP4 and 15 SP1 with disk-based SBD:
+.PP
+.RS 2
+.br
+property cib-bootstrap-options: \\
+.br
+ have-watchdog=true \\
+.br
+ cluster-infrastructure=corosync \\
+.br
+ cluster-name=hacluster \\
+.br
+ stonith-enabled=true \\
+.br
+ placement-strategy=balanced \\
+.br
+ stonith-timeout=180 \\
+.br
+ no-quorum-policy=freeze \\
+.br
+ concurrent-fencing=true
+.br
+rsc_defaults rsc-options: \\
+.br
+.\" TODO resource-stickiness=120 or 1000?
+ resource-stickiness=120 \\
+.br
+ migration-threshold=50 \\
+.br
+ failure-timeout=86400
+.br
+op_defaults op-options: \\
+.br
+ timeout=600 \\
+.br
+ record-pending=true
+.RE
+.PP
+.\" TODO example for SLE-HA 15 SP1 and 12 SP5 with disk-based and diskless SBD.
+
+\fB* crm SBD stonith configuration\fR
+
+To complete the SBD setup, it is necessary to activate SBD as STONITH/fencing
+mechanism in the CIB. The SBD is normally used for SAPHanaSR-ScaleOut instead
+of any other fencing/stonith mechanism. Example for a basic disk-based SBD
+resource:
+.PP
+.RS 2
+.br
+primitive rsc_stonith_sbd stonith:external/sbd \\
+.br
+ params pcmk_action_limit="-1" pcmk_delay_max="1"
+.RE
+.PP
+
+\fB* crm simple IP address resource configuration\fR
+
+Let the Linux cluster manage one IP address and move that address along
+with the HANA primary master nameserver.
+.PP
+.RS 2
+.br
+primitive rsc_ip_SLE_HDB00 IPAddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.188
+.br
+colocation col_ip_with_SLE_HDB00 \\
+.br
+ 2000: rsc_ip_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Master
+.RE
+.PP
+
+\fB* crm IP address for active/active read-enabled resource configuration\fR
+
+Let the Linux cluster manage an additional IP address and move that address
+along with the HANA secondary master nameserver.
+.br
+Note: This example works for two-node HANA scale-out.
+.\" TODO multi-node see below
+.PP
+.RS 2
+.br
+primitive rsc_ip_ro_SLE_HDB00 IPAddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.199
+.br
+colocation col_ip_ro_with_secondary_SLE_HDB00 \\
+.br
+ 2000: rsc_ip_ro_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Slave
+.br
+location loc_ip_ro_not_master_SLE_HDB00 \\
+.br
+ rsc_ip_ro_SLE_HDB00 \\
+.br
+ rule -inf: hana_sle_roles ne master1:master:worker:master
+.\" TODO works this for multi-node:  rule 8000: score eq 100
+.RE
+.PP
+
+\fB* crm grouped IP address resource configuration\fR
+
+Let the Linux cluster manage one IP address and move that address along
+with the HANA primary master nameserver. An auxiliary resource is needed
+for specific public cloud purpose.
+.\" TODO
+.PP
+.RS 2
+.br
+primitive rsc_ip_SLE_HDB00 IPAddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.188 cidr_netmask=32
+.br
+primitive rsc_lb_SLE_HDB00 azure-lb \\
+.br
+ params port=62502
+.br
+group grp_ip_SLE_HDB00 rsc_lb_SLE_HDB00 rsc_ip_SLE_HDB00 \\
+.br
+ meta resource-stickiness=1
+.br 
+colocation col_ip_with_SLE_HDB00 \\
+.br
+ 8000: grp_ip_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Master
+.RE
+.PP
+
+\fB* crm NFS check resource configuration\fR
+
+In case of NFS failure, HANA might stop working but the Linux cluster
+might not take action. To solve this, a dummy filesystem resource could
+be added. If this filesystem reports monitor failures, the node gets fenced
+and a takeover is initiated.
+.br
+Note: Understand the impact before implementing.
+.PP
+.RS 2
+primitive rsc_fs_check_SLE_HDB00 Filesystem \\
+.br
+ params device="/hana/shared/SLE/check/" \\
+ directory="/hana/shared/check/" fstype=nfs4 \\
+.br
+options="bind,defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock" \\
+.br
+ op monitor interval=120 timeout=120 on-fail=fence \\
+.br
+ op_params OCF_CHECK_LEVEL=20 \\
+.br
+ op start interval=0 timeout=120 \\
+.br
+ op stop interval=0 timeout=120
+.br
+clone cln_fs_check_SLE_HDB00 rsc_fs_check_SLE_HDB00 \\
+.br
+ meta clone-node-max=1 interleave=true
+.br
+location fs_check_not_on_majority_maker \\
+ cln_fs_check_SLE_HDB00 -inf: vm-majority
+.RE
+.PP
+
+\fB* check how resource stickiness affects promotion scoring\fR
+
+SAPHanaSR uses an internal scoring table. The promotion scores for HANA
+primary and secondary master are in a certain range. The scores used by the
+Linux cluster should be in the same range.
+.PP
+.RS 2
+.br
+# SAPHanaSR-showAttr | grep master.:master
+.br
+# crm_simulate -Ls | grep promotion
+.RE
+.PP
+
+\fB* cleanup SDB stonith resource after write failure\fR
+
+In rare cases the SBD stonith resource failes writing to the block device.
+After the root cause has been found and fixed, the failure message can be
+cleaned.
+.PP
+.RS 2
+.br
+# stonith_admin --cleanup --history=<originator_node> 
+.RE
+.PP
+
+\fB* check saphostagent and show SAP instances\fR
+
+Basic check for the saphostagent.
+.PP
+.RS 2
+# /usr/sap/hostctrl/exe/saphostctrl -function Ping
+.br
+# /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
+.RE
+.PP
+
+\fB* check systemd services for the HANA database\fR
+
+In case systemd-style init is used for the HANA database, the services can be
+checked. Example SID is HA1, instance number is 10.
+.PP
+.RS 2
+.br
+# systemctl list-unit-files | grep -i sap
+.br
+# systemctl status SAPHA1_10.service
+.br
+# systemd-cgls -u SAP.slice
+.br
+# systemd-cgls -u SAPHA1_10.service
+.br
+# systemctl show SAPHA1_10.service
+.\" TODO check Autostart not set.
+.RE
+.PP
+
+\fB* show pacemaker service drop-in file\fR
+
+In case systemd-style init is used for the HANA database, it might be desired
+to have the  SAP instance service stopping after pacemaker at system shutdown.
+A drop-in file might help. Example SID is S07, instance number is 00.
+
+.pp
+.RS 2
+# cat /etc/systemd/system/pacemaker.service.d/00-pacemaker.conf
+.br
+[Unit]
+.br
+Description=pacemaker needs SAP instance service
+.br
+Documentation=man:SAPHanaSR_basic_cluster(7)
+.br
+Wants=SAPS07_00.service
+.br
+After=SAPS07_00.service
+.RE
+.PP
+
+\fB* check for pacemaker dependency to SAP instance service\fR
+
+Example SID is S07, instance number is 00.
+.PP
+.RS 2
+# systemctl show pacemaker.service | grep SAP07_00
+.br
+# systemd-delta | grep pacemaker
+.br
+# systemd-analyze dot | grep "pacemaker.*SAPS07_00"
+.RE
+.PP
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBocf_heartbeat_IPAddr2\fP(7) , \fBocf_heartbeat_Filesystem\fP(7) ,
+\fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) , 
+\fBcrm_no_quorum_policy\fP(7) , \fBcrm\fP(8) , \fBcrm_simulate\fP(8) ,
+\fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR-showAttr\fP(7) ,
+\fBcorosync.conf\fP(5) , \fBvotequorum\fP(5) ,
+\fBnfs\fP(5) , \fBmount\fP(8) , \fBsystemctl\fP(1) ,
+\fBsystemd-cgls\fP(1) ,\fBsystemd-analyze\fP(1) , \fBsystemd-delta\fP(1) , 
+\fBha_related_suse_tids\fP(7) , \fBha_related_sap_notes\fP(7) ,
+.br
+https://documentation.suse.com/sbp/all/?context=sles-sap ,
+.br
+https://documentation.suse.com/sles-sap/ ,
+.br
+https://www.suse.com/support/kb/ ,
+.br
+https://www.clusterlabs.org
+.PP
+.SH AUTHORS
+.br
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2018 SUSE Linux GmbH, Germany.
+.br
+(c) 2019-2023 SUSE LLC
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
