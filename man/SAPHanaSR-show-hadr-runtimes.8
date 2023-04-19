@@ -1,0 +1,111 @@
+.\" Version: 1.001
+.\"
+.TH SAPHanaSR-show-hadr-runtimes 8 "18 Apr 2023" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR-show-hadr-runtimes \- Shows SAPHanaSR.py and SAPHanaSrMultiTarget.py hook script runtimes
+.\"
+.SH SYNOPSYS
+\fBSAPHanaSR-show-hadr-runtimes\fR [ --help | --version ]
+.\"
+.SH DESCRIPTION
+SAPHanaSR-show-hadr-runtimes shows susHanaSR.py and susHanaSrMultiTarget.py HADR provider hook script runtimes from HANA nameserver tracefiles.
+.\" TODO details
+.PP
+The output shows six columns.
+.\" TODO details
+.PP
+1. date
+.PP
+2. time of day
+.PP
+3. runtime in seconds
+.PP
+4. HADR provider hook script
+.br
+ha_dr_SAPHanaSR indicates old-style, ha_dr_SAPHanaSrM indicates multi-target
+.PP
+5. call ID used by HANA
+.br
+suffix unifies multiple IDs in tracefile
+.PP
+6. hook script actions
+.br
+Ds - SAPHanaSR.srConnectionChanged.*method called with Dict 
+.br
+Ib - ignoring bad status
+.br
+Ie - ignoring empty site
+.br
+Cg - CALLING CRM: write CIB attribute hana_<sid>_glob_srHook
+.br
+Cv - CALLING CRM: write CIB attribute hana_<sid>_gsh
+.br
+Lv - CALLING CRM: read CIB attribute hana_<sid>_gsh
+.br
+Cs - CALLING CRM: write CIB attribute hana_<sid>_site_srHook_<site>
+.\" TODO The Lv and Cx actions are the expensive call-outs.
+.\"
+.SH OPTIONS
+.HP
+\fB --help\fR
+        show help.
+.HP
+\fB --version\fR
+        show version.
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.\"
+.SH EXAMPLES
+.\" TODO examples
+.TP
+* Show HADR hook script calls in chronological order.
+.br
+# sort -k2,3 nameserver_*.3?????.???.trc | SAPHanaSR-show-hadr-runtimes | sort -k1,2
+.TP
+* Show HADR hook script call runtimes, call-outs only.
+# sort -k2,3 nameserver_*.3?????.???.trc | SAPHanaSR-show-hadr-runtimes | grep -v "DsI"
+.TP
+* Show HADR hook script calls sorted by runtime.
+# sort -k2,3 nameserver_*.3?????.???.trc | SAPHanaSR-show-hadr-runtimes | sort -n -k3
+.\"
+.SH FILES
+.TP
+/usr/bin/SAPHanaSR-show-hadr-runtimes
+        the program itself.
+.TP
+/usr/sap/${SID}/HDB${InstNr}/${HOST}/trace/
+	the HANA tracefile directory.
+.\"
+.SH BUGS
+Formatting and content of this script's output will change, since this script
+is under development. This script is not intended to be called from monitoring
+tools.
+.br
+The HADR provider hook script and runtime environment are not exactly optiomally prepared for calculating runtimes. Thus results from SAPHanaSR-show-hadr-runtimes might be incomplete or unprecise sometimes.
+.br
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.\"
+.SH SEE ALSO
+\fBsusHanaSR.py\fP(7) , \fBsusHanaSrMultiTarget.py\fP(7) ,
+\fBSAPHanaSR-showAttr\fP(8) ,
+\fBsort\fP(8)
+.\"
+.SH AUTHORS
+F.Herschel, L.Pinne.
+.\"
+.SH COPYRIGHT
+(c) 2021-2023 SUSE LLC
+.br
+SAPHanaSR-show-hadr-runtimes comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

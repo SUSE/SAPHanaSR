@@ -1,13 +1,13 @@
-.\" Version: 0.160.1
+.\" Version: 1.001
 .\"
-.TH SAPHanaSR.py 7 "02 Nov 2022" "" "SAPHanaSR"
+.TH susHanaSR.py 7 "13 Apr 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
-SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
+susHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
 .PP
 .\"
 .SH DESCRIPTION
-SAPHanaSR.py can be used to provide a script for the SAP HANA srHook method
+susHanaSR.py can be used to provide a script for the SAP HANA srHook method
 srConnectionChanged().
 
 The SAP HANA nameserver provides a Python-based API ("HA/DR providers"), which
@@ -17,7 +17,7 @@ need to be executed. The method srConnectionChanged() is called on the master
 nameserver as soon as one of the replicating services loses or establishes
 the system replication connection. This method is called only once.
 
-SAPHanaSR.py updates the cluster attribute srHook at changes of the HANA system
+susHanaSR.py updates the cluster attribute srHook at changes of the HANA system
 replication status. Thus this attribute is more reliable than the attribute
 sync_state which is polled by RA monitors.
 
@@ -27,14 +27,14 @@ This hook script needs to be configured and activated on all HANA nodes.
 .\"
 .SH SUPPORTED PARAMETERS
 * The "HA/DR providers" API accepts the following parameters for the
-ha_dr_provider_SAPHanaSR section:
+ha_dr_provider_sushanasr section:
 .TP
-\fB[ha_dr_provider_saphanasr]\fP
+\fB[ha_dr_provider_sushanasr]\fP
 .TP
-\fBprovider = SAPHanaSR\fP
+\fBprovider = susHanaSR\fP
 Mandatory. Must not be changed.
 .TP
-\fBpath = /usr/share/SAPHanaSR\fP
+\fBpath = /usr/share/SAPHanaSR-angi\fP
 Mandatory. Please change only if requested.
 .TP
 \fBexecution_order = [ INTEGER ]\fP
@@ -44,16 +44,16 @@ Mandatory. Order might depend on other hook scripts.
 .TP
 \fB[trace]\fP
 .TP
-\fBha_dr_saphanasr = [ info | debug ]\fP
+\fBha_dr_sushanasr = [ info | debug ]\fP
 Optional. Will be added automatically if not set.
 .PP
-* The he SAPHanaController and SAPHana RA recognize the effecting system
+* The he SAPHanaController RA recognize the effecting system
 replication status via attributes in the CIB´s SAPHanaSR properties section.
 The SAP System Indentifier (sid) is given in lower case:
 .TP
 \fBhana_${sid}_site_srHook_${site} = [ SOK | SFAIL | SWAIT ]\fP
 .TP
-Note: SAPHanaSR-ScaleOut comes with a differnt SAPHanaSR.py that provides global attributes.
+Note: SAPHanaSR-ScaleOut comes with a SAPHanaSR.py that provides global attributes.
 .PP
 .\"
 .SH RETURN CODES
@@ -90,22 +90,23 @@ This file is needed at both sites. The HANA has to be stopped before the files
 can be edited.
 .PP
 .RS 2
-[ha_dr_provider_saphanasr]
+[ha_dr_provider_sushanasr]
 .br
-provider = SAPHanaSR
+provider = susHanaSR
 .br
-path = /usr/share/SAPHanaSR
+path = /usr/share/SAPHanaSR-angi
 .br
 execution_order = 1
 .br
 [trace]
 .br
-ha_dr_saphanasr = info
+ha_dr_sushanasr = info
 .PP
 * Example for entry in SAP HANA 2.0 global configuration
 /hana/shared/$SID/global/hdb/custom/config/global.ini to enable multi-target aware third site.
 .br
-This entry is needed to allow ocf_suse_SAPHana(7) parameter AUTOMATED_REGISTER=true in multi-target environments.
+This entry is needed to allow ocf_suse_SAPHanaController(7) parameter
+AUTOMATED_REGISTER=true in multi-target environments.
 The HANA has to be stopped before the files can be edited.
 Do not copy the file between nodes. Please check SAP HANA documentation for details.
 .PP
@@ -117,22 +118,6 @@ Do not copy the file between nodes. Please check SAP HANA documentation for deta
 register_secondaries_on_takeover = true
 .br
  ...
-.RE
-.PP
-* Example for creating the optional SAPHanaSR python object file manually. This object file will not be updated with RPM package updates.
-.PP
-.RS 2
-# mkdir -p /hana/shared/srhook
-.br
-# chown ha1adm.sapsys /hana/shared/srhook
-.br
-# su - ha1adm
-.br
-# cd /hana/shared/srhook
-.br
-# python -m py_compile /usr/share/SAPHanaSR/SAPHanaSR.py
-.br
-# ls -l SAPHanaSR.pyc
 .RE
 .PP
 * Example for checking the system log for srHook setting HANA system replication status in the CIB properties section. To be executed on respective HANA primary site's master nameserver.
@@ -148,9 +133,9 @@ register_secondaries_on_takeover = true
 .br
 ~> cdtrace
 .br
-~> grep SAPHanaSR.srConnectionChanged.*called nameserver_*.trc
+~> grep susHanaSR.srConnectionChanged.*called nameserver_*.trc
 .br
-~> grep crm_attribute.*SAPHanaSR nameserver_*.trc
+~> grep crm_attribute.*susHanaSR nameserver_*.trc
 .br
 # exit
 .RE
@@ -162,7 +147,7 @@ register_secondaries_on_takeover = true
 .br
 ~> cdtrace
 .br
-~> grep HADR.*load.*SAPHanaS nameserver_*.trc
+~> grep HADR.*load.*susHanaS nameserver_*.trc
 .RE
 .PP
 * Example for comparing Linux cluster srHook attribute with current HANA SR state. SID is HA1. To be executed on current HANA primary site.
@@ -193,7 +178,6 @@ Note: Understand the impact before trying.
 \fB*\fR Example for removing orphaned global srHook attribute.
 This might be done after upgrading from old-style srHook, to avoid confusion
 caused by different HANA HADR provider API versions.
-See also SAPHanaSR.py(7) and SAPHanaSR-manageAttr(8) from SAPHanaSR-ScaleOut.
 SID is HA1.
 .\" TODO scale-up: SID is HA1, node is node1. All nodes need to be cleaned.
 .\" TODO scale-up: # crm_attribute --delete -t nodes --node node1 --name hana_ha1_glob_srHook
@@ -216,11 +200,8 @@ SID is HA1.
 .\"
 .SH FILES
 .TP
-/usr/share/SAPHanaSR/SAPHanaSR.py
+/usr/share/SAPHanaSR-angi/susHanaSR.py
 the hook provider, delivered with the RPM
-.TP
-/hana/shared/srhook/SAPHanaSR.pyc
-the hook provider, if pre-compiled for the particular HANA (optional)
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 the on-disk representation of HANA global system configuration
@@ -238,13 +219,12 @@ the internal cache for srHook status changes while Linux cluster is down, file i
 .SH REQUIREMENTS
 1. SAP HANA 2.0 SPS04 or later provides the HA/DR provider hook method
 srConnectionChanged() with multi-target aware parameters.
-SAP HANA 1.0 does not provide them.
 The multi-target aware parameters are needed for the SAPHanaSR scale-up
 package.
 .PP
 2. No other HADR provider hook script should be configured for the
 srConnectionChanged() method. Hook scripts for other methods, provided in
-SAPHanaSR, can be used in parallel to SAPHanaSR.py, if not documented
+SAPHanaSR-angi, can be used in parallel to susHanaSR.py, if not documented
 contradictingly.
 .PP
 3. The user ${sid}adm needs execution permission as user root for the command
@@ -252,9 +232,6 @@ crm_attribute.
 .PP
 4. The hook provider needs to be added to the HANA global configuration,
 in memory and on disk (in persistence).
-.PP
-5. If the hook provider should be pre-compiled, the particular Python version
-that comes with SAP HANA has to be used.
 .\"
 .SH BUGS
 In case of any problem, please use your favourite SAP support process to open
@@ -264,7 +241,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) ,
-\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBocf_heartbeat_IPaddr2\fP(7) ,
 \fBsusCostOpt.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP (7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR-manageProvider\fP(8) , \fBSAPHanaSR-hookHelper\fP(8) ,
@@ -276,15 +254,15 @@ https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5df
 .PP
 .\"
 .SH AUTHORS
-F.Herschel, L.Pinne.
+A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
 (c) 2015-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2022 SUSE LLC
+(c) 2019-2023 SUSE LLC
 .br
-SAPHanaSR.py comes with ABSOLUTELY NO WARRANTY.
+susHanaSR.py comes with ABSOLUTELY NO WARRANTY.
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

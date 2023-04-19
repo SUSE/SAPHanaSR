@@ -1,24 +1,29 @@
-.\" Version: 0.160.1
+.\" Version: 1.001 
 .\"
-.TH SAPHanaSR 7 "22 Jun 2022" "" "SAPHanaSR"
+.TH SAPHanaSR 7 "13 Apr 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
-SAPHanaSR \- Tools for automating SAP HANA system replication in scale-up setups.
+SAPHanaSR-angi \- SAP HANA SR - An Next Generation Interface.
 .PP
 .\"
 .SH DESCRIPTION
 .\"
 \fBOverview\fR
 .PP
-The SAPHanaSR package provides resource agents (RA) and tools for setting up
-and managing automation of SAP HANA system replication (SR) in scale-up setups.
-.pp
+The SAPHanaSR-angi package provides resource agents (RA) and tools for setting
+up and managing automation of SAP HANA system replication (SR) in scale-up
+setups.
+.PP
+CIB attributes are not backward compatible between SAPHanaSR-angi and
+SAPHanaSR or SAPHanaSR-ScaleOut. So there is currently no easy migration path.
+.B SAPHanaSR-angi is shipped as technology preview.
+.PP
 System replication will help to replicate the database data from one site to
 another site in order to compensate for database failures. With this mode of
 operation, internal SAP HANA high-availability (HA) mechanisms and the Linux
 cluster have to work together.
 .PP
-The SAPHana RA performs the actual check of the SAP HANA
+The SAPHanaController RA performs the actual check of the SAP HANA
 database instances and is configured as a multi-state resource.
 Managing the two SAP HANA instances means that the resource agent controls
 the start/stop of the instances. In addition the resource agent is able to
@@ -42,7 +47,7 @@ consistency even in corner cases. Another use case for hook scripts is allowing
 manual takeover if the HANA resource is in maintenance mode, but blocking manual
 takeover otherwise. This prevents from dual-primary situations.
 .PP
-Note: To automate SAP HANA SR in scale-out setups, please use the package
+Note: The SAPHanaSR-angi package is not compatible to packages SAPHanaSR and
 SAPHanaSR-ScaleOut.
 .PP
 \fBScenarios\fR
@@ -119,10 +124,10 @@ start.
 .PP
 4. \fBSite takeover not preferred over local re-start\fR
 .br
-SAPHanaSR-ScaleOut allows to configure, if you prefer to takeover to the
+SAPHanaSR allows to configure, if you prefer to takeover to the
 secondary after the primary landscape fails. The alternative is to restart the
 primary landscape, if it fails and only to takeover when no local restart is
-possible anymore. This can be tuned by SAPHana(7) parameters.
+possible anymore. This can be tuned by SAPHanaController(7) parameters.
 .br
 The current implementation only allows to takeover in case the landscape status
 reports 1 (ERROR). The cluster will not takeover, when the SAP HANA still
@@ -181,13 +186,13 @@ left-over migration constraints, and resource failures as well as the HANA
 landscape status, and the HANA SR status.
 .PP
 \fB*\fR Manually activating an HANA primary creates risk of a dual-primary situation.
-The user is responsible for data integrity.
+The user is responsible for data integrity. See also susTkOver.py(7).
 .PP
 .\"
 .SH REQUIREMENTS
 .PP
-For the current version of the package SAPHanaSR, the support is limited to the
-following scenarios and parameters:
+For the current version of the package SAPHanaSR-angi, the capabilities are
+limited to the following scenarios and parameters:
 .PP
 1. HANA scale-up cluster with system replication. The two HANA database
 systems (primary and secondary site) are managed by one Linux cluster.
@@ -202,8 +207,8 @@ customized actions or messages. Supported shell is bash.
 .PP
 3. Strict time synchronization between the cluster nodes, e.g. NTP.
 .PP
-4. For scale-up the following SAP HANA SR scenarios are supported with the
-SAPHanaSR package:
+4. For scale-up the following SAP HANA SR scenarios are possible with the
+SAPHanaSR-angi package:
 .br
 	4.1 performance-optimized (memory preload on secondary)
 .br
@@ -241,18 +246,13 @@ off.
 .PP
 10. The RA's monitoring operations have to be active.
 .PP
-11. Using HADR provider hook for srConnectionChanged() by enabling SAPHanaSR.py
-is strongly recommended. This might become mandatory in furture versions.
+11. Using HADR provider hook for srConnectionChanged() by enabling susHanaSR.py
+is mandatory.
 .PP
 12. For scale-up, the current resource agent supports SAP HANA in system
-replication beginning with HANA version 1.0 SPS 7 patch level 70,
-recommended is SPS 11.
-With HANA 2.0 SPS04 and later multi-target system replication
-is possible as well. Even in HANA multi-target environments, the current
-resource agent manages only two sites. Thus only two HANA sites are part
-of the Linux cluster. See also item 5 above.
+replication beginning with HANA version 2.0 SPS 05.
 .PP
-13. Colocation constraints between the SAPHanaController or SAPHana RA and
+13. Colocation constraints between the SAPHanaController RA and
 other resources are allowed only if they do not affect the RA's scoring.
 The location scoring finally depends on system replication status an must not
 be over-ruled by additional constraints. Thus it is not allowed to define rules
@@ -279,14 +279,17 @@ controlled by another SUSE HA cluster. If that third site should work as part
 of a fall-back HA cluster in DR case, that HA cluster needs to be in standby.
 .PP
 20. RA and srHook runtime almost completely depends on call-outs to controlled
-resources, OS and Linux cluster. The infrastructure needs to allow these call-outs
-to return in time.
+resources, OS and Linux cluster. The infrastructure needs to allow these
+call-outs to return in time.
 .PP
 21. The SAP HANA Fast Restart feature on RAM-tmfps as well as HANA on persistent
 memory can be used, as long as they are transparent to SUSE HA.
 .PP
 22. The SAP HANA site name is from 2 up to 32 characters long. It starts with a
 character or number. Subsequent characters may contain dash and underscore.
+.PP
+23. The SAPHanaController RA, the SUSE HA cluster and several SAP components
+need read/write access and sufficient space in the Linux /tmp filesystem.
 .PP
 .\"
 .SH BUGS
@@ -297,9 +300,10 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHana\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBocf_heartbeat_IPaddr2\fP(7) ,
 \fBSAPHanaSR_basic_cluster\fP(7) ,
-\fBSAPHanaSR.py\fP(7) , \fBsusCostOpt.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP (7) ,
+\fBsusHanaSR.py\fP(7) , \fBsusCostOpt.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP (7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBsystemctl\fP(1) ,
 \fBstonith\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) ,
@@ -336,9 +340,9 @@ A.Briel, F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2015-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2022 SUSE LLC
+(c) 2019-2023 SUSE LLC
 .br
-The package SAPHanaSR comes with ABSOLUTELY NO WARRANTY.
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html
