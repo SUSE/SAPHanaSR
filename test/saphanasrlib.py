@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
 """
@@ -316,7 +317,9 @@ class SaphanasrTest:
                 print(".", end='', flush=True)
             process_result = -1
             self.read_saphana_sr()
-            process_result = max ( self.process_topology_object(step, 'pSite', 'Sites'),
+            process_result = max (
+                                  self.process_topology_object(step, 'global', 'Global'),
+                                  self.process_topology_object(step, 'pSite', 'Sites'),
                                   self.process_topology_object(step, 'sSite', 'Sites'),
                                   self.process_topology_object(step, 'pHost', 'Hosts'),
                                   self.process_topology_object(step, 'sHost', 'Hosts'))
@@ -496,6 +499,7 @@ if __name__ == "__main__":
         test01.run['r_id'] = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
         l_top = test01.topolo
+        l_top.update({'global': 'global'})
         l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
         l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
         l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
