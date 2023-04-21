@@ -500,6 +500,18 @@ if __name__ == "__main__":
         test01.read_saphana_sr()
         l_top = test01.topolo
         l_top.update({'global': 'global'})
+        # for angi-ScaleUp and classic ScaleOut:
+        # pSite is the site with srr-attribute == "P"
+        # sSite is the site with srr-attribute == "S"
+        # pHost is the host with site-attribute == pSite
+        # sHost is the host with site-attribute == sSite
+        # TODO: for angi-ScaleOut and classic-ScaleOut we might need to differ msn-host, plain-worker (no mns-candidate) and standby node
+        # TODO: classic-ScaleUp
+        # pHost could be the host with roles-attr like X:P:XXXX
+        # sHost could be the host with roles-attr like X:S:XXXX
+        # pSite is referenced by pHost-site-attr
+        # sSite is referenced by sHost-site-attr
+        #
         l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
         l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
         l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
