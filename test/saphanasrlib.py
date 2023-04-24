@@ -173,8 +173,10 @@ class SaphanasrTest:
     def get_area_object_by_key_val(self, area_name, key, value, **kwargs):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         # Query runs from area-level via object-level. Then search for key=value.
-        for k,v in kwargs.items():
-            self.message(f"DEBUG: kwarg {k}={v}") 
+        l_sloppy = False
+        if 'sloppy' in kwargs:
+            l_sloppy = kwargs['sloppy']
+            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}") 
         object_name = None
         l_sr = self.dict_sr
         if area_name in l_sr:
@@ -182,10 +184,15 @@ class SaphanasrTest:
             for k in l_area.keys():
                 l_obj = l_area[k]
                 if key in l_obj:
-                    if l_obj[key] == value:
-                        object_name = k
-                        # currently we only return the first match
-                        break
+                    if l_sloppy:
+                        # search value by regexp
+                        if re.search(value, l_obj[key]):
+                            object_name = k
+                    else:
+                        if l_obj[key] == value:
+                            object_name = k
+                            # currently we only return the first match
+                            break
         return object_name
 
     def get_value(self, area_name, object_name, key):
@@ -532,7 +539,7 @@ if __name__ == "__main__":
         # pSite is referenced by pHost-site-attr
         # sSite is referenced by sHost-site-attr
         #
-        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P', sloppy=True)})
+        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
         l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
         # first try to use site-msn attribute to get the master name server
         # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
@@ -542,8 +549,8 @@ if __name__ == "__main__":
         if l_top['pHost'] == None:
             # if mns attributes do not work this is most likely a classic-ScaleUp in this case also pSite etc are invalid
             # TODO: this is currently only a workaound till we can seach for a area/object/key ~ value regexp
-            l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'score', '150')})
-            l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'score', '100')})
+            l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:P:', sloppy=True)})
+            l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:S:', sloppy=True)})
             l_top.update({'pSite': test01.get_value('Hosts', l_top['pHost'], 'site')})
             l_top.update({'sSite': test01.get_value('Hosts', l_top['sHost'], 'site')})
 
