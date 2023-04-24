@@ -25,10 +25,13 @@ class SaphanasrTest:
     """
     version = "0.1.20230404.1848"
 
-    def message(self, msg):
+    def message(self, msg, **kwargs):
         """
         message with formatted timestamp
         """
+        stdout = True
+        if 'stdout' in kwargs:
+            stdout = kwargs['stdout']
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.run['r_id']:
@@ -36,24 +39,15 @@ class SaphanasrTest:
         else:
             r_id = ""
         msg_arr = msg.split(" ")
-        print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+        if stdout: 
+            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
-            self.message_fh(msg, self.run['log_file_handle'])
+            if self.run['log_file_handle']:
+                _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
+                _l_msg += ' '.join(msg_arr[1:])
+                self.run['log_file_handle'].write(_l_msg + "\n")
         except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
-
-    def message_fh(self, msg, file_handle):
-        """ print a message with fotmatted timestamp to a file handle """
-        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        if self.run['r_id']:
-            r_id = " [{}]".format(self.run['r_id'])
-        else:
-            r_id = ""
-        msg_arr = msg.split(" ")
-        if file_handle:
-            _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
-            _l_msg += ' '.join(msg_arr[1:])
-            file_handle.write(_l_msg + "\n")
 
     def __init__(self, *args):
         """
@@ -239,8 +233,8 @@ class SaphanasrTest:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
                 self.test_data.update(json.load(tf_fh))
         self.run['test_id'] = self.test_data['test']
-        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),
-                        self.run['log_file_handle'])
+        self.message("DEBUG: test_data: {}".format(str(self.test_data)),
+                        stdout=False)
 
     def __add_failed__(self, area_object, key_val_reg):
         """ document failed checks """
@@ -252,7 +246,7 @@ class SaphanasrTest:
         ( _key, _val, _reg ) = key_val_reg
         _l_failed += f"{_key}={_val} !~ {_reg}; "
         self.run['failed'] = _l_failed
-        self.message_fh("DEBUG: add-failed: " + self.__get_failed__(), self.run['log_file_handle'])
+        self.message("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
@@ -294,7 +288,7 @@ class SaphanasrTest:
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message_fh(f"FAILED: {self.__get_failed__()}", self.run['log_file_handle'])
+            self.message(f"FAILED: {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -304,7 +298,7 @@ class SaphanasrTest:
             checks = step[topology_object_name]
             if isinstance(checks,str):
                 check_ptr = checks
-                self.message_fh(f"DEBUG: check_ptr {check_ptr}", self.run['log_file_handle'])
+                self.message(f"DEBUG: check_ptr {check_ptr}", stdout=False)
                 checks = self.test_data["checkPtr"][check_ptr]
             topolo = self.topolo
             if topology_object_name in topolo:
@@ -534,8 +528,8 @@ if __name__ == "__main__":
         # sHost is the host with site-attribute == sSite
         # TODO: for angi-ScaleOut and classic-ScaleOut we might need to differ msn-host, plain-worker (no mns-candidate) and standby node
         # TODO: classic-ScaleUp
-        # pHost could be the host with roles-attr like X:P:XXXX
-        # sHost could be the host with roles-attr like X:S:XXXX
+        # pHost could be the host with roles-attr like [0-4]:P:*
+        # sHost could be the host with roles-attr like [0-4]:S:*
         # pSite is referenced by pHost-site-attr
         # sSite is referenced by sHost-site-attr
         #
