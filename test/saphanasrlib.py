@@ -172,6 +172,7 @@ class SaphanasrTest:
 
     def get_area_object_by_key_val(self, area_name, key, value):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
+        # Query runs from area-level via object-level. Then search for key=value.
         object_name = None
         l_sr = self.dict_sr
         if area_name in l_sr:
@@ -184,6 +185,21 @@ class SaphanasrTest:
                         # currently we only return the first match
                         break
         return object_name
+
+    def get_value(self, area_name, object_name, key):
+        """ method to query the value of a key (e.g. 'msn') for an object (e.g. site 'MAINZ' inside an area (e.g. 'Sites') """
+        # Query runs from area-level via object-level to key-level
+        l_value = None
+        l_sr = self.dict_sr
+        if area_name in l_sr:
+            l_area = l_sr[area_name]
+            if object_name in l_area:
+                l_obj = l_area[object_name]
+                if key in l_obj:
+                    l_value = l_obj[key]
+                else:
+                    self.message(f'DEBUG: key {key} not found')
+        return l_value
 
     def pretty_print(self, dictionary,level):
         """ debug method for nested dictionary """
@@ -514,8 +530,14 @@ if __name__ == "__main__":
         #
         l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
         l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
-        l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
-        l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
+        # first try to use site-msn attribute to get the master name server
+        # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
+        l_top.update({'pHost': test01.get_value('Sites', l_top['pSite'], 'mns')})
+        l_top.update({'sHost': test01.get_value('Sites', l_top['sSite'], 'mns')})
+
+        # TODO: do we need the old method as fallback, if msn is empty or misleading?
+        #l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
+        #l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
         l_msg = (
                     f"TOPO: pSite={l_top['pSite']}"
                     f" sSite={l_top['sSite']}"
