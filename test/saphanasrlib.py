@@ -535,6 +535,14 @@ if __name__ == "__main__":
         l_top.update({'pHost': test01.get_value('Sites', l_top['pSite'], 'mns')})
         l_top.update({'sHost': test01.get_value('Sites', l_top['sSite'], 'mns')})
 
+        if l_top['pHost'] == None:
+            # if mns attributes do not work this is most likely a classic-ScaleUp in this case also pSite etc are invalid
+            # TODO: this is currently only a workaound till we can seach for a area/object/key ~ value regexp
+            l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'score', '150')})
+            l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'score', '100')})
+            l_top.update({'pSite': test01.get_value('Hosts', l_top['pHost'], 'site')})
+            l_top.update({'sSite': test01.get_value('Hosts', l_top['sHost'], 'site')})
+
         # TODO: do we need the old method as fallback, if msn is empty or misleading?
         #l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
         #l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
