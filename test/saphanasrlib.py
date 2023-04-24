@@ -170,9 +170,11 @@ class SaphanasrTest:
                     self.__insert_to_area__(area, l_obj)
         return 0
 
-    def get_area_object_by_key_val(self, area_name, key, value):
+    def get_area_object_by_key_val(self, area_name, key, value, **kwargs):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         # Query runs from area-level via object-level. Then search for key=value.
+        for k,v in kwargs.items():
+            self.message(f"DEBUG: kwarg {k}={v}") 
         object_name = None
         l_sr = self.dict_sr
         if area_name in l_sr:
@@ -530,7 +532,7 @@ if __name__ == "__main__":
         # pSite is referenced by pHost-site-attr
         # sSite is referenced by sHost-site-attr
         #
-        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
+        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P', sloppy=True)})
         l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
         # first try to use site-msn attribute to get the master name server
         # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
