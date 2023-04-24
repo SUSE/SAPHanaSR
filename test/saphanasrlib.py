@@ -280,6 +280,8 @@ class SaphanasrTest:
                         else:
                             self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
                             check_result = max(check_result, 1)
+                    else:
+                        self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp))
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
