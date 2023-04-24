@@ -547,8 +547,7 @@ if __name__ == "__main__":
         l_top.update({'sHost': test01.get_value('Sites', l_top['sSite'], 'mns')})
 
         if l_top['pHost'] == None:
-            # if mns attributes do not work this is most likely a classic-ScaleUp in this case also pSite etc are invalid
-            # TODO: this is currently only a workaound till we can seach for a area/object/key ~ value regexp
+            # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
             l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:P:', sloppy=True)})
             l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:S:', sloppy=True)})
             l_top.update({'pSite': test01.get_value('Hosts', l_top['pHost'], 'site')})
