@@ -25,7 +25,7 @@ Version:        1.001.4
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
-Conflicts:      SAPHanaSR SAPHanaSR-ScaleOut
+Conflicts:      SAPHanaSR SAPHanaSR-ScaleOut SAPHanaSR-doc SAPHanaSR-ScaleOut-doc
 BuildArch:      noarch
 
 Source0:        %{name}-%{version}.tgz
