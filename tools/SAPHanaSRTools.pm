@@ -24,39 +24,39 @@ use Data::Dumper qw(Dumper);
 @ISA = qw(Exporter);
 # Init immediately so their contents can be used in the 'use vars' below.
 @EXPORT    = qw(
-    check_lpa_status 
-    check_all_ok 
-    check_node_status 
-    check_node_mode 
-    get_hana_attributes 
-    get_hana_sync_state 
-    get_lpa_by_host 
-    get_nodes_online 
-    get_node_status 
-    get_sid_and_InstNr 
-    get_number_primary 
-    get_number_secondary 
-    get_host_primary 
-    get_host_secondary 
-    get_new_attribute_model 
-    get_number_HANA_standby 
-    get_HANA_nodes 
-    get_node_list 
-    get_master_nameserver 
-    get_site_by_host 
-    host_attr2string 
-    insertAttribute 
-    max get_nodes_online 
-    mysyslog max 
-    mysyslog 
+    check_lpa_status
+    check_all_ok
+    check_node_status
+    check_node_mode
+    get_hana_attributes
+    get_hana_sync_state
+    get_lpa_by_host
+    get_nodes_online
+    get_node_status
+    get_sid_and_InstNr
+    get_number_primary
+    get_number_secondary
+    get_host_primary
+    get_host_secondary
+    get_new_attribute_model
+    get_number_HANA_standby
+    get_HANA_nodes
+    get_node_list
+    get_master_nameserver
+    get_site_by_host
+    host_attr2string
+    insertAttribute
+    max get_nodes_online
+    mysyslog max
+    mysyslog
     path_to_table
-    print_host_attr 
-    set_new_attribute_model 
-    set_cibFile 
-    set_GName 
-    set_HName 
-    set_SName 
-    set_Site 
+    print_host_attr
+    set_new_attribute_model
+    set_cibFile
+    set_GName
+    set_HName
+    set_SName
+    set_Site
 );
 
 
@@ -160,9 +160,9 @@ sub attr_in_selection {
         if ( exists($selections{$testSelection})) {
             my @sel_def_site = @{$selections{$testSelection}->{$testArea}};
             if ( grep /^$testAttr$/, @sel_def_site ) {
-                $result=1 
+                $result=1
             } else {
-                print "filtered: testSelection=$testSelection, testArea=$testArea, testAttr=$testAttr ", join(":",@sel_def_site), " \n";
+                # print "filtered: testSelection=$testSelection, testArea=$testArea, testAttr=$testAttr ", join(":",@sel_def_site), " \n";
             }
             #$result=1 if grep /^$testAttr$/, @sel_def_site ;
         } else {
@@ -296,6 +296,9 @@ sub get_hana_attributes
     my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN, $selection ) = @_;
     my %id2uname;
     my $CIB;
+    if ( !defined ($seection)) {
+        $selection = "all";
+    }
     if ( $cibFile eq "" ) {
         open $CIB, "-|", "cibadmin -Ql" or die "CIB could not be read from cluster";
     } else  {
