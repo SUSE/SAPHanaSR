@@ -296,7 +296,7 @@ sub get_hana_attributes
     my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN, $selection ) = @_;
     my %id2uname;
     my $CIB;
-    if ( !defined ($seection)) {
+    if ( !defined ($selection)) {
         $selection = "all";
     }
     if ( $cibFile eq "" ) {
