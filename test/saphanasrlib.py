@@ -430,7 +430,7 @@ class SaphanasrTest:
         if action_name == "ksi":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-        elif action_name == "kpi":
+        elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kpx":
@@ -487,7 +487,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kpi", "ksi", "kpx", "ksx", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "ksi", "kpx", "ksx", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
             action_rc = self.action_on_cluster(action_name)

@@ -15,21 +15,26 @@ function run() {
     else
         ln -s "$logFile" "$logLink"
     fi
-    python3 saphanasrlib.py --testFile="${testID}.json" \
+    saphanasrlib.py --testFile="$test_dir/${testID}.json" \
                             --remoteNode="$node" \
                             --repeat="$repeat" \
                             --dumpFailures \
-                            --defaultChecksFile="defaultChecks.json" \
-                            --logFile "$logFile"
+                            --defaultChecksFile="$test_dir/defaultChecks.json" \
+                            --properties="$test_dir/properties.json" \
+                            --logFile "$local_dir/$logFile"
     # ln -s -f testLog2023-03-31.txt testLog.curr.txt
     sleep "$sleep"; 
     return 0
 }
 
+test_scenario="angi-ScaleUp"
+local_dir="$PWD"
+test_dir="/usr/local/share/tester/json/$test_scenario"
+
 while true; do  
-    run basf02 kpi  3 300
+    run basf02 kill_prim_inst  3 300
     run basf02 free_log_area 1 60
-    run basf02 kpi  1 120
+    run basf02 kill_prim_inst  1 120
     run basf02 free_log_area 1 60
     run basf02 restart_cluster_turn_hana  1 300
     run basf02 ssn  2 300
