@@ -427,7 +427,7 @@ class SaphanasrTest:
         remote = self.config['remote_node']
         test_sid = self.test_data['sid']
         cmd = ""
-        if action_name == "ksi":
+        if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kill_prim_inst":
@@ -487,7 +487,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "ksi", "kpx", "ksx", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_secn_inst", "kpx", "ksx", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
             action_rc = self.action_on_cluster(action_name)
