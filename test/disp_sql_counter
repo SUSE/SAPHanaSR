@@ -1,0 +1,168 @@
+# pylint: disable=invalid-name,fixme,broad-except
+"""
+# disp_sql_counter
+# Authors:      Fabian Herschel, May 2023
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2023 SUSE LLC
+
+CREATE ROW TABLE fhcounter (timestamp TIMESTAMP, counter BIGINT);
+
+
+select * from fhcounter;
+"""
+
+# loading classes and libraries
+import os
+import time
+
+# pylint: enable=invalid-name
+try:
+    from hdbcli import dbapi
+except ImportError as e:
+    print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
+
+try:
+    from hdb_ha_dr.client import HADRBase
+except ImportError as e:
+    print(f"Module HADRBase not found - running outside of SAP HANA? - {e}")
+
+# parameter section
+FHVERSION = "1.001.1"
+USERKEY_DFLT = "TESTER"
+#
+
+
+# pylint: disable-next=invalid-name
+class disp_sql():
+
+    def __init__(self, *args, **kwargs):
+        #my_sid_upper = os.environ.get('SAPSYSTEMNAME')
+        #mysid = my_sid_upper.lower()
+        # TODO: user key by option
+        self.userkey = USERKEY_DFLT
+        self.connection = None
+        self.list=[]
+
+    def connect(self, **kargs):
+        try:
+            connection = dbapi.connect(key=self.userkey)
+        except Exception as exerr:
+            print(f"error during database connection - {exerr}.\n")
+            return None
+        if not connection.isconnected():
+            print("database connection could not be established\n")
+            return None
+        self.connection = connection
+        return connection
+
+    def disconnect(self):
+        if self.connection:
+            self.connection.close()
+
+    def insert(self):
+        count = 1
+        time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
+        insert_sql = f"insert into fhcounter (timestamp, counter) VALUES ( '{time_str}', {count} );"
+
+        connection = self.connection
+        if connection == None or not connection.isconnected():
+            print("insert(): database connection could not be established or disconnected now\n")
+            return(1)
+        cursor = connection.cursor()
+        try:
+            #self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
+            print(f"sqlstatement: {insert_sql}\n")
+            cursor.execute(insert_sql)
+            #for row in cursor:
+            #    print(row)
+        except Exception as exerr:
+            print("error during execution of the sql statement"
+                             f" {insert_sql} - {exerr}.\n")
+        # commit the changes in the database
+        connection.commit()
+        # close cursor
+        cursor.close()
+        return 0
+
+    def count(self, **kargs):
+        # TODO: key=userkey, table=tablename
+        count_sql = "select count(*) from fhcounter"
+        connection = self.connection
+        if connection == None or not connection.isconnected():
+            print("count(): database connection could not be established or disconnected now\n")
+            return 1
+
+        cursor = connection.cursor()
+        try:
+            #self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
+            print(f"sqlstatement: {count_sql}\n")
+            cursor.execute(count_sql)
+            for row in cursor:
+                print(row[0])
+        except Exception as exerr:
+            print("error during execution of the sql statement"
+                             f" {count_sql} - {exerr}.\n")
+        # commit the changes in the database
+        connection.commit()
+        # close cursor
+        cursor.close()
+        return 0
+
+    def select(self):
+        select_sql = "SELECT timestamp, counter FROM fhcounter ORDER BY timestamp, counter"
+        connection = self.connection
+        if connection == None or not connection.isconnected():
+            print("select(): database connection could not be established or disconnected now\n")
+            return 1
+
+        cursor = connection.cursor()
+        try:
+            cursor.execute(select_sql)
+            self.list = []
+            for row in cursor:
+                self.list.append(row[0])
+            self.list.reverse()
+        except Exception as exerr:
+            print("error during execution of the sql statement"
+                             f" {select_sql} - {exerr}.\n")
+        # close cursor
+        cursor.close()
+        return 0
+
+    def list_last(self, maxnr):
+        now = time.time()
+        for element in self.list[0:maxnr]:
+            etime = element.timestamp()
+            dtime = now - etime
+            if dtime < 10:
+                print(f"e: {element} current entry")
+            else:
+                print(f"e: {element} outdated entry")
+            
+
+sql = disp_sql()
+i = 0
+print(f"version: {FHVERSION}")
+while True:
+    i += 1
+    if sql.connection == None:
+        print("try connect to database")
+        sql.connect()
+        if sql.connection == None:
+            print("connect to database failed, sleep 10s")
+            time.sleep(10)
+    else:
+        if not sql.connection.isconnected():
+            print("reconnect to database")
+            sql.disconnect()
+            sql.connect()
+        #print(f"modulo: {(i+1)%10}")
+        if i % 100 == 0:
+            print("software disconnect from database")
+            sql.disconnect() # break db connection every 10. loop to check code
+        sql.insert()
+        sql.count()
+        sql.select()
+    sql.list_last(4)
+    time.sleep(2)
+sql.disconnect()
