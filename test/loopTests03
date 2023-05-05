@@ -1,0 +1,37 @@
+#!/usr/bin/bash
+
+function run() {
+    local node="$1" testID="$2" repeat="$3" sleep="$4"
+    logFile="testLog$(date +"%Y-%m-%d").txt"
+    logLink="testLog.curr.txt"
+    if [ ! -f "$logFile" ]; then
+        touch "$logFile"
+    fi
+    if [ -L "$logLink" ]; then
+        rl=$(readlink "$logLink")
+        if [[ "$rl" != "$logFile" ]]; then
+            ln -s -f "$logFile" "$logLink"
+        fi
+    else
+        ln -s "$logFile" "$logLink"
+    fi
+    saphanasrlib.py --testFile="$test_dir/${testID}.json" \
+                            --remoteNode="$node" \
+                            --repeat="$repeat" \
+                            --dumpFailures \
+                            --defaultChecksFile="$test_dir/defaultChecks.json" \
+                            --properties="$test_dir/properties.json" \
+                            --logFile "$local_dir/$logFile"
+    # ln -s -f testLog2023-03-31.txt testLog.curr.txt
+    sleep "$sleep"; 
+    return 0
+}
+
+test_scenario="angi-ScaleUp"
+local_dir="$PWD"
+test_dir="/usr/local/share/tester/json/$test_scenario"
+
+while true; do  
+    run basf02 free_log_area 1 600
+    run basf02 bmt  1  600
+done 
