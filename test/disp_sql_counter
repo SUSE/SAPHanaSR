@@ -14,6 +14,7 @@ select * from fhcounter;
 # loading classes and libraries
 import os
 import time
+from concurrent import futures
 
 # pylint: enable=invalid-name
 try:
@@ -27,7 +28,7 @@ except ImportError as e:
     print(f"Module HADRBase not found - running outside of SAP HANA? - {e}")
 
 # parameter section
-FHVERSION = "1.001.1"
+FHVERSION = "1.001.2"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -44,6 +45,7 @@ class disp_sql():
         self.list=[]
 
     def connect(self, **kargs):
+        # TODO: key=userkey, table=tablename
         try:
             connection = dbapi.connect(key=self.userkey)
         except Exception as exerr:
@@ -70,48 +72,40 @@ class disp_sql():
             return(1)
         cursor = connection.cursor()
         try:
-            #self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
-            #print(f"sqlstatement: {insert_sql}")
             cursor.execute(insert_sql)
-            #for row in cursor:
-            #    print(row)
         except Exception as exerr:
             print("error during execution of the sql statement" f" {insert_sql} - {exerr}.")
-        # commit the changes in the database
-        connection.commit()
-        # close cursor
+        try:
+            connection.commit()
+        except Exception as exerr:
+            print("error during commit" f"- {exerr}.")
         cursor.close()
         return 0
 
     def count(self, **kargs):
-        # TODO: key=userkey, table=tablename
         count_sql = "select count(*) from fhcounter"
         connection = self.connection
+        result = None
         if connection == None or not connection.isconnected():
-            print("count(): database connection could not be established or disconnected now")
-            return 1
+            return result
 
         cursor = connection.cursor()
         try:
-            #self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
-            print(f"sqlstatement: {count_sql}")
             cursor.execute(count_sql)
             for row in cursor:
-                print(row[0])
+                #print(row[0], end='')
+                result = row[0]
         except Exception as exerr:
             print("error during execution of the sql statement"
-                             f" {count_sql} - {exerr}.")
-        # commit the changes in the database
-        connection.commit()
-        # close cursor
+                             f" {count_sql} - {exerr}.", end='')
         cursor.close()
-        return 0
+        return result
 
     def select(self):
         select_sql = "SELECT timestamp, counter FROM fhcounter ORDER BY timestamp, counter"
         connection = self.connection
         if connection == None or not connection.isconnected():
-            print("select(): database connection could not be established or disconnected now")
+            print("select(): database connection could not be established or disconnected now", end='')
             return 1
 
         cursor = connection.cursor()
@@ -123,8 +117,7 @@ class disp_sql():
             self.list.reverse()
         except Exception as exerr:
             print("error during execution of the sql statement"
-                             f" {select_sql} - {exerr}.")
-        # close cursor
+                             f" {select_sql} - {exerr}.", end='')
         cursor.close()
         return 0
 
@@ -135,42 +128,54 @@ class disp_sql():
             etime = element.timestamp()
             dtime = now - etime
             if dtime < 10:
-                status = "current"
+                status = "*"
             else:
-                status = "outdated"
-            outList.append(f"{element} ({status})")
-        outStr = ", ".join(outList)
+                status = "-"
+            outList.append(f"[{status}]")
+        outStr = "".join(outList)
         print(f"List: [{outStr}]", end='')
             
 
 sql = disp_sql()
+connection = None
 i = 0
 print(f"version: {FHVERSION}")
 while True:
     i += 1
     status = ""
     sleep = 2
-    if sql.connection == None:
-        sql.connect()
-        if sql.connection == None:
-            status = "connect to database failed"
-            sleep = 10
+    time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
+    print(f"Loop {time_str}:",end='', flush=True)
+    if connection == None:
+        with futures.ThreadPoolExecutor(max_workers=3) as e:
+            fs = {e.submit(sql.connect)}
+            res = futures.wait(fs, timeout=1.0)
+            for f in res.done:
+                connection = f.result()
+        time.sleep(sleep)
+        print(f"status 01: ", end='', flush=True)
+        continue
     else:
-        if not sql.connection.isconnected():
-            status="reconnect to database"
+        print("isconn?",end='', flush=True)
+        if not sql.connection.isconnected() or i % 100 == 0:
+            status="reconnect"
             sql.disconnect()
             sql.connect()
-        else:
-            status = "connected"
-        #print(f"modulo: {(i+1)%10}")
-        if i % 100 == 0:
-            status = "software test disconnect from database"
-            sql.disconnect() # break db connection every 10. loop to check code
-        sql.insert()
-        sql.count()
-        sql.select()
-    print(f"{status}: ", end='')
-    sql.list_last(4)
+        #else:
+        #    status = "connected"
+        #print("Ins:",end='', flush=True)
+        #sql.insert()
+        print("Cnt:",end='', flush=True)
+        with futures.ThreadPoolExecutor(max_workers=3) as e:
+            fs = {e.submit(sql.count)}
+            res = futures.wait(fs, timeout=1.0)
+            for f in res.done:
+                print(f"count={f.result()}")
+        #sql.count()
+        #print("Sel:",end='', flush=True)
+        #sql.select()
+    print(f"status 02 {status}: ", end='', flush=True)
+    sql.list_last(20)
     print()
     time.sleep(sleep)
 sql.disconnect()
