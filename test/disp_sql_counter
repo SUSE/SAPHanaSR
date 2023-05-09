@@ -47,10 +47,10 @@ class disp_sql():
         try:
             connection = dbapi.connect(key=self.userkey)
         except Exception as exerr:
-            print(f"error during database connection - {exerr}.\n")
+            print(f"error during database connection - {exerr}.")
             return None
         if not connection.isconnected():
-            print("database connection could not be established\n")
+            print("database connection could not be established")
             return None
         self.connection = connection
         return connection
@@ -66,18 +66,17 @@ class disp_sql():
 
         connection = self.connection
         if connection == None or not connection.isconnected():
-            print("insert(): database connection could not be established or disconnected now\n")
+            print("insert(): database connection could not be established or disconnected now")
             return(1)
         cursor = connection.cursor()
         try:
             #self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
-            print(f"sqlstatement: {insert_sql}\n")
+            #print(f"sqlstatement: {insert_sql}")
             cursor.execute(insert_sql)
             #for row in cursor:
             #    print(row)
         except Exception as exerr:
-            print("error during execution of the sql statement"
-                             f" {insert_sql} - {exerr}.\n")
+            print("error during execution of the sql statement" f" {insert_sql} - {exerr}.")
         # commit the changes in the database
         connection.commit()
         # close cursor
@@ -89,19 +88,19 @@ class disp_sql():
         count_sql = "select count(*) from fhcounter"
         connection = self.connection
         if connection == None or not connection.isconnected():
-            print("count(): database connection could not be established or disconnected now\n")
+            print("count(): database connection could not be established or disconnected now")
             return 1
 
         cursor = connection.cursor()
         try:
             #self.tracer.info(f"sqlstatement: {self.sql_set_memory}")
-            print(f"sqlstatement: {count_sql}\n")
+            print(f"sqlstatement: {count_sql}")
             cursor.execute(count_sql)
             for row in cursor:
                 print(row[0])
         except Exception as exerr:
             print("error during execution of the sql statement"
-                             f" {count_sql} - {exerr}.\n")
+                             f" {count_sql} - {exerr}.")
         # commit the changes in the database
         connection.commit()
         # close cursor
@@ -112,7 +111,7 @@ class disp_sql():
         select_sql = "SELECT timestamp, counter FROM fhcounter ORDER BY timestamp, counter"
         connection = self.connection
         if connection == None or not connection.isconnected():
-            print("select(): database connection could not be established or disconnected now\n")
+            print("select(): database connection could not be established or disconnected now")
             return 1
 
         cursor = connection.cursor()
@@ -124,20 +123,24 @@ class disp_sql():
             self.list.reverse()
         except Exception as exerr:
             print("error during execution of the sql statement"
-                             f" {select_sql} - {exerr}.\n")
+                             f" {select_sql} - {exerr}.")
         # close cursor
         cursor.close()
         return 0
 
     def list_last(self, maxnr):
         now = time.time()
+        outList = []
         for element in self.list[0:maxnr]:
             etime = element.timestamp()
             dtime = now - etime
             if dtime < 10:
-                print(f"e: {element} current entry")
+                status = "current"
             else:
-                print(f"e: {element} outdated entry")
+                status = "outdated"
+            outList.append(f"{element} ({status})")
+        outStr = ", ".join(outList)
+        print(f"List: [{outStr}]", end='')
             
 
 sql = disp_sql()
@@ -145,24 +148,29 @@ i = 0
 print(f"version: {FHVERSION}")
 while True:
     i += 1
+    status = ""
+    sleep = 2
     if sql.connection == None:
-        print("try connect to database")
         sql.connect()
         if sql.connection == None:
-            print("connect to database failed, sleep 10s")
-            time.sleep(10)
+            status = "connect to database failed"
+            sleep = 10
     else:
         if not sql.connection.isconnected():
-            print("reconnect to database")
+            status="reconnect to database"
             sql.disconnect()
             sql.connect()
+        else:
+            status = "connected"
         #print(f"modulo: {(i+1)%10}")
         if i % 100 == 0:
-            print("software disconnect from database")
+            status = "software test disconnect from database"
             sql.disconnect() # break db connection every 10. loop to check code
         sql.insert()
         sql.count()
         sql.select()
+    print(f"{status}: ", end='')
     sql.list_last(4)
-    time.sleep(2)
+    print()
+    time.sleep(sleep)
 sql.disconnect()
