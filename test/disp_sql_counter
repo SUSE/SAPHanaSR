@@ -14,7 +14,7 @@ select * from fhcounter;
 # loading classes and libraries
 import os
 import time
-from concurrent import futures
+import threading
 
 # pylint: enable=invalid-name
 try:
@@ -28,21 +28,46 @@ except ImportError as e:
     print(f"Module HADRBase not found - running outside of SAP HANA? - {e}")
 
 # parameter section
-FHVERSION = "1.001.2"
+FHVERSION = "1.2.20230510"
 USERKEY_DFLT = "TESTER"
 #
 
 
 # pylint: disable-next=invalid-name
-class disp_sql():
+class SqlThread(threading.Thread):
+    AccessData = threading.Lock()
 
     def __init__(self, *args, **kwargs):
+        super().__init__()
         #my_sid_upper = os.environ.get('SAPSYSTEMNAME')
         #mysid = my_sid_upper.lower()
         # TODO: user key by option
         self.userkey = USERKEY_DFLT
         self.connection = None
         self.list=[]
+        self.count_sql = None
+
+    def run(self):
+        _connection = self.connect()
+        _i = 0
+        while True:
+            _i += 1
+            status = ""
+            sleep = 2
+            if _connection == None:
+                _connection = self.connect()
+                time.sleep(sleep)
+                continue
+            else:
+                _connection = self.check_and_reconnect(_i)
+                sql.insert()
+                _count = self.count()
+                _list = sql.select()
+            with SqlThread.AccessData:
+                self.count_sql = _count
+                self.list = _list[:]
+            time.sleep(sleep)
+        sql.disconnect()
 
     def connect(self, **kargs):
         # TODO: key=userkey, table=tablename
@@ -61,6 +86,13 @@ class disp_sql():
         if self.connection:
             self.connection.close()
 
+    def check_and_reconnect(self, i):
+        connection = None
+        if not self.connection.isconnected() or i % 100 == 0:
+            sql.disconnect()
+            connection = sql.connect()
+        return connection
+
     def insert(self):
         count = 1
         time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
@@ -68,17 +100,19 @@ class disp_sql():
 
         connection = self.connection
         if connection == None or not connection.isconnected():
-            print("insert(): database connection could not be established or disconnected now")
+            #print("insert(): database connection could not be established or disconnected now")
             return(1)
         cursor = connection.cursor()
         try:
             cursor.execute(insert_sql)
         except Exception as exerr:
-            print("error during execution of the sql statement" f" {insert_sql} - {exerr}.")
+            pass
+            #print("error during execution of the sql statement" f" {insert_sql} - {exerr}.")
         try:
             connection.commit()
         except Exception as exerr:
-            print("error during commit" f"- {exerr}.")
+            pass
+            #print("error during commit" f"- {exerr}.")
         cursor.close()
         return 0
 
@@ -93,33 +127,32 @@ class disp_sql():
         try:
             cursor.execute(count_sql)
             for row in cursor:
-                #print(row[0], end='')
                 result = row[0]
         except Exception as exerr:
-            print("error during execution of the sql statement"
-                             f" {count_sql} - {exerr}.", end='')
+            pass
+            print("count(): {exerr}", end='')
         cursor.close()
         return result
 
     def select(self):
         select_sql = "SELECT timestamp, counter FROM fhcounter ORDER BY timestamp, counter"
         connection = self.connection
+        result = []
         if connection == None or not connection.isconnected():
-            print("select(): database connection could not be established or disconnected now", end='')
-            return 1
+            #print("select(): database connection could not be established or disconnected now", end='')
+            return None 
 
         cursor = connection.cursor()
         try:
             cursor.execute(select_sql)
-            self.list = []
             for row in cursor:
-                self.list.append(row[0])
-            self.list.reverse()
+                result.append(row[0])
+            result.reverse()
         except Exception as exerr:
-            print("error during execution of the sql statement"
-                             f" {select_sql} - {exerr}.", end='')
+            pass
+            #print("error during execution of the sql statement" f" {select_sql} - {exerr}.", end='')
         cursor.close()
-        return 0
+        return result 
 
     def list_last(self, maxnr):
         now = time.time()
@@ -136,8 +169,9 @@ class disp_sql():
         print(f"List: [{outStr}]", end='')
             
 
-sql = disp_sql()
-connection = None
+sql = SqlThread()
+sql.start()
+
 i = 0
 print(f"version: {FHVERSION}")
 while True:
@@ -145,37 +179,16 @@ while True:
     status = ""
     sleep = 2
     time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
-    print(f"Loop {time_str}:",end='', flush=True)
-    if connection == None:
-        with futures.ThreadPoolExecutor(max_workers=3) as e:
-            fs = {e.submit(sql.connect)}
-            res = futures.wait(fs, timeout=1.0)
-            for f in res.done:
-                connection = f.result()
-        time.sleep(sleep)
-        print(f"status 01: ", end='', flush=True)
-        continue
-    else:
-        print("isconn?",end='', flush=True)
-        if not sql.connection.isconnected() or i % 100 == 0:
-            status="reconnect"
-            sql.disconnect()
-            sql.connect()
-        #else:
-        #    status = "connected"
-        #print("Ins:",end='', flush=True)
-        #sql.insert()
-        print("Cnt:",end='', flush=True)
-        with futures.ThreadPoolExecutor(max_workers=3) as e:
-            fs = {e.submit(sql.count)}
-            res = futures.wait(fs, timeout=1.0)
-            for f in res.done:
-                print(f"count={f.result()}")
-        #sql.count()
-        #print("Sel:",end='', flush=True)
-        #sql.select()
-    print(f"status 02 {status}: ", end='', flush=True)
-    sql.list_last(20)
+    print(f"Loop {time_str}: ",end='', flush=True)
+    #print(f"status 02 {status}: ", end='', flush=True)
+    with SqlThread.AccessData:
+        if sql.connection == None:
+            conStat="nc"
+        else:
+            conStat="c"
+        print(f"conn={conStat} ",end='',flush=True)
+        print(f"count={sql.count_sql} ",end='',flush=True)
+        sql.list_last(20)
     print()
     time.sleep(sleep)
 sql.disconnect()
