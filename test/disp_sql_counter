@@ -46,18 +46,23 @@ class SqlThread(threading.Thread):
         self.connection = None
         self.list=[]
         self.count_sql = None
+        self.err_status = False
+        self.err_txt = ""
+        self._err_flag = False
 
     def run(self):
         _connection = self.connect()
         _i = 0
+        _count = None
+        _list = []
         while True:
             _i += 1
             status = ""
+            self._err_flag = False
+            self._err_txt = "<>"
             sleep = 2
             if _connection == None:
                 _connection = self.connect()
-                time.sleep(sleep)
-                continue
             else:
                 _connection = self.check_and_reconnect(_i)
                 sql.insert()
@@ -66,6 +71,8 @@ class SqlThread(threading.Thread):
             with SqlThread.AccessData:
                 self.count_sql = _count
                 self.list = _list[:]
+                self.err_status = self._err_flag
+                self.err_txt = self._err_txt[:]
             time.sleep(sleep)
         sql.disconnect()
 
@@ -74,10 +81,12 @@ class SqlThread(threading.Thread):
         try:
             connection = dbapi.connect(key=self.userkey)
         except Exception as exerr:
-            print(f"error during database connection - {exerr}.")
+            self._err_flag = True
+            self._err_txt = "connect():01"
             return None
         if not connection.isconnected():
-            print("database connection could not be established")
+            self._err_flag = True
+            self._err_txt = "connect():02"
             return None
         self.connection = connection
         return connection
@@ -100,19 +109,20 @@ class SqlThread(threading.Thread):
 
         connection = self.connection
         if connection == None or not connection.isconnected():
-            #print("insert(): database connection could not be established or disconnected now")
+            self._err_flag = True
+            self._err_txt = "insert():01"
             return(1)
         cursor = connection.cursor()
         try:
             cursor.execute(insert_sql)
         except Exception as exerr:
-            pass
-            #print("error during execution of the sql statement" f" {insert_sql} - {exerr}.")
+            self._err_flag = True
+            self._err_txt = "insert():02"
         try:
             connection.commit()
         except Exception as exerr:
-            pass
-            #print("error during commit" f"- {exerr}.")
+            self._err_flag = True
+            self._err_txt = "insert():03"
         cursor.close()
         return 0
 
@@ -121,6 +131,8 @@ class SqlThread(threading.Thread):
         connection = self.connection
         result = None
         if connection == None or not connection.isconnected():
+            self._err_flag = True
+            self._err_txt = "count():01"
             return result
 
         cursor = connection.cursor()
@@ -129,8 +141,8 @@ class SqlThread(threading.Thread):
             for row in cursor:
                 result = row[0]
         except Exception as exerr:
-            pass
-            print("count(): {exerr}", end='')
+            self._err_flag = True
+            self._err_txt = "count():02"
         cursor.close()
         return result
 
@@ -139,7 +151,8 @@ class SqlThread(threading.Thread):
         connection = self.connection
         result = []
         if connection == None or not connection.isconnected():
-            #print("select(): database connection could not be established or disconnected now", end='')
+            self._err_flag = True
+            self._err_txt = "select():01"
             return None 
 
         cursor = connection.cursor()
@@ -149,8 +162,8 @@ class SqlThread(threading.Thread):
                 result.append(row[0])
             result.reverse()
         except Exception as exerr:
-            pass
-            #print("error during execution of the sql statement" f" {select_sql} - {exerr}.", end='')
+            self._err_flag = True
+            self._err_txt = "select():02"
         cursor.close()
         return result 
 
@@ -160,11 +173,11 @@ class SqlThread(threading.Thread):
         for element in self.list[0:maxnr]:
             etime = element.timestamp()
             dtime = now - etime
-            if dtime < 10:
+            if dtime < 70:
                 status = "*"
             else:
                 status = "-"
-            outList.append(f"[{status}]")
+            outList.append(f"{status}")
         outStr = "".join(outList)
         print(f"List: [{outStr}]", end='')
             
@@ -180,15 +193,13 @@ while True:
     sleep = 2
     time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
     print(f"Loop {time_str}: ",end='', flush=True)
-    #print(f"status 02 {status}: ", end='', flush=True)
     with SqlThread.AccessData:
-        if sql.connection == None:
-            conStat="nc"
+        if sql.err_status == True:
+            msg = f"conn=FAIL ({sql.err_txt})"
         else:
-            conStat="c"
-        print(f"conn={conStat} ",end='',flush=True)
-        print(f"count={sql.count_sql} ",end='',flush=True)
-        sql.list_last(20)
+            msg = f"conn=OK"
+        print(f"{msg} count={sql.count_sql} ",end='',flush=True)
+        sql.list_last(10)
     print()
     time.sleep(sleep)
 sql.disconnect()
