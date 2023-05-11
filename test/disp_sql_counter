@@ -7,6 +7,9 @@
 
 CREATE ROW TABLE fhcounter (timestamp TIMESTAMP, counter BIGINT);
 
+TODO: parameter für "site" und pro LOOP die site ausgeben
+TODO: parameter für "user-key"
+TODO: parameter für "service" und ausgabe pro LOOP Zeile (für den Access auf den vom Cluster bereitgestellten Primary)
 
 select * from fhcounter;
 """
@@ -22,19 +25,14 @@ try:
 except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
-try:
-    from hdb_ha_dr.client import HADRBase
-except ImportError as e:
-    print(f"Module HADRBase not found - running outside of SAP HANA? - {e}")
-
 # parameter section
-FHVERSION = "1.2.20230510"
+FHVERSION = "1.2.20230511.1757"
 USERKEY_DFLT = "TESTER"
 #
 
 
 # pylint: disable-next=invalid-name
-class SqlThread(threading.Thread):
+class DbThreads:
     AccessData = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -49,8 +47,13 @@ class SqlThread(threading.Thread):
         self.err_status = False
         self.err_txt = ""
         self._err_flag = False
+        self.run_time = 0
 
-    def run(self):
+    def start_threads(self):
+        threading.Thread(target=self.run_sql).start()
+        threading.Thread(target=self.run_watchdog).start()
+
+    def run_sql(self):
         _connection = self.connect()
         _i = 0
         _count = None
@@ -58,23 +61,47 @@ class SqlThread(threading.Thread):
         while True:
             _i += 1
             status = ""
+            #print(f"@@RUN-LOOP@@",end='',flush=True)
             self._err_flag = False
             self._err_txt = "<>"
             sleep = 2
             if _connection == None:
+                #print(f"@@RUN-CONN@@",end='',flush=True)
                 _connection = self.connect()
             else:
                 _connection = self.check_and_reconnect(_i)
+                #print(f"@@RUN-INS@@",end='',flush=True)
                 sql.insert()
+                #print(f"@@RUN-CNT@@",end='',flush=True)
                 _count = self.count()
+                #print(f"@@RUN-SEL@@",end='',flush=True)
                 _list = sql.select()
-            with SqlThread.AccessData:
+            with DbThreads.AccessData:
+                #print(f"@@RUN-DAT@@",end='',flush=True)
                 self.count_sql = _count
                 self.list = _list[:]
                 self.err_status = self._err_flag
                 self.err_txt = self._err_txt[:]
+                self.run_time = time.time()
             time.sleep(sleep)
-        sql.disconnect()
+        self.disconnect()
+
+    def run_watchdog(self):
+        sleep = 6
+        while True:
+            loop_time = time.time()
+            with DbThreads.AccessData:
+                time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
+                if (loop_time - self.run_time) > 3*sleep:
+                    msg = f"expired data"
+                    disconn = True
+                else:
+                    msg = f"current data"
+                    disconn = False
+                print(f"WDog {time_str}: {msg}", flush=True)
+            if disconn == True:
+                self.disconnect()
+            time.sleep(sleep)
 
     def connect(self, **kargs):
         # TODO: key=userkey, table=tablename
@@ -82,11 +109,11 @@ class SqlThread(threading.Thread):
             connection = dbapi.connect(key=self.userkey)
         except Exception as exerr:
             self._err_flag = True
-            self._err_txt = "connect():01"
+            self._err_txt = "C-ERR-01"
             return None
         if not connection.isconnected():
             self._err_flag = True
-            self._err_txt = "connect():02"
+            self._err_txt = "C-ERR-02"
             return None
         self.connection = connection
         return connection
@@ -110,19 +137,19 @@ class SqlThread(threading.Thread):
         connection = self.connection
         if connection == None or not connection.isconnected():
             self._err_flag = True
-            self._err_txt = "insert():01"
+            self._err_txt = "I-ERR-01"
             return(1)
         cursor = connection.cursor()
         try:
             cursor.execute(insert_sql)
         except Exception as exerr:
             self._err_flag = True
-            self._err_txt = "insert():02"
+            self._err_txt = "I-ERR-02"
         try:
             connection.commit()
         except Exception as exerr:
             self._err_flag = True
-            self._err_txt = "insert():03"
+            self._err_txt = "I-ERR-03"
         cursor.close()
         return 0
 
@@ -132,7 +159,7 @@ class SqlThread(threading.Thread):
         result = None
         if connection == None or not connection.isconnected():
             self._err_flag = True
-            self._err_txt = "count():01"
+            self._err_txt = "Q-ERR-01"
             return result
 
         cursor = connection.cursor()
@@ -142,7 +169,7 @@ class SqlThread(threading.Thread):
                 result = row[0]
         except Exception as exerr:
             self._err_flag = True
-            self._err_txt = "count():02"
+            self._err_txt = "Q-ERR-02"
         cursor.close()
         return result
 
@@ -152,7 +179,7 @@ class SqlThread(threading.Thread):
         result = []
         if connection == None or not connection.isconnected():
             self._err_flag = True
-            self._err_txt = "select():01"
+            self._err_txt = "S-ERR-01"
             return None 
 
         cursor = connection.cursor()
@@ -163,7 +190,7 @@ class SqlThread(threading.Thread):
             result.reverse()
         except Exception as exerr:
             self._err_flag = True
-            self._err_txt = "select():02"
+            self._err_txt = "S-ERR-02"
         cursor.close()
         return result 
 
@@ -182,8 +209,8 @@ class SqlThread(threading.Thread):
         print(f"List: [{outStr}]", end='')
             
 
-sql = SqlThread()
-sql.start()
+sql = DbThreads()
+sql.start_threads()
 
 i = 0
 print(f"version: {FHVERSION}")
@@ -191,15 +218,19 @@ while True:
     i += 1
     status = ""
     sleep = 2
-    time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
-    print(f"Loop {time_str}: ",end='', flush=True)
-    with SqlThread.AccessData:
-        if sql.err_status == True:
-            msg = f"conn=FAIL ({sql.err_txt})"
+    with DbThreads.AccessData:
+        time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
+        print(f"Loop {time_str}: ",end='', flush=True)
+        loop_time = time.time()
+        if loop_time - sql.run_time > 10:
+            msg = f"status=FAIL (EXPIRED)"
         else:
-            msg = f"conn=OK"
-        print(f"{msg} count={sql.count_sql} ",end='',flush=True)
+            if sql.err_status == True:
+                msg = f"status=FAIL ({sql.err_txt})"
+            else:
+                msg = f"status=OK"
+        print(f"{msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
         sql.list_last(10)
-    print()
+        print()
     time.sleep(sleep)
 sql.disconnect()
