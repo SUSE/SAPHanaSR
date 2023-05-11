@@ -305,6 +305,7 @@ sub get_hana_attributes
        open $CIB, "<", "$cibFile" or die "CIB file $cibFile not found or not able to read it";
     }
     printf "DBG: selection=%s\n", $selection;
+    insertAttribute($sid, $refGL, $refGN, "global", "sid", uc($sid));
     while (<$CIB>) {
         chomp;
         my ($host, $name, $site, $value);
