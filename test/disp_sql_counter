@@ -26,7 +26,7 @@ except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-FHVERSION = "1.2.20230511.1757"
+FHVERSION = "1.2.20230512.1017"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -47,7 +47,8 @@ class DbThreads:
         self.err_status = False
         self.err_txt = ""
         self._err_flag = False
-        self.run_time = 0
+        self.run_time = time.time() 
+        self.kick_me = False
 
     def start_threads(self):
         threading.Thread(target=self.run_sql).start()
@@ -93,14 +94,11 @@ class DbThreads:
             with DbThreads.AccessData:
                 time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
                 if (loop_time - self.run_time) > 3*sleep:
-                    msg = f"expired data"
-                    disconn = True
+                    msg = f"expired data - KICK!!"
+                    self.kick_me = True
                 else:
                     msg = f"current data"
-                    disconn = False
                 print(f"WDog {time_str}: {msg}", flush=True)
-            if disconn == True:
-                self.disconnect()
             time.sleep(sleep)
 
     def connect(self, **kargs):
@@ -232,5 +230,9 @@ while True:
         print(f"{msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
         sql.list_last(10)
         print()
+        if sql.kick_me == True:
+            del sql
+            sql = DbThreads()
+            sql.start_threads()
     time.sleep(sleep)
 sql.disconnect()
