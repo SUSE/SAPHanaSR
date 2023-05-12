@@ -26,7 +26,7 @@ except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-FHVERSION = "1.2.20230512.1017"
+FHVERSION = "1.3.20230512.1033"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -49,10 +49,21 @@ class DbThreads:
         self._err_flag = False
         self.run_time = time.time() 
         self.kick_me = False
+        self.thread_sql = None
+        self.thread_watchdog = None
+
+    def start_thread_sql(self):
+        self.thread_sql = threading.Thread(target=self.run_sql).start()
+
+    def start_thread_watchdog(self):
+        self.thread_watchdog = threading.Thread(target=self.run_watchdog).start()
+
+    def del_thread_sql(self):
+        del self.thread_sql
 
     def start_threads(self):
-        threading.Thread(target=self.run_sql).start()
-        threading.Thread(target=self.run_watchdog).start()
+        self.start_thread_sql()
+        self.start_thread_watchdog()
 
     def run_sql(self):
         _connection = self.connect()
@@ -231,8 +242,7 @@ while True:
         sql.list_last(10)
         print()
         if sql.kick_me == True:
-            del sql
-            sql = DbThreads()
-            sql.start_threads()
+            sql.del_thread_sql()
+            sql.start_thread_sql()
     time.sleep(sleep)
 sql.disconnect()
