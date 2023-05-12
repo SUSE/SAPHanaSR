@@ -75,7 +75,7 @@ my %selections = (
                                     'global'   => ["cib-time", "maintenance", "prim", "sec", "topology"],
                                     'resource' => ["maintenance", "is_managed"],
                                     'site'     => ["lpt", "lss", "mns", "opMode", "srHook", "srMode", "srPoll", "srr"],
-                                    'host'     => ["clone_state", "roles", "score", "site", "srah", "vhost"],
+                                    'host'     => ["clone_state", "roles", "score", "site", "sra", "srah", "vhost"],
                                  },
                     'minimal' => {
                                     'global'   => ["cib-time", "maintenance", "topology"],
