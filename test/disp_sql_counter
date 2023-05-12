@@ -27,7 +27,7 @@ except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-FHVERSION = "1.7.20230512.1515"
+FHVERSION = "1.8.20230512.1642"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -217,7 +217,7 @@ class DbThreads:
                 status = "-"
             outList.append(f"{status}")
         outStr = "".join(outList)
-        print(f"List: [{outStr}]", end='')
+        print(f"List: [{outStr}]", end='', flush=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--userkey", help="specify sap user key")
@@ -238,7 +238,6 @@ while True:
     sleep = 2
     with DbThreads.AccessData:
         time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
-        print(f"{time_str} {sql.userkey:<8}",end='', flush=True)
         loop_time = time.time()
         if loop_time - sql.run_time > 10:
             msg = f"status=FAIL (EXPIRED)"
@@ -247,9 +246,10 @@ while True:
                 msg = f"status=FAIL ({sql.err_txt})"
             else:
                 msg = f"status=OK"
+        print(f"{time_str} {sql.userkey:<8}",end='', flush=True)
         print(f"{msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
         sql.list_last(10)
-        print()
+        print('',flush=True)
         if sql.kick_me == True:
             sql.del_thread_sql()
             sql.start_thread_sql()
