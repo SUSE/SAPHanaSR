@@ -906,26 +906,23 @@ sub host_attr2string
        foreach my $HKey (sort keys %$refH) {
            $sortVal = $$refH{$HKey} -> {$sort};
            push(@{$GroupedHosts{$sortVal}}, $HKey);
-           #printf "TST: <%s>\n", $sortVal;
        }
        # not ready so far only print the grouped hosts
        foreach my $sortV (sort keys %GroupedHosts) {
-           #my $StrHosts;
            #$StrHosts=join(":", @{$GroupedHosts{$sortV}});
            foreach my $Host (@{$GroupedHosts{$sortV}}) {
-               printf "%-$hclen.${hclen}s ", $Host;
                foreach my $AKey (sort keys %$refN) {
-                if ($AKey ne "_hosts") {
+                if ($AKey eq "_hosts") {
+                    $string.=sprintf "%-$len.${hclen}s ", $Host;
+	        } else {
                     $len = $$refN{$AKey}->{_length};
                     $string.=sprintf "%-$len.${len}s ", $$refH{$Host} -> {$AKey};
                 }
             }
             $string.=sprintf "\n";
            }
-           #printf "TST: <%s> -> <%s>\n", $sortV, $StrHosts;
        }
     }
-
     if ( $format eq "tables" ) {
 	    $string.=sprintf "\n";
     }
