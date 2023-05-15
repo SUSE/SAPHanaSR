@@ -866,11 +866,7 @@ sub host_attr2string
                 $len = $$refN{$AKey}->{_length};
                 $line_len=$line_len+$len+1;
 
-                if ( $AKey eq $sort ) {
-                   $string.=sprintf "*%-$len.${len}s ", $$refN{$AKey}->{_title};
-                } else {
-                   $string.=sprintf "%-$len.${len}s ", "$$refN{$AKey}->{_title}";
-                }
+               $string.=sprintf "%-$len.${len}s ", "$$refN{$AKey}->{_title}";
             }
 	    }
 	    $string.=sprintf "\n";
@@ -886,7 +882,7 @@ sub host_attr2string
             }
             foreach my $AKey (sort keys %$refN) {
                 if ($AKey ne "_hosts") {
-                    $len = $$refN{$AKey}->{_length};
+                    $len = max($$refN{$AKey}->{_length}, length($AKey));
                     if ( $format eq "tables" ) {
                         $string.=sprintf "%-$len.${len}s ", $$refH{$HKey} -> {$AKey};
                     } elsif ( $format eq "script" ) {
@@ -913,7 +909,8 @@ sub host_attr2string
            foreach my $Host (@{$GroupedHosts{$sortV}}) {
                foreach my $AKey (sort keys %$refN) {
                 if ($AKey eq "_hosts") {
-                    $string.=sprintf "%-$len.${hclen}s ", $Host;
+                    $len = max($$refN{$AKey}->{_length}, length($title));
+                    $string.=sprintf "%-$len.${len}s ", $Host;
 	        } else {
                     $len = $$refN{$AKey}->{_length};
                     $string.=sprintf "%-$len.${len}s ", $$refH{$Host} -> {$AKey};
