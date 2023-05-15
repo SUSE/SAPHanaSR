@@ -8,8 +8,7 @@ SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replica
 .SH SYNOPSIS
 \fBSAPHanaSR-showAttr\fR [ --help | --version | --path2table ]
 .br
-\fBSAPHanaSR-showAttr\fR [ --select=SELECTION ] [ --sid=SID[:INO] ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
-.\" TODO \fBSAPHanaSR-showAttr\fR [ --select=SELECTION ] [ --sid=SID[:INO] ] [ --sort=FIELD ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
+\fBSAPHanaSR-showAttr\fR [ --sid=SID[:INO] ] [ --select=SELECTION ] [ --sort=FIELD ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
 .\"
 .SH DESCRIPTION
 SAPHanaSR-showAttr shows Linux cluster attributes for SAP HANA system replication automation.
@@ -23,7 +22,6 @@ Fields to be shown can be specified by pre-defined selections via command line o
 .PP
 The output shows four sections, containing all or some of the listed
 fields:
-.\" TODO check with existing script.
 .TP
 Global section
 .br
@@ -53,8 +51,8 @@ name of Linux cluster resource (\fBResource\fP)
 .br
 maintenance status of Linux cluster resource (\fBmaintenance\fP)
 .TP
-Site section
-HANA site name (\fBSite\fP)
+Sites section
+HANA site name (\fBSites\fP)
 .br
 SAPHanaSR last primary timestamp (\fBlpt\fP)
 .br
@@ -108,6 +106,46 @@ if no corresponding attribute exists, e.g. the standby field.
 An incomplete compilation on field details and purpose follows below.
 .\" TODO formatting below. better no indents, but bold item header?
 .\" TODO check details for Scale-Out
+.PP
+.B Global
+- the string global
+
+Value: global
+
+The Global field is used as root for the whole data structure.
+The Global section shows overall information on the system.
+.PP
+.B Hosts
+- Linux hostname
+
+Value: [ \fIHOSTNAME\fR ]
+
+Hostnames of HANA nodes managed by the Linux cluster.
+The hostname has to follow UNIX RFC 1178. Additional rules specific to SAP
+apply. E.g. length of hostname is limited to 13 characters.
+.\" TODO SAP note.
+.\" TODO still using remoteHost?
+See also the fields remoteHost and vhost.
+The Hosts section shows one line per host, containing details on that host and
+the HANA instance there. 
+.PP
+.B Resource
+- name of Linux cluster resource
+
+Value:  [ \fIRESOURCENAME\fR ]
+
+Name of the multi-state resource controlled by SAPHanaController.
+The Resource section shows the main cluster resource.
+.PP
+.B Sites
+- HANA site
+
+Value: [ \fIHANA_SITE\fR ]
+
+The HANA sites are detected by SAPHanaTopology. Two sites are managed by the Linux cluster.
+Optionally a third site could be connected thru multi-target system replication outside the cluster. 
+The Sites section shows information on the sites known to the Linux cluster and the
+HANA system replication status. 
 .PP
 .B clone_state
 - clone state of the Linux cluster resource
@@ -202,23 +240,6 @@ Value: [ \fIfilter\fR ]
 The filter is defined by hana_<sid>_glob_filter .
 See ocf_suse_SAPHana(7) and ocf_suse_SAPHanaController(7) for details.
 .PP
-.B Global
-- the string global
-
-Value: global
-
-The Global field is used as root for the whole data structure.
-.PP
-.B Hosts
-- Linux hostname
-
-Value: [ \fIHOSTNAME\fR ]
-
-The hostname has to follow UNIX RFC 1178. Additional rules specific to SAP
-apply. E.g. length of hostname is limited to 13 characters.
-.\" TODO SAP note.
-See also the fields remoteHost and vhost.
-.PP
 .B lpt
 - last primary timestamp
 
@@ -302,18 +323,11 @@ The attribute is used by the SAPHanaController or SAPHana resource agent for
 setting up system replication.
 See also the fields Hosts and vhost.
 .PP
-.B Resource
-- name of Linux cluster resource
-
-Value:  [ \fIRESOURCENAME\fR ]
-
-Name of the multi-state resource controlled by SAPHanaController or SAPHana.
-.PP
 .B roles
 - actual and configured roles for HANA on that node
 
 The roles field in the Hosts section has four sub-fields (A:B:C:D).
-For scale-up that four fields C:D:E:F should be master1:master:worker:master.
+For scale-up that four fields should be master1:master:worker:master.
 .\" TODO or ":shtdown:shtdown:shtdown"
 .\" TODO scale-out ERP and scale-out ERP
 .br
@@ -370,17 +384,17 @@ Also an HANA database connected thru mulit-target replication outside the cluste
 Value: [ \fIHANA_SITE\fR ]
 
 The node attribute hana_<sid>_site is set by SAPHanaTopology, according to the running HANA.
-The attribute is used by the SAPHanaController or SAPHana resource agent for setting up
+The attribute is used by the SAPHanaController resource agent for setting up
 system replication.
 A dash (-) indicates the RA did not run or did not recognize the site.
 .PP
-.B srmode
+.B srMode
 - HANA SR mode
 
 Value: [ sync | syncmem ]
 
-The node attribute hana_<sid>_srmode or cluster attribute hana_<sid>_glob_srmode is set by SAPHanaTopology, according to the running HANA.
-The attribute is used by the SAPHanaController or SAPHana resource agent for setting up system
+The node attribute hana_<sid>_glob_srmode is set by SAPHanaTopology, according to the running HANA.
+The attribute is used by the SAPHanaController resource agent for setting up system
 replication. SAP HANA knows also async and fullsync (see URLs below).
 Those do not make sense for automating HANA system replication by an Linux cluster.
 .PP
@@ -394,16 +408,14 @@ The attribute is shown after it has been changed from the default.
 The field might appear or disappear, depending on cluster maintenance tasks.
 See also the maintenance attribute above.
 .PP
-.B sync_state
+.B srPoll
 - HANA SR status
 
 Value: [ SOK | SFAIL | SWAIT | SREG | PRIM ]
 
-.\"TODO cluster property sync_state ?
-The cluster property hana_<sid>_glob_sync_state is set by the SAPHanaController or SAPHana resource agent.
+The cluster property hana_<sid>_glob_sync_state is set by the SAPHanaController resource agent.
 The first three values are representing an HANA system replication status,
-recognized at latest RA run, see ocf_suse_SAPHana(7), ocf_suse_SAPHanaController(7) and
-systemReplicationStatus.py .
+recognized at latest RA run, see ocf_suse_SAPHanaController(7) and systemReplicationStatus.py .
 .br
 The 4th value (PRIM) just indicates an HANA SR primary.
 .PP
@@ -437,17 +449,13 @@ attributes for later use, for root cause analysis.
 
 Value: [ SOK | SFAIL | SWAIT | SREG | PRIM ]
 
-The cluster attributes related to srHook are hana_<sid>_site_srHook_<site> for the multi-tier enabled hook and hana_<sid>_glob_srHook for the old-style hook.
-It represents the HANA SR status from HA/DR provider API method srConnectionChanged(). See SAPHanaSR-ScaleOut(7) for supported API versions and scenarios.
-The attribute is not updated if the cluster is not running. Thus if the cluster is shut down while HANA remains running, the content of srHook might be outdated on cluster start until the next srConnectionChanged() event.
+The cluster attributes related to srHook is hana_<sid>_site_srHook_<site>.
+It represents the HANA SR status from HA/DR provider API method srConnectionChanged().
+See SAPHanaSR(7) and SAPHanaSR-ScaleOut(7) for supported API versions and scenarios.
+The attribute is not updated if the cluster is not running. Thus if the cluster is
+shut down while HANA remains running, the content of srHook might be outdated on
+cluster start until the next srConnectionChanged() event.
 See susHanaSR.py(7) and susHanaSrMultiTarget.py(7) for details. 
-.br
-The cluster property \fBhana_<sid>_glob_srHook\fR shows one HANA SR status.
-It does not work for multi-tier and multi-target system replication.
-\fBhana_<sid>_site_srHook_<site>\fR shows the HANA SR status specific to the
-respective site.
-.br
-Note: Global and site-specific properties must not appear at same time.
 .PP
 .B terminate
 - Linux cluster node fence status
@@ -499,10 +507,9 @@ show selected information only. Allowed values: [ all | default | minimal | sr ]
 \fB --sid=\fISID\fR[:\fIINO\fR]
 use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
 Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
-.\" TODO is --sort intended to work?
-.\" .TP 4
-.\" \fB --sort \fIFIELD\fR
-.\" sort Hosts section table by field. Allowed values: roles, site. The default sort is by hostnames.
+.TP 4
+--sort=\fIFIELD\fR
+sort Hosts section table by field. Allowed values: [ roles | site ]. Default is sort by hostnames.
 .TP 4
 \fB --format=\fIFORMAT\fR
 output format. Allowed values: [ script | tables ]. Default is tables.
