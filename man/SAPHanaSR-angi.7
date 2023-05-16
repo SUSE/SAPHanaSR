@@ -1,0 +1,194 @@
+.\" Version: 1.001
+.\"
+.TH SAPHanaSR 7 "08 May 2023" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+SAPHanaSR-angi \- SAP HANA SR - Advanced Next Generation Interface.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+\fBOverview\fR
+.PP
+The SAPHanaSR-angi package provides resource agents (RA), HA/DR provider hook
+scripts and tools for setting up and managing automation of SAP HANA system
+replication (SR) in scale-up and scale-out setups.
+.PP
+.B SAPHanaSR-angi is shipped as technology preview.
+.PP
+Note: The SAPHanaSR-angi package is not compatible to packages SAPHanaSR and
+SAPHanaSR-ScaleOut.
+.PP
+.\"
+.SH REQUIREMENTS
+.PP
+For the current version of the package SAPHanaSR-angi, the capabilities are
+limited to the following scenarios and parameters:
+.PP
+1. HANA scale-up and scale-out clusters with system replication. The two HANA
+database systems (primary and secondary site) are managed by one Linux cluster.
+.PP
+2. Technical users and groups such as sidadm are defined locally in the
+Linux system. If users are resolved by remote service, local caching is
+neccessary. Substitute user (su) to sidadm needs to work reliable and without
+customized actions or messages. Supported shell is bash.
+.PP
+3. Strict time synchronization between the cluster nodes, e.g. NTP.
+.PP
+4. The following SAP HANA SR scenarios are possible with the
+SAPHanaSR-angi package:
+.br
+	4.11 scale-up performance-optimized (memory preload on secondary)
+.br
+	4.12 scale-up cost-optimized (e.g. with QA on secondary)
+.br
+	4.13 scale-up multi-tier or multi-target, 3rd site outside
+.br
+	4.14 scale-up single-tenant or multi-tenant (MDC) for all of the above
+.br
+	4.15 scale-up active/read-enabled
+.br
+	4.16 scale-up multiple independent HANA SR pairs (MCOS) in one cluster
+.br
+	Note: For MCOS, there must be no constraints between HANA SR pairs.
+.br
+	4.21 scale-out performance-optimized with standby nodes
+.br
+	4.22 scale-out performance-optimized without standby nodes
+.br
+	4.23 scale-out multi-tier or multi-target, 3rd site outside
+.br
+	4.24 scale-out single-tenant or multi-tenant (MDC) for all of the above
+.br
+	4.25 scale-out active/read-enabled for two-node sites
+.PP
+5. Only one system replication between the two SAP HANA database in the Linux
+cluster. Maximum one system replication to an HANA database outside the Linux
+cluster.
+.PP
+6. The replication mode is either sync or syncmem for the controlled replication.
+Replication mode async is not supported. The operation modes delta_datashipping,
+logreplay and logreplay_readaccess are supported.
+.PP
+7. Both SAP HANA database systems have the same SAP Identifier (SID) and
+Instance Number (INO).
+.PP
+8. Besides SAP HANA you need SAP hostagent installed and started on your system.
+For SystemV style, the sapinit script needs to be active.
+For systemd style, the services saphostagent and SAP${SID}_${INO} can stay enabled. The systemd enabled saphostagent and instance´s sapstartsrv is supported from SAPHanaSR 0.155 onwards. Please refer to the OS documentation for the systemd version. Please refer to SAP documentation for the SAP HANA version.
+Combining systemd style hostagent with SystemV style instance is allowed.
+However, all nodes in one Linux cluster have to use the same style.
+.PP
+9. Automated start of SAP HANA database systems during system boot must be switched
+off.
+.PP
+10. The RA's monitoring operations have to be active.
+.PP
+11. Using HA/DR provider hook for srConnectionChanged() by enabling susHanaSR.py
+ or susHanaSrMultiTarget.py is mandatory.
+.PP
+12. For scale-up and scale-out the current resource agent supports SAP HANA in
+system replication beginning with HANA version 2.0 SPS 05.
+.PP
+13. Colocation constraints between the SAPHanaController RA and
+other resources are allowed only if they do not affect the RA's scoring.
+The location scoring finally depends on system replication status an must not
+be over-ruled by additional constraints. Thus it is not allowed to define rules
+forcing a SAPHanaController resource to follow another resource.
+.PP
+14. The Linux cluster needs to be up and running to allow HA/DR provider events
+being written into CIB attributes. The current HANA SR status might differ
+from CIB srHook attribute after cluster maintenance.
+.PP
+15. Once an HANA system replication site is known to the Linux cluster, that
+exact site name has to be used whenever the site is registered manually.
+.PP
+16. Reliable access to the /hana/shared/ filesystem is crucial for HANA and the
+Linux cluster.
+.PP
+17. HANA feature Secondary Time Travel is not supported.
+.PP
+18. In MDC configurations the HANA database is treated as a single system
+including all database containers. Therefore, cluster takeover decisions are
+based on the complete status independent of the status of individual containers.
+.PP
+19. If a third HANA site is connected by system replication, that HANA is not
+controlled by another SUSE HA cluster. If that third site should work as part
+of a fall-back HA cluster in DR case, that HA cluster needs to be in standby.
+.PP
+20. RA and srHook runtime almost completely depends on call-outs to controlled
+resources, OS and Linux cluster. The infrastructure needs to allow these
+call-outs to return in time.
+.PP
+21. The SAP HANA Fast Restart feature on RAM-tmfps as well as HANA on persistent
+memory can be used, as long as they are transparent to SUSE HA.
+.PP
+22. The SAP HANA site name is from 2 up to 32 characters long. It starts with a
+character or number. Subsequent characters may contain dash and underscore.
+.PP
+23. The SAPHanaController RA, the SUSE HA cluster and several SAP components
+need read/write access and sufficient space in the Linux /tmp filesystem.
+.PP
+24. CIB attributes are not backward compatible between SAPHanaSR-angi and
+the former SAPHanaSR or SAPHanaSR-ScaleOut. So there is currently no easy migration path.
+.PP
+More information on specific requirements of Linux HA scenarios for SAP HANA SR
+scale-up and scale-out setups are described in the REQUIREMENTS section of
+SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
+.\"
+.SH BUGS
+.\" TODO
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBocf_heartbeat_IPaddr2\fP(7) ,
+\fBSAPHanaSR_basic_cluster\fP(7) ,
+\fBsusHanaSR.py\fP(7) , \fBsusHanaSrMultiTarget.py\fP(7) ,
+\fBsusCostOpt.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP (7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBsystemctl\fP(1) ,
+\fBstonith\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) ,
+\fBcrm\fP(8) , \fBcorosync.conf\fP(5) , \fBcrm_no_quorum_policy\fP(7) ,
+\fBsaptune\fP(8) , \fBcs_show_hana_info\fP(8) , \fBsupportconfig\fP(8) ,
+.br
+https://documentation.suse.com/sbp/sap/ ,
+.br
+https://documentation.suse.com/sles-sap/ ,
+.br
+https://www.suse.com/releasenotes/ ,
+.br
+https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
+.br
+https://www.susecon.com/doc/2016/sessions/TUT90846.pdf ,
+.br
+https://www.suse.com/media/presentation/TUT90846_towards_zero_downtime%20_how_to_maintain_sap_hana_system_replication_clusters.pdf ,
+.br
+http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution ,
+.br
+http://scn.sap.com/docs/DOC-60334 ,
+.br
+http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy ,
+.br
+https://wiki.scn.sap.com/wiki/display/ATopics/HOW+TO+SET+UP+SAPHanaSR+IN+THE+COST+OPTIMIZED+SAP+HANA+SR+SCENARIO+-+PART+I
+.br
+https://blogs.sap.com/2020/01/30/sap-hana-and-persistent-memory/
+.PP
+.SH AUTHORS
+.br
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.br
+(c) 2022-2023 SUSE LLC
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
