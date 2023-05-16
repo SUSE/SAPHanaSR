@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 function run() {
-    local node="$1" testID="$2" repeat="$3" sleep="$4"
+    local node="$1" testID="$2" test_prop="$3" repeat="$4" sleep="$5"
     logFile="testLog$(date +"%Y-%m-%d").txt"
     logLink="testLog.curr.txt"
     if [ ! -f "$logFile" ]; then
@@ -20,7 +20,7 @@ function run() {
                             --repeat="$repeat" \
                             --dumpFailures \
                             --defaultChecksFile="$test_dir/defaultChecks.json" \
-                            --properties="$test_dir/properties.json" \
+                            --properties="$test_dir/$test_prop.json" \
                             --logFile "$local_dir/$logFile"
     # ln -s -f testLog2023-03-31.txt testLog.curr.txt
     sleep "$sleep"; 
@@ -29,8 +29,8 @@ function run() {
 
 test_scenario="angi-ScaleUp"
 test_case="nop"
+test_prop="properties"
 local_dir="$PWD"
-test_dir="/usr/local/share/tester/json/$test_scenario"
 node="nowhere"
 
 while [ $# -gt 0 ]; do
@@ -41,26 +41,31 @@ while [ $# -gt 0 ]; do
         --node=* )
                 node=${1#*=}
                 ;;
+        --properties=* )
+                test_prop=${1#*=}
+                ;;
     esac
     shift
 done
 
+test_dir="/usr/local/share/tester/json/$test_scenario"
+
 echo "node: $node, test_scenario=$test_scenario"
 while true; do  
-    run "$node" restart_cluster_turn_hana  1 300
-    run "$node" kill_prim_inst  3 300
-    run "$node" free_log_area 1 60
-    run "$node" kill_prim_inst  1 120
-    run "$node" free_log_area 1 60
-    run "$node" ssn  2 300
-    run "$node" kill_secn_inst  3 300
-    run "$node" spn  2 300
-    run "$node" sap  1 300
-    run "$node" kpx  1 300
-    run "$node" nop  1  10 
-    run "$node" ksx  1 300
-    run "$node" maintenance_cluster_turn_hana 1 300
-    run "$node" restart_cluster  1 300
-    run "$node" restart_cluster_hana_running   1 300
-    run "$node" bmt  1  60
+    run "$node" restart_cluster_turn_hana "$test_prop" 1 300
+    run "$node" kill_prim_inst  "$test_prop" 3 300
+    run "$node" free_log_area "$test_prop" 1 60
+    run "$node" kill_prim_inst  "$test_prop" 1 120
+    run "$node" free_log_area "$test_prop" 1 60
+    run "$node" ssn  "$test_prop" 2 300
+    run "$node" kill_secn_inst  "$test_prop" 3 300
+    run "$node" spn  "$test_prop" 2 300
+    run "$node" sap  "$test_prop" 1 300
+    run "$node" kpx  "$test_prop" 1 300
+    run "$node" nop  "$test_prop" 1  10 
+    run "$node" ksx  "$test_prop" 1 300
+    run "$node" maintenance_cluster_turn_hana "$test_prop" 1 300
+    run "$node" restart_cluster  "$test_prop" 1 300
+    run "$node" restart_cluster_hana_running   "$test_prop" 1 300
+    run "$node" bmt  "$test_prop" 1  60
 done 
