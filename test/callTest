@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 function run() {
-    local node="$1" testID="$2" repeat="$3" sleep="$4"
+    local node="$1" testID="$2" test_prop="$3" repeat="$4" sleep="$5"
     logFile="testLog$(date +"%Y-%m-%d").txt"
     logLink="testLog.curr.txt"
     if [ ! -f "$logFile" ]; then
@@ -20,7 +20,7 @@ function run() {
                             --repeat="$repeat" \
                             --dumpFailures \
                             --defaultChecksFile="$test_dir/defaultChecks.json" \
-                            --properties="$test_dir/properties.json" \
+                            --properties="$test_dir/$test_prop.json" \
                             --logFile "$local_dir/$logFile"
     # ln -s -f testLog2023-03-31.txt testLog.curr.txt
     sleep "$sleep"; 
@@ -28,7 +28,30 @@ function run() {
 }
 
 test_scenario="angi-ScaleUp"
+test_case="nop"
+test_prop="properties"
 local_dir="$PWD"
+node="nowhere"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --test_scenario=* )
+                test_scenario=${1#*=}
+                ;;
+        --node=* )
+                node=${1#*=}
+                ;;
+        --test_case=* )
+                test_case=${1#*=}
+                ;;
+        --properties=* )
+                test_prop=${1#*=}
+                ;;
+    esac
+    shift
+done
+
 test_dir="/usr/local/share/tester/json/$test_scenario"
 
-run "$1" "$2" 1 10
+echo "node: $node, test_scenario=$test_scenario, test_case=$test_case"
+run "$node" "$test_case" "$test_prop" 1 10
