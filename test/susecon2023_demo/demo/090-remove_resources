@@ -1,0 +1,36 @@
+#!/bin/bash
+crm resource stop mst_SAPHanaCon_HA1_HDB00 
+cs_wait_for_idle -s 5
+crm resource refresh mst_SAPHanaCon_HA1_HDB00
+
+crm resource stop cln_SAPHanaTop_HA1_HDB00
+cs_wait_for_idle -s 2
+crm resource refresh cln_SAPHanaTop_HA1_HDB00
+
+crm maintenance on
+crm configure delete SAPHanaSR
+crm configure delete ord_SAPHana_HA1_HDB00
+crm configure delete col_ip_prim_SAPHana_HA1_HDB00
+crm configure delete col_ip_prim_SAPHana_HA1_HDB00
+crm configure delete mst_SAPHanaCon_HA1_HDB00
+crm configure delete cln_SAPHanaTop_HA1_HDB00
+crm configure delete rsc_SAPHanaTop_HA1_HDB00
+crm configure delete rsc_SAPHanaCon_HA1_HDB00
+
+for attr in clone_state roles sra srah
+do
+    crm_attribute -N pizbuin01 -n "hana_ha1_$attr" -D -l reboot
+    crm_attribute -N pizbuin02 -n "hana_ha1_$attr" -D -l reboot
+done
+for attr in site 
+do
+    crm_attribute -N pizbuin01 -n "hana_ha1_$attr" -D -l forever
+    crm_attribute -N pizbuin02 -n "hana_ha1_$attr" -D -l forever
+done
+crm_attribute -n master-rsc_SAPHanaCon_HA1_HDB00 -N pizbuin01 -D -l reboot
+crm_attribute -n master-rsc_SAPHanaCon_HA1_HDB00 -N pizbuin02 -D -l reboot
+crm maintenance off
+
+ssh pizbuin01 "su - ha1adm -c 'sapcontrol -nr 00 -function Start'"
+ssh pizbuin02 "su - ha1adm -c 'sapcontrol -nr 00 -function Start'"
+
