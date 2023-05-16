@@ -1,6 +1,6 @@
-.\" Version: 0.180.0
+.\" Version: 1.001
 .\"
-.TH ocf_suse_SAPHanaController 7 "11 Nov 2022" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "08 May 2022" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication.
@@ -12,7 +12,7 @@ SAPHanaController \- Manages takeover between two SAP HANA databases with system
 .\"
 .SH DESCRIPTION
 
-\fBSAPHanaController\fP is a resource agent for SAP HANA databases in scale-out setups.
+\fBSAPHanaController\fP is a resource agent for SAP HANA databases in scale-up and scale-out setups.
 It manages takeover for a SAP HANA database with system replication in an OCF multi-state configuration.
 .PP
 System replication will help to replicate the database data from one site to another site in order to compensate for database failures.
@@ -24,14 +24,14 @@ As long as the HANA landscape status is not "ERROR" the Linux cluster will not a
 The main purpose of the Linux cluster is to handle the takeover to the other site.
 Only if the HANA landscape status indicates that HANA can not recover from the failure and the replication is in sync, then Linux will act. 
 As an exception, the Linux cluster will react if HANA moves the master nameserver role to another candidate. 
-SAPHanaController is also able to restart former failed worker nodes as standby. In addition to the SAPHanaTopology RA, the SAPHanaSR-ScaleOut solution uses a "HA/DR provider" API provided by HANA to get informed about the current state of the system replication.
+SAPHanaController is also able to restart former failed worker nodes as standby. In addition to the SAPHanaTopology RA, the SAPHanaSR solution uses a "HA/DR provider" API provided by HANA to get informed about the current state of the system replication.
 .PP
 On initial cluster start, the cluster needs to detect a valid HANA system replication setup, including system replication status (SOK) and last primary timestamp (LPT). This is neccessary to ensure data integrity.
 .PP
 The SAPHanaController resource agent (RA) performs the actual check of the SAP HANA database instances and is configured as a multi-state resource.
 The Linux cluster resource's master status will follow the HANA's active master name server role. Resources (e.g. IP address) that need to run on the same node with that HANA role should be co-located with the master target.
 .PP
-Managing the two SAP HANA instances in scale-out setup means that the resource agent controls the start/stop of the instances. 
+Managing the two SAP HANA instances in scale-up or scale-out setup means that the resource agent controls the start/stop of the instances. 
 In addition the resource agent is able to monitor the SAP HANA databases on landscape host configuration level. For this monitoring the resource agent relies on interfaces provided by SAP.
 A third task of the resource agent is to also check the synchronisation status of the two SAP HANA databases. If the synchronisation is not "SOK", then the cluster avoids to takeover to the secondary side, if the primary fails. This is to improve the data consistency.
 .PP
@@ -281,11 +281,11 @@ DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="true" \\
 .br
 HANA_CALL_TIMEOUT="120"
 .PP
-ms msl_SAPHanaCon_SLE_HDB00 rsc_SAPHanaCon_SLE_HDB00 \\
+clone mst_SAPHanaCon_SLE_HDB00 rsc_SAPHanaCon_SLE_HDB00 \\
 .br
-master-node-max="1" master-max="1" clone-node-max="1" interleave="true"
+clone-node-max="1" promotable="true" interleave="true"
 .PP
-location SAPHanaCon_not_on_majority_maker msl_SAPHanaCon_HAE_HDB00 -inf: vm-majority
+location SAPHanaCon_not_on_majority_maker mst_SAPHanaCon_HAE_HDB00 -inf: vm-majority
 .RE
 .PP
 * The following shows the filter for log messages set to defaults, pacemaker-1.0.
@@ -335,26 +335,16 @@ SAPHanaController parameter PREFER_SITE_TAKEOVER.
 .RE
 .PP
 * Manually trigger an SAPHanaController probe action. Output goes to the
-usual logfiles.
+usual logfiles. Number of nodes is 6, InstanceNr is 00.
 .PP
 .RS 4
 # OCF_ROOT=/usr/lib/ocf/ OCF_RESKEY_SID=HA1 OCF_RESKEY_InstanceNumber=00
 OCF_RESKEY_CRM_meta_clone_max=6 OCF_RESKEY_CRM_meta_clone_node_max=1
-OCF_RESKEY_CRM_meta_master_node_max=1 OCF_RESKEY_CRM_meta_master_max=1
 OCF_RESKEY_CRM_meta_interval=0
 /usr/lib/ocf/resource.d/suse/SAPHanaController monitor
 .RE
 .PP
-* Check for working NTP service on ntpd-based systems:
-.PP
-.RS 4
-# ntpq -p
-.\" TODO: output
-.RE
-.PP
-.RS 2
-Respectively on chronyd-based systems:
-.RE
+* Check for working NTP service on chronyd-based systems:
 .PP
 .RS 4
 # chronyc sources
@@ -470,7 +460,7 @@ nodeB: 1479202132
 .PP
 .\"
 .SH REQUIREMENTS
-For the current version of the SAPHanaController resource agent that comes with the software package SAPHanaSR-ScaleOut, the support is limited to the scenarios and parameters described in the respective manual page SAPHanaSR-ScaleOut(7).
+For the current version of the SAPHanaController resource agent that comes with the software package SAPHanaSR-angi, the support is limited to the scenarios and parameters described in the manual pages SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
 .PP
 .\"
 .SH BUGS
@@ -481,7 +471,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_heartbeat_IPaddr2\fP(8) , \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-manageAttr\fP(8)  ,  \fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBstonith\fP(8) , \fBcrm\fP(8) 
+\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_heartbeat_IPaddr2\fP(8) , \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR_basic_cluster\fP(7) , \fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) , \fBSAPHanaSR-manageAttr\fP(8) , \fBchrony.conf\fP(5) , \fBstonith\fP(8) , \fBcrm\fP(8) 
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap ,
 .br
@@ -503,7 +493,7 @@ F.Herschel, L.Pinne.
 .br
 (c) 2015-2017 SUSE Linux GmbH, Germany.
 .br
-(c) 2018-2022 SUSE LLC
+(c) 2018-2023 SUSE LLC
 .br
 The resource agent SAPHanaController comes with ABSOLUTELY NO WARRANTY.
 .br
