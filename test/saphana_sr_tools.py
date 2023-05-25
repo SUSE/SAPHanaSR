@@ -4,6 +4,28 @@ import json
 
 class HanaCluster():
 
+    selections = {
+                    'default': {
+                                    'global'   : ['cib-time', 'maintenance', 'prim', 'sec', 'topology'],
+                                    'resource' : ['maintenance', 'is_managed'],
+                                    'site'     : ['lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
+                               },
+                    'sr': {
+                                    'global'   : ['cib-time', 'maintenance', 'prim', 'sec', 'topology'],
+                                    'resource' : ['maintenance', 'is_managed'],
+                                    'site'     : ['lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
+                                 },
+                    'minimal': {
+                                    'global'   : ['cib-time', 'maintenance', 'topology'],
+                                    'resource' : ['maintenance', 'is_managed'],
+                                    'site'     : ['lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
+                                    'host'     : ['clone_state', 'roles', 'score', 'site'],
+                                 }
+                }
+
+
     def __init__(self):
         self.tree = None
         self.root = None
@@ -112,12 +134,13 @@ class HanaCluster():
                 if self.filter(col) == True:
                     value = print_dic[key][col]
                     print(f"{table_name}/{key}/{col}={quote}{value}{quote}")
-
                 
     def filter(self, column_name):
         ''' filter column_names 
             False, if column should be skipped
             True, if column should be printed
+            TODO: implement filter sets e.g. all, default, sr, ...
+            TODO: filter sets might allow custom config via json file (filter set per area)
         '''
         match_obj = re.search("#feature",column_name)
         if match_obj != None:
