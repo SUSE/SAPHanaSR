@@ -84,7 +84,7 @@ class HanaCluster():
         # print rows
         #
         for key in print_dic:
-            for col in column_names[0:]:         # later add 'filter' for column names
+            for col in column_names[0:]:        
                 if self.filter(col) == True:
                     if col in column_length:
                         col_len = column_length[col]
@@ -102,9 +102,23 @@ class HanaCluster():
     def print_dic_as_json(self, print_dic, table_name):
         json_obj = json.dumps({table_name: print_dic}, indent = 4)
         print(json_obj)
-      
+
+    def print_dic_as_path(self, print_dic, table_name, **kargs):
+        quote=''
+        if 'quote' in kargs:
+            quote = kargs['quote']
+        for key in print_dic:
+            for col in print_dic[key]:
+                if self.filter(col) == True:
+                    value = print_dic[key][col]
+                    print(f"{table_name}/{key}/{col}={quote}{value}{quote}")
+
                 
     def filter(self, column_name):
+        ''' filter column_names 
+            False, if column should be skipped
+            True, if column should be printed
+        '''
         match_obj = re.search("#feature",column_name)
         if match_obj != None:
             return False
@@ -122,6 +136,7 @@ myCluster.xml_import('hoef.test.xml')
 myCluster.fill_host_table()
 myCluster.print_dic_as_table(myCluster.host_table,"Host")
 myCluster.print_dic_as_json(myCluster.host_table,"Host")
+myCluster.print_dic_as_path(myCluster.host_table,"Host", quote='"')
 
 
 """
