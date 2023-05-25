@@ -100,7 +100,7 @@ class HanaCluster():
             print()
 
     def print_dic_as_json(self, print_dic, table_name):
-        json_obj = json.dumps(print_dic, indent = 4)
+        json_obj = json.dumps({table_name: print_dic}, indent = 4)
         print(json_obj)
       
                 
