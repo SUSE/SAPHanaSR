@@ -46,7 +46,6 @@ class HanaCluster():
             # TODO add only cluster and hana_xxx_gloval_nnnn attributes - for now we add all
             if self.is_site_attribute(nv.attrib['name']) == False:
                 global_global_dict.update({nv.attrib['name']: nv.attrib["value"]})
-                #print(nv.attrib['name'], "=", nv.attrib["value"])
 
     def fill_site_dict(self):
         self.site_dict = {}
@@ -54,11 +53,12 @@ class HanaCluster():
             name = nv.attrib['name']
             value = nv.attrib["value"]
             site = self.is_site_attribute(name, return_site_name=True)
-                if site:
-                    if not(site in self.site_dict):
-                        self.site_dict.update({site: {}})
-                    site_site_dict = self.site_dict[site]
-                    site_site_dict.update({name: value})
+            if site:
+                if not(site in self.site_dict):
+                    self.site_dict.update({site: {}})
+                site_site_dict = self.site_dict[site]
+                # for sites we already use the shortened attribute name (site-part in the name sis also removed to match the same column later)
+                site_site_dict.update({self.shorten(name): value})
  
     def fill_host_dict(self):
         self.host_dict = {}
@@ -67,7 +67,6 @@ class HanaCluster():
             self.host_dict.update({hostname: {}})
             node_table = self.host_dict[hostname]
             self.fill_node(hostname, node_table)
-            #print(self.host_dict)
 
     def fill_node(self, hostname, node_table):
         host_obj = self.root.findall(f"./configuration/nodes/*[@uname='{hostname}']")[0]
@@ -79,9 +78,9 @@ class HanaCluster():
 
     def is_site_attribute(self, column_name, **kargs):
         return_site_name = False
-        if return_site_name in kargs:
+        if 'return_site_name' in kargs:
             return_site_name = kargs['return_site_name']
-        match_obj = re.search("hana_..._site_(.*)_",column_name)
+        match_obj = re.search("hana_..._site_.*_(.*)",column_name)
         if match_obj:
             if return_site_name:
                 return match_obj.group(1)
@@ -131,6 +130,7 @@ class HanaCluster():
         #
         # print headline
         #
+        bar_len = 0
         for col in column_names:                 # later add 'filter' for column names
             if self.filter(col) == True:
                 if col in column_length:
@@ -138,7 +138,9 @@ class HanaCluster():
                 else:
                     col_len = 1
                 print("{0:<{width}} ".format(self.shorten(col), width=col_len), end='')
+                bar_len += col_len + 1
         print()
+        print('-' * bar_len)
         #
         # print rows
         #
