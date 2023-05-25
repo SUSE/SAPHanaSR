@@ -477,7 +477,7 @@ class SaphanasrTest:
         elif action_name_short == "shell":
             remote = 'localhost'
             action_parameter = " ".join(action_array[1:])
-            cmd = "bash {}".format(action_parameter)
+            cmd = "{}".format(action_parameter)
         return self.action_call(action_name, cmd, remote)
 
     def action(self, action_name):
