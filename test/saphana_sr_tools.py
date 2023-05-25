@@ -32,20 +32,20 @@ class HanaCluster():
         self.global_table = None
         self.resource_table = None
         self.site_table = None
-        self.host_table = None
+        self.host_dict = None
 
     def xml_import(self, filename):
         self.tree = ET.parse(filename)
         self.root = self.tree.getroot()
 
-    def fill_host_table(self):
-        self.host_table = {}
+    def fill_host_dict(self):
+        self.host_dict = {}
         for host_obj in self.root.findall("./configuration/nodes/*"):
             hostname = host_obj.attrib['uname']
-            self.host_table.update({hostname: {}})
-            node_table = self.host_table[hostname]
+            self.host_dict.update({hostname: {}})
+            node_table = self.host_dict[hostname]
             self.fill_node(hostname, node_table)
-            #print(self.host_table)
+            #print(self.host_dict)
 
     def fill_node(self, hostname, node_table):
         host_obj = self.root.findall(f"./configuration/nodes/*[@uname='{hostname}']")[0]
@@ -156,10 +156,10 @@ class HanaCluster():
 
 myCluster = HanaCluster()
 myCluster.xml_import('hoef.test.xml')
-myCluster.fill_host_table()
-myCluster.print_dic_as_table(myCluster.host_table,"Host")
-myCluster.print_dic_as_json(myCluster.host_table,"Host")
-myCluster.print_dic_as_path(myCluster.host_table,"Host", quote='"')
+myCluster.fill_host_dict()
+myCluster.print_dic_as_table(myCluster.host_dict,"Host")
+myCluster.print_dic_as_json(myCluster.host_dict,"Host")
+myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
 
 
 """
