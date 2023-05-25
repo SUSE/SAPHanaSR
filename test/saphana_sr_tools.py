@@ -29,23 +29,45 @@ class HanaCluster():
     def __init__(self):
         self.tree = None
         self.root = None
-        self.global_table = None
-        self.resource_table = None
-        self.site_table = None
-        self.host_table = None
+        self.global_dict = None
+        self.resource_dict = None
+        self.site_dict = None
+        self.host_dict = None
+        self.selection = 'default'
 
     def xml_import(self, filename):
         self.tree = ET.parse(filename)
         self.root = self.tree.getroot()
 
-    def fill_host_table(self):
-        self.host_table = {}
+    def fill_global_dict(self):
+        self.global_dict =  {"global": {} }
+        global_global_dict = self.global_dict['global']
+        for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
+            # TODO add only cluster and hana_xxx_gloval_nnnn attributes - for now we add all
+            if self.is_site_attribute(nv.attrib['name']) == False:
+                global_global_dict.update({nv.attrib['name']: nv.attrib["value"]})
+                #print(nv.attrib['name'], "=", nv.attrib["value"])
+
+    def fill_site_dict(self):
+        self.site_dict = {}
+        for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
+            name = nv.attrib['name']
+            value = nv.attrib["value"]
+            site = self.is_site_attribute(name, return_site_name=True)
+                if site:
+                    if not(site in self.site_dict):
+                        self.site_dict.update({site: {}})
+                    site_site_dict = self.site_dict[site]
+                    site_site_dict.update({name: value})
+ 
+    def fill_host_dict(self):
+        self.host_dict = {}
         for host_obj in self.root.findall("./configuration/nodes/*"):
             hostname = host_obj.attrib['uname']
-            self.host_table.update({hostname: {}})
-            node_table = self.host_table[hostname]
+            self.host_dict.update({hostname: {}})
+            node_table = self.host_dict[hostname]
             self.fill_node(hostname, node_table)
-            #print(self.host_table)
+            #print(self.host_dict)
 
     def fill_node(self, hostname, node_table):
         host_obj = self.root.findall(f"./configuration/nodes/*[@uname='{hostname}']")[0]
@@ -54,6 +76,21 @@ class HanaCluster():
         host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
         for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
            node_table.update({nv.attrib['name']: nv.attrib["value"]})
+
+    def is_site_attribute(self, column_name, **kargs):
+        return_site_name = False
+        if return_site_name in kargs:
+            return_site_name = kargs['return_site_name']
+        match_obj = re.search("hana_..._site_(.*)_",column_name)
+        if match_obj:
+            if return_site_name:
+                return match_obj.group(1)
+            else:
+                return True
+        else:
+            if return_site_name:
+                return None
+        return False;
 
     def shorten(self, column_name):
         """ shortens column name
@@ -156,10 +193,14 @@ class HanaCluster():
 
 myCluster = HanaCluster()
 myCluster.xml_import('hoef.test.xml')
-myCluster.fill_host_table()
-myCluster.print_dic_as_table(myCluster.host_table,"Host")
-myCluster.print_dic_as_json(myCluster.host_table,"Host")
-myCluster.print_dic_as_path(myCluster.host_table,"Host", quote='"')
+myCluster.fill_global_dict()
+myCluster.fill_site_dict()
+myCluster.fill_host_dict()
+myCluster.print_dic_as_table(myCluster.global_dict,"Global")
+myCluster.print_dic_as_table(myCluster.site_dict,"Site")
+myCluster.print_dic_as_table(myCluster.host_dict,"Host")
+#myCluster.print_dic_as_json(myCluster.host_dict,"Host")
+#myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
 
 
 """
