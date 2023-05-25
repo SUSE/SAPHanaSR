@@ -170,10 +170,10 @@ class HanaCluster():
     def print_all_as_json(self):
         # TODO: maybe 'Global', 'Site', 'Host", ... configurable strings?
         json_obj = json.dumps( {
-                                 'Global': self.glocal_dict,
+                                 'Global': self.global_dict,
                                  'Site':   self.site_dict,
-                                 'Host':   self.site_dict
-                               }
+                                 'Host':   self.host_dict
+                               }, indent = 4
                              )
         print(json_obj)
 
@@ -217,6 +217,7 @@ myCluster.fill_host_dict()
 myCluster.print_dic_as_table(myCluster.global_dict,"Global")
 myCluster.print_dic_as_table(myCluster.site_dict,"Site")
 myCluster.print_dic_as_table(myCluster.host_dict,"Host")
+myCluster.print_all_as_json()
 #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
 #myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
 
