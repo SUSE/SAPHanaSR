@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+import re
 
 class HanaCluster():
 
@@ -15,23 +16,106 @@ class HanaCluster():
         self.root = self.tree.getroot()
 
     def fill_host_table(self):
+        self.host_table = {}
         for host_obj in self.root.findall("./configuration/nodes/*"):
             hostname = host_obj.attrib['uname']
-            self.fill_node(hostname)
+            self.host_table.update({hostname: {}})
+            node_table = self.host_table[hostname]
+            self.fill_node(hostname, node_table)
+            #print(self.host_table)
 
-    def fill_node(self, hostname):
-        print(f"===== host: {hostname} =====")
+    def fill_node(self, hostname, node_table):
         host_obj = self.root.findall(f"./configuration/nodes/*[@uname='{hostname}']")[0]
         for nv in host_obj.findall("./instance_attributes/nvpair"):
-            print(nv.attrib['name'], "=", nv.attrib["value"])
+            node_table.update({nv.attrib['name']: nv.attrib["value"]})
         host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
         for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
-           print(nv.attrib['name'], "=", nv.attrib["value"])
+           node_table.update({nv.attrib['name']: nv.attrib["value"]})
+
+    def shorten(self, column_name):
+        """ shortens column name
+            e.g. (1) hana_ha1_site -> site              ( a node attribute)
+                 (2) hana_ha1_site_mns_S1 -> mns        ( a site attribute )
+                 (3) hana_ha1_global_topology -> global ( a global attribute )
+        """
+        match_obj = re.search("hana_..._global_(.*)",column_name)  # (3)
+        if match_obj != None:
+            column_name = match_obj.group(1)
+        match_obj = re.search("hana_..._site_(.*)_",column_name)   # (2)
+        if match_obj != None:
+            column_name = match_obj.group(1)
+        match_obj = re.search("hana_..._(.*)",column_name)         # (1)
+        if match_obj != None:
+            column_name = match_obj.group(1)
+        return column_name
+
+    def print_table(self, table, table_name):
+        # build headline: 
+        #  1. get all keys (column-names) used by any of the top-level-objects
+        #  2. get the max length of each column (max(column_name, max(any column_value))
+        column_names = []
+        column_length = {}
+        column_length[table_name] = len(table_name)
+        for key in table:
+            element_keys = list(table[key].keys())
+            column_names.extend(element_keys)
+            column_length[table_name] = max(column_length[table_name], len(key))
+        column_names = sorted(list(dict.fromkeys(column_names)))
+        column_names.insert(0, table_name)
+        for col in column_names[1:]:
+            col_len = len(self.shorten(col)) 
+            for key in table:
+                if col in table[key]:
+                    col_len = max(col_len, len(table[key][col]))
+            column_length[col] = col_len
+        print(f"column_names: { column_names }")
+        #
+        # print headline
+        #
+        for col in column_names:                 # later add 'filter' for column names
+            if self.filter(col) == True:
+                if col in column_length:
+                    col_len = column_length[col]
+                else:
+                    col_len = 1
+                print("{0:<{width}} ".format(self.shorten(col), width=col_len), end='')
+        print()
+        #
+        # print rows
+        #
+        for key in table:
+            for col in column_names[0:]:         # later add 'filter' for column names
+                if self.filter(col) == True:
+                    if col in column_length:
+                        col_len = column_length[col]
+                    else:
+                        col_len = 1
+                    if col == table_name:
+                        value = key
+                    elif col in table[key]:
+                        value = table[key][col]
+                    else:
+                        value = ""
+                    print("{0:<{width}} ".format(value, width=col_len), end='')
+            print()
+                
+    def filter(self, column_name):
+        match_obj = re.search("#feature",column_name)
+        if match_obj != None:
+            return False
+        match_obj = re.search("fail-count-",column_name) 
+        if match_obj != None:
+            return False
+        match_obj = re.search("last-failure-",column_name) 
+        if match_obj != None:
+            return False
+        return True
 
 
 myCluster = HanaCluster()
 myCluster.xml_import('hoef.test.xml')
 myCluster.fill_host_table()
+myCluster.print_table(myCluster.host_table,"Host")
 
 
 """
