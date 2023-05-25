@@ -109,6 +109,8 @@ class HanaCluster():
         return column_name
 
     def print_dic_as_table(self, print_dic, table_name):
+        # TODO: option for bar-character (default "-")
+        # TODO: option for empty line at end of table (default True) or like 'end' in print end='' is no-line end="bar" is same a after headline end="space" (default) is one empty line
         # build headline: 
         #  1. get all keys (column-names) used by any of the top-level-objects
         #  2. get the max length of each column (max(column_name, max(any column_value))
@@ -159,6 +161,7 @@ class HanaCluster():
                         value = ""
                     print("{0:<{width}} ".format(value, width=col_len), end='')
             print()
+        print()
 
     def print_dic_as_json(self, print_dic, table_name):
         json_obj = json.dumps({table_name: print_dic}, indent = 4)
@@ -181,6 +184,9 @@ class HanaCluster():
             TODO: implement filter sets e.g. all, default, sr, ...
             TODO: filter sets might allow custom config via json file (filter set per area)
         '''
+        match_obj = re.search("dc.version",column_name)
+        if match_obj != None:
+            return False
         match_obj = re.search("#feature",column_name)
         if match_obj != None:
             return False
