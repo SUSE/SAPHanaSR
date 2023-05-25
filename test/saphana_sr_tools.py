@@ -167,6 +167,16 @@ class HanaCluster():
         json_obj = json.dumps({table_name: print_dic}, indent = 4)
         print(json_obj)
 
+    def print_all_as_json(self):
+        # TODO: maybe 'Global', 'Site', 'Host", ... configurable strings?
+        json_obj = json.dumps( {
+                                 'Global': self.glocal_dict,
+                                 'Site':   self.site_dict,
+                                 'Host':   self.site_dict
+                               }
+                             )
+        print(json_obj)
+
     def print_dic_as_path(self, print_dic, table_name, **kargs):
         quote=''
         if 'quote' in kargs:
