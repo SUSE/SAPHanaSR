@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 import re
+import json
 
 class HanaCluster():
 
@@ -49,26 +50,25 @@ class HanaCluster():
             column_name = match_obj.group(1)
         return column_name
 
-    def print_table(self, table, table_name):
+    def print_dic_as_table(self, print_dic, table_name):
         # build headline: 
         #  1. get all keys (column-names) used by any of the top-level-objects
         #  2. get the max length of each column (max(column_name, max(any column_value))
         column_names = []
         column_length = {}
         column_length[table_name] = len(table_name)
-        for key in table:
-            element_keys = list(table[key].keys())
+        for key in print_dic:
+            element_keys = list(print_dic[key].keys())
             column_names.extend(element_keys)
             column_length[table_name] = max(column_length[table_name], len(key))
         column_names = sorted(list(dict.fromkeys(column_names)))
         column_names.insert(0, table_name)
         for col in column_names[1:]:
             col_len = len(self.shorten(col)) 
-            for key in table:
-                if col in table[key]:
-                    col_len = max(col_len, len(table[key][col]))
+            for key in print_dic:
+                if col in print_dic[key]:
+                    col_len = max(col_len, len(print_dic[key][col]))
             column_length[col] = col_len
-        print(f"column_names: { column_names }")
         #
         # print headline
         #
@@ -83,7 +83,7 @@ class HanaCluster():
         #
         # print rows
         #
-        for key in table:
+        for key in print_dic:
             for col in column_names[0:]:         # later add 'filter' for column names
                 if self.filter(col) == True:
                     if col in column_length:
@@ -92,12 +92,17 @@ class HanaCluster():
                         col_len = 1
                     if col == table_name:
                         value = key
-                    elif col in table[key]:
-                        value = table[key][col]
+                    elif col in print_dic[key]:
+                        value = print_dic[key][col]
                     else:
                         value = ""
                     print("{0:<{width}} ".format(value, width=col_len), end='')
             print()
+
+    def print_dic_as_json(self, print_dic, table_name):
+        json_obj = json.dumps(print_dic, indent = 4)
+        print(json_obj)
+      
                 
     def filter(self, column_name):
         match_obj = re.search("#feature",column_name)
@@ -115,7 +120,8 @@ class HanaCluster():
 myCluster = HanaCluster()
 myCluster.xml_import('hoef.test.xml')
 myCluster.fill_host_table()
-myCluster.print_table(myCluster.host_table,"Host")
+myCluster.print_dic_as_table(myCluster.host_table,"Host")
+myCluster.print_dic_as_json(myCluster.host_table,"Host")
 
 
 """
