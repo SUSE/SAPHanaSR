@@ -97,7 +97,7 @@ class HanaCluster():
                  (2) hana_ha1_site_mns_S1 -> mns        ( a site attribute )
                  (3) hana_ha1_global_topology -> global ( a global attribute )
         """
-        match_obj = re.search("hana_..._global_(.*)",column_name)  # (3)
+        match_obj = re.search("hana_..._glob_(.*)",column_name)    # (3)
         if match_obj != None:
             column_name = match_obj.group(1)
         match_obj = re.search("hana_..._site_(.*)_",column_name)   # (2)
