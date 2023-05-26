@@ -16,24 +16,25 @@ import argparse
 
 class HanaCluster():
 
+    global selections 
     selections = {
                     'default': {
-                                    'global'   : ['cib-time', 'maintenance', 'prim', 'sec', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'topology'],
                                     'resource' : ['maintenance', 'is_managed'],
-                                    'site'     : ['lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
+                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
                                },
                     'sr': {
-                                    'global'   : ['cib-time', 'maintenance', 'prim', 'sec', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'topology'],
                                     'resource' : ['maintenance', 'is_managed'],
-                                    'site'     : ['lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
+                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['Host', 'clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
                                  },
                     'minimal': {
-                                    'global'   : ['cib-time', 'maintenance', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'topology'],
                                     'resource' : ['maintenance', 'is_managed'],
-                                    'site'     : ['lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
-                                    'host'     : ['clone_state', 'roles', 'score', 'site'],
+                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
+                                    'host'     : ['Host', 'clone_state', 'roles', 'score', 'site'],
                                  }
                 }
 
@@ -45,10 +46,11 @@ class HanaCluster():
         self.resource_dict = None
         self.site_dict = None
         self.host_dict = None
-        self.selection = 'default'
+        self.selection = 'test'
         self.config = {}
         self.config['cib_file'] = "-"
         self.config['format'] = "table"
+        self.config['select'] = "default"
 
     def xml_import(self, filename):
         self.tree = ET.parse(filename)
@@ -123,7 +125,7 @@ class HanaCluster():
             column_name = match_obj.group(1)
         return column_name
 
-    def print_dic_as_table(self, print_dic, table_name):
+    def print_dic_as_table(self, print_dic, area, table_name):
         # TODO: option for bar-character (default "-")
         # TODO: option for empty line at end of table (default True) or like 'end' in print end='' is no-line end="bar" is same a after headline end="space" (default) is one empty line
         # build headline: 
@@ -148,8 +150,8 @@ class HanaCluster():
         # print headline
         #
         bar_len = 0
-        for col in column_names:                 # later add 'filter' for column names
-            if self.filter(col) == True:
+        for col in column_names:                 
+            if self.filter(area, col) == True:
                 if col in column_length:
                     col_len = column_length[col]
                 else:
@@ -163,7 +165,7 @@ class HanaCluster():
         #
         for key in print_dic:
             for col in column_names[0:]:        
-                if self.filter(col) == True:
+                if self.filter(area, col) == True:
                     if col in column_length:
                         col_len = column_length[col]
                     else:
@@ -198,29 +200,35 @@ class HanaCluster():
             quote = kargs['quote']
         for key in print_dic:
             for col in print_dic[key]:
-                if self.filter(col) == True:
+                if self.filter(area, col) == True:
                     value = print_dic[key][col]
                     print(f"{table_name}/{key}/{col}={quote}{value}{quote}")
                 
-    def filter(self, column_name):
+    def filter(self, area, column_name):
         ''' filter column_names 
             False, if column should be skipped
             True, if column should be printed
             TODO: implement filter sets e.g. all, default, sr, ...
             TODO: filter sets might allow custom config via json file (filter set per area)
         '''
-        match_obj = re.search("dc.version",column_name)
-        if match_obj != None:
-            return False
-        match_obj = re.search("#feature",column_name)
-        if match_obj != None:
-            return False
-        match_obj = re.search("fail-count-",column_name) 
-        if match_obj != None:
-            return False
-        match_obj = re.search("last-failure-",column_name) 
-        if match_obj != None:
-            return False
+        select = self.config['select']
+        if select == 'test':
+            match_obj = re.search("dc.version",column_name)
+            if match_obj != None:
+                return False
+            match_obj = re.search("#feature",column_name)
+            if match_obj != None:
+                return False
+            match_obj = re.search("fail-count-",column_name) 
+            if match_obj != None:
+                return False
+            match_obj = re.search("last-failure-",column_name) 
+            if match_obj != None:
+                return False
+        elif select in selections and area in selections[select]:
+            the_selection = selections[select][area]
+            if not(self.shorten(column_name) in the_selection):
+                return False
         return True
 
 
@@ -229,6 +237,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cibfile", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
+    parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
     #                    action="store_true")
     args = parser.parse_args()
@@ -236,20 +245,22 @@ if __name__ == "__main__":
         myCluster.config['cib_file'] = args.cibfile
     if args.format:
         myCluster.config['format'] = args.format
+    if args.select:
+        myCluster.config['select'] = args.select
     myCluster.xml_import(myCluster.config['cib_file'])
     myCluster.fill_global_dict()
     myCluster.fill_site_dict()
     myCluster.fill_host_dict()
     if myCluster.config['format'] == "table":
-        myCluster.print_dic_as_table(myCluster.global_dict,"Global")
-        myCluster.print_dic_as_table(myCluster.site_dict,"Site")
-        myCluster.print_dic_as_table(myCluster.host_dict,"Host")
+        myCluster.print_dic_as_table(myCluster.global_dict, "global", "Global")
+        myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
+        myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
     elif myCluster.config['format'] == "json":
         myCluster.print_all_as_json()
     elif myCluster.config['format'] == "path":
-        myCluster.print_dic_as_path(myCluster.global_dict,"Global", quote='"')
-        myCluster.print_dic_as_path(myCluster.site_dict,"Site", quote='"')
-        myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
+        myCluster.print_dic_as_path(myCluster.global_dict, "Global", quote='"')
+        myCluster.print_dic_as_path(myCluster.site_dict, "Site", quote='"')
+        myCluster.print_dic_as_path(myCluster.host_dict, "Host", quote='"')
     #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
 
 
