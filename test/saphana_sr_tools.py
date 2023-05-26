@@ -247,6 +247,8 @@ if __name__ == "__main__":
     elif myCluster.config['format'] == "json":
         myCluster.print_all_as_json()
     elif myCluster.config['format'] == "path":
+        myCluster.print_dic_as_path(myCluster.global_dict,"Global", quote='"')
+        myCluster.print_dic_as_path(myCluster.site_dict,"Site", quote='"')
         myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
     #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
 
