@@ -48,13 +48,24 @@ class HanaCluster():
         self.host_dict = None
         self.selection = 'test'
         self.config = {}
-        self.config['cib_file'] = "-"
+        self.config['cib_file'] = None
         self.config['format'] = "table"
         self.config['select'] = "default"
 
     def xml_import(self, filename):
-        self.tree = ET.parse(filename)
-        self.root = self.tree.getroot()
+        if filename == None:
+            # use cibadmin as input
+            pass
+            self.root = ET.fromstring(xml_as_string)
+        elif filename == "-":
+            # read from stdin
+            self.tree = ET.parse(sys.stdin)
+            self.root = self.tree.getroot()
+            pass
+        else:
+            # read from filename
+            self.tree = ET.parse(filename)
+            self.root = self.tree.getroot()
 
     def fill_global_dict(self):
         self.global_dict =  {"global": {} }
