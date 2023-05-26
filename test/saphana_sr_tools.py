@@ -70,12 +70,24 @@ class HanaCluster():
             self.root = self.tree.getroot()
 
     def fill_global_dict(self):
+        """
+        fill_global_dict() - fill the 'global' dictionary
+            global area is for attributes not assigned for a node/host, site nor resource
+            typically this includes the cib-time, all hana_sid_glob_ attributes
+        """
         self.global_dict =  {"global": {} }
         global_global_dict = self.global_dict['global']
+        # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             # TODO add only cluster and hana_xxx_gloval_nnnn attributes - for now we add all
             if self.is_site_attribute(nv.attrib['name']) == False:
                 global_global_dict.update({nv.attrib['name']: nv.attrib["value"]})
+        # handle all cib attributes at top-level
+        cib_attrs = self.root.attrib
+        if 'cib-last-written' in cib_attrs:
+            global_global_dict.update({'cib-time': cib_attrs["cib-last-written"]})
+        if 'have-quorum' in cib_attrs:
+            global_global_dict.update({'have-quorum': cib_attrs["have-quorum"]})
 
     def fill_site_dict(self):
         self.site_dict = {}
