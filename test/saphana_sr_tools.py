@@ -1,6 +1,18 @@
+#!/usr/bin/python3
+# pylint: disable=consider-using-f-string
+# pylint: disable=fixme
+"""
+ saphana_sr_tools.py
+ Author:       Fabian Herschel, May 2023
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2023 SUSE LLC
+"""
+
 import xml.etree.ElementTree as ET
 import re
+import sys
 import json
+import argparse
 
 class HanaCluster():
 
@@ -34,6 +46,8 @@ class HanaCluster():
         self.site_dict = None
         self.host_dict = None
         self.selection = 'default'
+        self.config = {}
+        self.config['cib_file'] = "-"
 
     def xml_import(self, filename):
         self.tree = ET.parse(filename)
@@ -209,17 +223,27 @@ class HanaCluster():
         return True
 
 
-myCluster = HanaCluster()
-myCluster.xml_import('hoef.test.xml')
-myCluster.fill_global_dict()
-myCluster.fill_site_dict()
-myCluster.fill_host_dict()
-myCluster.print_dic_as_table(myCluster.global_dict,"Global")
-myCluster.print_dic_as_table(myCluster.site_dict,"Site")
-myCluster.print_dic_as_table(myCluster.host_dict,"Host")
-myCluster.print_all_as_json()
-#myCluster.print_dic_as_json(myCluster.host_dict,"Host")
-#myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
+if __name__ == "__main__":
+    myCluster = HanaCluster()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cibfile", help="specify the cibfile file")
+    parser.add_argument("--format", help="output format ([table], path, script, json)")
+    #parser.add_argument("--dumpFailures", help="print failed checks per loop",
+    #                    action="store_true")
+    args = parser.parse_args()
+    if args.cibfile:
+        #self.message("PARAM: testFile: {}".format(args.testFile))
+        myCluster.config['cib_file'] = args.cibfile
+    myCluster.xml_import(myCluster.config['cib_file'])
+    myCluster.fill_global_dict()
+    myCluster.fill_site_dict()
+    myCluster.fill_host_dict()
+    myCluster.print_dic_as_table(myCluster.global_dict,"Global")
+    myCluster.print_dic_as_table(myCluster.site_dict,"Site")
+    myCluster.print_dic_as_table(myCluster.host_dict,"Host")
+    myCluster.print_all_as_json()
+    #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
+    #myCluster.print_dic_as_path(myCluster.host_dict,"Host", quote='"')
 
 
 """
