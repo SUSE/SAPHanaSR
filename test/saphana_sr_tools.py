@@ -21,19 +21,19 @@ class HanaCluster():
     selections = {
                     'default': {
                                     'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'topology'],
-                                    'resource' : ['maintenance', 'is_managed'],
+                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
                                },
                     'sr': {
                                     'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'topology'],
-                                    'resource' : ['maintenance', 'is_managed'],
+                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
                                  },
                     'minimal': {
                                     'global'   : ['Global', 'cib-time', 'maintenance', 'topology'],
-                                    'resource' : ['maintenance', 'is_managed'],
+                                    'resource' : ['Resource', 'maintenance', 'is_managed'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'roles', 'score', 'site'],
                                  }
@@ -90,7 +90,31 @@ class HanaCluster():
             global_glob_dict.update({'have-quorum': cib_attrs["have-quorum"]})
 
     def fill_res_dict(self):
-        pass
+        """
+        fill_res_dict()
+        TODO: Autodetection of the SID
+        """
+        sid = "HA1"
+        self.res_dict = {}
+        # Controller
+        con_res = self.root.findall(f"./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")[0]
+        con_name = con_res.attrib['id']
+        self.res_dict.update({con_name: {}}) 
+        res_res_dict = self.res_dict[con_name]
+        for ma in con_res.findall("./meta_attributes/nvpair"):
+            name = ma.attrib['name']
+            value = ma.attrib["value"]
+            res_res_dict.update({name: value})
+        # Topology
+        top_res = self.root.findall(f"./configuration/resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")[0]
+        top_name = top_res.attrib['id']
+        self.res_dict.update({top_name: {}}) 
+        res_res_dict = self.res_dict[top_name]
+        for ma in top_res.findall("./meta_attributes/nvpair"):
+            name = ma.attrib['name']
+            value = ma.attrib["value"]
+            res_res_dict.update({name: value})
+        print(self.res_dict)
 
     def fill_site_dict(self):
         self.site_dict = {}
@@ -216,13 +240,14 @@ class HanaCluster():
         # TODO: maybe 'Global', 'Site', 'Host", ... configurable strings?
         json_obj = json.dumps( {
                                  'Global': self.glob_dict,
+                                 'Resource': self.res_dict,
                                  'Site':   self.site_dict,
                                  'Host':   self.host_dict
                                }, indent = 4
                              )
         print(json_obj)
 
-    def print_dic_as_path(self, print_dic, table_name, **kargs):
+    def print_dic_as_path(self, print_dic, area, table_name, **kargs):
         quote=''
         if 'quote' in kargs:
             quote = kargs['quote']
@@ -277,18 +302,21 @@ if __name__ == "__main__":
         myCluster.config['select'] = args.select
     myCluster.xml_import(myCluster.config['cib_file'])
     myCluster.fill_glob_dict()
+    myCluster.fill_res_dict()
     myCluster.fill_site_dict()
     myCluster.fill_host_dict()
     if myCluster.config['format'] == "table":
         myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
+        myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
         myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
         myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
     elif myCluster.config['format'] == "json":
         myCluster.print_all_as_json()
     elif myCluster.config['format'] == "path":
-        myCluster.print_dic_as_path(myCluster.glob_dict, "Global", quote='"')
-        myCluster.print_dic_as_path(myCluster.site_dict, "Site", quote='"')
-        myCluster.print_dic_as_path(myCluster.host_dict, "Host", quote='"')
+        myCluster.print_dic_as_path(myCluster.glob_dict, "global", "Global", quote='"')
+        myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
+        myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
+        myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
     #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
 
 
