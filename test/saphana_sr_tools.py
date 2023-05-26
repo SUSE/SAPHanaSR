@@ -11,6 +11,7 @@
 import xml.etree.ElementTree as ET
 import re
 import sys
+import subprocess
 import json
 import argparse
 
@@ -55,8 +56,9 @@ class HanaCluster():
     def xml_import(self, filename):
         if filename == None:
             # use cibadmin as input
-            pass
-            self.root = ET.fromstring(xml_as_string)
+            cmd = "cibadmin -Ql"
+            xml_string = subprocess.check_output(cmd.split(" "))
+            self.root = ET.fromstring(xml_string)
         elif filename == "-":
             # read from stdin
             self.tree = ET.parse(sys.stdin)
