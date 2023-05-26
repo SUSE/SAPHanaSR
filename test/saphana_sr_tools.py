@@ -114,7 +114,6 @@ class HanaCluster():
             name = ma.attrib['name']
             value = ma.attrib["value"]
             res_res_dict.update({name: value})
-        print(self.res_dict)
 
     def fill_site_dict(self):
         self.site_dict = {}
