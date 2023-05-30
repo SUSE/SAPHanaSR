@@ -6,6 +6,9 @@
  Author:       Fabian Herschel, May 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
+
+# TODO: STEP01: SID-autodetection - get SID from query for SAPHanaController/SAPHanaTopologyResource - warn, if there are no or more than one SIDs found.
+# TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
 """
 
 import xml.etree.ElementTree as ET
@@ -92,7 +95,9 @@ class HanaCluster():
     def fill_res_dict(self):
         """
         fill_res_dict()
+        TODO: description
         TODO: Autodetection of the SID
+        TODO: Controller and Topology part very similar -> create a method for processing that
         """
         sid = "HA1"
         self.res_dict = {}
@@ -116,6 +121,9 @@ class HanaCluster():
             res_res_dict.update({name: value})
 
     def fill_site_dict(self):
+        """
+        TODO: description
+        """
         self.site_dict = {}
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             name = nv.attrib['name']
@@ -129,6 +137,9 @@ class HanaCluster():
                 site_site_dict.update({self.shorten(name): value})
  
     def fill_host_dict(self):
+        """
+        TODO: description
+        """
         self.host_dict = {}
         for host_obj in self.root.findall("./configuration/nodes/*"):
             hostname = host_obj.attrib['uname']
@@ -137,6 +148,9 @@ class HanaCluster():
             self.fill_node(hostname, node_table)
 
     def fill_node(self, hostname, node_table):
+        """
+        TODO: description
+        """
         host_obj = self.root.findall(f"./configuration/nodes/*[@uname='{hostname}']")[0]
         for nv in host_obj.findall("./instance_attributes/nvpair"):
             node_table.update({nv.attrib['name']: nv.attrib["value"]})
@@ -145,6 +159,9 @@ class HanaCluster():
            node_table.update({nv.attrib['name']: nv.attrib["value"]})
 
     def is_site_attribute(self, column_name, **kargs):
+        """
+        TODO: description
+        """
         return_site_name = False
         if 'return_site_name' in kargs:
             return_site_name = kargs['return_site_name']
@@ -177,6 +194,10 @@ class HanaCluster():
         return column_name
 
     def print_dic_as_table(self, print_dic, area, table_name):
+        """
+        TODO: description
+        TODO: break this method into smaller pieces
+        """
         # TODO: option for bar-character (default "-")
         # TODO: option for empty line at end of table (default True) or like 'end' in print end='' is no-line end="bar" is same a after headline end="space" (default) is one empty line
         # build headline: 
@@ -232,10 +253,16 @@ class HanaCluster():
         print()
 
     def print_dic_as_json(self, print_dic, table_name):
+        """
+        TODO: description
+        """
         json_obj = json.dumps({table_name: print_dic}, indent = 4)
         print(json_obj)
 
     def print_all_as_json(self):
+        """
+        TODO: description
+        """
         # TODO: maybe 'Global', 'Site', 'Host", ... configurable strings?
         json_obj = json.dumps( {
                                  'Global': self.glob_dict,
@@ -247,6 +274,9 @@ class HanaCluster():
         print(json_obj)
 
     def print_dic_as_path(self, print_dic, area, table_name, **kargs):
+        """
+        TODO: description
+        """
         quote=''
         if 'quote' in kargs:
             quote = kargs['quote']
