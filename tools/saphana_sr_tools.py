@@ -42,7 +42,6 @@ class HanaCluster():
                                  }
                 }
 
-
     def __init__(self):
         self.tree = None
         self.root = None
@@ -79,7 +78,7 @@ class HanaCluster():
         """
         fill_glob_dict() - fill the 'global' dictionary
             global area is for attributes not assigned for a node/host, site nor resource
-            typically this includes the cib-time, all hana_sid_glob_ attributes
+            typically this includes the cib-time, stonith-enabled and all hana_sid_glob_ attributes
         """
         self.glob_dict =  {"global": {} }
         global_glob_dict = self.glob_dict['global']
@@ -95,6 +94,8 @@ class HanaCluster():
                     sid = self.get_sid_from_attribute(name)
                     if sid == self.config['sid']:
                         global_glob_dict.update({name: value})
+            else:
+                global_glob_dict.update({name: value})
         # handle all cib attributes at top-level
         cib_attrs = self.root.attrib
         if 'cib-last-written' in cib_attrs:
@@ -104,8 +105,7 @@ class HanaCluster():
 
     def fill_res_dict(self):
         """
-        fill_res_dict()
-        TODO: description
+        fill_res_dict() - fill the 'resource' dictionary
         TODO: Controller and Topology part very similar -> create a method for processing that
         """
         sid = self.config["sid"].upper()
@@ -204,18 +204,27 @@ class HanaCluster():
         return False;
 
     def is_hana_attribute(self, name):
+        """
+        TODO: description
+        """
         match_obj = re.match("hana_.*",name)
         if match_obj:
            return True
         return False
 
     def is_hana_glob_attribute(self, name):
+        """
+        TODO: description
+        """
         match_obj = re.match("hana_..._glob_.*",name)
         if match_obj:
            return True
         return False
 
     def get_sid_from_attribute(self, name):
+        """
+        TODO: description
+        """
         sid = None
         match_obj = re.match("hana_(...)_",name)
         if match_obj:
@@ -389,8 +398,10 @@ if __name__ == "__main__":
         myCluster.get_sids()
         if len(myCluster.sids) == 0:
             print("ERR: No SID found in cluster config")
+            sys.exit(1)
         elif len(myCluster.sids) > 1:
             print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+            sys.exit(1)
         else:
            myCluster.config['sid'] = myCluster.sids[0].lower()
     myCluster.fill_glob_dict()
