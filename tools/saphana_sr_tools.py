@@ -11,12 +11,13 @@
 # TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
 """
 
-import xml.etree.ElementTree as ET
+import argparse
+import json
+import os
 import re
 import sys
 import subprocess
-import json
-import argparse
+import xml.etree.ElementTree as ET
 
 class HanaCluster():
 
@@ -71,8 +72,12 @@ class HanaCluster():
             pass
         else:
             # read from filename
-            self.tree = ET.parse(filename)
-            self.root = self.tree.getroot()
+            if os.path.isfile(filename):
+                self.tree = ET.parse(filename)
+                self.root = self.tree.getroot()
+            else:
+                print(f"cib file {filename} not found")
+                sys.exit(2)
 
     def fill_glob_dict(self):
         """
@@ -394,6 +399,7 @@ if __name__ == "__main__":
     if args.sid:
         myCluster.config['sid'] = args.sid.lower()
     myCluster.xml_import(myCluster.config['cib_file'])
+    multi_sid = False
     if myCluster.config['sid'] == None:
         myCluster.get_sids()
         if len(myCluster.sids) == 0:
@@ -401,6 +407,7 @@ if __name__ == "__main__":
             sys.exit(1)
         elif len(myCluster.sids) > 1:
             print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+            multi_sid = False
             sys.exit(1)
         else:
            myCluster.config['sid'] = myCluster.sids[0].lower()
@@ -408,14 +415,17 @@ if __name__ == "__main__":
     myCluster.fill_res_dict()
     myCluster.fill_site_dict()
     myCluster.fill_host_dict()
-    if myCluster.config['format'] == "table":
+    oformat = "table"
+    if 'format' in myCluster.config:
+        oformat = myCluster.config['format']
+    if oformat == "table":
         myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
         myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
         myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
         myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
-    elif myCluster.config['format'] == "json":
+    elif oformat == "json":
         myCluster.print_all_as_json()
-    elif myCluster.config['format'] == "path":
+    elif oformat == "path" or oformat == "script":
         myCluster.print_dic_as_path(myCluster.glob_dict, "global", "Global", quote='"')
         myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
         myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
