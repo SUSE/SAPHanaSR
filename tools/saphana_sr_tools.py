@@ -51,12 +51,13 @@ class HanaCluster():
         self.site_dict = None
         self.host_dict = None
         self.selection = 'test'
-        self.config = {}
-        self.config['cib_file'] = None
-        self.config['format'] = "table"
-        self.config['select'] = "default"
+        self.config = {
+            'cib_file': None,
+            'format': "table",
+            'select': "default",
+            'sid': None 
+                      }
         self.sids = []
-        self.sid = None
 
     def xml_import(self, filename):
         if filename == None:
@@ -82,8 +83,8 @@ class HanaCluster():
         """
         self.glob_dict =  {"global": {} }
         global_glob_dict = self.glob_dict['global']
-        if self.sid:
-            global_glob_dict.update({'sid': self.sid})
+        if 'sid' in self.config and self.['config']:
+            global_glob_dict.update({'sid': self.config['sid']})
         # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             # TODO add only cluster and hana_xxx_gloval_nnnn attributes - for now we add all
@@ -330,6 +331,7 @@ if __name__ == "__main__":
     parser.add_argument("--cib", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
+    parser.add_argument("--sid", help="specify the sid to check for")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
     #                    action="store_true")
     args = parser.parse_args()
@@ -339,6 +341,8 @@ if __name__ == "__main__":
         myCluster.config['format'] = args.format
     if args.select:
         myCluster.config['select'] = args.select
+    if args.sid:
+        myCluster.config['sid'] = args.sid
     myCluster.xml_import(myCluster.config['cib_file'])
     myCluster.get_sids()
     if len(myCluster.sids) == 0:
