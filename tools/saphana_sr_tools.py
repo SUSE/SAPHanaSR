@@ -106,29 +106,32 @@ class HanaCluster():
         """
         fill_res_dict()
         TODO: description
-        TODO: Autodetection of the SID
         TODO: Controller and Topology part very similar -> create a method for processing that
         """
-        sid = "HA1"
+        sid = self.config["sid"].upper()
         self.res_dict = {}
         # Controller
-        con_res = self.root.findall(f"./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")[0]
-        con_name = con_res.attrib['id']
-        self.res_dict.update({con_name: {}}) 
-        res_res_dict = self.res_dict[con_name]
-        for ma in con_res.findall("./meta_attributes/nvpair"):
-            name = ma.attrib['name']
-            value = ma.attrib["value"]
-            res_res_dict.update({name: value})
+        con_res_arr = self.root.findall(f"./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")
+        if len(con_res_arr) == 1:
+            con_res = con_res_arr[0]
+            con_name = con_res.attrib['id']
+            self.res_dict.update({con_name: {}}) 
+            res_res_dict = self.res_dict[con_name]
+            for ma in con_res.findall("./meta_attributes/nvpair"):
+                name = ma.attrib['name']
+                value = ma.attrib["value"]
+                res_res_dict.update({name: value})
         # Topology
-        top_res = self.root.findall(f"./configuration/resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")[0]
-        top_name = top_res.attrib['id']
-        self.res_dict.update({top_name: {}}) 
-        res_res_dict = self.res_dict[top_name]
-        for ma in top_res.findall("./meta_attributes/nvpair"):
-            name = ma.attrib['name']
-            value = ma.attrib["value"]
-            res_res_dict.update({name: value})
+        top_res_arr = self.root.findall(f"./configuration/resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")
+        if len(top_res_arr) == 1:
+            top_res = top_res_arr[0]
+            top_name = top_res.attrib['id']
+            self.res_dict.update({top_name: {}}) 
+            res_res_dict = self.res_dict[top_name]
+            for ma in top_res.findall("./meta_attributes/nvpair"):
+                name = ma.attrib['name']
+                value = ma.attrib["value"]
+                res_res_dict.update({name: value})
 
     def fill_site_dict(self):
         """
