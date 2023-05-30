@@ -83,7 +83,7 @@ class HanaCluster():
         """
         self.glob_dict =  {"global": {} }
         global_glob_dict = self.glob_dict['global']
-        if 'sid' in self.config and self.['config']:
+        if 'sid' in self.config and self.config['sid']:
             global_glob_dict.update({'sid': self.config['sid']})
         # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
@@ -350,7 +350,7 @@ if __name__ == "__main__":
     elif len(myCluster.sids) > 1:
         print("WARN: Multiple SIDs found in cluster config. Please specify SID using --sid <SID>")
     else:
-       myCluster.sid = myCluster.sids[0]
+       myCluster.config['sid'] = myCluster.sids[0]
     myCluster.fill_glob_dict()
     myCluster.fill_res_dict()
     myCluster.fill_site_dict()
