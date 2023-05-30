@@ -84,7 +84,7 @@ class HanaCluster():
         self.glob_dict =  {"global": {} }
         global_glob_dict = self.glob_dict['global']
         if 'sid' in self.config and self.config['sid']:
-            global_glob_dict.update({'sid': self.config['sid']})
+            global_glob_dict.update({'sid': self.config['sid'].upper()})
         # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             # TODO add only cluster and hana_xxx_global_nnnn attributes - for now we add all
@@ -167,10 +167,20 @@ class HanaCluster():
         """
         host_obj = self.root.findall(f"./configuration/nodes/*[@uname='{hostname}']")[0]
         for nv in host_obj.findall("./instance_attributes/nvpair"):
-            node_table.update({nv.attrib['name']: nv.attrib["value"]})
+            name = nv.attrib['name']
+            value = nv.attrib["value"]
+            if self.is_hana_attribute(name):
+                sid = self.get_sid_from_attribute(name)
+                if sid == self.config['sid']:
+                    node_table.update({name: value})
         host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
         for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
-           node_table.update({nv.attrib['name']: nv.attrib["value"]})
+            name = nv.attrib['name']
+            value = nv.attrib["value"]
+            if self.is_hana_attribute(name):
+                sid = self.get_sid_from_attribute(name)
+                if sid == self.config['sid']:
+                    node_table.update({name: value})
 
     def is_site_attribute(self, column_name, **kargs):
         """
@@ -370,16 +380,16 @@ if __name__ == "__main__":
     if args.select:
         myCluster.config['select'] = args.select
     if args.sid:
-        myCluster.config['sid'] = args.sid
+        myCluster.config['sid'] = args.sid.lower()
     myCluster.xml_import(myCluster.config['cib_file'])
     if myCluster.config['sid'] == None:
         myCluster.get_sids()
         if len(myCluster.sids) == 0:
             print("ERR: No SID found in cluster config")
         elif len(myCluster.sids) > 1:
-            print("WARN: Multiple SIDs found in cluster config. Please specify SID using --sid <SID>")
+            print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
         else:
-           myCluster.config['sid'] = myCluster.sids[0]
+           myCluster.config['sid'] = myCluster.sids[0].lower()
     myCluster.fill_glob_dict()
     myCluster.fill_res_dict()
     myCluster.fill_site_dict()
