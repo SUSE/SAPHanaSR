@@ -87,7 +87,7 @@ class HanaCluster():
             global_glob_dict.update({'sid': self.config['sid']})
         # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
-            # TODO add only cluster and hana_xxx_gloval_nnnn attributes - for now we add all
+            # TODO add only cluster and hana_xxx_global_nnnn attributes - for now we add all
             if self.is_site_attribute(nv.attrib['name']) == False:
                 global_glob_dict.update({nv.attrib['name']: nv.attrib["value"]})
         # handle all cib attributes at top-level
@@ -128,18 +128,22 @@ class HanaCluster():
     def fill_site_dict(self):
         """
         TODO: description
+        hana_<sid>_site_<name>_<site>
         """
         self.site_dict = {}
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             name = nv.attrib['name']
             value = nv.attrib["value"]
             site = self.is_site_attribute(name, return_site_name=True)
-            if site:
+            sid  = self.get_sid_from_attribute(name)
+            if site  and sid == self.config['sid']:
                 if not(site in self.site_dict):
                     self.site_dict.update({site: {}})
                 site_site_dict = self.site_dict[site]
                 # for sites we already use the shortened attribute name (site-part in the name sis also removed to match the same column later)
                 site_site_dict.update({self.shorten(name): value})
+            else:
+                pass
  
     def fill_host_dict(self):
         """
@@ -180,6 +184,13 @@ class HanaCluster():
             if return_site_name:
                 return None
         return False;
+
+    def get_sid_from_attribute(self, name):
+        sid = None
+        match_obj = re.search("hana_(...)_site_.*_.*",name)
+        if match_obj:
+            sid = match_obj.group(1)
+        return sid
 
     def shorten(self, column_name):
         """ shortens column name
@@ -344,13 +355,14 @@ if __name__ == "__main__":
     if args.sid:
         myCluster.config['sid'] = args.sid
     myCluster.xml_import(myCluster.config['cib_file'])
-    myCluster.get_sids()
-    if len(myCluster.sids) == 0:
-        print("ERR: No SID found in cluster config")
-    elif len(myCluster.sids) > 1:
-        print("WARN: Multiple SIDs found in cluster config. Please specify SID using --sid <SID>")
-    else:
-       myCluster.config['sid'] = myCluster.sids[0]
+    if myCluster.config['sid'] == None:
+        myCluster.get_sids()
+        if len(myCluster.sids) == 0:
+            print("ERR: No SID found in cluster config")
+        elif len(myCluster.sids) > 1:
+            print("WARN: Multiple SIDs found in cluster config. Please specify SID using --sid <SID>")
+        else:
+           myCluster.config['sid'] = myCluster.sids[0]
     myCluster.fill_glob_dict()
     myCluster.fill_res_dict()
     myCluster.fill_site_dict()
