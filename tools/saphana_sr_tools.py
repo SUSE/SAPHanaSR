@@ -88,8 +88,13 @@ class HanaCluster():
         # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             # TODO add only cluster and hana_xxx_global_nnnn attributes - for now we add all
-            if self.is_site_attribute(nv.attrib['name']) == False:
-                global_glob_dict.update({nv.attrib['name']: nv.attrib["value"]})
+            name = nv.attrib['name']
+            value = nv.attrib["value"]
+            if self.is_hana_attribute(name):
+                if self.is_hana_glob_attribute(name):
+                    sid = self.get_sid_from_attribute(name)
+                    if sid == self.config['sid']:
+                        global_glob_dict.update({name: value})
         # handle all cib attributes at top-level
         cib_attrs = self.root.attrib
         if 'cib-last-written' in cib_attrs:
@@ -185,9 +190,21 @@ class HanaCluster():
                 return None
         return False;
 
+    def is_hana_attribute(self, name):
+        match_obj = re.match("hana_.*",name)
+        if match_obj:
+           return True
+        return False
+
+    def is_hana_glob_attribute(self, name):
+        match_obj = re.match("hana_..._glob_.*",name)
+        if match_obj:
+           return True
+        return False
+
     def get_sid_from_attribute(self, name):
         sid = None
-        match_obj = re.search("hana_(...)_site_.*_.*",name)
+        match_obj = re.match("hana_(...)_",name)
         if match_obj:
             sid = match_obj.group(1)
         return sid
