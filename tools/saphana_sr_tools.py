@@ -23,19 +23,19 @@ class HanaCluster():
     global selections 
     selections = {
                     'default': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
                                },
                     'sr': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
                                  },
                     'minimal': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'sid', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'roles', 'score', 'site'],
@@ -55,6 +55,8 @@ class HanaCluster():
         self.config['cib_file'] = None
         self.config['format'] = "table"
         self.config['select'] = "default"
+        self.sids = []
+        self.sid = None
 
     def xml_import(self, filename):
         if filename == None:
@@ -80,6 +82,8 @@ class HanaCluster():
         """
         self.glob_dict =  {"global": {} }
         global_glob_dict = self.glob_dict['global']
+        if self.sid:
+            global_glob_dict.update({'sid': self.sid})
         # handle all attributes from properties but not site attributes (hana_<sid>_site_<name>_<site>)
         for nv in self.root.findall("./configuration/crm_config/cluster_property_set/nvpair"):
             # TODO add only cluster and hana_xxx_gloval_nnnn attributes - for now we add all
@@ -313,23 +317,36 @@ class HanaCluster():
                 return False
         return True
 
+    def get_sids(self):
+        root = self.root
+        sids = []
+        for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
+            sids.append(ia.attrib['value'])
+        self.sids = sids
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cibfile", help="specify the cibfile file")
+    parser.add_argument("--cib", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
     #                    action="store_true")
     args = parser.parse_args()
-    if args.cibfile:
-        myCluster.config['cib_file'] = args.cibfile
+    if args.cib:
+        myCluster.config['cib_file'] = args.cib
     if args.format:
         myCluster.config['format'] = args.format
     if args.select:
         myCluster.config['select'] = args.select
     myCluster.xml_import(myCluster.config['cib_file'])
+    myCluster.get_sids()
+    if len(myCluster.sids) == 0:
+        print("ERR: No SID found in cluster config")
+    elif len(myCluster.sids) > 1:
+        print("WARN: Multiple SIDs found in cluster config. Please specify SID using --sid <SID>")
+    else:
+       myCluster.sid = myCluster.sids[0]
     myCluster.fill_glob_dict()
     myCluster.fill_res_dict()
     myCluster.fill_site_dict()
