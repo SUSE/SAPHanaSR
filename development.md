@@ -2,10 +2,11 @@
 ## Branch handling
 
 - `maintenance-classic` contains all bugfixes and features needed and delivered for the current released SAPHanaSR (Scale-Up)
-  This branch will be based on current (27.04.2023) `master` branch, the tag `classic-start` will mark the starting point for this branch.
-  All future bugfixing and feature enhancements for the released SAPHanaSR will take place in this branch
+  This branch is based on `master` branch (renamed at 27.04.2023), the tag `classic-start` will mark the starting point for this branch.
+  All future bugfixing and feature enhancements for the released SAPHanaSR will take place in this branch (via PRs)
+  All changes to this branch need to be backward compatible to not distract the installed customer base.
 
-- `main` formerly `master` contains all bugfixing and features for the future **SAP HANA System Replication - A New Generation Interface**
+- `main` formerly `angi` contains all bugfixing and features for the future **SAP HANA System Replication - A New Generation Interface**
 
 - `stable` contains a snapshot of `main`, which represents the current build release package SAPHanaSR-angi. A corresponding tag (e.g. a1.001.4-TP) will mark the release. The branch is currently set to 'read-only'
 
