@@ -56,7 +56,7 @@ try:
             self.tracer.info("{0}.{1}() version {2}".format(self.__class__.__name__, method, fhSRHookVersion))
             return {"provider_company": "SUSE",
                     "provider_name": "susTkOver",  # class name
-                    "provider_description": "Inform Cluster about SR state",
+                    "provider_description": "Block manual takeover, if cluster is active",
                     "provider_version": "1.0"}
 
         def preTakeover(self, isForce, **kwargs):
