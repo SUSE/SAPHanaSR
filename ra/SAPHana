@@ -591,19 +591,16 @@ scoring_crm_master()
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local roles="$1"
     local sync="$2"
-    local skip=0
-    local myScore=""
+    local myScore=''
     for scan in "${SCORING_TABLE[@]}"; do
-        if [ $skip -eq 0 ]; then
-            read rolePatt syncPatt score <<< $scan
-            if grep "$rolePatt" <<< "$roles"; then
-               if grep "$syncPatt" <<< "$sync"; then
-                  super_ocf_log info "DEC: scoring_crm_master: roles($roles) are matching pattern ($rolePatt)"
-                  super_ocf_log info "DEC: scoring_crm_master: sync($sync) is matching syncPattern ($syncPatt)"
-                  super_ocf_log info "DEC: scoring_crm_master: set score $score"
-                  skip=1
-                  myScore=$score
-               fi
+        read rolePatt syncPatt score <<< $scan
+        if [[ "$roles" =~ $rolePatt ]] ; then
+            if [[ "$sync" =~ $syncPatt ]] ; then
+                super_ocf_log info "DEC: scoring_crm_master: roles($roles) are matching pattern ($rolePatt)"
+                super_ocf_log info "DEC: scoring_crm_master: sync($sync) is matching syncPattern ($syncPatt)"
+                super_ocf_log info "DEC: scoring_crm_master: set score $score"
+                myScore=$score
+                break
             fi
         fi
     done
