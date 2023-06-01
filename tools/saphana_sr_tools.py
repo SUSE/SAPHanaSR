@@ -87,7 +87,9 @@ class HanaCluster():
             'cib_file': None,
             'format': "table",
             'select': "default",
-            'sid': None 
+            'sid': None, 
+            'sort': None,
+            'sort-reverse': False,
                       }
         self.sids = []
 
@@ -289,7 +291,7 @@ class HanaCluster():
         column_names = sorted(list(dict.fromkeys(column_names)))
         column_names.insert(0, table_name)
         for col in column_names[1:]:
-            col_len = len(self.shorten(col)) 
+            col_len = len(shorten(col)) 
             for key in print_dic:
                 if col in print_dic[key]:
                     col_len = max(col_len, len(print_dic[key][col]))
@@ -304,7 +306,7 @@ class HanaCluster():
                     col_len = column_length[col]
                 else:
                     col_len = 1
-                print("{0:<{width}} ".format(self.shorten(col), width=col_len), end='')
+                print("{0:<{width}} ".format(shorten(col), width=col_len), end='')
                 bar_len += col_len + 1
         print()
         print('-' * bar_len)
@@ -385,7 +387,7 @@ class HanaCluster():
                 return False
         elif select in selections and area in selections[select]:
             the_selection = selections[select][area]
-            if not(self.shorten(column_name) in the_selection):
+            if not(shorten(column_name) in the_selection):
                 return False
         return True
 
@@ -405,6 +407,7 @@ if __name__ == "__main__":
     parser.add_argument("--format", help="output format ([table], path, script, json)")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     parser.add_argument("--sid", help="specify the sid to check for")
+    parser.add_argument("--sort", help="specify the column name to sort by")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
     #                    action="store_true")
     args = parser.parse_args()
@@ -416,6 +419,15 @@ if __name__ == "__main__":
         myCluster.config['select'] = args.select
     if args.sid:
         myCluster.config['sid'] = args.sid.lower()
+    if args.sort:
+        if args.sort[0] == '-':
+            myCluster.config['sort-reverse'] = True
+            myCluster.config['sort'] = args.sort[1:]
+        elif args.sort[0] == '+':
+            myCluster.config['sort-reverse'] = False
+            myCluster.config['sort'] = args.sort[1:]
+        else:
+            myCluster.config['sort'] = args.sort
     myCluster.xml_import(myCluster.config['cib_file'])
     multi_sid = False
     if myCluster.config['sid'] == None:
@@ -437,14 +449,19 @@ if __name__ == "__main__":
     if 'format' in myCluster.config:
         oformat = myCluster.config['format']
     if oformat == "table":
-        myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
-        myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
-        myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
-        myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
-        index = 'hana_ha1_clone_state'
+        index = myCluster.config['sort']
         index_type = 'str'
-        index_reverse = False
-        myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host", "Host")
+        index_reverse = myCluster.config['sort-reverse']
+        if index == None:
+            myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
+            myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
+            myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
+            myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
+        else:
+            myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Host")
+            myCluster.print_dic_as_table(dict(sorted(myCluster.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
+            myCluster.print_dic_as_table(dict(sorted(myCluster.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
+            myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
     elif oformat == "json":
         myCluster.print_all_as_json()
     elif oformat == "path" or oformat == "script":
