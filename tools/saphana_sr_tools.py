@@ -19,6 +19,21 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 
+def get_sort_value(item, index, **kargs):
+    """ get_value(item, index, **kargs)
+        item is the single entity item to be sorted
+        index is the 'field' in item to sort-by
+        with type='int' or type='str' you could define the replace value for non-existing dictionary entries in item
+    """
+    if index in item:
+        return item[index]
+    if 'type' in kargs:
+        if kargs['type'] == 'int':
+            return 0
+        elif kargs['type'] == 'str':
+            return ''
+    return  None
+
 class HanaCluster():
 
     global selections 
@@ -379,6 +394,8 @@ class HanaCluster():
         for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
             sids.append(ia.attrib['value'])
         self.sids = sids
+    
+
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
@@ -423,6 +440,10 @@ if __name__ == "__main__":
         myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
         myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
         myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
+        index = 'hana_ha1_clone_state'
+        index_type = 'str'
+        index_reverse = False
+        myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host", "Host")
     elif oformat == "json":
         myCluster.print_all_as_json()
     elif oformat == "path" or oformat == "script":
@@ -434,6 +455,14 @@ if __name__ == "__main__":
 
 
 """
+# sort dictionary by nested key-value
+print(d)
+index = 'status'
+index_type = 'str'
+index_reverse = False
+print("asc: {}".format(dict(sorted(d.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)).keys()))
+index_reverse = True
+print("des: {}".format(dict(sorted(d.items(), key=lambda item: (get_value(item[1],index, type=index_type)), reverse=index_reverse)).keys()))
 # get all configuration-node objects
 root.findall("./configuration/nodes/*")
  
