@@ -34,6 +34,23 @@ def get_sort_value(item, index, **kargs):
             return ''
     return  None
 
+def shorten(column_name):
+    """ shortens column name
+        e.g. (1) hana_ha1_site -> site              ( a node attribute)
+             (2) hana_ha1_site_mns_S1 -> mns        ( a site attribute )
+             (3) hana_ha1_global_topology -> global ( a global attribute )
+    """
+    match_obj = re.search("hana_..._glob_(.*)",column_name)    # (3)
+    if match_obj != None:
+        column_name = match_obj.group(1)
+    match_obj = re.search("hana_..._site_(.*)_",column_name)   # (2)
+    if match_obj != None:
+        column_name = match_obj.group(1)
+    match_obj = re.search("hana_..._(.*)",column_name)         # (1)
+    if match_obj != None:
+        column_name = match_obj.group(1)
+    return column_name
+
 class HanaCluster():
 
     global selections 
@@ -113,7 +130,7 @@ class HanaCluster():
                 if self.is_hana_glob_attribute(name):
                     sid = self.get_sid_from_attribute(name)
                     if sid == self.config['sid']:
-                        global_glob_dict.update({name: value})
+                        global_glob_dict.update({shorten(name): value})
             else:
                 global_glob_dict.update({name: value})
         # handle all cib attributes at top-level
@@ -169,7 +186,7 @@ class HanaCluster():
                     self.site_dict.update({site: {}})
                 site_site_dict = self.site_dict[site]
                 # for sites we already use the shortened attribute name (site-part in the name sis also removed to match the same column later)
-                site_site_dict.update({self.shorten(name): value})
+                site_site_dict.update({shorten(name): value})
             else:
                 pass
  
@@ -195,7 +212,7 @@ class HanaCluster():
             if self.is_hana_attribute(name):
                 sid = self.get_sid_from_attribute(name)
                 if sid == self.config['sid']:
-                    node_table.update({name: value})
+                    node_table.update({shorten(name): value})
         host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
         for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
             name = nv.attrib['name']
@@ -203,7 +220,7 @@ class HanaCluster():
             if self.is_hana_attribute(name):
                 sid = self.get_sid_from_attribute(name)
                 if sid == self.config['sid']:
-                    node_table.update({name: value})
+                    node_table.update({shorten(name): value})
 
     def is_site_attribute(self, column_name, **kargs):
         """
@@ -251,22 +268,6 @@ class HanaCluster():
             sid = match_obj.group(1)
         return sid
 
-    def shorten(self, column_name):
-        """ shortens column name
-            e.g. (1) hana_ha1_site -> site              ( a node attribute)
-                 (2) hana_ha1_site_mns_S1 -> mns        ( a site attribute )
-                 (3) hana_ha1_global_topology -> global ( a global attribute )
-        """
-        match_obj = re.search("hana_..._glob_(.*)",column_name)    # (3)
-        if match_obj != None:
-            column_name = match_obj.group(1)
-        match_obj = re.search("hana_..._site_(.*)_",column_name)   # (2)
-        if match_obj != None:
-            column_name = match_obj.group(1)
-        match_obj = re.search("hana_..._(.*)",column_name)         # (1)
-        if match_obj != None:
-            column_name = match_obj.group(1)
-        return column_name
 
     def print_dic_as_table(self, print_dic, area, table_name):
         """
