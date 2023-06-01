@@ -398,23 +398,9 @@ class HanaCluster():
             False, if column should be skipped
             True, if column should be printed
             TODO: filter sets might allow custom config via json file (filter set per area)
-            TODO: remove select 'test' later
         '''
         select = self.config['select']
-        if select == 'test':
-            match_obj = re.search("dc.version",column_name)
-            if match_obj != None:
-                return False
-            match_obj = re.search("#feature",column_name)
-            if match_obj != None:
-                return False
-            match_obj = re.search("fail-count-",column_name) 
-            if match_obj != None:
-                return False
-            match_obj = re.search("last-failure-",column_name) 
-            if match_obj != None:
-                return False
-        elif select in selections and area in selections[select]:
+        if select in selections and area in selections[select]:
             the_selection = selections[select][area]
             after_loop = False
             for pat in the_selection:
