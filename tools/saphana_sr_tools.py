@@ -215,6 +215,8 @@ class HanaCluster():
                 sid = self.get_sid_from_attribute(name)
                 if sid == self.config['sid']:
                     node_table.update({shorten(name): value})
+            else:
+                node_table.update({shorten(name): value})
         host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
         for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
             name = nv.attrib['name']
@@ -223,6 +225,9 @@ class HanaCluster():
                 sid = self.get_sid_from_attribute(name)
                 if sid == self.config['sid']:
                     node_table.update({shorten(name): value})
+            else:
+                node_table.update({shorten(name): value})
+        
 
     def is_site_attribute(self, column_name, **kargs):
         """
