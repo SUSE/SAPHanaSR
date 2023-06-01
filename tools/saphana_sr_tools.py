@@ -89,13 +89,13 @@ class HanaCluster():
                                     'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', r'fail.*'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
                                },
                     'cluster3': {
                                     'global'   : ['-dc.*'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', r'fail.*'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
                                },
                 }
 
@@ -411,7 +411,7 @@ class HanaCluster():
                     pat = pat[1:]
                 elif pat[0]=='+':
                     pat = pat[1:]
-                match_obj = re.match(pat,column_name)
+                match_obj = re.match(pat + '$',column_name)
                 if match_obj:
                     return on_match
             return after_loop
