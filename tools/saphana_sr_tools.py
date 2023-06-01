@@ -68,11 +68,23 @@ class HanaCluster():
                                     'host'     : ['Host', 'clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
                                  },
                     'minimal': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'sid', 'topology'],
+                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
                                     'host'     : ['Host', 'clone_state', 'roles', 'score', 'site'],
-                                 }
+                                 },
+                    'cluster': {
+                                    'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
+                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
+                               },
+                    'cluster2': {
+                                    'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
+                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost', r'fail.*'],
+                               },
                 }
 
     def __init__(self):
