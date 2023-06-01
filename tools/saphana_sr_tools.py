@@ -55,6 +55,12 @@ class HanaCluster():
 
     global selections 
     selections = {
+                    'all': {
+                                    'global'   : ['.*'],
+                                    'resource' : ['.*'],
+                                    'site'     : ['.*'],
+                                    'host'     : ['.*'],
+                               },
                     'default': {
                                     'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
@@ -77,13 +83,19 @@ class HanaCluster():
                                     'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost'],
                                },
                     'cluster2': {
                                     'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
                                     'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost', r'fail.*'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', r'fail.*'],
+                               },
+                    'cluster3': {
+                                    'global'   : ['-dc.*'],
+                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', r'fail.*'],
                                },
                 }
 
@@ -385,8 +397,8 @@ class HanaCluster():
         ''' filter column_names 
             False, if column should be skipped
             True, if column should be printed
-            TODO: implement filter sets e.g. all, default, sr, ...
             TODO: filter sets might allow custom config via json file (filter set per area)
+            TODO: remove select 'test' later
         '''
         select = self.config['select']
         if select == 'test':
@@ -404,8 +416,19 @@ class HanaCluster():
                 return False
         elif select in selections and area in selections[select]:
             the_selection = selections[select][area]
-            if not(shorten(column_name) in the_selection):
-                return False
+            after_loop = False
+            for pat in the_selection:
+                on_match = True
+                if pat[0]=='-':
+                    after_loop = True
+                    on_match = False
+                    pat = pat[1:]
+                elif pat[0]=='+':
+                    pat = pat[1:]
+                match_obj = re.match(pat,column_name)
+                if match_obj:
+                    return on_match
+            return after_loop
         return True
 
     def get_sids(self):
