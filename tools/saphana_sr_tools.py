@@ -19,6 +19,8 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 
+version = 1.0.20230602.1415
+
 def get_sort_value(item, index, **kargs):
     """ get_value(item, index, **kargs)
         item is the single entity item to be sorted
@@ -484,7 +486,7 @@ if __name__ == "__main__":
             myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
             myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
         else:
-            myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Host")
+            myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
             myCluster.print_dic_as_table(dict(sorted(myCluster.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
             myCluster.print_dic_as_table(dict(sorted(myCluster.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
             myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
