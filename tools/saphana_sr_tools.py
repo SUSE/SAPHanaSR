@@ -19,7 +19,7 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 
-version = "1.0.20230602.1415"
+version = "1.0.20230602.1526"
 
 def get_sort_value(item, index, **kargs):
     """ get_value(item, index, **kargs)
@@ -36,21 +36,33 @@ def get_sort_value(item, index, **kargs):
             return ''
     return  None
 
-def shorten(column_name):
+def shorten(column_name, **kargs):
     """ shortens column name
-        e.g. (1) hana_ha1_site -> site              ( a node attribute)
-             (2) hana_ha1_site_mns_S1 -> mns        ( a site attribute )
-             (3) hana_ha1_global_topology -> global ( a global attribute )
+        optinal parameter: sid=<sid> to be more precise in the pattern
+        e.g. (1) hana_ha1_site -> site                ( a node attribute)
+             (2) hana_ha1_site_mns_S1 -> mns          ( a site attribute )
+             (3) hana_ha1_global_topology -> topology ( a global attribute )
+             (4) master-rsc_SAPHanaCon_HA1_HDB10 -> score 
+    # TODO: Do we need to check, if the master-attribute belongs to the promotable clone for this SID?
     """
-    match_obj = re.search("hana_..._glob_(.*)",column_name)    # (3)
+    sid = '...'
+    sid_uc = '...'
+    if 'sid' in kargs:
+        sid = kargs['sid'].lower()
+        sid_uc = kargs['sid'].upper()
+    match_obj = re.search(f"hana_{sid}_glob_(.*)",column_name)    # (3)
     if match_obj != None:
         column_name = match_obj.group(1)
-    match_obj = re.search("hana_..._site_(.*)_",column_name)   # (2)
+    match_obj = re.search(f"hana_{sid}_site_(.*)_",column_name)   # (2)
     if match_obj != None:
         column_name = match_obj.group(1)
-    match_obj = re.search("hana_..._(.*)",column_name)         # (1)
+    match_obj = re.search(f"hana_{sid}_(.*)",column_name)         # (1)
     if match_obj != None:
         column_name = match_obj.group(1)
+    # TODO: Do we need to check, if the master-attribute belongs to the promotable clone for this SID?
+    match_obj = re.search(f"master.rsc.*_{sid_uc}_.*",column_name)   # (4)
+    if match_obj != None:
+        column_name = 'score'
     return column_name
 
 class HanaCluster():
@@ -240,7 +252,7 @@ class HanaCluster():
             if self.is_hana_attribute(name):
                 sid = self.get_sid_from_attribute(name)
                 if sid == self.config['sid']:
-                    node_table.update({shorten(name): value})
+                    node_table.update({shorten(name, sid=sid): value})
             else:
                 node_table.update({shorten(name): value})
         host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
@@ -250,9 +262,9 @@ class HanaCluster():
             if self.is_hana_attribute(name):
                 sid = self.get_sid_from_attribute(name)
                 if sid == self.config['sid']:
-                    node_table.update({shorten(name): value})
+                    node_table.update({shorten(name, sid=sid): value})
             else:
-                node_table.update({shorten(name): value})
+                node_table.update({shorten(name, sid=self.config['sid']): value})
         
 
     def is_site_attribute(self, column_name, **kargs):
