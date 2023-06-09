@@ -125,6 +125,7 @@ class HanaCluster():
         self.selection = 'test'
         self.config = {
             'cib_file': None,
+            'cib_file_list': [ None ],
             'from': 0,
             'format': "table",
             'properties_file': None,
@@ -479,7 +480,7 @@ if __name__ == "__main__":
     if args.cib:
         myCluster.config['cib_file'] = args.cib
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
-    if 'from' in vars(args):
+    if 'from' in vars(args) and vars(args)['from']:
         dt = dateutil_parser.parse(vars(args)['from']) 
         myCluster.config['from'] = int(dt.timestamp())
     if args.format:
