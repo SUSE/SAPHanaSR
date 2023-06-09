@@ -12,6 +12,8 @@
 """
 
 import argparse
+#from datetime import datetime
+from dateutil import parser as dateutil_parser
 import json
 import os
 import re
@@ -123,12 +125,14 @@ class HanaCluster():
         self.selection = 'test'
         self.config = {
             'cib_file': None,
+            'from': 0,
             'format': "table",
             'properties_file': None,
             'select': "default",
             'sid': None, 
             'sort': None,
             'sort-reverse': False,
+            'to': 99999999999, # some time in the future ;-)
                       }
         self.sids = []
 
@@ -463,15 +467,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cib", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
+    parser.add_argument("--from", help="select 'from' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--properties", help="specify the properties file")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     parser.add_argument("--sid", help="specify the sid to check for")
     parser.add_argument("--sort", help="specify the column name to sort by")
+    parser.add_argument("--to", help="select 'to' - timepoint ('YYYY-M-D H:M:S')")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
     #                    action="store_true")
     args = parser.parse_args()
     if args.cib:
         myCluster.config['cib_file'] = args.cib
+    # args.from would create a namespace conflict so extracting 'from' using vars(args)
+    if 'from' in vars(args):
+        dt = dateutil_parser.parse(vars(args)['from']) 
+        myCluster.config['from'] = int(dt.timestamp())
     if args.format:
         myCluster.config['format'] = args.format
     if args.properties:
@@ -489,6 +499,9 @@ if __name__ == "__main__":
             myCluster.config['sort'] = args.sort[1:]
         else:
             myCluster.config['sort'] = args.sort
+    if args.to:
+        dt = dateutil_parser.parse(args.to) 
+        myCluster.config['to'] = int(dt.timestamp())
     myCluster.read_properties()
     myCluster.xml_import(myCluster.config['cib_file'])
     multi_sid = False
@@ -507,6 +520,16 @@ if __name__ == "__main__":
     myCluster.fill_res_dict()
     myCluster.fill_site_dict()
     myCluster.fill_host_dict()
+    #print(str(myCluster.glob_dict))
+    if 'cib-time' in myCluster.glob_dict['global']:
+        #print(f"dbg: test time filter")
+        dt = dateutil_parser.parse(myCluster.glob_dict['global']['cib-time'])
+        cibtime = int(dt.timestamp())
+        if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
+            pass
+        else:
+            print(f"Filter cib-time {myCluster.glob_dict['global']['cib-time']}")
+            exit(1)
     oformat = "table"
     if 'format' in myCluster.config:
         oformat = myCluster.config['format']
@@ -531,5 +554,3 @@ if __name__ == "__main__":
         myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
         myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
         myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
-    #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
-
