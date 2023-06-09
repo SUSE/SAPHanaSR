@@ -13,6 +13,9 @@
 
 import argparse
 from dateutil import parser as dateutil_parser
+import json
+import os
+import re
 import sys
 sys.path.insert(1, '/usr/local/lib')
 from saphana_sr_tools import HanaCluster
@@ -20,7 +23,7 @@ from saphana_sr_tools import HanaCluster
 if __name__ == "__main__":
     myCluster = HanaCluster()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cib", help="specify the cibfile file")
+    parser.add_argument("--cib", nargs="*", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
     parser.add_argument("--from", help="select 'from' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--properties", help="specify the properties file")
@@ -32,9 +35,10 @@ if __name__ == "__main__":
     #                    action="store_true")
     args = parser.parse_args()
     if args.cib:
-        myCluster.config['cib_file'] = args.cib
+        #myCluster.config['cib_file'] = args.cib[0] # later we need to iterate
+        myCluster.config['cib_file_list'] = args.cib 
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
-    if 'from' in vars(args):
+    if 'from' in vars(args) and vars(args)['from']:
         dt = dateutil_parser.parse(vars(args)['from']) 
         myCluster.config['from'] = int(dt.timestamp())
     if args.format:
@@ -58,54 +62,61 @@ if __name__ == "__main__":
         dt = dateutil_parser.parse(args.to) 
         myCluster.config['to'] = int(dt.timestamp())
     myCluster.read_properties()
-    myCluster.xml_import(myCluster.config['cib_file'])
-    multi_sid = False
-    if myCluster.config['sid'] == None:
-        myCluster.get_sids()
-        if len(myCluster.sids) == 0:
-            print("ERR: No SID found in cluster config")
-            sys.exit(1)
-        elif len(myCluster.sids) > 1:
-            print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
-            multi_sid = False
-            sys.exit(1)
-        else:
-           myCluster.config['sid'] = myCluster.sids[0].lower()
-    myCluster.fill_glob_dict()
-    myCluster.fill_res_dict()
-    myCluster.fill_site_dict()
-    myCluster.fill_host_dict()
-    #print(str(myCluster.glob_dict))
-    if 'cib-time' in myCluster.glob_dict['global']:
-        #print(f"dbg: test time filter")
-        dt = dateutil_parser.parse(myCluster.glob_dict['global']['cib-time'])
-        cibtime = int(dt.timestamp())
-        if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
-            pass
-        else:
-            print(f"Filter cib-time {myCluster.glob_dict['global']['cib-time']}")
-            exit(1)
-    oformat = "table"
-    if 'format' in myCluster.config:
-        oformat = myCluster.config['format']
-    if oformat == "table":
-        index = myCluster.config['sort']
-        index_type = 'str'
-        index_reverse = myCluster.config['sort-reverse']
-        if index == None:
-            myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
-            myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
-            myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
-            myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
-        else:
-            myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
-            myCluster.print_dic_as_table(dict(sorted(myCluster.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
-            myCluster.print_dic_as_table(dict(sorted(myCluster.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
-            myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
-    elif oformat == "json":
-        myCluster.print_all_as_json()
-    elif oformat == "path" or oformat == "script":
-        myCluster.print_dic_as_path(myCluster.glob_dict, "global", "Global", quote='"')
-        myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
-        myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
-        myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
+    #
+    # here the cib files iteration would begin
+    #   - we need to read all given cib files
+    #   - sort the found data dictionaries by cib-date
+    #   - output all data dictionaries, filtered by from+to
+    #
+    for cib_file in myCluster.config['cib_file_list']:
+        myCluster.xml_import(cib_file)
+        multi_sid = False
+        if myCluster.config['sid'] == None:
+            myCluster.get_sids()
+            if len(myCluster.sids) == 0:
+                print("ERR: No SID found in cluster config")
+                sys.exit(1)
+            elif len(myCluster.sids) > 1:
+                print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+                multi_sid = False
+                sys.exit(1)
+            else:
+               myCluster.config['sid'] = myCluster.sids[0].lower()
+        myCluster.fill_glob_dict()
+        myCluster.fill_res_dict()
+        myCluster.fill_site_dict()
+        myCluster.fill_host_dict()
+        #print(str(myCluster.glob_dict))
+        if 'cib-time' in myCluster.glob_dict['global']:
+            #print(f"dbg: test time filter")
+            dt = dateutil_parser.parse(myCluster.glob_dict['global']['cib-time'])
+            cibtime = int(dt.timestamp())
+            if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
+                pass
+            else:
+                print(f"Filter cib-time {myCluster.glob_dict['global']['cib-time']}")
+                exit(1)
+        oformat = "table"
+        if 'format' in myCluster.config:
+            oformat = myCluster.config['format']
+        if oformat == "table":
+            index = myCluster.config['sort']
+            index_type = 'str'
+            index_reverse = myCluster.config['sort-reverse']
+            if index == None:
+                myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
+                myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
+                myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
+                myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
+            else:
+                myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
+                myCluster.print_dic_as_table(dict(sorted(myCluster.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
+                myCluster.print_dic_as_table(dict(sorted(myCluster.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
+                myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
+        elif oformat == "json":
+            myCluster.print_all_as_json()
+        elif oformat == "path" or oformat == "script":
+            myCluster.print_dic_as_path(myCluster.glob_dict, "global", "Global", quote='"')
+            myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
+            myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
+            myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
