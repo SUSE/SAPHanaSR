@@ -124,6 +124,7 @@ class HanaCluster():
         self.config = {
             'cib_file': None,
             'format': "table",
+            'properties_file': None,
             'select': "default",
             'sid': None, 
             'sort': None,
@@ -447,13 +448,22 @@ class HanaCluster():
             sids.append(ia.attrib['value'])
         self.sids = sids
     
-
+    def read_properties(self):
+        global selections
+        if self.config['properties_file']:
+            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
+                json_prop = json.load(prop_fh)
+                if 'selections' in json_prop:
+                    selections = json_prop['selections']
+                else:
+                    print(f"properties in file {properties_file} do not set 'selections'")
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
     parser = argparse.ArgumentParser()
     parser.add_argument("--cib", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
+    parser.add_argument("--properties", help="specify the properties file")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     parser.add_argument("--sid", help="specify the sid to check for")
     parser.add_argument("--sort", help="specify the column name to sort by")
@@ -464,6 +474,8 @@ if __name__ == "__main__":
         myCluster.config['cib_file'] = args.cib
     if args.format:
         myCluster.config['format'] = args.format
+    if args.properties:
+        myCluster.config['properties_file'] = args.properties
     if args.select:
         myCluster.config['select'] = args.select
     if args.sid:
@@ -477,6 +489,7 @@ if __name__ == "__main__":
             myCluster.config['sort'] = args.sort[1:]
         else:
             myCluster.config['sort'] = args.sort
+    myCluster.read_properties()
     myCluster.xml_import(myCluster.config['cib_file'])
     multi_sid = False
     if myCluster.config['sid'] == None:
