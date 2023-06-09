@@ -12,6 +12,7 @@
 """
 
 import argparse
+from datetime import datetime
 import sys
 sys.path.insert(1, '/usr/local/lib')
 from saphana_sr_tools import HanaCluster
@@ -21,6 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cib", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
+    parser.add_argument("--properties", help="specify the properties file")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     parser.add_argument("--sid", help="specify the sid to check for")
     parser.add_argument("--sort", help="specify the column name to sort by")
@@ -31,6 +33,8 @@ if __name__ == "__main__":
         myCluster.config['cib_file'] = args.cib
     if args.format:
         myCluster.config['format'] = args.format
+    if args.properties:
+        myCluster.config['properties_file'] = args.properties
     if args.select:
         myCluster.config['select'] = args.select
     if args.sid:
@@ -44,6 +48,7 @@ if __name__ == "__main__":
             myCluster.config['sort'] = args.sort[1:]
         else:
             myCluster.config['sort'] = args.sort
+    myCluster.read_properties()
     myCluster.xml_import(myCluster.config['cib_file'])
     multi_sid = False
     if myCluster.config['sid'] == None:
@@ -85,4 +90,3 @@ if __name__ == "__main__":
         myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
         myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
         myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
-    #myCluster.print_dic_as_json(myCluster.host_dict,"Host")
