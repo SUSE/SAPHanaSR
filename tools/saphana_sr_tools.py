@@ -116,6 +116,7 @@ class HanaCluster():
                 }
 
     def __init__(self):
+        self.multi_status = []
         self.tree = None
         self.root = None
         self.glob_dict = None
@@ -136,6 +137,21 @@ class HanaCluster():
             'to': 99999999999, # some time in the future ;-)
                       }
         self.sids = []
+
+    def read_properties(self):
+        global selections
+        if self.config['properties_file']:
+            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
+                json_prop = json.load(prop_fh)
+                if 'selections' in json_prop:
+                    selections = json_prop['selections']
+                else:
+                    print(f"properties in file {properties_file} do not set 'selections'")
+
+class HanaStatus():
+
+    def __init__(self, config):
+        self.config = config
 
     def xml_import(self, filename):
         if filename == None:
@@ -270,16 +286,18 @@ class HanaCluster():
                     node_table.update({shorten(name, sid=sid): value})
             else:
                 node_table.update({shorten(name): value})
-        host_status_obj = self.root.findall(f"./status/node_state[@uname='{hostname}']")[0]
-        for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
-            name = nv.attrib['name']
-            value = nv.attrib["value"]
-            if self.is_hana_attribute(name):
-                sid = self.get_sid_from_attribute(name)
-                if sid == self.config['sid']:
-                    node_table.update({shorten(name, sid=sid): value})
-            else:
-                node_table.update({shorten(name, sid=self.config['sid']): value})
+        host_status_obj_all = self.root.findall(f"./status/node_state[@uname='{hostname}']")
+        if len(host_status_obj_all) > 0:
+            host_status_obj = host_status_obj_all[0]
+            for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
+                name = nv.attrib['name']
+                value = nv.attrib["value"]
+                if self.is_hana_attribute(name):
+                    sid = self.get_sid_from_attribute(name)
+                    if sid == self.config['sid']:
+                        node_table.update({shorten(name, sid=sid): value})
+                else:
+                    node_table.update({shorten(name, sid=self.config['sid']): value})
         
 
     def is_site_attribute(self, column_name, **kargs):
@@ -426,7 +444,6 @@ class HanaCluster():
         ''' filter column_names 
             False, if column should be skipped
             True, if column should be printed
-            TODO: filter sets might allow custom config via json file (filter set per area)
         '''
         select = self.config['select']
         if select in selections and area in selections[select]:
@@ -453,20 +470,11 @@ class HanaCluster():
             sids.append(ia.attrib['value'])
         self.sids = sids
     
-    def read_properties(self):
-        global selections
-        if self.config['properties_file']:
-            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
-                json_prop = json.load(prop_fh)
-                if 'selections' in json_prop:
-                    selections = json_prop['selections']
-                else:
-                    print(f"properties in file {properties_file} do not set 'selections'")
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cib", help="specify the cibfile file")
+    parser.add_argument("--cib", nargs="*", help="specify the cibfile file")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
     parser.add_argument("--from", help="select 'from' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--properties", help="specify the properties file")
@@ -478,7 +486,8 @@ if __name__ == "__main__":
     #                    action="store_true")
     args = parser.parse_args()
     if args.cib:
-        myCluster.config['cib_file'] = args.cib
+        #myCluster.config['cib_file'] = args.cib[0] # later we need to iterate
+        myCluster.config['cib_file_list'] = args.cib 
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
     if 'from' in vars(args) and vars(args)['from']:
         dt = dateutil_parser.parse(vars(args)['from']) 
@@ -504,54 +513,63 @@ if __name__ == "__main__":
         dt = dateutil_parser.parse(args.to) 
         myCluster.config['to'] = int(dt.timestamp())
     myCluster.read_properties()
-    myCluster.xml_import(myCluster.config['cib_file'])
-    multi_sid = False
-    if myCluster.config['sid'] == None:
-        myCluster.get_sids()
-        if len(myCluster.sids) == 0:
-            print("ERR: No SID found in cluster config")
-            sys.exit(1)
-        elif len(myCluster.sids) > 1:
-            print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
-            multi_sid = False
-            sys.exit(1)
-        else:
-           myCluster.config['sid'] = myCluster.sids[0].lower()
-    myCluster.fill_glob_dict()
-    myCluster.fill_res_dict()
-    myCluster.fill_site_dict()
-    myCluster.fill_host_dict()
-    #print(str(myCluster.glob_dict))
-    if 'cib-time' in myCluster.glob_dict['global']:
-        #print(f"dbg: test time filter")
-        dt = dateutil_parser.parse(myCluster.glob_dict['global']['cib-time'])
-        cibtime = int(dt.timestamp())
-        if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
-            pass
-        else:
-            print(f"Filter cib-time {myCluster.glob_dict['global']['cib-time']}")
-            exit(1)
-    oformat = "table"
-    if 'format' in myCluster.config:
-        oformat = myCluster.config['format']
-    if oformat == "table":
-        index = myCluster.config['sort']
-        index_type = 'str'
-        index_reverse = myCluster.config['sort-reverse']
-        if index == None:
-            myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
-            myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
-            myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
-            myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
-        else:
-            myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
-            myCluster.print_dic_as_table(dict(sorted(myCluster.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
-            myCluster.print_dic_as_table(dict(sorted(myCluster.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
-            myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
-    elif oformat == "json":
-        myCluster.print_all_as_json()
-    elif oformat == "path" or oformat == "script":
-        myCluster.print_dic_as_path(myCluster.glob_dict, "global", "Global", quote='"')
-        myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
-        myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
-        myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
+    #
+    # here the cib files iteration would begin
+    #   - we need to read all given cib files
+    #   - sort the found data dictionaries by cib-date
+    #   - output all data dictionaries, filtered by from+to
+    #
+    for cib_file in myCluster.config['cib_file_list']:
+        myHana    = HanaStatus(myCluster.config)
+        myHana.xml_import(myCluster.config['cib_file'])
+        multi_sid = False
+        if myCluster.config['sid'] == None:
+            myHana.get_sids()
+            if len(myHana.sids) == 0:
+                print("ERR: No SID found in cluster config")
+                sys.exit(1)
+            elif len(myHana.sids) > 1:
+                print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+                multi_sid = False
+                sys.exit(1)
+            else:
+               myHana.config['sid'] = myHana.sids[0].lower()
+               myCluster.config['sid'] = myHana.sids[0].lower()
+        myHana.fill_glob_dict()
+        myHana.fill_res_dict()
+        myHana.fill_site_dict()
+        myHana.fill_host_dict()
+        #print(str(myCluster.glob_dict))
+        if 'cib-time' in myHana.glob_dict['global']:
+            #print(f"dbg: test time filter")
+            dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
+            cibtime = int(dt.timestamp())
+            if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
+                pass
+            else:
+                print(f"Filter cib-time {myCluster.glob_dict['global']['cib-time']}")
+                exit(1)
+        oformat = "table"
+        if 'format' in myCluster.config:
+            oformat = myCluster.config['format']
+        if oformat == "table":
+            index = myCluster.config['sort']
+            index_type = 'str'
+            index_reverse = myCluster.config['sort-reverse']
+            if index == None:
+                myHana.print_dic_as_table(myHana.glob_dict, "global", "Global")
+                myHana.print_dic_as_table(myHana.res_dict, "resource", "Resource")
+                myHana.print_dic_as_table(myHana.site_dict, "site", "Site")
+                myHana.print_dic_as_table(myHana.host_dict, "host", "Host")
+            else:
+                myHana.print_dic_as_table(dict(sorted(myHana.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
+                myHana.print_dic_as_table(dict(sorted(myHana.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
+                myHana.print_dic_as_table(dict(sorted(myHana.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
+                myHana.print_dic_as_table(dict(sorted(myHana.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
+        elif oformat == "json":
+            myHana.print_all_as_json()
+        elif oformat == "path" or oformat == "script":
+            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"')
+            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"')
+            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"')
+            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"')
