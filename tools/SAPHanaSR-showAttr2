@@ -18,7 +18,7 @@ import os
 import re
 import sys
 sys.path.insert(1, '/usr/local/lib')
-from saphana_sr_tools import HanaCluster
+from saphana_sr_tools import HanaCluster,HanaStatus
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
@@ -69,33 +69,52 @@ if __name__ == "__main__":
     #   - output all data dictionaries, filtered by from+to
     #
     for cib_file in myCluster.config['cib_file_list']:
-        myCluster.xml_import(cib_file)
+        myHana    = HanaStatus(myCluster.config)
+        myHana.xml_import(cib_file)
         multi_sid = False
         if myCluster.config['sid'] == None:
-            myCluster.get_sids()
-            if len(myCluster.sids) == 0:
+            myHana.get_sids()
+            if len(myHana.sids) == 0:
                 print("ERR: No SID found in cluster config")
                 sys.exit(1)
-            elif len(myCluster.sids) > 1:
+            elif len(myHana.sids) > 1:
                 print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
                 multi_sid = False
                 sys.exit(1)
             else:
-               myCluster.config['sid'] = myCluster.sids[0].lower()
-        myCluster.fill_glob_dict()
-        myCluster.fill_res_dict()
-        myCluster.fill_site_dict()
-        myCluster.fill_host_dict()
-        #print(str(myCluster.glob_dict))
-        if 'cib-time' in myCluster.glob_dict['global']:
+               myHana.config['sid'] = myHana.sids[0].lower()
+               myCluster.config['sid'] = myHana.sids[0].lower()
+        myHana.fill_glob_dict()
+        if 'cib-time' in myHana.glob_dict['global']:
             #print(f"dbg: test time filter")
-            dt = dateutil_parser.parse(myCluster.glob_dict['global']['cib-time'])
+            dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
             cibtime = int(dt.timestamp())
+            myHana.ts = cibtime
             if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
                 pass
             else:
-                print(f"Filter cib-time {myCluster.glob_dict['global']['cib-time']}")
-                exit(1)
+                print(f"Filter cib-time {myHana.glob_dict['global']['cib-time']}")
+                continue
+        if len(myCluster.multi_status) == 0:
+            myCluster.multi_status.insert(0, myHana)
+        else:
+            # search position where to insert the new hana_status
+            pos = 0
+            inserted = 0
+            for hana_status in myCluster.multi_status:
+                if myHana.ts < hana_status.ts:
+                    myCluster.multi_status.insert(pos, myHana)
+                    inserted = 1
+                    break
+                else:
+                    pos += 1
+            if inserted == 0:
+                myCluster.multi_status.insert(pos, myHana)  # insert at the end, if it is not inserted before
+        myHana.fill_res_dict()
+        myHana.fill_site_dict()
+        myHana.fill_host_dict()
+
+    for myHana in myCluster.multi_status:
         oformat = "table"
         if 'format' in myCluster.config:
             oformat = myCluster.config['format']
@@ -104,19 +123,19 @@ if __name__ == "__main__":
             index_type = 'str'
             index_reverse = myCluster.config['sort-reverse']
             if index == None:
-                myCluster.print_dic_as_table(myCluster.glob_dict, "global", "Global")
-                myCluster.print_dic_as_table(myCluster.res_dict, "resource", "Resource")
-                myCluster.print_dic_as_table(myCluster.site_dict, "site", "Site")
-                myCluster.print_dic_as_table(myCluster.host_dict, "host", "Host")
+                myHana.print_dic_as_table(myHana.glob_dict, "global", "Global")
+                myHana.print_dic_as_table(myHana.res_dict, "resource", "Resource")
+                myHana.print_dic_as_table(myHana.site_dict, "site", "Site")
+                myHana.print_dic_as_table(myHana.host_dict, "host", "Host")
             else:
-                myCluster.print_dic_as_table(dict(sorted(myCluster.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
-                myCluster.print_dic_as_table(dict(sorted(myCluster.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
-                myCluster.print_dic_as_table(dict(sorted(myCluster.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
-                myCluster.print_dic_as_table(dict(sorted(myCluster.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
+                myHana.print_dic_as_table(dict(sorted(myHana.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
+                myHana.print_dic_as_table(dict(sorted(myHana.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
+                myHana.print_dic_as_table(dict(sorted(myHana.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
+                myHana.print_dic_as_table(dict(sorted(myHana.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
         elif oformat == "json":
-            myCluster.print_all_as_json()
+            myHana.print_all_as_json()
         elif oformat == "path" or oformat == "script":
-            myCluster.print_dic_as_path(myCluster.glob_dict, "global", "Global", quote='"')
-            myCluster.print_dic_as_path(myCluster.res_dict, "resource", "Resource", quote='"')
-            myCluster.print_dic_as_path(myCluster.site_dict, "site", "Site", quote='"')
-            myCluster.print_dic_as_path(myCluster.host_dict, "host", "Host", quote='"')
+            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"')
+            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"')
+            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"')
+            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"')
