@@ -145,8 +145,17 @@ class HanaCluster():
         else:
             # read from filename
             if os.path.isfile(filename):
-                self.tree = ET.parse(filename)
-                self.root = self.tree.getroot()
+                # bz2 ?
+                match_obj = re.search("\.bz2$",filename)
+                if match_obj:
+                    print(f"File {filename} ending with .bz2 is assumed to be compressed with bzip2 - try to uncompress")
+                    import bz2
+                    with bz2.open(filename, "rb") as f:
+                        content = f.read()
+                    self.root = ET.fromstring(content.decode())
+                else:
+                    self.tree = ET.parse(filename)
+                    self.root = self.tree.getroot()
             else:
                 print(f"cib file {filename} not found")
                 sys.exit(2)
