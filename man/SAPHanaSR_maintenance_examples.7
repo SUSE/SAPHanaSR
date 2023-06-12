@@ -1,16 +1,16 @@
-.\" Version: 0.160.1
+.\" Version: 1.001 
 .\"
-.TH SAPHanaSR_maintenance_examples 7 "10 Feb 2023" "" "SAPHanaSR"
+.TH SAPHanaSR_maintenance_examples 7 "12 Jun 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
-SAPHanaSR_maintenance_examples \- maintenance examples for SAPHana and SAPHanaController.
+SAPHanaSR_maintenance_examples \- maintenance examples for SAPHanaController.
 .PP
 .\"
 .SH DESCRIPTION
 .PP
-Maintenance examples for SAPHana and SAPHanaController.
-Please see ocf_suse_SAPHana(7) respectively ocf_suse_SAPHanaController(7),
-SAPHanaSR.py(7), SAPHanaSrMultiTarget.py(7), susTkOver.py(7), susChkSrv.py(7),
+Maintenance examples for SAPHanaController.
+Please see ocf_suse_SAPHanaController(7), susHanaSR.py(7),
+susHanaSrMultiTarget.py(7), susTkOver.py(7), susChkSrv.py(7),
 SAPHanaSR-manageAttr(8), for more examples and read the REQUIREMENTS section
 below.
 .RE
@@ -62,13 +62,13 @@ After takeover of the primary has been finished, the migration rule has to be de
 .br
 # cs_clusterstate -i
 .br
-# crm resource move msl_SAPHana_SLE_HDB10 force
+# crm resource move mst_SAPHana_SLE_HDB10 force
 .br
 # cs_clusterstate -i
 .br
 # SAPHanaSR-showAttr
 .br
-# crm resource clear msl_SAPHana_SLE_HDB10
+# crm resource clear mst_SAPHana_SLE_HDB10
 .br
 # SAPHanaSR-showAttr
 .br
@@ -102,7 +102,7 @@ See also section REQUIREMENTS below and later example on determining the correct
 .br
 If everything looks fine, proceed.
 .br
-# crm resource maintenance msl_SAPHana_SLE_HDB10
+# crm resource maintenance mst_SAPHana_SLE_HDB10
 .br
 # crm_mon -1r
 .RE
@@ -130,9 +130,9 @@ If everything looks fine, proceed.
 .br
 ~> hdbnsutil -sr_takeover
 .br
-~> HDBsettings.sh systemReplicationStatus.py; echo RC:$?
+~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
 .br
-~> HDBsettings.sh landscapeHostConfiguration.py; echo RC:$?
+~> cdpy; python3 ./landscapeHostConfiguration.py; echo RC:$?
 .br
 If everything looks fine, proceed.
 .RE
@@ -153,9 +153,9 @@ If everything looks fine, proceed.
 .RE
 .RS 4
 .br
-~> HDBsettings.sh systemReplicationStatus.py; echo RC:$?
+~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
 .br
-~> HDBsettings.sh ./landscapeConfigurationStatus.py; echo RC:$?
+~> cdpy; python3 ./landscapeConfigurationStatus.py; echo RC:$?
 .br
 ~> exit
 .br
@@ -168,9 +168,9 @@ If everything looks fine, proceed.
 .br
 # cs_clusterstate -i
 .br
-# crm resource refresh msl_SAPHana_SLE_HDB10
+# crm resource refresh mst_SAPHana_SLE_HDB10
 .br
-# crm resource maintenance msl_SAPHana_SLE_HDB10 off
+# crm resource maintenance mst_SAPHana_SLE_HDB10 off
 .br
 # SAPHanaSR-showAttr
 .br
@@ -227,90 +227,6 @@ This is an advanced task.
 .RE
 .PP
 .\"
-\fB*\fR Overview on maintenance procedure for HANA, the Linux cluster remains running, on pacemaker 1.0.
-
-See also section REQUIREMENTS below.
-.PP
-.RS 2
-1. Check if everything looks fine, see above.
-.br
-2. Set the Linux cluster into maintenance mode.
-.RE
-.RS 4
-# crm configure property maintenance-mode=true
-.RE
-.RS 2
-3. Perform the HANA maintenance, e.g. update to latest SPS.
-.br
-4. Set the SAPHanaController m/s resource to unmanaged.
-.RE
-.RS 4
-# crm resource unmanage <m/s-resource>
-.RE
-.RS 2
-5. Set the Linux cluster back into ready mode.
-.RE
-.RS 4
-# crm configure property maintenance-mode=false
-.RE
-.RS 2
-6. Clean up the SAPHanaController m/s resource.
-.RE
-.RS 4
-# crm resource cleanup <m/s-resource> node <node>
-.RE
-.RS 2
-7. Set the SAPHanaController m/s resource back to managed.
-.RE
-.RS 4
-# crm resource manage <m/s-resource>
-.RE
-.RS 2
-8. Check if everything looks fine, see above.
-.RE
-.PP
-.RE
-Note: The YaST module hana_updater does something similar, combined with an
-administrative takeover.
-.PP
-On pacemaker 1.1.19 and 2.0 respectively do the following. 
-.PP
-.RS 2
-1. Check if everything looks fine, see above.
-.br
-2. Set the SAPHanaController multi-state resource into maintenance mode.
-.RE
-.RS 4
-# crm resource maintenance msl_SAPHanaCon_SLE_HDB10 on
-.RE
-.RS 2
-3. Perform the HANA maintenance, e.g. update to latest SPS.
-.br
-4. Tell the cluster to forget about HANA status and to reprobe the resources.
-.RE
-.RS 4
-# crm resource refresh msl_SAPHanaCon_SLE_HDB10
-.RE
-.RS 2
-5. Set the SAPHanaController multi-state resource back to managed.
-.RE
-.RS 4
-# crm resource maintenance msl_SAPHanaCon_SLE_HDB10 off
-.RE
-.RS 2
-6. Remove the meta attribute from CIB, optional.
-.RE
-.RS 4
-# crm resource meta msl_SAPHanaCon_SLE_HDB10 delete maintenance
-.RE
-.RS 2
-7. Check if everything looks fine, see above.
-.RE
-.PP
-The two procedures must not be mixed. If the procedure for pacemaker-1.0 has
-been used, left-over maintenance attribute have to be removed from the CIB
-before proceeding with the new procedure for pacemaker-2.0.
-.PP
 \fB*\fR Overview on maintenance procedure for Linux, HANA remains running, on pacemaker-2.0.
 
 See also section REQUIREMENTS below and example on checking status of HANA and cluster above.
@@ -344,7 +260,7 @@ See also section REQUIREMENTS below and example on checking status of HANA and c
 .RS 4
 # crm resource refresh cln_...
 .br
-# crm resource refresh msl_...
+# crm resource refresh mst_...
 .RE
 .RS 2
 7. Set cluster ready for operations, on either node.
@@ -400,22 +316,22 @@ It also is necessary to test and document the whole procedure before applying in
 Note: HANA is not available from step 4 to step 9. 
 .RE
 .PP
-\fB*\fR Overview on update procedure for the SAPHanaSR and SAPHanaSR-ScaleOut package.
+\fB*\fR Overview on update procedure for the SAPHanaSR-angi package.
 
 This procedure can be used to update RAs, HANA HADR provider hook scripts and related tools while HANA and Linux cluster stay online. See also SAPHanaSR-manageAttr(8) for details on reloading the HANA HADR provider.
 .PP
 .RS 2
 1. Check status of Linux cluster and HANA, see above.
 .br
-2. Set resources SAPHana (or SAPHanaController) and SAPHanaTopology to maintenance.
+2. Set resources SAPHanaController and SAPHanaTopology to maintenance.
 .br
 3. Update RPM on all cluster nodes.
 .br
 4. Reload HANA HADR provider hook script on both sites.
 .br
-5. Refresh resources SAPHana (or SAPHanaController) and SAPHanaTopology.
+5. Refresh resources SAPHanaController and SAPHanaTopology.
 .br 
-6. Set resources SAPHana (or SAPHanaController) and SAPHanaTopology from maintenance to managed.
+6. Set resources SAPHanaController and SAPHanaTopology from maintenance to managed.
 .br
 7. Check status of Linux cluster and HANA, see above.
 .RE
@@ -467,6 +383,7 @@ See above overview on maintenance procedures whith running Linux cluster.
 .PP
 \fB*\fR Manually update global site attribute.
 
+.\" TODO: attributes still used for angi?
 In rare cases the global site attribute hana_<sid>_glob_prim or
 hana_<sid>_glob_sec is not updated automatically after successful takeover,
 while all other attributes are updated correctly. The global site attribute
@@ -527,7 +444,7 @@ l. Finally check if everything looks fine.
 .\"
 .SH REQUIREMENTS
 .br
-\fB*\fR For the current version of the resource agents that come with the software packages SAPHanaSR and SAPHanaSR-ScaleOut, the support is limited to the scenarios and parameters described in the respective manual pages SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
+\fB*\fR For the current version of the resource agents that come with the software packages SAPHanaSR-angi, the support is limited to the scenarios and parameters described in the respective manual pages SAPHanaSR-angi(7), SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
 .PP
 \fB*\fR Be patient. For detecting the overall HANA status, the Linux cluster
 needs a certain amount of time, depending on the HANA and the configured
@@ -539,7 +456,7 @@ landscape status, and the HANA SR status.
 .PP
 \fB*\fR Maintenance attributes for cluster, nodes and resources must not be mixed.
 .PP
-\fB*\fR The Linux cluster needs to be up and running to allow HA/DR provider events being written into CIB attributes. 
+\fB*\fR The Linux cluster needs to be up and running to allow HA/DR provider events being written into CIB attributes.
 The current HANA SR status might differ from CIB srHook attribute after Linux cluster maintenance.
 .PP
 \fB*\fR Manually activating an HANA primary, like start of HANA primary or takeover outside
