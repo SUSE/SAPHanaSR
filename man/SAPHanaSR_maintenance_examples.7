@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR_maintenance_examples 7 "10 Feb 2023" "" "SAPHanaSR"
+.TH SAPHanaSR_maintenance_examples 7 "12 Jun 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR_maintenance_examples \- maintenance examples for SAPHana and SAPHanaController.
@@ -46,7 +46,9 @@ This might be convenient when performing administrative actions or cluster tests
 .PP
 \fB*\fR Initiate an administrative takeover of the HANA primary from one node to the other by using the Linux cluster. 
 
-This procedure does not work for scale-out.
+This procedure does not work for scale-out. On scale-up, it will stop the HANA primary.
+This might take a while. If you want to avoid waiting for the stopped primary,
+use the below procedure which suspends the primary.
 If the cluster should also register the former primary as secondary, AUTOMATED_REGISTER="true" is needed. Before the takeover will be initiated, the status of the Linux cluster and the HANA system replication has to be checked. The takeover should be initiated as forced migration of the multi-state SAPHana resource.
 .br
 Not working: Regular migration, migration of IP address, migration of primitive SAPHana resource, setting primary node standby.
@@ -79,12 +81,15 @@ Note: Former versions of the Linux cluster used "migrate" instead of "move" and 
 .PP
 \fB*\fR Perform an SAP HANA takeover by using SAP tools. 
 
-The procedures is described here for scale-out. It works for scale-up as well. 
+The procedure is described here for scale-out. It works for scale-up as well. 
+The procedure will stop the HANA primary. This might take a while. If you want
+to avoid waiting for the stopped primary, use the below procedure which suspends
+the primary.
 The status of HANA databases, system replication and Linux cluster has to be
 checked.
 The SAP HANA resources are set into maintenance, an sr_takeover is performed,
 the old primary is registered as new secondary.
-Therefore the correct secondary site name has to be used, see later example.
+Therefor the correct secondary site name has to be used, see later example.
 Finally the SAP HANA resources are given back to the Linux cluster.
 See also section REQUIREMENTS below and later example on determining the correct site name.
 .PP
@@ -177,6 +182,45 @@ If everything looks fine, proceed.
 # crm_mon -1r
 .br
 # cs_clusterstate -i
+.RE
+.PP
+\fB*\fR Overview on SAP HANA takeover using SAP tools and suspend primary feature.
+
+The procedure works for scale-up and scale-out.
+The status of HANA databases, system replication and Linux cluster has to be
+checked.
+The SAP HANA resources are set into maintenance, an sr_takeover is performed
+with suspending the primary, the old primary is registered as new secondary.
+Therefor the correct secondary site name has to be used.
+Finally the SAP HANA resources are given back to the Linux cluster.
+See also section REQUIREMENTS below and later example on determining the correct site name.
+.PP
+.RS 2
+1. Check status of Linux cluster and HANA, show current site names.
+.br
+2. Set SAPHanaController multi-state resource into maintenance.
+.br
+3. Perform the takeover, make sure to use the suspend primary feature:
+.RE
+.RS 4
+~> hdbnsutil -sr_takeover --suspendPrimary
+.RE
+.RS 2
+4. Check if the new primary is working.
+.br
+5. Stop suspended old primary.
+.br
+6. Register old primary as new secondary, make sure to use the correct site name.
+.br
+7. Start the new secondary.
+.br
+8. Check new secondary and its system replication.
+.br
+9. Refresh SAPHanaController multi-state resource.
+.br
+10. Set SAPHanaController multi-state resource to managed.
+.br
+11. Finally check status of Linux cluster and HANA. 
 .RE
 .PP
 \fB*\fR Check the two site names that are known to the Linux cluster. 
