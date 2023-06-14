@@ -21,7 +21,8 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 
-version = "1.0.20230602.1526"
+global lib_version
+lib_version = "1.0.20230614.1225"
 
 def get_sort_value(item, index, **kargs):
     """ get_value(item, index, **kargs)
