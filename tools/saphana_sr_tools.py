@@ -406,6 +406,9 @@ class HanaStatus():
             print()
         print()
 
+    def print_dic_as_table_sort_by(self, dic, index, index_type, index_reverse, area, table_name):
+        self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), area,   table_name)
+
     def print_dic_as_json(self, print_dic, table_name):
         """
         TODO: description
