@@ -1,54 +1,117 @@
-#!/bin/bash
-#
-# test_ksi (ScaleUp)
-# 2023-02-24
-# test steps expected see ksi.json
-#
-########
-#
-# usage:
-# test_XX --node=<clusterNode> --testCase=<testCase> --testFile=<testFile> [--verbose]
+#!/usr/bin/python3
+# pylint: disable=consider-using-f-string
+# pylint: disable=fixme
+"""
+ saphanasrtest.py
+ Author:       Fabian Herschel, Mar 2023
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2023 SUSE LLC
+"""
 
-set -u
-source ./test-lib
+import time
+#import subprocess
+import re
+import sys
+import json
+import argparse
+import random
+sys.path.insert(1, '/usr/local/lib')
+from saphana_sr_test import SaphanasrTest
+
+# TODO: move command-param-handling from class/lib to here
+"""
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--testFile", help="specify the test file")
+        parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+        parser.add_argument("--properties", help="specify the properties file")
+        parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
+        parser.add_argument("--simulate", help="only simulate, dont call actions",
+                            action="store_true")
+        parser.add_argument("--repeat", help="how often to repeat the test")
+        parser.add_argument("--dumpFailures", help="print failed checks per loop",
+                            action="store_true")
+        parser.add_argument("--logFile", help="log file to write the messages")
+        args = parser.parse_args()
+        if args.testFile:
+            self.message("PARAM: testFile: {}".format(args.testFile))
+            self.config['test_file'] = args.testFile
+        if args.defaultChecksFile:
+            self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
+            self.config['defaults_checks_file'] = args.defaultChecksFile
+        if args.properties:
+            self.message("PARAM: properties: {}".format(args.properties))
+            self.config['properties_file'] = args.properties
+        if args.remoteNode:
+            self.message("PARAM: remoteNode: {}".format(args.remoteNode))
+            self.config['remote_node'] = args.remoteNode
+        if args.repeat:
+            self.message("PARAM: repeat: {}".format(args.repeat))
+            self.config['repeat'] = int(args.repeat)
+        if args.dumpFailures:
+            self.message("PARAM: dumpFailures")
+            self.config['dump_failures'] = args.dumpFailures
+        if args.logFile:
+            self.message("PARAM: logFile: {}".format(args.logFile))
+            self.config['log_file'] = args.logFile
+            # disable 'consider to use with ...' - I am pretty sure with does not match here
+            # pylint: disable-next=R1732
+            self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
+"""
 
 
-function usage() {
-    cat <<EOF
-    $0 --node=<clusterNode> --testCase=<testCase> --testFile=<testFileJson> [--verbose]
-    <clusterNode>:  any node of the cluster
-    <testCase>:     test code like 'ksi', 'kpi' 'ssn'
-    <testFileJson>: filename of the json-formatted test description
-EOF
-}
+# TODO: impement test sequences instead of "only" repeating the same test
+test01 = SaphanasrTest()
+while test01.run['count'] <= test01.config['repeat']:
+    test01.run['r_id'] = random.randrange(10000,99999,1)
+    test01.read_saphana_sr()
+    l_top = test01.topolo
+    l_top.update({'global': 'global'})
+    # for angi-ScaleUp and classic ScaleOut:
+    # pSite is the site with srr-attribute == "P"
+    # sSite is the site with srr-attribute == "S"
+    # pHost is the host with site-attribute == pSite
+    # sHost is the host with site-attribute == sSite
+    # TODO: for angi-ScaleOut and classic-ScaleOut we might need to differ msn-host, plain-worker (no mns-candidate) and standby node
+    # TODO: classic-ScaleUp
+    # pHost could be the host with roles-attr like [0-4]:P:*
+    # sHost could be the host with roles-attr like [0-4]:S:*
+    # pSite is referenced by pHost-site-attr
+    # sSite is referenced by sHost-site-attr
+    #
+    l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
+    l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
+    # first try to use site-msn attribute to get the master name server
+    # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
+    l_top.update({'pHost': test01.get_value('Sites', l_top['pSite'], 'mns')})
+    l_top.update({'sHost': test01.get_value('Sites', l_top['sSite'], 'mns')})
 
-#
-# globals testCase(r)
-#
-function main() {
-    local rc1 rc2
-    local rc=3
-    local startStep currStep
-    startStep="$(search4getValue "Tests/$testCase/start")"
-    message "testCase=$testCase, startStep=$startStep"
-    checkPrerequisites "${testCase}-$startStep"; rc1="$?"
-    if [[ "$rc1" != 0 ]]; then
-       message "RESULT: PREREQUISITES NOT MATCHED"
-       rc=2
-    else
-        currStep="$(search4getValue "Steps/${testCase}-${startStep}/next")"
-        checkSequence "$testCase" "$currStep"; rc2="$?"
-        if [[ "$rc2" == 0 ]]; then
-            message "RESULT: TEST SUCCESS"
-            rc=0
-        else
-            message "RESULT: TEST FAILED"
-            rc=1
-        fi
-    fi
-    return "$rc"
-}
+    if l_top['pHost'] == None:
+        # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
+        l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:P:', sloppy=True)})
+        l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:S:', sloppy=True)})
+        l_top.update({'pSite': test01.get_value('Hosts', l_top['pHost'], 'site')})
+        l_top.update({'sSite': test01.get_value('Hosts', l_top['sHost'], 'site')})
 
-# --node=<clusterNode> --testCase=<testCase> --testFile=<testFile>
-init "$@"
-main
+    # TODO: do we need the old method as fallback, if msn is empty or misleading?
+    #l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
+    #l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
+    l_msg = (
+                f"TOPO: pSite={l_top['pSite']}"
+                f" sSite={l_top['sSite']}"
+                f" pHost={l_top['pHost']}"
+                f" sHost={l_top['sHost']}"
+            )
+    test01.message(l_msg)
+    test01.read_test_file()
+    my_test_id = test01.run['test_id']
+    if test01.config['repeat'] != 1:
+        test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
+    test01.run['test_rc'] = test01.process_test()
+    MSG_TEMPL = "TEST: {} testNr={} {} successfully :) ######"
+    if test01.run['test_rc'] == 0:
+        test01.message(MSG_TEMPL.format(my_test_id, 'PASSED', test01.run['count']))
+    else:
+        test01.message(MSG_TEMPL.format(my_test_id, 'FAILED', test01.run['count']))
+    test01.run['count'] += 1
+if  test01.run['log_file_handle']:
+    test01.run['log_file_handle'].close()
