@@ -23,7 +23,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230404.1848"
+    version = "0.1.20230615.1833"
 
     def message(self, msg, **kwargs):
         """
@@ -166,9 +166,7 @@ class SaphanasrTest:
 
     def get_area_object_by_key_val(self, area_name, search_criteria, **kwargs):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
-        # TODO: for now we only take the first search_criteria to test compability, then we enhace that to multiple criteria
-        key = list(search_criteria.keys())[0]
-        value = search_criteria[key]
+        # sloppy might be need to set per search-criteria (e.g. True for roles nut False for site)
         # Query runs from area-level via object-level. Then search for key=value.
         l_sloppy = False
         if 'sloppy' in kwargs:
@@ -176,20 +174,29 @@ class SaphanasrTest:
             self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}") 
         object_name = None
         l_sr = self.dict_sr
+        # check, if 'area' is in the sr-data-dictionary
         if area_name in l_sr:
             l_area = l_sr[area_name]
+            # loop over all objets in area to check against criteria
             for k in l_area.keys():
                 l_obj = l_area[k]
-                if key in l_obj:
-                    if l_sloppy:
-                        # search value by regexp
-                        if re.search(value, l_obj[key]):
-                            object_name = k
+                # loop over multiple search-criteria (key/value)
+                all_match = True
+                for search_key in search_criteria.keys():
+                    search_value = search_criteria[search_key]
+                    if search_key in l_obj:
+                        if l_sloppy:
+                            # search value by regexp
+                            if not(re.search(search_value, l_obj[search_key])):
+                                all_match = False
+                        else:
+                            if not(l_obj[search_key] == search_value):
+                                all_match = False
                     else:
-                        if l_obj[key] == value:
-                            object_name = k
-                            # currently we only return the first match
-                            break
+                        all_match = False
+                if all_match:
+                    object_name = k
+                    break
         return object_name
 
     def get_value(self, area_name, object_name, key):
@@ -436,6 +443,9 @@ class SaphanasrTest:
         elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+        elif action_name == "kill_prim_worker_inst":
+            remote = self.topolo['pWorker']
+            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kpx":
             remote = self.topolo['pHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
@@ -490,7 +500,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_secn_inst", "kpx", "ksx", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kpx", "ksx", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
             action_rc = self.action_on_cluster(action_name)
