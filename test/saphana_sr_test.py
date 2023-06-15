@@ -164,8 +164,11 @@ class SaphanasrTest:
                     self.__insert_to_area__(area, l_obj)
         return 0
 
-    def get_area_object_by_key_val(self, area_name, key, value, **kwargs):
+    def get_area_object_by_key_val(self, area_name, search_criteria, **kwargs):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
+        # TODO: for now we only take the first search_criteria to test compability, then we enhace that to multiple criteria
+        key = list(search_criteria.keys())[0]
+        value = search_criteria[key]
         # Query runs from area-level via object-level. Then search for key=value.
         l_sloppy = False
         if 'sloppy' in kwargs:
@@ -533,17 +536,19 @@ if __name__ == "__main__":
         # pSite is referenced by pHost-site-attr
         # sSite is referenced by sHost-site-attr
         #
-        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
-        l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
+        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', { 'srr': 'P'})})
+        l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', { 'srr', 'S'})})
         # first try to use site-msn attribute to get the master name server
         # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
         l_top.update({'pHost': test01.get_value('Sites', l_top['pSite'], 'mns')})
         l_top.update({'sHost': test01.get_value('Sites', l_top['sSite'], 'mns')})
 
+        test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Hosts', { 'roles': ':worker:slave'}, sloppy=True)}")
+
         if l_top['pHost'] == None:
             # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
-            l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:P:', sloppy=True)})
-            l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'roles', '[0-4]:S:', sloppy=True)})
+            l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', {'roles': '[0-4]:P:'}, sloppy=True)})
+            l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', {'roles', '[0-4]:S:'}, sloppy=True)})
             l_top.update({'pSite': test01.get_value('Hosts', l_top['pHost'], 'site')})
             l_top.update({'sSite': test01.get_value('Hosts', l_top['sHost'], 'site')})
 
