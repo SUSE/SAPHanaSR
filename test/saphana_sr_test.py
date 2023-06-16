@@ -440,13 +440,16 @@ class SaphanasrTest:
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+        elif action_name == "kill_secn_worker_inst":
+            remote = self.topolo['sWorker']
+            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kill_prim_worker_inst":
             remote = self.topolo['pWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-        elif action_name == "kpx":
+        elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "ksx":
@@ -500,7 +503,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kpx", "ksx", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "ksx", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
             action_rc = self.action_on_cluster(action_name)
