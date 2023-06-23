@@ -49,59 +49,67 @@ class SaphanasrTest:
         except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         """
         constructor
         """
+        cmdparse = True;
+        if 'cmdparse' in kwargs:
+            cmdparse = kwargs['cmdparse']
         self.config = { 'test_file': "-",
                         'defaults_checks_file': None,
                         'properties_file': "properties.json",
                         'log_file': "",
                         'repeat': 1,
                         'dump_failures': False,
-                        'remote_node': None
+                        'remote_node': None,
+                        'remote_nodes': []
                       }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
         self.message("INIT: tester version: {}".format(self.version))
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--testFile", help="specify the test file")
-        parser.add_argument("--defaultChecksFile", help="specify the default checks file")
-        parser.add_argument("--properties", help="specify the properties file")
-        parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
-        parser.add_argument("--simulate", help="only simulate, dont call actions",
-                            action="store_true")
-        parser.add_argument("--repeat", help="how often to repeat the test")
-        parser.add_argument("--dumpFailures", help="print failed checks per loop",
-                            action="store_true")
-        parser.add_argument("--logFile", help="log file to write the messages")
-        args = parser.parse_args()
-        if args.testFile:
-            self.message("PARAM: testFile: {}".format(args.testFile))
-            self.config['test_file'] = args.testFile
-        if args.defaultChecksFile:
-            self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-            self.config['defaults_checks_file'] = args.defaultChecksFile
-        if args.properties:
-            self.message("PARAM: properties: {}".format(args.properties))
-            self.config['properties_file'] = args.properties
-        if args.remoteNode:
-            self.message("PARAM: remoteNode: {}".format(args.remoteNode))
-            self.config['remote_node'] = args.remoteNode
-        if args.repeat:
-            self.message("PARAM: repeat: {}".format(args.repeat))
-            self.config['repeat'] = int(args.repeat)
-        if args.dumpFailures:
-            self.message("PARAM: dumpFailures")
-            self.config['dump_failures'] = args.dumpFailures
-        if args.logFile:
-            self.message("PARAM: logFile: {}".format(args.logFile))
-            self.config['log_file'] = args.logFile
-            # disable 'consider to use with ...' - I am pretty sure with does not match here
-            # pylint: disable-next=R1732
-            self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
+        if cmdparse:
+            self.message("dbg: lib parses cmdline")
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--testFile", help="specify the test file")
+            parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+            parser.add_argument("--properties", help="specify the properties file")
+            parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
+            parser.add_argument("--simulate", help="only simulate, dont call actions",
+                                action="store_true")
+            parser.add_argument("--repeat", help="how often to repeat the test")
+            parser.add_argument("--dumpFailures", help="print failed checks per loop",
+                                action="store_true")
+            parser.add_argument("--logFile", help="log file to write the messages")
+            args = parser.parse_args()
+            if args.testFile:
+                self.message("PARAM: testFile: {}".format(args.testFile))
+                self.config['test_file'] = args.testFile
+            if args.defaultChecksFile:
+                self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
+                self.config['defaults_checks_file'] = args.defaultChecksFile
+            if args.properties:
+                self.message("PARAM: properties: {}".format(args.properties))
+                self.config['properties_file'] = args.properties
+            if args.remoteNode:
+                self.message("PARAM: remoteNode: {}".format(args.remoteNode))
+                self.config['remote_node'] = args.remoteNode
+            if args.repeat:
+                self.message("PARAM: repeat: {}".format(args.repeat))
+                self.config['repeat'] = int(args.repeat)
+            if args.dumpFailures:
+                self.message("PARAM: dumpFailures")
+                self.config['dump_failures'] = args.dumpFailures
+            if args.logFile:
+                self.message("PARAM: logFile: {}".format(args.logFile))
+                self.config['log_file'] = args.logFile
+                # disable 'consider to use with ...' - I am pretty sure with does not match here
+                # pylint: disable-next=R1732
+                self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
+        else: 
+            self.message("dbg: lib skips parsing cmdline")
         random.seed()
 
     def __insert_to_area__(self, area, the_object):
@@ -145,6 +153,18 @@ class SaphanasrTest:
         cmd = "SAPHanaSR-showAttr --format=script"
         self.dict_sr={}
         result_sr = self.__do_ssh__(self.config['remote_node'], "root", cmd)
+        if result_sr[2] == 20000:
+            #self.message("remote node broken !!")
+            # try other remoteNodes (if given via parameter)
+            #self.message(f"len array {len(self.config['remote_nodes'])}")
+            if len(self.config['remote_nodes']) > 1:
+                for remote_node in self.config['remote_nodes']:
+                    #self.message(f"test now with host {remote_node}")
+                    result_sr = self.__do_ssh__(remote_node, "root", cmd)
+                    if result_sr[2] != 20000:
+                        self.message(f"STATUS: get data form {remote_node}")
+                        self.config['remote_node'] = remote_node
+                        break
         for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
@@ -517,15 +537,20 @@ class SaphanasrTest:
         returns a tuple ( stdout-string, stderr, string, rc )
         """
         if remote_host:
-            ssh_client = SSHClient()
-            ssh_client.load_system_host_keys()
-            ssh_client.connect(remote_host, username=user)
-            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
-            result_stdout = cmd_stdout.read().decode("utf8")
-            result_stderr = cmd_stderr.read().decode("utf8")
-            result_rc = cmd_stdout.channel.recv_exit_status()
-            check_result = (result_stdout, result_stderr, result_rc)
-            ssh_client.close()
+            try:
+                ssh_client = SSHClient()
+                ssh_client.load_system_host_keys()
+                ssh_client.connect(remote_host, username=user)
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+            except Exception as ssh_muell:
+                #self.message("ssh connection did not work ...")
+                #self.message(f"{type(ssh_muell)}")
+                check_result=("", "", 20000)
         else:
             check_result=("", "", 20000)
         return check_result
