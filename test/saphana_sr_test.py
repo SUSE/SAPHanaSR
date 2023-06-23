@@ -23,7 +23,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230615.1833"
+    version = "0.1.20230623.1914"
 
     def message(self, msg, **kwargs):
         """
@@ -162,7 +162,7 @@ class SaphanasrTest:
                     #self.message(f"test now with host {remote_node}")
                     result_sr = self.__do_ssh__(remote_node, "root", cmd)
                     if result_sr[2] != 20000:
-                        self.message(f"STATUS: get data form {remote_node}")
+                        self.message(f"STATUS: get data from {remote_node}")
                         self.config['remote_node'] = remote_node
                         break
         for line in result_sr[0].splitlines():
