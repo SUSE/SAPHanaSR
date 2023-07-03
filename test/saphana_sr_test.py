@@ -23,7 +23,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230623.1914"
+    version = "0.1.20130703.1350"
 
     def message(self, msg, **kwargs):
         """
@@ -495,6 +495,15 @@ class SaphanasrTest:
             cmd = "crm node online {}".format(self.topolo['pHost'])
         elif action_name == "cleanup":
             cmd = "crm resource cleanup {}".format(resource)
+        elif action_name == "kill_secn_worker_node":
+            remote = self.topolo['sWorker']
+            cmd = "systemctl reboot --force"
+        elif action_name == "kill_secn_node":
+            remote = self.topolo['sHost']
+            cmd = "systemctl reboot --force"
+        elif action_name == "kill_prim_worker_node":
+            remote = self.topolo['pWorker']
+            cmd = "systemctl reboot --force"
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
@@ -525,7 +534,7 @@ class SaphanasrTest:
             action_rc = 0
         elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_worker_node"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
