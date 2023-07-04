@@ -3,6 +3,12 @@
 # pylint: disable=fixme
 # pylint: disable=line-too-long
 # pylint: disable=invalid-name
+# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-arguments
+# pylint: disable=too-many-branches
+# pylint: disable=global-variable-undefined
+# pylint: disable=too-few-public-methods
+# pylint: disable=consider-using-get
 # flake8-in-file-ignores: noqa: E501
 """
  saphana_sr_tools.py
@@ -22,9 +28,10 @@ import re
 import sys
 import subprocess
 import xml.etree.ElementTree as ET
-from dateutil import parser as dateutil_parser
+import bz2
+#from dateutil import parser as dateutil_parser
 
-global lib_version
+# global lib_version
 lib_version = "1.0.20230614.1225"
 
 
@@ -39,7 +46,7 @@ def get_sort_value(item, index, **kargs):
     if 'type' in kargs:
         if kargs['type'] == 'int':
             return 0
-        elif kargs['type'] == 'str':
+        if kargs['type'] == 'str':
             return ''
     return None
 
@@ -59,22 +66,25 @@ def shorten(column_name, **kargs):
         sid = kargs['sid'].lower()
         sid_uc = kargs['sid'].upper()
     match_obj = re.search(f"hana_{sid}_glob_(.*)", column_name)    # (3)
-    if match_obj != None:
+    if match_obj is not None:
         column_name = match_obj.group(1)
     match_obj = re.search(f"hana_{sid}_site_(.*)_", column_name)   # (2)
-    if match_obj != None:
+    if match_obj is not None:
         column_name = match_obj.group(1)
     match_obj = re.search(f"hana_{sid}_(.*)", column_name)         # (1)
-    if match_obj != None:
+    if match_obj is not None:
         column_name = match_obj.group(1)
     # TODO: Do we need to check, if the master-attribute belongs to the promotable clone for this SID?
     match_obj = re.search(f"master.rsc.*_{sid_uc}_.*", column_name)   # (4)
-    if match_obj != None:
+    if match_obj is not None:
         column_name = 'score'
     return column_name
 
 
 class HanaCluster():
+    """
+    HanaCluster: top level class for an entire cluster
+    """
 
     global selections
     selections = {
@@ -123,6 +133,9 @@ class HanaCluster():
                 }
 
     def __init__(self):
+        """
+        initialize an SAP HANA cluster object
+        """
         self.multi_status = []
         self.tree = None
         self.root = None
@@ -146,6 +159,9 @@ class HanaCluster():
         self.sids = []
 
     def read_properties(self):
+        """
+        read all properties from json file
+        """
         global selections
         if self.config['properties_file']:
             with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
@@ -153,18 +169,32 @@ class HanaCluster():
                 if 'selections' in json_prop:
                     selections = json_prop['selections']
                 else:
-                    print(f"properties in file {properties_file} do not set 'selections'")
+                    print(f"properties in file {self.config['properties_file']} do not set 'selections'")
 
 
 class HanaStatus():
+    """
+    HanaStatus: class to capture and analyze an SR status
+    """
 
     def __init__(self, config):
+        """
+        initialize (SAP) HANA status object
+        """
         self.config = config
         self.root = None
         self.tree = None
+        self.glob_dict = None
+        self.res_dict = None
+        self.site_dict = None
+        self.host_dict = None
+        self.sids = None
 
     def xml_import(self, filename):
-        if filename == None:
+        """
+        xml_import - import a cluster CIB into object dictionaries
+        """
+        if filename is None:
             # use cibadmin as input
             cmd = "cibadmin -Ql"
             xml_string = subprocess.check_output(cmd.split(" "))
@@ -173,15 +203,13 @@ class HanaStatus():
             # read from stdin
             self.tree = ET.parse(sys.stdin)
             self.root = self.tree.getroot()
-            pass
         else:
             # read from filename
             if os.path.isfile(filename):
                 # bz2 ?
-                match_obj = re.search("\.bz2$", filename)
+                match_obj = re.search(r"\.bz2$", filename)
                 if match_obj:
                     print(f"File {filename} ending with .bz2 is assumed to be compressed with bzip2 - try to uncompress")
-                    import bz2
                     with bz2.open(filename, "rb") as f:
                         content = f.read()
                     self.root = ET.fromstring(content.decode())
@@ -263,7 +291,7 @@ class HanaStatus():
             site = self.is_site_attribute(name, return_site_name=True)
             sid = self.get_sid_from_attribute(name)
             if site and sid == self.config['sid']:
-                if not (site in self.site_dict):
+                if not site in self.site_dict:
                     self.site_dict.update({site: {}})
                 site_site_dict = self.site_dict[site]
                 # for sites we already use the shortened attribute name (site-part in the name sis also removed to match the same column later)
@@ -320,12 +348,10 @@ class HanaStatus():
         if match_obj:
             if return_site_name:
                 return match_obj.group(1)
-            else:
-                return True
-        else:
-            if return_site_name:
-                return None
-        return False;
+            return True
+        if return_site_name:
+            return None
+        return False
 
     def is_hana_attribute(self, name):
         """
@@ -385,7 +411,7 @@ class HanaStatus():
         #
         bar_len = 0
         for col in column_names:
-            if self.filter(area, col) == True:
+            if self.filter(area, col) is True:
                 if col in column_length:
                     col_len = column_length[col]
                 else:
@@ -399,7 +425,7 @@ class HanaStatus():
         #
         for key in print_dic:
             for col in column_names[0:]:
-                if self.filter(area, col) == True:
+                if self.filter(area, col) is True:
                     if col in column_length:
                         col_len = column_length[col]
                     else:
@@ -415,6 +441,9 @@ class HanaStatus():
         print()
 
     def print_dic_as_table_sort_by(self, dic, index, index_type, index_reverse, area, table_name):
+        """
+        print_dic_as_table_sort_by - print a dictionary 'table' sorted by 'index'
+        """
         self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1], index, type=index_type)), reverse=index_reverse)), area, table_name)
 
     def print_dic_as_json(self, print_dic, table_name):
@@ -447,7 +476,7 @@ class HanaStatus():
             quote = kargs['quote']
         for key in print_dic:
             for col in print_dic[key]:
-                if self.filter(area, col) == True:
+                if self.filter(area, col) is True:
                     value = print_dic[key][col]
                     print(f"{table_name}/{key}/{col}={quote}{value}{quote}")
 
@@ -475,6 +504,9 @@ class HanaStatus():
         return True
 
     def get_sids(self):
+        """
+        get_sids - ger als SIDs mentioned in a SAPHanaController resource
+        """
         root = self.root
         sids = []
         for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
@@ -495,7 +527,7 @@ if __name__ == "__main__":
     myHana = HanaStatus(myCluster.config)
     myHana.xml_import(cib_file)
     multi_sid = False
-    if myCluster.config['sid'] == None:
+    if myCluster.config['sid'] is None:
         myHana.get_sids()
         if len(myHana.sids) == 0:
             print("ERR: No SID found in cluster config")
