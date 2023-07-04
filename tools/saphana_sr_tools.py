@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# flake8: noqa: E126,E501
 """
  saphana_sr_tools.py
  Author:       Fabian Herschel, May 2023
@@ -24,6 +25,7 @@ import xml.etree.ElementTree as ET
 global lib_version
 lib_version = "1.0.20230614.1225"
 
+
 def get_sort_value(item, index, **kargs):
     """ get_value(item, index, **kargs)
         item is the single entity item to be sorted
@@ -37,7 +39,8 @@ def get_sort_value(item, index, **kargs):
             return 0
         elif kargs['type'] == 'str':
             return ''
-    return  None
+    return None
+
 
 def shorten(column_name, **kargs):
     """ shortens column name
@@ -45,7 +48,7 @@ def shorten(column_name, **kargs):
         e.g. (1) hana_ha1_site -> site                ( a node attribute)
              (2) hana_ha1_site_mns_S1 -> mns          ( a site attribute )
              (3) hana_ha1_global_topology -> topology ( a global attribute )
-             (4) master-rsc_SAPHanaCon_HA1_HDB10 -> score 
+             (4) master-rsc_SAPHanaCon_HA1_HDB10 -> score
     # TODO: Do we need to check, if the master-attribute belongs to the promotable clone for this SID?
     """
     sid = '...'
@@ -68,51 +71,52 @@ def shorten(column_name, **kargs):
         column_name = 'score'
     return column_name
 
+
 class HanaCluster():
 
-    global selections 
+    global selections
     selections = {
                     'all': {
-                                    'global'   : ['.*'],
-                                    'resource' : ['.*'],
-                                    'site'     : ['.*'],
-                                    'host'     : ['.*'],
+                                    'global': ['.*'],
+                                    'resource': ['.*'],
+                                    'site': ['.*'],
+                                    'host': ['.*'],
                                },
                     'default': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
-                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
-                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
+                                    'global': ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
                                },
                     'sr': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
-                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
-                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
+                                    'global': ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host': ['Host', 'clone_state', 'roles', 'score', 'site', 'sra', 'srah', 'vhost'],
                                  },
                     'minimal': {
-                                    'global'   : ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
-                                    'resource' : ['Resource', 'maintenance', 'is_managed'],
-                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'roles', 'score', 'site'],
+                                    'global': ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed'],
+                                    'site': ['Site', 'lpt', 'lss', 'mns', 'srHook', 'srPoll', 'srr'],
+                                    'host': ['Host', 'clone_state', 'roles', 'score', 'site'],
                                  },
                     'cluster': {
-                                    'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
-                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
-                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost'],
+                                    'global': ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost'],
                                },
                     'cluster2': {
-                                    'global'   : ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
-                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
-                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
+                                    'global': ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
                                },
                     'cluster3': {
-                                    'global'   : ['-dc.*'],
-                                    'resource' : ['Resource', 'maintenance', 'is_managed', 'promotable'],
-                                    'site'     : ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
-                                    'host'     : ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
+                                    'global': ['-dc.*'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
+                                    'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
                                },
                 }
 
@@ -127,15 +131,15 @@ class HanaCluster():
         self.selection = 'test'
         self.config = {
             'cib_file': None,
-            'cib_file_list': [ None ],
+            'cib_file_list': [None],
             'from': 0,
             'format': "table",
             'properties_file': None,
             'select': "default",
-            'sid': None, 
+            'sid': None,
             'sort': None,
             'sort-reverse': False,
-            'to': 99999999999, # some time in the future ;-)
+            'to': 99999999999,  # some time in the future ;-)
                       }
         self.sids = []
 
@@ -148,6 +152,7 @@ class HanaCluster():
                     selections = json_prop['selections']
                 else:
                     print(f"properties in file {properties_file} do not set 'selections'")
+
 
 class HanaStatus():
 
@@ -189,7 +194,7 @@ class HanaStatus():
             global area is for attributes not assigned for a node/host, site nor resource
             typically this includes the cib-time, stonith-enabled and all hana_sid_glob_ attributes
         """
-        self.glob_dict =  {"global": {} }
+        self.glob_dict = {"global": {}}
         global_glob_dict = self.glob_dict['global']
         if 'sid' in self.config and self.config['sid']:
             global_glob_dict.update({'sid': self.config['sid'].upper()})
@@ -224,7 +229,7 @@ class HanaStatus():
         if len(con_res_arr) == 1:
             con_res = con_res_arr[0]
             con_name = con_res.attrib['id']
-            self.res_dict.update({con_name: {}}) 
+            self.res_dict.update({con_name: {}})
             res_res_dict = self.res_dict[con_name]
             for ma in con_res.findall("./meta_attributes/nvpair"):
                 name = ma.attrib['name']
@@ -235,7 +240,7 @@ class HanaStatus():
         if len(top_res_arr) == 1:
             top_res = top_res_arr[0]
             top_name = top_res.attrib['id']
-            self.res_dict.update({top_name: {}}) 
+            self.res_dict.update({top_name: {}})
             res_res_dict = self.res_dict[top_name]
             for ma in top_res.findall("./meta_attributes/nvpair"):
                 name = ma.attrib['name']
@@ -252,8 +257,8 @@ class HanaStatus():
             name = nv.attrib['name']
             value = nv.attrib["value"]
             site = self.is_site_attribute(name, return_site_name=True)
-            sid  = self.get_sid_from_attribute(name)
-            if site  and sid == self.config['sid']:
+            sid = self.get_sid_from_attribute(name)
+            if site and sid == self.config['sid']:
                 if not (site in self.site_dict):
                     self.site_dict.update({site: {}})
                 site_site_dict = self.site_dict[site]
@@ -261,7 +266,7 @@ class HanaStatus():
                 site_site_dict.update({shorten(name): value})
             else:
                 pass
- 
+
     def fill_host_dict(self):
         """
         TODO: description
@@ -299,7 +304,6 @@ class HanaStatus():
                         node_table.update({shorten(name, sid=sid): value})
                 else:
                     node_table.update({shorten(name, sid=self.config['sid']): value})
-        
 
     def is_site_attribute(self, column_name, **kargs):
         """
@@ -325,7 +329,7 @@ class HanaStatus():
         """
         match_obj = re.match("hana_.*", name)
         if match_obj:
-           return True
+            return True
         return False
 
     def is_hana_glob_attribute(self, name):
@@ -334,7 +338,7 @@ class HanaStatus():
         """
         match_obj = re.match("hana_..._glob_.*", name)
         if match_obj:
-           return True
+            return True
         return False
 
     def get_sid_from_attribute(self, name):
@@ -347,7 +351,6 @@ class HanaStatus():
             sid = match_obj.group(1)
         return sid
 
-
     def print_dic_as_table(self, print_dic, area, table_name):
         """
         TODO: description
@@ -355,7 +358,7 @@ class HanaStatus():
         """
         # TODO: option for bar-character (default "-")
         # TODO: option for empty line at end of table (default True) or like 'end' in print end='' is no-line end="bar" is same a after headline end="space" (default) is one empty line
-        # build headline: 
+        # build headline:
         #  1. get all keys (column-names) used by any of the top-level-objects
         #  2. get the max length of each column (max(column_name, max(any column_value))
         column_names = []
@@ -368,7 +371,7 @@ class HanaStatus():
         column_names = sorted(list(dict.fromkeys(column_names)))
         column_names.insert(0, table_name)
         for col in column_names[1:]:
-            col_len = len(shorten(col)) 
+            col_len = len(shorten(col))
             for key in print_dic:
                 if col in print_dic[key]:
                     col_len = max(col_len, len(print_dic[key][col]))
@@ -377,7 +380,7 @@ class HanaStatus():
         # print headline
         #
         bar_len = 0
-        for col in column_names:                 
+        for col in column_names:
             if self.filter(area, col) == True:
                 if col in column_length:
                     col_len = column_length[col]
@@ -391,7 +394,7 @@ class HanaStatus():
         # print rows
         #
         for key in print_dic:
-            for col in column_names[0:]:        
+            for col in column_names[0:]:
                 if self.filter(area, col) == True:
                     if col in column_length:
                         col_len = column_length[col]
@@ -408,7 +411,7 @@ class HanaStatus():
         print()
 
     def print_dic_as_table_sort_by(self, dic, index, index_type, index_reverse, area, table_name):
-        self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1], index, type=index_type)), reverse=index_reverse)), area,   table_name)
+        self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1], index, type=index_type)), reverse=index_reverse)), area, table_name)
 
     def print_dic_as_json(self, print_dic, table_name):
         """
@@ -422,11 +425,11 @@ class HanaStatus():
         TODO: description
         """
         # TODO: maybe 'Global', 'Site', 'Host", ... configurable strings?
-        json_obj = json.dumps( {
+        json_obj = json.dumps({
                                  'Global': self.glob_dict,
                                  'Resource': self.res_dict,
-                                 'Site':   self.site_dict,
-                                 'Host':   self.host_dict
+                                 'Site': self.site_dict,
+                                 'Host': self.host_dict
                                }, indent=4
                              )
         print(json_obj)
@@ -443,9 +446,9 @@ class HanaStatus():
                 if self.filter(area, col) == True:
                     value = print_dic[key][col]
                     print(f"{table_name}/{key}/{col}={quote}{value}{quote}")
-                
+
     def filter(self, area, column_name):
-        ''' filter column_names 
+        ''' filter column_names
             False, if column should be skipped
             True, if column should be printed
         '''
@@ -473,7 +476,7 @@ class HanaStatus():
         for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
             sids.append(ia.attrib['value'])
         self.sids = sids
-    
+
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
@@ -481,11 +484,11 @@ if __name__ == "__main__":
     parser.add_argument("--cib", help="specify the cibfile file")
     args = parser.parse_args()
     if args.cib:
-        myCluster.config['cib_file_list'] = args.cib 
+        myCluster.config['cib_file_list'] = args.cib
     print(f"dbg: {myCluster.config['cib_file_list']}")
     cib_file = myCluster.config['cib_file_list']
     print(f"dbg: {cib_file}")
-    myHana    = HanaStatus(myCluster.config)
+    myHana = HanaStatus(myCluster.config)
     myHana.xml_import(cib_file)
     multi_sid = False
     if myCluster.config['sid'] == None:
