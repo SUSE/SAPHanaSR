@@ -107,13 +107,16 @@ install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 # auxiliary Perl library and test scripts
-install -m 0555 tools/SAPHanaSR-monitor %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-monitor-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-showAttr-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
-install -m 0555 tools/SAPHanaSR-filter %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-replay-archive-legacy %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-filter-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
+install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 
 # wizard files for hawk2
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
@@ -130,10 +133,13 @@ install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/
 %dir /usr/lib/%{name}
 /usr/lib/%{name}/SAPHanaSRTools.pm
 /usr/lib/%{name}/saphana-*-lib
-/usr/bin/SAPHanaSR-monitor
+/usr/lib/%{name}/saphana_sr_*.py
+/usr/bin/SAPHanaSR-monitor-legacy
 /usr/bin/SAPHanaSR-showAttr
+/usr/bin/SAPHanaSR-showAttr-legacy
 /usr/bin/SAPHanaSR-replay-archive
-/usr/bin/SAPHanaSR-filter
+/usr/bin/SAPHanaSR-replay-archive-legacy
+/usr/bin/SAPHanaSR-filter-legacy
 /usr/bin/SAPHanaSR-hookHelper
 /usr/bin/SAPHanaSR-manageProvider
 
