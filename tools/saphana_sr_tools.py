@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
-# flake8: noqa: E126,E501
+# pylint: disable=line-too-long
+# pylint: disable=invalid-name
+# flake8-in-file-ignores: noqa: E501
 """
  saphana_sr_tools.py
  Author:       Fabian Herschel, May 2023
@@ -14,13 +16,13 @@
 
 import argparse
 #from datetime import datetime
-from dateutil import parser as dateutil_parser
 import json
 import os
 import re
 import sys
 import subprocess
 import xml.etree.ElementTree as ET
+from dateutil import parser as dateutil_parser
 
 global lib_version
 lib_version = "1.0.20230614.1225"
