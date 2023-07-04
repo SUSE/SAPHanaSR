@@ -21,7 +21,7 @@
 """
 
 import argparse
-#from datetime import datetime
+# from datetime import datetime
 import json
 import os
 import re
@@ -29,7 +29,7 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 import bz2
-#from dateutil import parser as dateutil_parser
+# from dateutil import parser as dateutil_parser
 
 # global lib_version
 lib_version = "1.0.20230614.1225"
@@ -291,7 +291,7 @@ class HanaStatus():
             site = self.is_site_attribute(name, return_site_name=True)
             sid = self.get_sid_from_attribute(name)
             if site and sid == self.config['sid']:
-                if not site in self.site_dict:
+                if site not in self.site_dict:
                     self.site_dict.update({site: {}})
                 site_site_dict = self.site_dict[site]
                 # for sites we already use the shortened attribute name (site-part in the name sis also removed to match the same column later)
@@ -463,8 +463,8 @@ class HanaStatus():
                                  'Resource': self.res_dict,
                                  'Site': self.site_dict,
                                  'Host': self.host_dict
-                               }, indent=4
-                             )
+                              }, indent=4
+                              )
         print(json_obj)
 
     def print_dic_as_path(self, print_dic, area, table_name, **kargs):
