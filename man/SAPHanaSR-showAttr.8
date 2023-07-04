@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-showAttr 8 "13 Apr 2023" "" "SAPHanaSR"
+.TH SAPHanaSR-showAttr 8 "08 May 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replication.
@@ -8,24 +8,24 @@ SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replica
 .SH SYNOPSIS
 \fBSAPHanaSR-showAttr\fR [ --help | --version | --path2table ]
 .br
-\fBSAPHanaSR-showAttr\fR [ --sid=SID[:INO] ] [ --sort=FIELD ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
+\fBSAPHanaSR-showAttr\fR [ --sid=SID[:INO] ] [ --select=SELECTION ] [ --sort=FIELD ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
 .\"
 .SH DESCRIPTION
 SAPHanaSR-showAttr shows Linux cluster attributes for SAP HANA system replication automation.
 The overall system replication (SR) state is shown as well as the HANA state
 on each node.
 Because the HANA srHook methods srConnectionChanged() and preTakeover() are
-used, the respective information shows up as well.
+used, respective information shows up as well.
 The information is fetched from the Linux cluster information base (CIB), not
 from HANA directly.
+Fields to be shown can be specified by pre-defined selections via command line option.
 .PP
 The output shows four sections, containing all or some of the listed
 fields:
-.\" TODO check with existing script.
 .TP
 Global section
 .br
-HANA system identifier (\fBGlobal\fP)
+global (\fBGlobal\fP)
 .br
 date and time of record (\fBcib-time\fP)
 .br
@@ -33,32 +33,40 @@ maintenance status of Linux cluster (\fBmaintenance\fP)
 .br
 filter for resource agent logging (\fBfilter\fP)
 .br
-Linux cluster scale-out multi-target support (\fBmts\fP)
-.br
+.\" TODO Linux cluster scale-out multi-target support (\fBmts\fP)
+.\" .br
 HANA primary replication site (\fBprim\fP)
 .br
 HANA secondary replication site (\fBsec\fP)
 .br
-HANA replication channel state, indicated by srConnectionChanged (\fBsrHook\fP)
+HANA system identifier (\fBsid\fP)
 .br
-HANA replication state of secondary site, indicated by systemReplicationStatus.py (\fBsync_state\fP)
-.br
-Linux cluster update status (\fBupd\fP)
+.\" TODO Linux cluster update status (\fBupd\fP)
+.\" .br
+HANA topology (\fBtopology\fP)
 .TP
-Resource section
+Resources section
 .br
-name of Linux cluster resource (\fBResource\fP)
+name of Linux cluster resources (\fBResources\fP)
 .br
-maintenance status of Linux cluster resource (\fBmaintenance\fP)
+maintenance status of Linux cluster resources (\fBmaintenance\fP)
 .TP
-Site section
-HANA site name (\fBSite\fP)
+Sites section
+HANA site name (\fBSites\fP)
 .br
 SAPHanaSR last primary timestamp (\fBlpt\fP)
 .br
 HANA landscape status (\fBlss\fP)
 .br
 HANA current master nameserver for that site (\fBmns\fP)
+.br
+HANA replication operation mode (\fBopMode\fP)
+.br
+HANA system replication status from HA/DR provider hook (\fBsrHook\fP)
+.br
+HANA system replication mode (\fBsrMode\fP)
+.br
+HANA system replication status from RA monitor (\fBsrPoll\fP)
 .br
 HANA system replication role (\fBsrr\fP)
 .TP
@@ -74,17 +82,17 @@ actual and configured roles for HANA on that node (\fBroles\fP)
 .br
 actual master score on that node (\fBscore\fP)
 .br
-generation of resource agent (\fBgra\fP)
-.br
-generation of srHook (\fBgsh\fP)
-.br
+.\" TODO generation of resource agent (\fBgra\fP)
+.\" .br
+.\" TODO generation of srHook (\fBgsh\fP)
+.\" .br
 HANA site where the host sits (\fBsite\fP)
-.br
-HANA system replication mode (\fBsrmode\fP)
 .br
 maintenance state of Linux cluster node (\fBstandby\fP)
 .br
-HANA system replication status (\fBsync_state\fP)
+HANA system replication takeover action, indicated by preTakeover() (\fBsra\fP)
+.br
+HANA system replication takeover action history, (\fBsrah\fP)
 .br
 Linux cluster node fence status (\fBterminate\fP)
 .br
@@ -92,9 +100,6 @@ HANA version (\fBversion\fP)
 .br
 HANA virtual host name (\fBvhost\fP)
 .br
-HANA system replication takeover action, indicated by preTakeover() (\fBsra\fP)
-.br
-HANA system replication takeover action history, (\fBsrah\fP)
 .PP
 Some fields are generated dynamically from the CIB. That fields are missing,
 if no corresponding attribute exists, e.g. the standby field.
@@ -102,13 +107,55 @@ An incomplete compilation on field details and purpose follows below.
 .\" TODO formatting below. better no indents, but bold item header?
 .\" TODO check details for Scale-Out
 .PP
+.B Global
+- the string global
+
+Value: global
+
+The Global field is used as root for the whole data structure.
+The Global section shows overall information on the system.
+.PP
+.B Hosts
+- Linux hostname
+
+Value: [ \fIHOSTNAME\fR ]
+
+Hostnames of HANA nodes managed by the Linux cluster.
+The hostname has to follow UNIX RFC 1178. Additional rules specific to SAP
+apply. E.g. length of hostname is limited to 13 characters.
+.\" TODO SAP note.
+.\" TODO still using remoteHost?
+See also the fields remoteHost and vhost.
+The Hosts section shows one line per host, containing details on that host and
+the HANA instance there. 
+.PP
+.B Resources
+- name of Linux cluster resources
+
+Value:  [ \fIRESOURCENAME\fR ]
+
+Name of the multi-state resource controlled by SAPHanaController, occasionally
+also the clone resource SAPHanaTopology. 
+The Resources section shows the HANA cluster resources and their cluster
+maintenance attribute´s status.
+.PP
+.B Sites
+- HANA site
+
+Value: [ \fIHANA_SITE\fR ]
+
+The HANA sites are detected by SAPHanaTopology. Two sites are managed by the Linux cluster.
+Optionally a third site could be connected thru multi-target system replication outside the cluster. 
+The Sites section shows information on the sites known to the Linux cluster and the
+HANA system replication status. 
+.PP
 .B clone_state
 - clone state of the Linux cluster resource
 
 Value: [ PROMOTED | DEMOTED | UNDEFINED | WAITING4LPA | WAITING4PRIM | WAITING4NODES | WAITING4REG ]
 
 .\" TODO: what kind of attribute?
-This variable is set by the SAPHanaController or SAPHana resource agent.
+This variable is set by the SAPHanaController resource agent.
 .br
 PROMOTED marks on scale-up the master state of an instance, which makes an HANA
 SR primary. On scale-out it indicates the master nameserver of the primary site.
@@ -131,54 +178,52 @@ WAITING4REG indicates potential risk of a dual primary situation.
 The cluster is waiting for the administrator to manually register the former
 HANA primary as new secondary.
 .br
-See also AUTOMATED_REGISTER and DUPLICATE_PRIMARY_TIMEOUT in ocf_suse_SAPHana(7) and
-ocf_suse_SAPHanaController(7).
+See also AUTOMATED_REGISTER and DUPLICATE_PRIMARY_TIMEOUT in ocf_suse_SAPHanaController(7).
 .PP
-.B gra
-- generation of resource agent
-
-Value: [ \fIgeneration\fR ]
-
-The RA generation attribute identifies which generation of the RA is running.
-It helps determing RA's capabilities and performing cluster-wide upgrades of
-RA and srHook. The generation should be same for both on all nodes of the
-Linux cluster after successful upgrade.
-See also gsh below and SAPHanaSR-manageAttr(8).
-.PP
-.B gsh
-- generation of srHook
-
-Value: [ \fIgeneration\fR ]
-
-The srHook generation attribute identifies which generation of the srHook is running.
-It helps determing srHook's capabilities and performing cluster-wide upgrades of
-RA and srHook. E.g. starting with generation 2.0 the RA supports scale-out
-multi-target system replication, which needs replacement of the old SAPHanaSR.py
-by new SAPHanaSrMultiTarget.py.
 .\" TODO used with SAPHanaSR-angi?
-See also gra above and SAPHanaSR-manageAttr(8).
-.PP
-.B mts
-- Linux cluster scale-out multi-target support
-
-Value: [ true | false ]
-
-The multi-target support attribute identifies whether the Linux cluster supports
-HANA scale-out multi-target system replication. This needs consistently updated
-RA and srHook to be active on all Linux cluster nodes, including the majority
-maker.
-See also gra, gsh and SAPHanaSR-manageAttr(8).
-.PP
-.B upd
-- Linux cluster update status
-
-Value: [ ok | nok ]
-
-.\" TODO
-The update status attribute identifies whether the whole cluster has successfully
-passed an update procedure.
-See also mts above and SAPHanaSR-manageAttr(8).
-.PP
+.\" .B gra
+.\" - generation of resource agent
+.\" 
+.\" Value: [ \fIgeneration\fR ]
+.\" 
+.\" The RA generation attribute identifies which generation of the RA is running.
+.\" It helps determining RA's capabilities and performing cluster-wide upgrades of
+.\" RA and srHook. The generation should be same for both on all nodes of the
+.\" Linux cluster after successful upgrade.
+.\" See also gsh below and SAPHanaSR-manageAttr(8).
+.\" .PP
+.\" .B gsh
+.\" - generation of srHook
+.\" 
+.\" Value: [ \fIgeneration\fR ]
+.\" 
+.\" The srHook generation attribute identifies which generation of the srHook is running.
+.\" It helps determining srHook's capabilities and performing cluster-wide upgrades of
+.\" RA and srHook. E.g. starting with generation 2.0 the RA supports scale-out
+.\" multi-target system replication, which needs replacement of the old SAPHanaSR.py
+.\" by new SAPHanaSrMultiTarget.py.
+.\" See also gra above and SAPHanaSR-manageAttr(8).
+.\" .PP
+.\" .B mts
+.\" - Linux cluster scale-out multi-target support
+.\" 
+.\" Value: [ true | false ]
+.\" 
+.\" The multi-target support attribute identifies whether the Linux cluster supports
+.\" HANA scale-out multi-target system replication. This needs consistently updated
+.\" RA and srHook to be active on all Linux cluster nodes, including the majority
+.\" maker.
+.\" See also gra, gsh and SAPHanaSR-manageAttr(8).
+.\" .PP
+.\" .B upd
+.\" - Linux cluster update status
+.\" 
+.\" Value: [ ok | nok ]
+.\" 
+.\" The update status attribute identifies whether the whole cluster has successfully
+.\" passed an update procedure.
+.\" See also mts above and SAPHanaSR-manageAttr(8).
+.\" .PP
 .B maintenance
 - maintenance status of Linux cluster or cluster resource
 
@@ -190,40 +235,22 @@ The field might appear or disappear, depending on cluster maintenance tasks.
 See also the standby attribute below.
 .PP
 .B filter
-- SAPHanaController or SAPHana filter for logging
+- SAPHanaController filter for logging
 
 Value: [ \fIfilter\fR ]
 
 The filter is defined by hana_<sid>_glob_filter .
-See ocf_suse_SAPHana(7) and ocf_suse_SAPHanaController(7) for details.
-.PP
-.B Global
-- HANA system identifier
-
-Value: [ \fISID\fR ]
-
-The SID is the same for the pair of HANA system replication databases in the
-cluster.
-.\" TODO as well as for the ones outside connected by system replication.
-.PP
-.B Hosts
-- Linux hostname
-
-Value: [ \fIHOSTNAME\fR ]
-
-The hostname has to follow UNIX RFC 1178. Additional rules specific to SAP
-apply. E.g. length of hostname is limited to 13 characters.
-.\" TODO SAP note.
-See also the fields remoteHost and vhost.
+See ocf_suse_SAPHanaController(7) for details.
 .PP
 .B lpt
 - last primary timestamp
 
-Value: [ \fIUNIX_EPOCH\fR | 30 | 10 | 0 ]
+Value: [ \fIUNIX_EPOCH\fR | 30 | 20 | 10 | 0 ]
 
-The node attribute lpa_<sid>_lpt or cluster attribute hana_<sid>_site_lpt_<site> is set by the SAPHanaController or SAPHana resource agent.
+The node attribute lpa_<sid>_lpt or cluster attribute hana_<sid>_site_lpt_<site>
+is set by the SAPHanaController resource agent.
 When the RA detects a running HANA SR primary on the node, it records the Unix Epoch time.
-See section DUPLICATE_PRIMARY_TIMEOUT of ocf_suse_SAPHana(7) and ocf_suse_SAPHanaController(7).
+See section DUPLICATE_PRIMARY_TIMEOUT ocf_suse_SAPHanaController(7).
 .br
 Auxiliary values are set for an HANA SR secondary. 30 means the instance is
 evictable for primary. 10 means: not yet ready.
@@ -233,7 +260,25 @@ evictable for primary. 10 means: not yet ready.
 
 Value: [ 4 | 3 | 2 | 1 | 0 ]
 
-The site attribute lss shows the return code of HANA's landscapeHostConfiguration.py. See field A of the roles section below and ocf_suse_SAPHanaController(7).
+The site attribute lss shows the return code of HANA's landscapeHostConfiguration.py.
+.br
+Value: [ 4 | 3 | 2 | 1 | 0 ]
+.br
+This field contains the return code of landscapHostConfiguration.py. The
+parameter does not tell you if the secondary system is ready for a takeover.
+The meaning is different from common Linux return codes.
+.br
+4 = OK - Everything looks perfect on the HANA primary.
+.br
+3 = WARNING - A HANA Host Auto-Failover is taking place.
+.br
+2 = INFO - The landscape is completely functional, but the actual role of the host differs from the configured role.
+.br
+1 = DOWN - There are not enough active hosts.
+.br
+0 = FATAL - Internal script error, the state could not be determined.
+.br
+See landscapeHostConfiguration.py an ocf_suse_SAPHanaController(7).
 .PP
 .B mns
 - master nameserver
@@ -262,12 +307,12 @@ For scale-up see roles sub-field B of the Hosts section.
 Value: [ online | offline ]
 .\" TODO UNCLEAN | pending ?
 .PP
-.B op_mode
+.B opMode
 - HANA SR operations mode
 
 Value: [ logreplay | delta_datashipping | logreplay_readaccess ]
 
-The node attribute hana_<sid>_op_mode is set by SAPHanaTopology, according to the running HANA. The attribute is used by the SAPHanaController or SAPHana resource agent for setting up system replication. delta_datashipping is not recommended in the context of Linux clusters.
+The node attribute hana_<sid>_op_mode is set by SAPHanaTopology, according to the running HANA. The attribute is used by the SAPHanaController resource agent for setting up system replication. delta_datashipping is not recommended in the context of Linux clusters.
 .PP
 .B remoteHost
 - HANA SR remote host
@@ -277,70 +322,35 @@ Value: [ \fIHOSTNAME\fR ]
 
 The node attribute hana_<sid>_remoteHost is set by SAPHanaTopology, according
 to the running HANA.
-The attribute is used by the SAPHanaController or SAPHana resource agent for
+The attribute is used by the SAPHanaController resource agent for
 setting up system replication.
 See also the fields Hosts and vhost.
-.PP
-.B Resource
-- name of Linux cluster resource
-
-Value:  [ \fIRESOURCENAME\fR ]
-
-Name of the multi-state resource controlled by SAPHanaController or SAPHana.
 .PP
 .B roles
 - actual and configured roles for HANA on that node
 
-The roles field in the Hosts section has six sub-fields for scale-up (A:B:C:D:E:F). It has four sub-fields for scale-out (C:D:E:F). 
-The sub-fields C:D:E:F are primarily useful for HANA scale-out.
-For scale-up that four fields C:D:E:F should be master1:master:worker:master.
+The roles field in the Hosts section has four sub-fields (A:B:C:D).
+For scale-up that four fields should be master1:master:worker:master.
 .\" TODO or ":shtdown:shtdown:shtdown"
+.\" TODO scale-out ERP and scale-out ERP
 .br
 
-Field A: return code of landscapeHostConfiguration.py
-.br
-Value: [ 4 | 3 | 2 | 1 | 0 ]
-.br
-This field contains the return code of landscapHostConfiguration.py. The
-parameter does not tell you if the secondary system is ready for a takeover.
-The meaning is different from common Linux return codes.
-.br
-4 = OK - Everything looks perfect on the HANA primary.
-.br
-3 = WARNING - A HANA Host Auto-Failover is taking place.
-.br
-2 = INFO - The landscape is completely functional, but the actual role of the host differs from the configured role.
-.br
-1 = DOWN - There are not enough active hosts.
-.br
-0 = FATAL - Internal script error, the state could not be determined.
-.br
-See landscapeHostConfiguration.py.
-.br
-
-Field B: HANA System Replication Role
-.br
-Value: [ "P"rimary | "S"econdary | "N"one ]
-.br
-See field srr of the Site section for scale-out.
-.br
-
-Field C: NameServer Config Role
+Field A: NameServer Config Role
 .br
 Value: [ master1 | master2 | master3 | worker | slave | standby | shtdown ]
 .br
 
-Field D: NameServer Actual Role
+Field B: NameServer Actual Role
 .br
 Value: [ master | slave | standby | shtdown ]
 .br
 
-Field E: IndexServer Config Role
+Field C: IndexServer Config Role
 .br
 Value: [ master1 | master2 | master3 | worker | slave | standby | shtdown ]
 .br
 
-Field F: IndexServer Actual Role
+Field D: IndexServer Actual Role
 .br
 Value: [ master | worker | slave | standby | shtdown ]
 .br
@@ -354,7 +364,7 @@ Value: [ master | worker | slave | standby | shtdown ]
 .\"Value: [ 150 | 140 | 100 | 90 | 80 | 60 | 10 | 0 | -1 | -INFINITY ]
 Value: [ 150 | 145 | 140 | 115 | 110 | 100 | 90 | 80 | 70 | 60 | 10 | 5 | 0 | -1 | -9000 | -10000 | -12200 | -22100 | -22200 | -32300 | -33333 | -INFINITY ]
 
-This is a variable of the SAPHanaController or SAPHana resource agent. It is calculated
+This is a variable of the SAPHanaController resource agent. It is calculated
 based on an internal scoring table. A value of 150 should cause the Linux cluster promoting
 the local resource instance to HANA SR primary master nameserver.
 140 indicates a HANA primary master nameserver candidate. 
@@ -363,23 +373,31 @@ the local resource instance to HANA SR primary master nameserver.
 Note: The effective resource scoring used by the Linux cluster differs from the above
 values because the cluster engine takes into account other factors as well.  
 .PP
+.B sid
+- HANA system indentifier
+
+Value: [ \fISID\fR ]
+
+The SID is the same for the pair of HANA system replication databases in the Linux cluster.
+Also an HANA database connected thru mulit-target replication outside the cluster has this SID.
+.PP
 .B site
 - HANA site where the host sits
 
 Value: [ \fIHANA_SITE\fR ]
 
 The node attribute hana_<sid>_site is set by SAPHanaTopology, according to the running HANA.
-The attribute is used by the SAPHanaController or SAPHana resource agent for setting up
+The attribute is used by the SAPHanaController resource agent for setting up
 system replication.
 A dash (-) indicates the RA did not run or did not recognize the site.
 .PP
-.B srmode
+.B srMode
 - HANA SR mode
 
 Value: [ sync | syncmem ]
 
-The node attribute hana_<sid>_srmode or cluster attribute hana_<sid>_glob_srmode is set by SAPHanaTopology, according to the running HANA.
-The attribute is used by the SAPHanaController or SAPHana resource agent for setting up system
+The node attribute hana_<sid>_glob_srmode is set by SAPHanaTopology, according to the running HANA.
+The attribute is used by the SAPHanaController resource agent for setting up system
 replication. SAP HANA knows also async and fullsync (see URLs below).
 Those do not make sense for automating HANA system replication by an Linux cluster.
 .PP
@@ -393,16 +411,14 @@ The attribute is shown after it has been changed from the default.
 The field might appear or disappear, depending on cluster maintenance tasks.
 See also the maintenance attribute above.
 .PP
-.B sync_state
+.B srPoll
 - HANA SR status
 
 Value: [ SOK | SFAIL | SWAIT | SREG | PRIM ]
 
-.\"TODO cluster property sync_state ?
-The cluster property hana_<sid>_glob_sync_state is set by the SAPHanaController or SAPHana resource agent.
+The cluster property hana_<sid>_glob_sync_state is set by the SAPHanaController resource agent.
 The first three values are representing an HANA system replication status,
-recognized at latest RA run, see ocf_suse_SAPHana(7), ocf_suse_SAPHanaController(7) and
-systemReplicationStatus.py .
+recognized at latest RA run, see ocf_suse_SAPHanaController(7) and systemReplicationStatus.py .
 .br
 The 4th value (PRIM) just indicates an HANA SR primary.
 .PP
@@ -412,7 +428,7 @@ The 4th value (PRIM) just indicates an HANA SR primary.
 Value: [ T | R | - ]
 
 The node attribute system replication action is checked by the HA/DR provider susTkOver.py using the API
-method preTakeover(). It is set by the resource agent SAPHana or SAPHanaController. 
+method preTakeover(). It is set by the SAPHanaController resource agent. 
 It indicates whether a takeover or registration is ongoing. This attribute may 
 not be persisted in pengine files.
 .br
@@ -436,17 +452,13 @@ attributes for later use, for root cause analysis.
 
 Value: [ SOK | SFAIL | SWAIT | SREG | PRIM ]
 
-The cluster attributes related to srHook are hana_<sid>_site_srHook_<site> for the multi-tier enabled hook and hana_<sid>_glob_srHook for the old-style hook.
-It represents the HANA SR status from HA/DR provider API method srConnectionChanged(). See SAPHanaSR-ScaleOut(7) for supported API versions and scenarios.
-The attribute is not updated if the cluster is not running. Thus if the cluster is shut down while HANA remains running, the content of srHook might be outdated on cluster start until the next srConnectionChanged() event.
+The cluster attributes related to srHook is hana_<sid>_site_srHook_<site>.
+It represents the HANA SR status from HA/DR provider API method srConnectionChanged().
+See SAPHanaSR(7) and SAPHanaSR-ScaleOut(7) for supported API versions and scenarios.
+The attribute is not updated if the cluster is not running. Thus if the cluster is
+shut down while HANA remains running, the content of srHook might be outdated on
+cluster start until the next srConnectionChanged() event.
 See susHanaSR.py(7) and susHanaSrMultiTarget.py(7) for details. 
-.br
-The cluster property \fBhana_<sid>_glob_srHook\fR shows one HANA SR status.
-It does not work for multi-tier and multi-target system replication.
-\fBhana_<sid>_site_srHook_<site>\fR shows the HANA SR status specific to the
-respective site.
-.br
-Note: Global and site-specific properties must not appear at same time.
 .PP
 .B terminate
 - Linux cluster node fence status
@@ -474,8 +486,8 @@ Value: [ \fIHANA_VIRT_HOSTNAME\fR ]
 
 The virtual hostname is used by the HANA instance instead of Linux hostname.
 The node attribute hana_<sid>_vhost is set by SAPHanaTopology, according to
-the running HANA. The attribute is used by the SAPHanaController or SAPHana
-resource agent for setting up system replication.
+the running HANA. The attribute is used by the SAPHanaController resource agent
+for setting up system replication.
 See also the fields Hosts and remoteHost. SAPHanaToplogy needs the SAPHOSTAGENT
 to map from the local hostname to the HANA virtual hostname.
 .\" TODO details, see HANA global.ini
@@ -491,16 +503,19 @@ show version.
 \fB --path2table\fR
 convert script-style input pipe back into normal output.
 .TP 4
+.\fB --select=\fISELECTION\fR
+.\" TODO explain meaning of values
+show selected information only. Allowed values: [ all | default | minimal | sr ]. Default is default.
+.TP 4
 \fB --sid=\fISID\fR[:\fIINO\fR]
 use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
 Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
 .TP 4
-\fB --sort \fIFIELD\fR
-sort Hosts section table by field. Allowed values: roles, site. The default sort is by hostnames.
-.\" TODO --format
-.\" .TP 4
-.\" \fB --format \fIFORMAT\fR
-.\" output format. Allowed values: [ text | HTML ]. Default is text.
+--sort=\fIFIELD\fR
+sort Hosts section table by field. Allowed values: [ roles | site ]. Default is sort by hostnames.
+.TP 4
+\fB --format=\fIFORMAT\fR
+output format. Allowed values: [ script | tables ]. Default is tables.
 .TP 4
 \fB --cib=\fIOFFLINE_CIB_FILE\fR
 read data from given offline CIB file.
@@ -519,7 +534,7 @@ show all SAPHanaSR attributes and relevant cluster maintenance states.
 .br
 If the roles sub-fields are 1:P:::: landscapeHostConfiguration.py has not been able to detect the HANA roles during last recent RA monitor operation. Likely HANA was down or sudo <sid>adm failed.
 .TP 4
-# SAPHanaSR-showAttr --sort roles
+# SAPHanaSR-showAttr --sort=roles
 show all SAPHanaSR attributes in the cluster and sort host table output by roles.
 .TP 4
 # SAPHanaSR-showAttr --sid=HA1:10 --cib=./hb_report-17-07-2019/grauenstein01/cib.xml

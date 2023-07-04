@@ -237,7 +237,7 @@ Suggested minimum timeout: 60\&.
 Reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status. Suggested minimum timeout: 700\&. Suggested interval: 60\&.
 .RE
 .PP
-\fBmonitor (Slave role)\fR
+\fBmonitor (demoted role)\fR
 .RS 4
 Reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status. The slave role's monitor interval has to be different from the master role. Suggested minimum timeout: 700\&. Suggested interval: 61\&.
 .RE
@@ -275,7 +275,7 @@ In addition, a SAPHanaTopology clone resource is needed to make this work.
 .RE
 .PP
 .RS 2
-primitive rsc_SAPHana_SLE_HDB00 ocf:suse:SAPHana \\
+primitive rsc_SAPHanaCon_SLE_HDB00 ocf:suse:SAPHanaController \\
 .br
  op start interval="0" timeout="3600" \\
 .br
@@ -285,17 +285,17 @@ primitive rsc_SAPHana_SLE_HDB00 ocf:suse:SAPHana \\
 .br
  op demote interval="0" timeout="320" \\
 .br
- op monitor interval="60" role="Master" timeout="700" \\
+ op monitor interval="60" role="Promoted" timeout="700" \\
 .br
- op monitor interval="61" role="Slave" timeout="700" \\
+ op monitor interval="61" role="Started" timeout="700" \\
 .br
  params SID="SLE" InstanceNumber="00" PREFER_SITE_TAKEOVER="true" \\
 .br
  DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="false"
 .PP
-ms msl_SAPHana_SLE_HDB00 rsc_SAPHana_SLE_HDB00 \\
+clone mst_SAPHanaCon_SLE_HDB00 rsc_SAPHanaCon_SLE_HDB00 \\
 .br
- clone-max="2" clone-node-max="1"
+ meta clone-max="2" clone-node-max="1" interleave="true" promotable="true"
 .RE
 .PP
 * Below is an example configuration for the two SAPHana resources in a cost-optimized scenario.
@@ -312,7 +312,7 @@ gets a priority to allow priority fencing. See manual page
 SAPHanaSR_basic_cluster(7).
 .PP
 .RS 2
-primitive rsc_SAPHana_PRD_HDB10 ocf:suse:SAPHana \\
+primitive rsc_SAPHanaCon_PRD_HDB10 ocf:suse:SAPHanaController \\
 .br
  op start interval="0" timeout="3600" \\
 .br
@@ -322,9 +322,9 @@ primitive rsc_SAPHana_PRD_HDB10 ocf:suse:SAPHana \\
 .br
  op demote interval="0" timeout="320" \\
 .br
- op monitor interval="60" role="Master" timeout="700" \\
+ op monitor interval="60" role="Promoted" timeout="700" \\
 .br
- op monitor interval="61" role="Slave" timeout="700" \\
+ op monitor interval="61" role="Started" timeout="700" \\
 .br
  params SID="PRD" InstanceNumber="10" PREFER_SITE_TAKEOVER="false" \\
 .br
@@ -332,9 +332,9 @@ primitive rsc_SAPHana_PRD_HDB10 ocf:suse:SAPHana \\
 .br
  meta priority=100
 .PP
-ms msl_SAPHana_PRD_HDB10 rsc_SAPHana_PRD_HDB10 \\
+clone mst_SAPHanaCon_PRD_HDB10 rsc_SAPHanaCon_PRD_HDB10 \\
 .br
- clone-max="2" clone-node-max="1 interleave="true"
+ meta clone-max="2" clone-node-max="1 interleave="true" promotable="true"
 .PP
 primitive rsc_SAPInstance_TST_HDB10 ocf:heartbeat:SAPInstance \\
 .br
@@ -358,7 +358,7 @@ colocation col_TST_never_with_PRD-ip -inf: rsc_SAPInstance_TST_HDB20_node02:Star
 .PP
 order ord_TST_stop_before_PRD-promote inf: rsc_SAPInstance_TST_HDB20_node02:stop \\
 .br
- msl_SAPHana_PRD_HDB10:promote
+ mst_SAPHanaCon_PRD_HDB10:promote
 .RE
 .PP
 * Initiate an administrative takeover of the HANA primary from one node to the
@@ -380,13 +380,13 @@ Note: Older versions of the Linux cluster have used the commands 'migrate' and
 .br
 # crm configure show | grep cli
 .br
-# crm resource move msl_SAPHana_SLE_HDB10 force
+# crm resource move mst_SAPHanaCon_SLE_HDB10 force
 .br
 # cs_clusterstate -i
 .br
 # SAPHanaSR-showAttr
 .br
-# crm resource clear msl_SAPHana_SLE_HDB10 
+# crm resource clear mst_SAPHanaCon_SLE_HDB10 
 .RE
 .PP
 * Manually start the HANA primary if only one node is available.
@@ -433,13 +433,13 @@ property $id="SAPHanaSR" \\
 .\" TODO: output
 .RE
 .PP
-* Show failcount for resource rsc_SAPHana_HA1_HDB00 .
+* Show failcount for resource rsc_SAPHanaCon_HA1_HDB00 .
 
 See also cluster properties migration-threshold, failure-timeout and
 SAPHana parameter PREFER_SITE_TAKEOVER.
 .PP
 .RS 2
-# cibadmin -Ql | grep rsc_SAPHana_HA1_HDB00.*fail-count
+# cibadmin -Ql | grep rsc_SAPHanaCon_HA1_HDB00.*fail-count
 .\" TODO: crm_mon --failcounts 
 .RE
 .PP
