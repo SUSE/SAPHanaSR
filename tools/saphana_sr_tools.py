@@ -160,6 +160,8 @@ class HanaStatus():
 
     def __init__(self, config):
         self.config = config
+        self.root = None
+        self.tree = None
 
     def xml_import(self, filename):
         if filename == None:
