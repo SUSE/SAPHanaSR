@@ -53,17 +53,17 @@ def shorten(column_name, **kargs):
     if 'sid' in kargs:
         sid = kargs['sid'].lower()
         sid_uc = kargs['sid'].upper()
-    match_obj = re.search(f"hana_{sid}_glob_(.*)",column_name)    # (3)
+    match_obj = re.search(f"hana_{sid}_glob_(.*)", column_name)    # (3)
     if match_obj != None:
         column_name = match_obj.group(1)
-    match_obj = re.search(f"hana_{sid}_site_(.*)_",column_name)   # (2)
+    match_obj = re.search(f"hana_{sid}_site_(.*)_", column_name)   # (2)
     if match_obj != None:
         column_name = match_obj.group(1)
-    match_obj = re.search(f"hana_{sid}_(.*)",column_name)         # (1)
+    match_obj = re.search(f"hana_{sid}_(.*)", column_name)         # (1)
     if match_obj != None:
         column_name = match_obj.group(1)
     # TODO: Do we need to check, if the master-attribute belongs to the promotable clone for this SID?
-    match_obj = re.search(f"master.rsc.*_{sid_uc}_.*",column_name)   # (4)
+    match_obj = re.search(f"master.rsc.*_{sid_uc}_.*", column_name)   # (4)
     if match_obj != None:
         column_name = 'score'
     return column_name
@@ -169,7 +169,7 @@ class HanaStatus():
             # read from filename
             if os.path.isfile(filename):
                 # bz2 ?
-                match_obj = re.search("\.bz2$",filename)
+                match_obj = re.search("\.bz2$", filename)
                 if match_obj:
                     print(f"File {filename} ending with .bz2 is assumed to be compressed with bzip2 - try to uncompress")
                     import bz2
@@ -254,7 +254,7 @@ class HanaStatus():
             site = self.is_site_attribute(name, return_site_name=True)
             sid  = self.get_sid_from_attribute(name)
             if site  and sid == self.config['sid']:
-                if not(site in self.site_dict):
+                if not (site in self.site_dict):
                     self.site_dict.update({site: {}})
                 site_site_dict = self.site_dict[site]
                 # for sites we already use the shortened attribute name (site-part in the name sis also removed to match the same column later)
@@ -308,7 +308,7 @@ class HanaStatus():
         return_site_name = False
         if 'return_site_name' in kargs:
             return_site_name = kargs['return_site_name']
-        match_obj = re.search("hana_..._site_.*_(.*)",column_name)
+        match_obj = re.search("hana_..._site_.*_(.*)", column_name)
         if match_obj:
             if return_site_name:
                 return match_obj.group(1)
@@ -323,7 +323,7 @@ class HanaStatus():
         """
         TODO: description
         """
-        match_obj = re.match("hana_.*",name)
+        match_obj = re.match("hana_.*", name)
         if match_obj:
            return True
         return False
@@ -332,7 +332,7 @@ class HanaStatus():
         """
         TODO: description
         """
-        match_obj = re.match("hana_..._glob_.*",name)
+        match_obj = re.match("hana_..._glob_.*", name)
         if match_obj:
            return True
         return False
@@ -342,7 +342,7 @@ class HanaStatus():
         TODO: description
         """
         sid = None
-        match_obj = re.match("hana_(...)_",name)
+        match_obj = re.match("hana_(...)_", name)
         if match_obj:
             sid = match_obj.group(1)
         return sid
@@ -408,7 +408,7 @@ class HanaStatus():
         print()
 
     def print_dic_as_table_sort_by(self, dic, index, index_type, index_reverse, area, table_name):
-        self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), area,   table_name)
+        self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1], index, type=index_type)), reverse=index_reverse)), area,   table_name)
 
     def print_dic_as_json(self, print_dic, table_name):
         """
@@ -435,7 +435,7 @@ class HanaStatus():
         """
         TODO: description
         """
-        quote=''
+        quote = ''
         if 'quote' in kargs:
             quote = kargs['quote']
         for key in print_dic:
@@ -455,13 +455,13 @@ class HanaStatus():
             after_loop = False
             for pat in the_selection:
                 on_match = True
-                if pat[0]=='-':
+                if pat[0] == '-':
                     after_loop = True
                     on_match = False
                     pat = pat[1:]
-                elif pat[0]=='+':
+                elif pat[0] == '+':
                     pat = pat[1:]
-                match_obj = re.match(pat + '$',column_name)
+                match_obj = re.match(pat + '$', column_name)
                 if match_obj:
                     return on_match
             return after_loop
@@ -498,8 +498,8 @@ if __name__ == "__main__":
             multi_sid = False
             sys.exit(1)
         else:
-           myHana.config['sid'] = myHana.sids[0].lower()
-           myCluster.config['sid'] = myHana.sids[0].lower()
+            myHana.config['sid'] = myHana.sids[0].lower()
+            myCluster.config['sid'] = myHana.sids[0].lower()
     myHana.fill_glob_dict()
     myHana.fill_res_dict()
     myHana.fill_site_dict()
