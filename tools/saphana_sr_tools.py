@@ -414,7 +414,7 @@ class HanaStatus():
         """
         TODO: description
         """
-        json_obj = json.dumps({table_name: print_dic}, indent = 4)
+        json_obj = json.dumps({table_name: print_dic}, indent=4)
         print(json_obj)
 
     def print_all_as_json(self):
@@ -427,7 +427,7 @@ class HanaStatus():
                                  'Resource': self.res_dict,
                                  'Site':   self.site_dict,
                                  'Host':   self.host_dict
-                               }, indent = 4
+                               }, indent=4
                              )
         print(json_obj)
 
