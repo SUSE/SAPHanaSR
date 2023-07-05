@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
@@ -23,7 +24,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20130703.1350"
+    version = "0.1.20230705.1446"
 
     def message(self, msg, **kwargs):
         """
@@ -220,7 +221,7 @@ class SaphanasrTest:
         return object_name
 
     def get_value(self, area_name, object_name, key):
-        """ method to query the value of a key (e.g. 'msn') for an object (e.g. site 'MAINZ' inside an area (e.g. 'Sites') """
+        """ method to query the value of a key (e.g. 'msn') for an object (e.g. site 'MAINZ' inside an area (e.g. 'Site') """
         # Query runs from area-level via object-level to key-level
         l_value = None
         l_sr = self.dict_sr
@@ -370,10 +371,10 @@ class SaphanasrTest:
             self.read_saphana_sr()
             process_result = max (
                                   self.process_topology_object(step, 'global', 'Global'),
-                                  self.process_topology_object(step, 'pSite', 'Sites'),
-                                  self.process_topology_object(step, 'sSite', 'Sites'),
-                                  self.process_topology_object(step, 'pHost', 'Hosts'),
-                                  self.process_topology_object(step, 'sHost', 'Hosts'))
+                                  self.process_topology_object(step, 'pSite', 'Site'),
+                                  self.process_topology_object(step, 'sSite', 'Site'),
+                                  self.process_topology_object(step, 'pHost', 'Host'),
+                                  self.process_topology_object(step, 'sHost', 'Host'))
             if process_result == 0:
                 break
             time.sleep(wait)
@@ -586,25 +587,25 @@ if __name__ == "__main__":
         # pSite is referenced by pHost-site-attr
         # sSite is referenced by sHost-site-attr
         #
-        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', { 'srr': 'P'})})
-        l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', { 'srr', 'S'})})
+        l_top.update({'pSite': test01.get_area_object_by_key_val('Site', { 'srr': 'P'})})
+        l_top.update({'sSite': test01.get_area_object_by_key_val('Site', { 'srr': 'S'})})
         # first try to use site-msn attribute to get the master name server
         # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
-        l_top.update({'pHost': test01.get_value('Sites', l_top['pSite'], 'mns')})
-        l_top.update({'sHost': test01.get_value('Sites', l_top['sSite'], 'mns')})
+        l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
+        l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
 
-        test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Hosts', { 'roles': ':worker:slave'}, sloppy=True)}")
+        test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
 
         if l_top['pHost'] == None:
             # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
-            l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', {'roles': '[0-4]:P:'}, sloppy=True)})
-            l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', {'roles', '[0-4]:S:'}, sloppy=True)})
-            l_top.update({'pSite': test01.get_value('Hosts', l_top['pHost'], 'site')})
-            l_top.update({'sSite': test01.get_value('Hosts', l_top['sHost'], 'site')})
+            l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
+            l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
+            l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
+            l_top.update({'sSite': test01.get_value('Host', l_top['sHost'], 'site')})
 
         # TODO: do we need the old method as fallback, if msn is empty or misleading?
-        #l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
-        #l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
+        #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
+        #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
         l_msg = (
                     f"TOPO: pSite={l_top['pSite']}"
                     f" sSite={l_top['sSite']}"
