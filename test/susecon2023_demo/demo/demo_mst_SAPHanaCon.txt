@@ -1,0 +1,15 @@
+primitive rsc_SAPHanaCon_HA1_HDB00 ocf:suse:SAPHanaController \
+	op start interval=0 timeout=3600 \
+	op stop interval=0 timeout=3600 \
+	op promote interval=0 timeout=3600 \
+	op monitor interval=15 role=Master timeout=700 \
+	op monitor interval=20 role=Slave timeout=700 \
+	params SID=HA1 InstanceNumber=00 PREFER_SITE_TAKEOVER=yes DUPLICATE_PRIMARY_TIMEOUT=600 AUTOMATED_REGISTER=yes
+#
+clone mst_SAPHanaCon_HA1_HDB00 rsc_SAPHanaCon_HA1_HDB00 \
+	meta clone-max=2 clone-node-max=1 interleave=true promotable=true maintenance=true target-role=Started
+#
+colocation col_ip_prim_SAPHana_HA1_HDB00 2000: rsc_ip_HA1:Started mst_SAPHanaCon_HA1_HDB00:Promoted
+#
+order ord_SAPHana_HA1_HDB00 Optional: cln_SAPHanaTop_HA1_HDB00 mst_SAPHanaCon_HA1_HDB00
+#

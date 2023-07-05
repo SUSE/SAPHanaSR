@@ -1,0 +1,63 @@
+#!/bin/sh
+
+remote_node="$1"
+sid="$2"
+
+session="SAP-"remote_node"
+window="$session:1"
+
+lines="$(tput lines)"
+columns="$(tput cols)"
+
+short_sleep=10
+half_sleep=5
+
+tmux -2 new-session -d -x "$columns" -y "$lines" -s "$session" 'echo "step -1"; bash'
+
+#             |cut2 45/55                          
+#             |                                    
+#  <attr>     |                    <crm_mon>       
+#             |                                    
+#-------------|cut3 85/15                          
+#  <state>    |                                    
+#-------------------------------------------------  cut1 56/44
+#                           |                      
+#                           |        <console>     
+#  <logs>                   | cut4 65/35           
+#                           |                      
+#                           |                      
+#                                                  
+
+
+(
+tmux new-window -t "$window" -n 'SAPHanaSR-console' 'echo "attr"; watch ssh $remote_node SAPHanaSR-showAttr --sid=$sid ; bash' || exit
+
+#
+# cut 1
+#
+tmux split-window -t "$window"             -v -p 44    -d 'echo "console";  bash'
+
+
+#
+# cut 2
+#
+tmux split-window -t "$window"             -h -p 55 -d 'echo "crm_mon"; watch "ssh $remote_node crm_mon -1r"; bash'
+
+#
+# cut 3
+#
+tmux split-window -t "$window"             -v -p 15    -d 'echo "state"; watch ssh $remote_node cs_clusterstate -i; bash'
+
+
+#
+# cut 4
+#
+tmux select-pane  -t "$window.{bottom-right}"
+
+tmux split-window -t "$window"             -h -p 65 -b 'echo "logs";  watch "bash view_suschksrv_trc.sh $remote_node | tail -18"; bash'
+
+) &
+
+# Attach to session
+tmux -2 attach-session -t "$session"
+

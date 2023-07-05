@@ -6,7 +6,7 @@
 # Copyright:    (c) 2017-2022 SUSE LLC
 # Author: Fabian Herschel
 # License: Check if we publish that under GPL v2+
-# Version: 0.26.2022.11.22
+# Version: 0.27.2023.04.28
 #
 ##################################################################
 
@@ -20,14 +20,72 @@ use Sys::Syslog;
 use Sys::Hostname;
 use File::Path;
 use vars qw(@ISA @EXPORT @EXPORT_OK);
+use Data::Dumper qw(Dumper);
 @ISA = qw(Exporter);
 # Init immediately so their contents can be used in the 'use vars' below.
-@EXPORT    = qw(max get_nodes_online mysyslog max mysyslog get_nodes_online get_node_status get_sid_and_InstNr get_hana_attributes get_hana_sync_state get_number_primary check_node_status check_node_mode get_number_secondary get_host_primary get_host_secondary check_lpa_status check_all_ok host_attr2string get_lpa_by_host get_site_by_host print_host_attr set_new_attribute_model get_new_attribute_model get_number_HANA_standby get_HANA_nodes get_node_list set_cibFile get_master_nameserver set_GName set_HName set_SName set_Site insertAttribute path_to_table);
+@EXPORT    = qw(
+    check_lpa_status
+    check_all_ok
+    check_node_status
+    check_node_mode
+    get_hana_attributes
+    get_hana_sync_state
+    get_lpa_by_host
+    get_nodes_online
+    get_node_status
+    get_sid_and_InstNr
+    get_number_primary
+    get_number_secondary
+    get_host_primary
+    get_host_secondary
+    get_new_attribute_model
+    get_number_HANA_standby
+    get_HANA_nodes
+    get_node_list
+    get_master_nameserver
+    get_site_by_host
+    host_attr2string
+    insertAttribute
+    max get_nodes_online
+    mysyslog max
+    mysyslog
+    path_to_table
+    print_host_attr
+    set_new_attribute_model
+    set_cibFile
+    set_GName
+    set_HName
+    set_SName
+    set_Site
+);
 
 
 my $VERSION="1.0";
 my $newAttributeModel=0;
 my $cibFile="";
+
+my %selections = (
+                    'default' => {
+                                    'global'   => ["cib-time", "maintenance", "prim", "sec", "topology"],
+                                    'resource' => ["maintenance", "is_managed"],
+                                    'site'     => ["lpt", "lss", "mns", "opMode", "srHook", "srMode", "srPoll", "srr"],
+                                    'host'     => ["clone_state", "node_state", "roles", "score", "site", "sra", "srah", "standby", "version", "vhost"],
+                                 },
+                    'sr' => {
+                                    'global'   => ["cib-time", "maintenance", "prim", "sec", "topology"],
+                                    'resource' => ["maintenance", "is_managed"],
+                                    'site'     => ["lpt", "lss", "mns", "opMode", "srHook", "srMode", "srPoll", "srr"],
+                                    'host'     => ["clone_state", "roles", "score", "site", "sra", "srah", "vhost"],
+                                 },
+                    'minimal' => {
+                                    'global'   => ["cib-time", "maintenance", "topology"],
+                                    'resource' => ["maintenance", "is_managed"],
+                                    'site'     => ["lpt", "lss", "mns", "srHook", "srPoll", "srr"],
+                                    'host'     => ["clone_state", "roles", "score", "site"],
+                                 }
+                 );
+
+#my %sel_def = %selections{default};
 
 
 #    @EXPORT_OK    = qw(max  mysyslog get_nodes_online);
@@ -90,15 +148,38 @@ sub get_new_attribute_model
     return $newAttributeModel;
 }
 
+sub attr_in_selection {
+    my $result = 0;
+    my ($testSelection, $testArea, $testAttr ) = @_;
+    if ( $testAttr =~ /hana_..._(.*)/ ) {
+       $testAttr =  $1;
+    }
+    if ( $testSelection eq "all" ) {
+        $result=1;
+    } else {
+        if ( exists($selections{$testSelection})) {
+            my @sel_def_site = @{$selections{$testSelection}->{$testArea}};
+            if ( grep /^$testAttr$/, @sel_def_site ) {
+                $result=1
+            } else {
+                # print "filtered: testSelection=$testSelection, testArea=$testArea, testAttr=$testAttr ", join(":",@sel_def_site), " \n";
+            }
+            #$result=1 if grep /^$testAttr$/, @sel_def_site ;
+        } else {
+            $result=0;
+        }
+    }
+    return $result;
+}
+
 sub max {
- # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  my $a = shift;
  my $b = shift;
  return $a > $b ? $a : $b;
 }
 
 sub mysyslog {
-   my ($prio, $form, @param) = ( @_ );
+   my ($prio, $form, @param) = @_;
    syslog $prio, $form, @param;
 }
 
@@ -212,147 +293,166 @@ sub insertAttribute {
 ################
 sub get_hana_attributes
 {
-    my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN ) = @_;
+    my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN, $selection ) = @_;
     my %id2uname;
     my $CIB;
+    if ( !defined ($selection)) {
+        $selection = "all";
+    }
     if ( $cibFile eq "" ) {
         open $CIB, "-|", "cibadmin -Ql" or die "CIB could not be read from cluster";
     } else  {
        open $CIB, "<", "$cibFile" or die "CIB file $cibFile not found or not able to read it";
     }
-while (<$CIB>) {
-   chomp;
-   my ($host, $name, $site, $value);
-   if ( $_ =~ /cib-last-written="([^"]*)"/ ) {
-      # printf "CIB-time: %s\n", $1;
-      insertAttribute($sid, $refGL, $refGN, "global", "cib-time", $1);
-   }
-
-   # search for is-managed and maintenance attributes
-   my $id, $value;
-    if ( / name=\"?(is-managed|maintenance)\"?/ ) {
-       $name = $1;
-       if ( / id="([^\"]*)"/ ) {
-           $id=$1;
-           if ( $id =~ /([^-]*)-/ ) {
-		   $id=$1;
+    printf "DBG: selection=%s\n", $selection;
+    insertAttribute($sid, $refGL, $refGN, "global", "sid", uc($sid));
+    while (<$CIB>) {
+        chomp;
+        my ($host, $name, $site, $value);
+        if ( $_ =~ /cib-last-written="([^"]*)"/ ) {
+            # printf "CIB-time: %s\n", $1;
+            if ( attr_in_selection($selection, "global", "cib-time") ) {
+                insertAttribute($sid, $refGL, $refGN, "global", "cib-time", $1);
+            }
+        }
+        # search for is-managed and maintenance attributes
+        my $id, $value;
+        if ( / name=\"?(is-managed|maintenance)\"?/ ) {
+            $name = $1;
+            if ( / id="([^\"]*)"/ ) {
+                $id=$1;
+                if ( $id =~ /([^-]*)-/ ) {
+                    $id=$1;
+                }
+            }
+            if ( / value="([^\"]*)"/ ) {
+                $value=$1;
+            }
+            if ( $id eq "cib" ) {
+                if ( attr_in_selection($selection, "global", "$name") ) {
+                    insertAttribute($sid, $refGL, $refGN, "global", "$name", "$value");
+                }
+            } elsif ( $id eq "nodes" ) {
+                # to be processed in node section (below)
+            } else {
+                if ( attr_in_selection($selection, "resource", "$name") ) {
+                    insertAttribute($sid, $refRL, $refRN, "$id", "$name", "$value");
+                }
+            }
+        }
+        my $SID=uc($sid);
+        if ( $_ =~ /<node / ) {
+          # catch a node definition line
+          my $nodeID="";
+          my $nodeUNAME="";
+          if ( $_ =~ /id="([^"]+)"/ ) {
+              $nodeID=$1;
+          }
+          if ( $_ =~ /uname="([^"].+)"/ ) {
+              $nodeUNAME=$1;
+          }
+          if (($nodeID ne "") && ($nodeUNAME ne "")) {
+             $id2uname{$nodeID}=$nodeUNAME;
+             # printf STDERR "%s -> %s\n", $nodeID, $id2uname{$nodeID};
+          }
+       }
+       #
+       #  <nvpair id="nodes-1234567890-standby" name="standby" value="off"/>
+       #
+       if ( $_ =~ /id="nodes-(.+)-(standby|maintenance)"/ ) {
+           my $host=$1; my $attribute=$2;
+             if (defined $id2uname{$host}) {
+                 $host = $id2uname{$host}
+             }
+            if ( $_ =~ /value="([a-zA-Z0-9\-\_]+)"/ ) {
+                my $value=$1;
+                #printf "STANDBY <%s> VALUE <%s>\n", $host, $value;
+                if ( attr_in_selection($selection, "host", "$attribute") ) {
+                    insertAttribute($sid, $refHH, $refHN, $host, $attribute, $value);
+                }
+            }
+       }
+       #
+       #  <node_state id="1234567890" uname="node01" in_ccm="true" crmd="online" crm-debug-origin="do_update_resource" join="member" expected="member">
+       #
+       #if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
+       #    # insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
+       #    insertAttribute($sid, $refHH, $refHN, $1, "node_status", $2);
+       #}
+       if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+)|(terminate))"/) {
+          $name=$1;
+          # Bug 1192963 - L3: SAPHanaSR-monitor not reporting correctly
+          #  - catch also ids: id="host15-instance_attributes-hana_ha1_srmode"
+          #
+          if (( $_ =~ /id=.((.*)-instance_attributes)-([a-zA-Z0-9\_\-]+)/ )
+             || ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ )) {
+             # found attribute in nodes forever and reboot store
+             $host=$2;
+             if (defined $id2uname{$host}) {
+                 $host = $id2uname{$host}
+             }
+             if ( $_ =~ /value="([^"]+)"/ ) {
+                $value=$1;
+                # printf "insert $sid HOST $host $name $value\n";
+                if ( attr_in_selection($selection, "host", "$name") ) {
+                    insertAttribute($sid, $refHH, $refHN, $host, $name, $value);
+                }
+             }
+          } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
+             # found a site attribute
+             $site=$1;
+             if ( $name =~ /[a-zA-Z0-9\_\-]+_site_([a-zA-Z0-9\-]+)/ ) {
+                $name = $1;
+             }
+             if ( $_ =~ /value="([^"]+)"/ ) {
+                $value=$1;
+                if ( attr_in_selection($selection, "site", "$name") ) {
+                    insertAttribute($sid, $refST, $refSN, $site, $name, $value);
+                }
+             }
+          } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
+             # found a global attribute
+             $host="GLOBAL";
+             if ( $name =~ /([a-zA-Z0-9\_\-]+)_glob_([a-zA-Z0-9\_\-]+)/ ) {
+                $name = $2;
+             }
+             if ( $_ =~ /value="([^"]+)"/ ) {
+                $value=$1;
+                if ( attr_in_selection($selection, "global", "$name") ) {
+                 insertAttribute($sid, $refGL, $refGN, "global", $name, $value);
+                }
+             }
+          }
+       } elsif ( $_ =~ /nvpair.*name="master.([a-zA-Z0-9\_\-]+_${SID}_([a-zA-Z0-9\-\_]+))"/ ) {
+           # lines with master scores:
+           # <nvpair id="status-suse05-master-rsc_SAPHanaCon_HA1_HDB10" name="master-rsc_SAPHanaCon_HA1_HDB10" value="150"/>
+            $name="score";
+            if ( $_ =~ /id=.status-([a-zA-Z0-9\_\-]+)-master/ ) {
+             # found attribute in nodes forever and reboot store
+             $host=$1;
+             if (defined $id2uname{$host}) {
+                 $host = $id2uname{$host}
+             }
+             if ( $_ =~ /value="([^"]+)"/ ) {
+                 $value=$1;
+                 # printf "insert $sid HOST $host $name $value\n";
+                if ( attr_in_selection($selection, "host", "$name") ) {
+                 insertAttribute($sid, $refHH, $refHN, $host, $name, $value);
+                }
+             }
+          }
+       } elsif ( $_ =~ /node_state.* crmd="([a-zA-Z0-9\-\_]+)"/ ) {
+          my $name = "node_state";
+          my $value = $1;
+          if ( $_ =~ /node_state.* uname="([a-zA-Z0-9\-\_]+)"/ ) {
+              my $host = $1;
+              if ( attr_in_selection($selection, "host", "$name") ) {
+                  insertAttribute($sid, $refHH, $refHN, $host, $name, $value);
+              }
            }
        }
-       if ( / value="([^\"]*)"/ ) {
-           $value=$1;
-       }
-      if ( $id eq "cib" ) {
-	      insertAttribute($sid, $refGL, $refGN, "global", "$name", "$value");
-      } elsif ( $id eq "nodes" ) {
-              # to be processed in node section (below)
-      } else {
-	      insertAttribute($sid, $refRL, $refRN, "$id", "$name", "$value");
-      }
     }
-   my $SID=uc($sid);
-   if ( $_ =~ /<node / ) {
-      # catch a node definition line
-      my $nodeID="";
-      my $nodeUNAME="";
-      if ( $_ =~ /id="([^"]+)"/ ) {
-          $nodeID=$1;
-      }
-      if ( $_ =~ /uname="([^"].+)"/ ) {
-          $nodeUNAME=$1;
-      }
-      if (($nodeID ne "") && ($nodeUNAME ne "")) {
-         $id2uname{$nodeID}=$nodeUNAME;
-         # printf STDERR "%s -> %s\n", $nodeID, $id2uname{$nodeID};
-      }
-   }
-   #
-   #  <nvpair id="nodes-1234567890-standby" name="standby" value="off"/>
-   #
-   if ( $_ =~ /id="nodes-(.+)-(standby|maintenance)"/ ) {
-       my $host=$1; my $attribute=$2;
-         if (defined $id2uname{$host}) {
-             $host = $id2uname{$host}
-         }
-       if ( $_ =~ /value="([a-zA-Z0-9\-\_]+)"/ ) {
-           my $value=$1;
-#printf "STANDBY <%s> VALUE <%s>\n", $host, $value;
-           insertAttribute($sid, $refHH, $refHN, $host, $attribute, $value);
-       }
-   }
-   #
-   #  <node_state id="1234567890" uname="node01" in_ccm="true" crmd="online" crm-debug-origin="do_update_resource" join="member" expected="member">
-   #
-   #if ( $_ =~ /node_state id=".+" uname="([a-zA-Z0-9\-\_]+)" .*crmd="([a-zA-Z0-9\-\_]+)"/ ) {
-   #    # insertAttribute($sid, \%Host, \%HName, $1, "node_status", $2);
-   #    insertAttribute($sid, $refHH, $refHN, $1, "node_status", $2);
-   #}
-   if ( $_ =~ /nvpair.*name="([a-zA-Z0-9\_\-]+_${sid}_([a-zA-Z0-9\-\_]+)|(terminate))"/) {
-      $name=$1;
-      # Bug 1192963 - L3: SAPHanaSR-monitor not reporting correctly
-      #  - catch also ids: id="host15-instance_attributes-hana_ha1_srmode"
-      #
-      if (( $_ =~ /id=.((.*)-instance_attributes)-([a-zA-Z0-9\_\-]+)/ )
-         || ( $_ =~ /id=.(status|nodes)-([a-zA-Z0-9\_\-]+)-/ )) {
-         # found attribute in nodes forever and reboot store
-         $host=$2;
-         if (defined $id2uname{$host}) {
-             $host = $id2uname{$host}
-         }
-         if ( $_ =~ /value="([^"]+)"/ ) {
-             $value=$1;
-             # printf "insert $sid HOST $host $name $value\n";
-             insertAttribute($sid, $refHH, $refHN, $host, $name, $value);
-         }
-      } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_site_[a-zA-Z0-9\-]+_([a-zA-Z0-9\_\-]+)/) {
-         # found a site attribute
-         $site=$1;
-         if ( $name =~ /[a-zA-Z0-9\_\-]+_site_([a-zA-Z0-9\-]+)/ ) {
-            $name = $1;
-         }
-         if ( $_ =~ /value="([^"]+)"/ ) {
-             $value=$1;
-#printf "insert $sid SITE $site $name $value\n";
-             insertAttribute($sid, $refST, $refSN, $site, $name, $value);
-         }
-      } elsif ( $_ =~ /id=.SAPHanaSR-[a-zA-Z0-9\_\-]+_glob_[a-zA-Z0-9\_\-]+/) {
-         # found a global attribute
-         $host="GLOBAL";
-         if ( $name =~ /([a-zA-Z0-9\_\-]+)_glob_([a-zA-Z0-9\_\-]+)/ ) {
-            $name = $2;
-         }
-         if ( $_ =~ /value="([^"]+)"/ ) {
-             $value=$1;
-#printf "insert $sid GLOB global $name $value\n";
-             insertAttribute($sid, $refGL, $refGN, "global", $name, $value);
-         }
-      }
-   } elsif ( $_ =~ /nvpair.*name="master.([a-zA-Z0-9\_\-]+_${SID}_([a-zA-Z0-9\-\_]+))"/ ) {
-       # lines with master scores:
-       # <nvpair id="status-suse05-master-rsc_SAPHanaCon_HA1_HDB10" name="master-rsc_SAPHanaCon_HA1_HDB10" value="150"/>
-        $name="score";
-        if ( $_ =~ /id=.status-([a-zA-Z0-9\_\-]+)-master/ ) {
-         # found attribute in nodes forever and reboot store
-         $host=$1;
-         if (defined $id2uname{$host}) {
-             $host = $id2uname{$host}
-         }
-         if ( $_ =~ /value="([^"]+)"/ ) {
-             $value=$1;
-             # printf "insert $sid HOST $host $name $value\n";
-             insertAttribute($sid, $refHH, $refHN, $host, $name, $value);
-         }
-      }
-   } elsif ( $_ =~ /node_state.* crmd="([a-zA-Z0-9\-\_]+)"/ ) {
-      my $name = "node_state";
-      my $value = $1;
-      if ( $_ =~ /node_state.* uname="([a-zA-Z0-9\-\_]+)"/ ) {
-          my $host = $1;
-          insertAttribute($sid, $refHH, $refHN, $host, $name, $value);
-
-   }
-   }
-}
-close CIB;
+    close CIB;
     return 0;
 }
 
@@ -364,7 +464,7 @@ close CIB;
 # table could (for first) be one of ['Global','Resource','Sites','Hosts']
 sub path_to_table
 {
-    my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN ) = @_;
+    my ($sid, $refHH, $refHN, $refGL, $refGN, $refST, $refSN, $refRL, $refRN, $selection ) = @_;
     #
     # for first we take plain stdin to parse the path lines
     #
@@ -374,13 +474,21 @@ sub path_to_table
         if ( $_ =~ m|([^/]*)/([^/]*)/([^/]*)="?([^"]*)"?| ) {
             my ( $table, $object, $key, $value ) = ( $1, $2, $3, $4 );
             if ( $table eq "Global" ) {
-                insertAttribute($sid, $refGL, $refGN, $object, $key, $value);
+                if ( attr_in_selection($selection, "global", "$key") ) {
+                    insertAttribute($sid, $refGL, $refGN, $object, $key, $value);
+                }
             } elsif ( $table eq "Resource" ) {
-                insertAttribute($sid, $refRL, $refRN, $object, $key, $value);
+                if ( attr_in_selection($selection, "resource", "$key") ) {
+                    insertAttribute($sid, $refRL, $refRN, $object, $key, $value);
+                }
             } elsif ( $table eq "Sites" ) {
-                insertAttribute($sid, $refST, $refSN, $object, $key, $value);
+                if ( attr_in_selection($selection, "site", "$key") ) {
+                    insertAttribute($sid, $refST, $refSN, $object, $key, $value);
+                }
             } elsif ( $table eq "Hosts" ) {
-                insertAttribute($sid, $refHH, $refHN, $object, $key, $value);
+                if ( attr_in_selection($selection, "host", "$key") ) {
+                    insertAttribute($sid, $refHH, $refHN, $object, $key, $value);
+                }
             }
         } else {
             printf("DBG: not a path: %s\n", $_);
@@ -734,7 +842,7 @@ sub check_all_ok
 sub host_attr2string
 {
     my $string="";
-    my ($refH, $refN, $title, $sort, $format) = @_;
+    my ($refH, $refN, $title, $sort, $format, $selection) = @_;
     my ($len, $line_len, $hclen);
     #
     # leave function if hash is empty
@@ -758,11 +866,7 @@ sub host_attr2string
                 $len = $$refN{$AKey}->{_length};
                 $line_len=$line_len+$len+1;
 
-                if ( $AKey eq $sort ) {
-                   $string.=sprintf "*%-$len.${len}s ", $$refN{$AKey}->{_title};
-                } else {
-                   $string.=sprintf "%-$len.${len}s ", "$$refN{$AKey}->{_title}";
-                }
+               $string.=sprintf "%-$len.${len}s ", "$$refN{$AKey}->{_title}";
             }
 	    }
 	    $string.=sprintf "\n";
@@ -778,7 +882,7 @@ sub host_attr2string
             }
             foreach my $AKey (sort keys %$refN) {
                 if ($AKey ne "_hosts") {
-                    $len = $$refN{$AKey}->{_length};
+                    $len = max($$refN{$AKey}->{_length}, length($AKey));
                     if ( $format eq "tables" ) {
                         $string.=sprintf "%-$len.${len}s ", $$refH{$HKey} -> {$AKey};
                     } elsif ( $format eq "script" ) {
@@ -798,26 +902,24 @@ sub host_attr2string
        foreach my $HKey (sort keys %$refH) {
            $sortVal = $$refH{$HKey} -> {$sort};
            push(@{$GroupedHosts{$sortVal}}, $HKey);
-           #printf "TST: <%s>\n", $sortVal;
        }
        # not ready so far only print the grouped hosts
        foreach my $sortV (sort keys %GroupedHosts) {
-           #my $StrHosts;
            #$StrHosts=join(":", @{$GroupedHosts{$sortV}});
            foreach my $Host (@{$GroupedHosts{$sortV}}) {
-               printf "%-$hclen.${hclen}s ", $Host;
                foreach my $AKey (sort keys %$refN) {
-                if ($AKey ne "_hosts") {
+                if ($AKey eq "_hosts") {
+                    $len = max($$refN{$AKey}->{_length}, length($title));
+                    $string.=sprintf "%-$len.${len}s ", $Host;
+	        } else {
                     $len = $$refN{$AKey}->{_length};
                     $string.=sprintf "%-$len.${len}s ", $$refH{$Host} -> {$AKey};
                 }
             }
             $string.=sprintf "\n";
            }
-           #printf "TST: <%s> -> <%s>\n", $sortV, $StrHosts;
        }
     }
-
     if ( $format eq "tables" ) {
 	    $string.=sprintf "\n";
     }
@@ -827,11 +929,11 @@ sub host_attr2string
 sub print_host_attr
 {
     my $string="";
-    my ($refH, $refN, $title, $sort, $format) = @_;
+    my ($refH, $refN, $title, $sort, $format, $selection) = @_;
     if ( ! defined $format) {
         $format="script"
     }
-    my $print_attributes_result = host_attr2string($refH, $refN, $title, $sort, $format);
+    my $print_attributes_result = host_attr2string($refH, $refN, $title, $sort, $format, $selection);
     if ( $print_attributes_result ) {
         printf "%s", $print_attributes_result;
     }

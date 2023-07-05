@@ -1,238 +1,141 @@
-#!/bin/bash
-#
-##########################################################################
-#
-# SAPHanaSR-replay
-#
-# Author:       Fabian Herschel, November 2015
-# Support:      linux@sap.com
-# License:      GNU General Public License 2 (GPLv2)
-# Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2022 SUSE LLC.
-#
-##########################################################################
-#
-# Syntax:
-# SAPHanaSR-replay-archive <path-to-pengine-archive> (tar.bz2)
-#
-# SAPHanaSR-replay-archive archive-containing-some-pengine-directories
-#
-##########################################################################
-#
-####################
-#
-version="1.0";
-# some help to the newbie
-exe="$0"
-bex=$(basename "$exe")
-format="tables";
-outDir="";
-pengine="";
+#!/usr/bin/python3
+# pylint: disable=consider-using-f-string
+# pylint: disable=fixme
+"""
+ saphana_sr_tools.py
+ Author:       Fabian Herschel, June 2023
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2023 SUSE LLC
 
-function help()
-{
-        echo
-        echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
-        echo "usage:    $bex [--format=script] --pengine=/path/to/pengine-files"
-        echo
-        echo "Possible output formats: tables, script, book"
-        echo "For format 'book' there is also an optional parameter --outDir"
-        echo
-        echo "usage:    $bex [OPTION]"
-        echo " --help		show help."
-        echo " --version	show version."
-        echo
-}
+# TODO: STEP01: extract files from crm_report-archive - find pengine directories 
+# TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
+"""
 
-function assert() 
-{
-        echo "$1"
-	exit 2
-}
-#
-while [ $# -gt 0 ]; do
-    case "$1" in
-     --help|-h)
-	     help;
-        exit
-    ;;
-     --version|-v)
-        echo "$bex version $version"
-        exit
-    ;;
-        --format=* )
-            format=${1#*=}
-    ;;
-        --outDir=* )
-            outDir=${1#*=}
-    ;;
-        --pengine=* )
-            pengine=${1#*=}
-	    echo "pengine directory $pengine"
-    ;;
-	--sid=* )
-           sids=${1#*=}
-    ;;
-        * )
-        archive="$1"
-    ;;
-    esac
-    shift
-done
+import argparse
+from dateutil import parser as dateutil_parser
+import json
+import os
+import re
+import sys
+sys.path.insert(1, '/usr/lib/SAPHanaSR-angi')
+from saphana_sr_tools import HanaCluster,HanaStatus
 
-if [[ -z "$pengine" && -z "$archive" ]]; then
-	echo "Either archive or pengine path is needed."
-	help
-	exit 2
-fi
+if __name__ == "__main__":
+    myCluster = HanaCluster()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cib", nargs="*", help="specify the cibfile file")
+    parser.add_argument("--format", help="output format ([table], path, script, json)")
+    parser.add_argument("--from", help="select 'from' - timepoint ('YYYY-M-D H:M:S')")
+    parser.add_argument("--properties", help="specify the properties file")
+    parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
+    parser.add_argument("--sid", help="specify the sid to check for")
+    parser.add_argument("--sort", help="specify the column name to sort by")
+    parser.add_argument("--to", help="select 'to' - timepoint ('YYYY-M-D H:M:S')")
+    #parser.add_argument("--dumpFailures", help="print failed checks per loop",
+    #                    action="store_true")
+    args = parser.parse_args()
+    if args.cib:
+        #myCluster.config['cib_file'] = args.cib[0] # later we need to iterate
+        myCluster.config['cib_file_list'] = args.cib 
+    # args.from would create a namespace conflict so extracting 'from' using vars(args)
+    if 'from' in vars(args) and vars(args)['from']:
+        dt = dateutil_parser.parse(vars(args)['from']) 
+        myCluster.config['from'] = int(dt.timestamp())
+    if args.format:
+        myCluster.config['format'] = args.format
+    if args.properties:
+        myCluster.config['properties_file'] = args.properties
+    if args.select:
+        myCluster.config['select'] = args.select
+    if args.sid:
+        myCluster.config['sid'] = args.sid.lower()
+    if args.sort:
+        if args.sort[0] == '-':
+            myCluster.config['sort-reverse'] = True
+            myCluster.config['sort'] = args.sort[1:]
+        elif args.sort[0] == '+':
+            myCluster.config['sort-reverse'] = False
+            myCluster.config['sort'] = args.sort[1:]
+        else:
+            myCluster.config['sort'] = args.sort
+    if args.to:
+        dt = dateutil_parser.parse(args.to) 
+        myCluster.config['to'] = int(dt.timestamp())
+    myCluster.read_properties()
+    #
+    # here the cib files iteration would begin
+    #   - we need to read all given cib files
+    #   - sort the found data dictionaries by cib-date
+    #   - output all data dictionaries, filtered by from+to
+    #
+    for cib_file in myCluster.config['cib_file_list']:
+        myHana    = HanaStatus(myCluster.config)
+        myHana.xml_import(cib_file)
+        multi_sid = False
+        if myCluster.config['sid'] == None:
+            myHana.get_sids()
+            if len(myHana.sids) == 0:
+                print("ERR: No SID found in cluster config")
+                sys.exit(1)
+            elif len(myHana.sids) > 1:
+                print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+                multi_sid = False
+                sys.exit(1)
+            else:
+               myHana.config['sid'] = myHana.sids[0].lower()
+               myCluster.config['sid'] = myHana.sids[0].lower()
+        myHana.fill_glob_dict()
+        if 'cib-time' in myHana.glob_dict['global']:
+            #print(f"dbg: test time filter")
+            dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
+            cibtime = int(dt.timestamp())
+            myHana.ts = cibtime
+            if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
+                pass
+            else:
+                print(f"Filter cib-time {myHana.glob_dict['global']['cib-time']}")
+                continue
+        if len(myCluster.multi_status) == 0:
+            myCluster.multi_status.insert(0, myHana)
+        else:
+            # search position where to insert the new hana_status
+            pos = 0
+            inserted = 0
+            for hana_status in myCluster.multi_status:
+                if myHana.ts < hana_status.ts:
+                    myCluster.multi_status.insert(pos, myHana)
+                    inserted = 1
+                    break
+                else:
+                    pos += 1
+            if inserted == 0:
+                myCluster.multi_status.insert(pos, myHana)  # insert at the end, if it is not inserted before
+        myHana.fill_res_dict()
+        myHana.fill_site_dict()
+        myHana.fill_host_dict()
 
-#
-####################
-#
-#
-if [ -z "$pengine" ]; then
-	echo "INFO: pengine is not set"
-    mkdir -p "${archive}-tmp"
-    if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
-    if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
-else
-	echo "INFO: pengine is set"
-	cd "$pengine" ||  assert "Can not change to directory $pengine" 
-	cd ..
-fi
-#
-####################
-#
-# find pengine directories
-#
-pDirs=$(find . -type d -name pengine)
-
-#
-####################
-#
-# find all pengine inputs sorted by time
-#
-pFiles=$(find "$pDirs" -name '*input-[0-9]*' -o -name '*warn-[0-9]*')
-# shellcheck disable=SC2086 
-# remark: ls needs unquoted variable here - pFiles-elements must not have whitespaces
-pFilesSorted=$(ls -tr $pFiles)
-
-#
-####################
-#
-# find all cib.txt files
-#
-cFiles=$(find . -type f -name cib.txt -o -name cib.xml)
-
-echo "#### cFiles=$cFiles ####"
-
-#
-####################
-#
-# find all SIDs mentioned in the cib.txt
-#
-if [ -z "$sids" ]; then
-    sids=$(
-    for cF in $cFiles; do
-      #cF=$(basename $cF)
-      (
-      case "$cF" in
-        *.txt )
-                while read -r line
-                do
-                    if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
-                       if [[ "$line" =~ SID=(...) ]]; then
-                       echo "${BASH_REMATCH[1]}"
-                       fi
-                    fi
-                done < "$cF"
-          ;;
-       *.xml )
-	  for line in $(xmllint --xpath '//clone/primitive[@type="SAPHanaTopology"]//nvpair[@name="SID"]/@value' "$cF" ); do
-	       if [[ "$line" =~ value=.(...). ]]; then
-		   echo "${BASH_REMATCH[1]}"
-	       fi
-          done
-          ;;
-      esac
-      )
-    done | tr '[:upper:]' '[:lower:]' | sort -u )
-fi
-
-#
-####################
-#
-# create a tmp directory to extract pengine files
-#
-if [ -z "$pengine" ]; then
-    mkdir -p "${archive}-tmp/tmp"
-    pengine_tmp="${archive}-tmp/tmp"
-else
-    mkdir -p "${pengine}-tmp"
-    pengine_tmp="${pengine}-tmp"
-fi
-#
-####################
-# create output directory, if set
-#
-if [ -n "$outDir" ]; then
-   mkdir -p "$outDir"
-   case "$format" in
-       book )
-           rsync -a  /usr/share/SAPHanaSR-angi/icons "$outDir"
-           ;;
-   esac
-   outNr=0
-fi
-
-
-#
-####################
-#
-# for all sids process all pengine files and show the hana attributes
-#
-for sid in $sids; do
-    echo "================ replay for sid $sid ==============="
-    for cibBZ2 in $pFilesSorted; do
-       cib="${cibBZ2%.bz2}";
-       shortCIB="${cib##*/}"
-       echo "cib: $cib";
-       cibFile="$pengine_tmp"/"$shortCIB"
-       less -c "$cibBZ2" > "$cibFile";
-       case "$format" in
-           tables | script )
-                   SAPHanaSR-showAttr --cib="$cibFile" --sid="$sid" --format="$format";
-                   ;;
-           book )
-               if [ -n "$outDir" ]; then
-                   outOption="--out=$outDir/sapMonitor.$outNr.html"
-                   (( outNr ++ ))
-               fi
-               SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="html2" "$outOption";
-                   ;;
-           txt | ascii | html )
-               SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="$format"
-                   ;;
-       esac
-       rm "$cibFile" ;
-    done
-    case "$format" in
-        book )
-               if [ -n "$outDir" ]; then
-                  lastFile="$outDir/sapMonitor.$outNr.html"
-                  cat << EOF >"$lastFile"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<title>SAPHanaSR status</title>
-<meta http-equiv="refresh" content="1; url=./sapMonitor.0.html" />
-<meta charset="utf-8"/>
-</head>
-<body class="" style="background-color:#dcddde;">
-</body>
-</html>
-EOF
-               fi
-               ;;
-    esac
-done
+    for myHana in myCluster.multi_status:
+        oformat = "table"
+        if 'format' in myCluster.config:
+            oformat = myCluster.config['format']
+        if oformat == "table":
+            index = myCluster.config['sort']
+            index_type = 'str'
+            index_reverse = myCluster.config['sort-reverse']
+            if index == None:
+                myHana.print_dic_as_table(myHana.glob_dict, "global", "Global")
+                myHana.print_dic_as_table(myHana.res_dict, "resource", "Resource")
+                myHana.print_dic_as_table(myHana.site_dict, "site", "Site")
+                myHana.print_dic_as_table(myHana.host_dict, "host", "Host")
+            else:
+                myHana.print_dic_as_table(dict(sorted(myHana.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
+                myHana.print_dic_as_table(dict(sorted(myHana.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
+                myHana.print_dic_as_table(dict(sorted(myHana.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
+                myHana.print_dic_as_table(dict(sorted(myHana.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
+        elif oformat == "json":
+            myHana.print_all_as_json()
+        elif oformat == "path" or oformat == "script":
+            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"')
+            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"')
+            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"')
+            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"')

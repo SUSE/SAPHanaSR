@@ -1,0 +1,116 @@
+#!/usr/bin/perl
+#
+# SAPHanaSR-showAttr
+# (c) 2014 SUSE Linux Products GmbH, Nuremberg, Germany
+# (c) 2015-2018 SUSE Linux GmbH, Nuremberg, Germany
+# Author: Fabian Herschel <fabian.herschel@suse.com>
+# License: GPL v2+
+
+use strict;
+
+my $Version="0.24.2023.04.28";
+#
+##################################################################
+#
+use POSIX;
+use Sys::Syslog;
+use Sys::Hostname;
+use File::Path;
+use Getopt::Long;
+use lib '/usr/lib/SAPHanaSR-angi';
+use lib '/usr/lib/SAPHanaSR';
+use SAPHanaSRTools;
+
+my @sids;
+my $ino="";
+my $sortBy="";
+my $sortSitesBy="";
+my $table_titleH = "Host";
+my %Name;
+my %Host;
+my %Site;
+my %Global;
+my %HName;
+my %SName;
+my %GName;
+my %Resource;
+my %RName;
+my $help;
+my $version;
+my $cibFile="";
+my $format="tables";
+my $path2table=0;
+my $selection="default";
+
+sub init()
+{
+    my $result = GetOptions (
+        "sid=s" => \@sids,
+        "sort=s" => \$sortBy,
+        "sort_sites=s" => \$sortSitesBy,
+        "cib=s" => \$cibFile,
+        "format=s" => \$format,
+        "version" => \$version,
+        "help" => \$help,
+        "path2table" => \$path2table,
+        "select=s" => \$selection,
+    );
+    if ( $format ne "tables" ) {
+        $sortBy = "";
+        $sortSitesBy = "";
+    }
+    return 0;
+}
+
+init();
+
+if ( $help ) {
+    printf "SAPHanaSR-showAttr {[--sid=<sid[:instNr]>]} [--format=<format> | --sort=<SortBy> | --sort_site=<SortBy>] [--cib=<OfflineCibFile>]\n";
+    printf "<format> could be 'tables' or 'script'";
+    printf "<selection> could be 'default', 'all', 'minimal'";
+    exit 0;
+}
+if ( $version ) {
+    printf "%s\n", $Version;
+    exit 0;
+}
+
+if ( $cibFile ne "" ) {
+    printf "Using cib file %s\n", $cibFile;
+    set_cibFile($cibFile);
+}
+
+sub max { # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
+    my $a = shift;
+    my $b = shift;
+    return $a > $b ? $a : $b;
+}
+
+if ( $path2table ) {
+    path_to_table("NIX", \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName, $selection);
+    print_host_attr(\%Global, \%GName, "Global", "", $format, $selection);
+    print_host_attr(\%Resource, \%RName, "Resource", "", $format, $selection);
+    print_host_attr(\%Site,   \%SName, "Sites",  $sortSitesBy, $format, $selection);
+    print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy, $format, $selection);
+    exit 44;
+} else {
+    if ( 0 == @sids ) {
+        my $sid_ino_list;
+        ( $sid_ino_list ) = get_sid_and_InstNr();
+        @sids = split(",", $sid_ino_list);
+    }
+    foreach my $sid (@sids) {
+        ( $sid, $ino ) = split(":", $sid);
+        $sid=lc("$sid");
+        %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=(); %Resource=(); %RName=();
+        get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName, $selection);
+        if ( keys(%Host) == 0 ) {
+            printf "No attributes found for SID=%s\n", $sid;
+        } else {
+            print_host_attr(\%Global, \%GName, "Global", "", $format, $selection);
+            print_host_attr(\%Resource, \%RName, "Resource", "", $format, $selection);
+            print_host_attr(\%Site,   \%SName, "Sites",  $sortSitesBy, $format, $selection);
+            print_host_attr(\%Host,   \%HName, "Hosts",  $sortBy, $format, $selection);
+        }
+    }
+}

@@ -1,5 +1,7 @@
+#!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
@@ -22,12 +24,15 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230404.1848"
+    version = "0.1.20230705.1446"
 
-    def message(self, msg):
+    def message(self, msg, **kwargs):
         """
         message with formatted timestamp
         """
+        stdout = True
+        if 'stdout' in kwargs:
+            stdout = kwargs['stdout']
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.run['r_id']:
@@ -35,78 +40,77 @@ class SaphanasrTest:
         else:
             r_id = ""
         msg_arr = msg.split(" ")
-        print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+        if stdout: 
+            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
-            self.message_fh(msg, self.run['log_file_handle'])
+            if self.run['log_file_handle']:
+                _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
+                _l_msg += ' '.join(msg_arr[1:])
+                self.run['log_file_handle'].write(_l_msg + "\n")
         except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
 
-    def message_fh(self, msg, file_handle):
-        """ print a message with fotmatted timestamp to a file handle """
-        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        if self.run['r_id']:
-            r_id = " [{}]".format(self.run['r_id'])
-        else:
-            r_id = ""
-        msg_arr = msg.split(" ")
-        if file_handle:
-            _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
-            _l_msg += ' '.join(msg_arr[1:])
-            file_handle.write(_l_msg + "\n")
-
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         """
         constructor
         """
+        cmdparse = True;
+        if 'cmdparse' in kwargs:
+            cmdparse = kwargs['cmdparse']
         self.config = { 'test_file': "-",
                         'defaults_checks_file': None,
                         'properties_file': "properties.json",
                         'log_file': "",
                         'repeat': 1,
                         'dump_failures': False,
-                        'remote_node': None
+                        'remote_node': None,
+                        'remote_nodes': []
                       }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
         self.message("INIT: tester version: {}".format(self.version))
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--testFile", help="specify the test file")
-        parser.add_argument("--defaultChecksFile", help="specify the default checks file")
-        parser.add_argument("--properties", help="specify the properties file")
-        parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
-        parser.add_argument("--simulate", help="only simulate, dont call actions",
-                            action="store_true")
-        parser.add_argument("--repeat", help="how often to repeat the test")
-        parser.add_argument("--dumpFailures", help="print failed checks per loop",
-                            action="store_true")
-        parser.add_argument("--logFile", help="log file to write the messages")
-        args = parser.parse_args()
-        if args.testFile:
-            self.message("PARAM: testFile: {}".format(args.testFile))
-            self.config['test_file'] = args.testFile
-        if args.defaultChecksFile:
-            self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-            self.config['defaults_checks_file'] = args.defaultChecksFile
-        if args.properties:
-            self.message("PARAM: properties: {}".format(args.properties))
-            self.config['properties_file'] = args.properties
-        if args.remoteNode:
-            self.message("PARAM: remoteNode: {}".format(args.remoteNode))
-            self.config['remote_node'] = args.remoteNode
-        if args.repeat:
-            self.message("PARAM: repeat: {}".format(args.repeat))
-            self.config['repeat'] = int(args.repeat)
-        if args.dumpFailures:
-            self.message("PARAM: dumpFailures")
-            self.config['dump_failures'] = args.dumpFailures
-        if args.logFile:
-            self.message("PARAM: logFile: {}".format(args.logFile))
-            self.config['log_file'] = args.logFile
-            # disable 'consider to use with ...' - I am pretty sure with does not match here
-            # pylint: disable-next=R1732
-            self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
+        if cmdparse:
+            self.message("dbg: lib parses cmdline")
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--testFile", help="specify the test file")
+            parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+            parser.add_argument("--properties", help="specify the properties file")
+            parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
+            parser.add_argument("--simulate", help="only simulate, dont call actions",
+                                action="store_true")
+            parser.add_argument("--repeat", help="how often to repeat the test")
+            parser.add_argument("--dumpFailures", help="print failed checks per loop",
+                                action="store_true")
+            parser.add_argument("--logFile", help="log file to write the messages")
+            args = parser.parse_args()
+            if args.testFile:
+                self.message("PARAM: testFile: {}".format(args.testFile))
+                self.config['test_file'] = args.testFile
+            if args.defaultChecksFile:
+                self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
+                self.config['defaults_checks_file'] = args.defaultChecksFile
+            if args.properties:
+                self.message("PARAM: properties: {}".format(args.properties))
+                self.config['properties_file'] = args.properties
+            if args.remoteNode:
+                self.message("PARAM: remoteNode: {}".format(args.remoteNode))
+                self.config['remote_node'] = args.remoteNode
+            if args.repeat:
+                self.message("PARAM: repeat: {}".format(args.repeat))
+                self.config['repeat'] = int(args.repeat)
+            if args.dumpFailures:
+                self.message("PARAM: dumpFailures")
+                self.config['dump_failures'] = args.dumpFailures
+            if args.logFile:
+                self.message("PARAM: logFile: {}".format(args.logFile))
+                self.config['log_file'] = args.logFile
+                # disable 'consider to use with ...' - I am pretty sure with does not match here
+                # pylint: disable-next=R1732
+                self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
+        else: 
+            self.message("dbg: lib skips parsing cmdline")
         random.seed()
 
     def __insert_to_area__(self, area, the_object):
@@ -150,6 +154,18 @@ class SaphanasrTest:
         cmd = "SAPHanaSR-showAttr --format=script"
         self.dict_sr={}
         result_sr = self.__do_ssh__(self.config['remote_node'], "root", cmd)
+        if result_sr[2] == 20000:
+            #self.message("remote node broken !!")
+            # try other remoteNodes (if given via parameter)
+            #self.message(f"len array {len(self.config['remote_nodes'])}")
+            if len(self.config['remote_nodes']) > 1:
+                for remote_node in self.config['remote_nodes']:
+                    #self.message(f"test now with host {remote_node}")
+                    result_sr = self.__do_ssh__(remote_node, "root", cmd)
+                    if result_sr[2] != 20000:
+                        self.message(f"STATUS: get data from {remote_node}")
+                        self.config['remote_node'] = remote_node
+                        break
         for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
@@ -169,20 +185,55 @@ class SaphanasrTest:
                     self.__insert_to_area__(area, l_obj)
         return 0
 
-    def get_area_object_by_key_val(self, area_name, key, value):
+    def get_area_object_by_key_val(self, area_name, search_criteria, **kwargs):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
+        # sloppy might be need to set per search-criteria (e.g. True for roles nut False for site)
+        # Query runs from area-level via object-level. Then search for key=value.
+        l_sloppy = False
+        if 'sloppy' in kwargs:
+            l_sloppy = kwargs['sloppy']
+            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}") 
         object_name = None
+        l_sr = self.dict_sr
+        # check, if 'area' is in the sr-data-dictionary
+        if area_name in l_sr:
+            l_area = l_sr[area_name]
+            # loop over all objets in area to check against criteria
+            for k in l_area.keys():
+                l_obj = l_area[k]
+                # loop over multiple search-criteria (key/value)
+                all_match = True
+                for search_key in search_criteria.keys():
+                    search_value = search_criteria[search_key]
+                    if search_key in l_obj:
+                        if l_sloppy:
+                            # search value by regexp
+                            if not(re.search(search_value, l_obj[search_key])):
+                                all_match = False
+                        else:
+                            if not(l_obj[search_key] == search_value):
+                                all_match = False
+                    else:
+                        all_match = False
+                if all_match:
+                    object_name = k
+                    break
+        return object_name
+
+    def get_value(self, area_name, object_name, key):
+        """ method to query the value of a key (e.g. 'msn') for an object (e.g. site 'MAINZ' inside an area (e.g. 'Site') """
+        # Query runs from area-level via object-level to key-level
+        l_value = None
         l_sr = self.dict_sr
         if area_name in l_sr:
             l_area = l_sr[area_name]
-            for k in l_area.keys():
-                l_obj = l_area[k]
+            if object_name in l_area:
+                l_obj = l_area[object_name]
                 if key in l_obj:
-                    if l_obj[key] == value:
-                        object_name = k
-                        # currently we only return the first match
-                        break
-        return object_name
+                    l_value = l_obj[key]
+                else:
+                    self.message(f'DEBUG: key {key} not found')
+        return l_value
 
     def pretty_print(self, dictionary,level):
         """ debug method for nested dictionary """
@@ -213,8 +264,8 @@ class SaphanasrTest:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
                 self.test_data.update(json.load(tf_fh))
         self.run['test_id'] = self.test_data['test']
-        self.message_fh("DEBUG: test_data: {}".format(str(self.test_data)),
-                        self.run['log_file_handle'])
+        self.message("DEBUG: test_data: {}".format(str(self.test_data)),
+                        stdout=False)
 
     def __add_failed__(self, area_object, key_val_reg):
         """ document failed checks """
@@ -226,7 +277,7 @@ class SaphanasrTest:
         ( _key, _val, _reg ) = key_val_reg
         _l_failed += f"{_key}={_val} !~ {_reg}; "
         self.run['failed'] = _l_failed
-        self.message_fh("DEBUG: add-failed: " + self.__get_failed__(), self.run['log_file_handle'])
+        self.message("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
@@ -263,10 +314,12 @@ class SaphanasrTest:
                         else:
                             self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
                             check_result = max(check_result, 1)
+                    else:
+                        self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp))
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message_fh(f"FAILED: {self.__get_failed__()}", self.run['log_file_handle'])
+            self.message(f"FAILED: {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -276,7 +329,7 @@ class SaphanasrTest:
             checks = step[topology_object_name]
             if isinstance(checks,str):
                 check_ptr = checks
-                self.message_fh(f"DEBUG: check_ptr {check_ptr}", self.run['log_file_handle'])
+                self.message(f"DEBUG: check_ptr {check_ptr}", stdout=False)
                 checks = self.test_data["checkPtr"][check_ptr]
             topolo = self.topolo
             if topology_object_name in topolo:
@@ -316,10 +369,12 @@ class SaphanasrTest:
                 print(".", end='', flush=True)
             process_result = -1
             self.read_saphana_sr()
-            process_result = max ( self.process_topology_object(step, 'pSite', 'Sites'),
-                                  self.process_topology_object(step, 'sSite', 'Sites'),
-                                  self.process_topology_object(step, 'pHost', 'Hosts'),
-                                  self.process_topology_object(step, 'sHost', 'Hosts'))
+            process_result = max (
+                                  self.process_topology_object(step, 'global', 'Global'),
+                                  self.process_topology_object(step, 'pSite', 'Site'),
+                                  self.process_topology_object(step, 'sSite', 'Site'),
+                                  self.process_topology_object(step, 'pHost', 'Host'),
+                                  self.process_topology_object(step, 'sHost', 'Host'))
             if process_result == 0:
                 break
             time.sleep(wait)
@@ -403,16 +458,22 @@ class SaphanasrTest:
         remote = self.config['remote_node']
         test_sid = self.test_data['sid']
         cmd = ""
-        if action_name == "ksi":
+        if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-        elif action_name == "kpi":
+        elif action_name == "kill_secn_worker_inst":
+            remote = self.topolo['sWorker']
+            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+        elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-        elif action_name == "kpx":
+        elif action_name == "kill_prim_worker_inst":
+            remote = self.topolo['pWorker']
+            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+        elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "ksx":
+        elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "bmt":
@@ -435,6 +496,18 @@ class SaphanasrTest:
             cmd = "crm node online {}".format(self.topolo['pHost'])
         elif action_name == "cleanup":
             cmd = "crm resource cleanup {}".format(resource)
+        elif action_name == "kill_secn_worker_node":
+            remote = self.topolo['sWorker']
+            cmd = "systemctl reboot --force"
+        elif action_name == "kill_secn_node":
+            remote = self.topolo['sHost']
+            cmd = "systemctl reboot --force"
+        elif action_name == "kill_prim_worker_node":
+            remote = self.topolo['pWorker']
+            cmd = "systemctl reboot --force"
+        elif action_name == "kill_prim_node":
+            remote = self.topolo['pHost']
+            cmd = "systemctl reboot --force"
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
@@ -453,7 +526,7 @@ class SaphanasrTest:
         elif action_name_short == "shell":
             remote = 'localhost'
             action_parameter = " ".join(action_array[1:])
-            cmd = "bash {}".format(action_parameter)
+            cmd = "{}".format(action_parameter)
         return self.action_call(action_name, cmd, remote)
 
     def action(self, action_name):
@@ -463,9 +536,9 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kpi", "ksi", "kpx", "ksx", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
@@ -477,15 +550,20 @@ class SaphanasrTest:
         returns a tuple ( stdout-string, stderr, string, rc )
         """
         if remote_host:
-            ssh_client = SSHClient()
-            ssh_client.load_system_host_keys()
-            ssh_client.connect(remote_host, username=user)
-            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
-            result_stdout = cmd_stdout.read().decode("utf8")
-            result_stderr = cmd_stderr.read().decode("utf8")
-            result_rc = cmd_stdout.channel.recv_exit_status()
-            check_result = (result_stdout, result_stderr, result_rc)
-            ssh_client.close()
+            try:
+                ssh_client = SSHClient()
+                ssh_client.load_system_host_keys()
+                ssh_client.connect(remote_host, username=user)
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+            except Exception as ssh_muell:
+                #self.message("ssh connection did not work ...")
+                #self.message(f"{type(ssh_muell)}")
+                check_result=("", "", 20000)
         else:
             check_result=("", "", 20000)
         return check_result
@@ -496,10 +574,38 @@ if __name__ == "__main__":
         test01.run['r_id'] = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
         l_top = test01.topolo
-        l_top.update({'pSite': test01.get_area_object_by_key_val('Sites', 'srr', 'P')})
-        l_top.update({'sSite': test01.get_area_object_by_key_val('Sites', 'srr', 'S')})
-        l_top.update({'pHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['pSite'])})
-        l_top.update({'sHost': test01.get_area_object_by_key_val('Hosts', 'site', l_top['sSite'])})
+        l_top.update({'global': 'global'})
+        # for angi-ScaleUp and classic ScaleOut:
+        # pSite is the site with srr-attribute == "P"
+        # sSite is the site with srr-attribute == "S"
+        # pHost is the host with site-attribute == pSite
+        # sHost is the host with site-attribute == sSite
+        # TODO: for angi-ScaleOut and classic-ScaleOut we might need to differ msn-host, plain-worker (no mns-candidate) and standby node
+        # TODO: classic-ScaleUp
+        # pHost could be the host with roles-attr like [0-4]:P:*
+        # sHost could be the host with roles-attr like [0-4]:S:*
+        # pSite is referenced by pHost-site-attr
+        # sSite is referenced by sHost-site-attr
+        #
+        l_top.update({'pSite': test01.get_area_object_by_key_val('Site', { 'srr': 'P'})})
+        l_top.update({'sSite': test01.get_area_object_by_key_val('Site', { 'srr': 'S'})})
+        # first try to use site-msn attribute to get the master name server
+        # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
+        l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
+        l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
+
+        test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
+
+        if l_top['pHost'] == None:
+            # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
+            l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
+            l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
+            l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
+            l_top.update({'sSite': test01.get_value('Host', l_top['sHost'], 'site')})
+
+        # TODO: do we need the old method as fallback, if msn is empty or misleading?
+        #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
+        #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
         l_msg = (
                     f"TOPO: pSite={l_top['pSite']}"
                     f" sSite={l_top['sSite']}"

@@ -1,0 +1,70 @@
+#!/usr/bin/bash
+
+function run() {
+    local node="$1" testID="$2" test_prop="$3" repeat="$4" sleep="$5"
+    logFile="testLog$(date +"%Y-%m-%d").txt"
+    logLink="testLog.curr.txt"
+    if [ ! -f "$logFile" ]; then
+        touch "$logFile"
+    fi
+    if [ -L "$logLink" ]; then
+        rl=$(readlink "$logLink")
+        if [[ "$rl" != "$logFile" ]]; then
+            ln -s -f "$logFile" "$logLink"
+        fi
+    else
+        ln -s "$logFile" "$logLink"
+    fi
+    SAPHanaSR-testCluster-multiNode --testFile="$test_dir/${testID}.json" \
+                            --remoteNodes $nodes \
+                            --repeat="$repeat" \
+                            --dumpFailures \
+                            --defaultChecksFile="$test_dir/defaultChecks.json" \
+                            --properties="$test_dir/$test_prop.json" \
+                            --logFile "$local_dir/$logFile"
+    # ln -s -f testLog2023-03-31.txt testLog.curr.txt
+    sleep "$sleep"; 
+    return 0
+}
+
+function usage() {
+     echo "usage: $0 [--test_scenario=...] --nodes=... [--test_case=...] [--properties=...] | --help"
+}
+
+test_scenario="angi-ScaleUp"
+test_case="nop"
+test_prop="properties"
+local_dir="$PWD"
+node="nowhere"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --test_scenario=* )
+                test_scenario=${1#*=}
+                ;;
+        --nodes )
+                shift
+                while [[ "$1" != "" && "$1" != "--*" ]];  do
+                    nodes="$nodes ${1#*=}"
+                    shift
+                     echo $nodes
+                done
+                ;;
+        --test_case=* )
+                test_case=${1#*=}
+                ;;
+        --properties=* )
+                test_prop=${1#*=}
+                ;;
+        --help* )
+                usage
+                exit 2
+                ;;
+    esac
+    shift
+done
+
+test_dir="/usr/local/share/tester/json/$test_scenario"
+
+echo "node: $node, test_scenario=$test_scenario, test_case=$test_case"
+run "$node" "$test_case" "$test_prop" 1 10

@@ -64,7 +64,7 @@ try:
             self.tracer.info(f"{self.__class__.__name__}.{method}() version {FHSRHOOKVERSION}")
             return {"provider_company": "SUSE",
                     "provider_name": "susTkOver",  # class name
-                    "provider_description": "Inform Cluster about SR state",
+                    "provider_description": "Block manual takeover, if cluster is active",
                     "provider_version": "1.0"}
 
         # pylint: disable-next=unused-argument,invalid-name

@@ -1,0 +1,238 @@
+#!/bin/bash
+#
+##########################################################################
+#
+# SAPHanaSR-replay
+#
+# Author:       Fabian Herschel, November 2015
+# Support:      linux@sap.com
+# License:      GNU General Public License 2 (GPLv2)
+# Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
+# Copyright (c) 2017-2022 SUSE LLC.
+#
+##########################################################################
+#
+# Syntax:
+# SAPHanaSR-replay-archive <path-to-pengine-archive> (tar.bz2)
+#
+# SAPHanaSR-replay-archive archive-containing-some-pengine-directories
+#
+##########################################################################
+#
+####################
+#
+version="1.0";
+# some help to the newbie
+exe="$0"
+bex=$(basename "$exe")
+format="tables";
+outDir="";
+pengine="";
+
+function help()
+{
+        echo
+        echo "usage:    $bex [--format=script] /path/to/pe-archive (tar.bz2)"
+        echo "usage:    $bex [--format=script] --pengine=/path/to/pengine-files"
+        echo
+        echo "Possible output formats: tables, script, book"
+        echo "For format 'book' there is also an optional parameter --outDir"
+        echo
+        echo "usage:    $bex [OPTION]"
+        echo " --help		show help."
+        echo " --version	show version."
+        echo
+}
+
+function assert() 
+{
+        echo "$1"
+	exit 2
+}
+#
+while [ $# -gt 0 ]; do
+    case "$1" in
+     --help|-h)
+	     help;
+        exit
+    ;;
+     --version|-v)
+        echo "$bex version $version"
+        exit
+    ;;
+        --format=* )
+            format=${1#*=}
+    ;;
+        --outDir=* )
+            outDir=${1#*=}
+    ;;
+        --pengine=* )
+            pengine=${1#*=}
+	    echo "pengine directory $pengine"
+    ;;
+	--sid=* )
+           sids=${1#*=}
+    ;;
+        * )
+        archive="$1"
+    ;;
+    esac
+    shift
+done
+
+if [[ -z "$pengine" && -z "$archive" ]]; then
+	echo "Either archive or pengine path is needed."
+	help
+	exit 2
+fi
+
+#
+####################
+#
+#
+if [ -z "$pengine" ]; then
+	echo "INFO: pengine is not set"
+    mkdir -p "${archive}-tmp"
+    if ! tar -xjf "$archive" -C "${archive}-tmp" ; then echo "Extracting archive $archive failed"; exit 2; fi
+    if ! cd "${archive}-tmp"; then echo "Can not enter archive directory ${archive}-tmp"; exit 2; fi
+else
+	echo "INFO: pengine is set"
+	cd "$pengine" ||  assert "Can not change to directory $pengine" 
+	cd ..
+fi
+#
+####################
+#
+# find pengine directories
+#
+pDirs=$(find . -type d -name pengine)
+
+#
+####################
+#
+# find all pengine inputs sorted by time
+#
+pFiles=$(find "$pDirs" -name '*input-[0-9]*' -o -name '*warn-[0-9]*')
+# shellcheck disable=SC2086 
+# remark: ls needs unquoted variable here - pFiles-elements must not have whitespaces
+pFilesSorted=$(ls -tr $pFiles)
+
+#
+####################
+#
+# find all cib.txt files
+#
+cFiles=$(find . -type f -name cib.txt -o -name cib.xml)
+
+echo "#### cFiles=$cFiles ####"
+
+#
+####################
+#
+# find all SIDs mentioned in the cib.txt
+#
+if [ -z "$sids" ]; then
+    sids=$(
+    for cF in $cFiles; do
+      #cF=$(basename $cF)
+      (
+      case "$cF" in
+        *.txt )
+                while read -r line
+                do
+                    if [[ "$line" =~ :suse:SAPHanaTopology ]] ; then
+                       if [[ "$line" =~ SID=(...) ]]; then
+                       echo "${BASH_REMATCH[1]}"
+                       fi
+                    fi
+                done < "$cF"
+          ;;
+       *.xml )
+	  for line in $(xmllint --xpath '//clone/primitive[@type="SAPHanaTopology"]//nvpair[@name="SID"]/@value' "$cF" ); do
+	       if [[ "$line" =~ value=.(...). ]]; then
+		   echo "${BASH_REMATCH[1]}"
+	       fi
+          done
+          ;;
+      esac
+      )
+    done | tr '[:upper:]' '[:lower:]' | sort -u )
+fi
+
+#
+####################
+#
+# create a tmp directory to extract pengine files
+#
+if [ -z "$pengine" ]; then
+    mkdir -p "${archive}-tmp/tmp"
+    pengine_tmp="${archive}-tmp/tmp"
+else
+    mkdir -p "${pengine}-tmp"
+    pengine_tmp="${pengine}-tmp"
+fi
+#
+####################
+# create output directory, if set
+#
+if [ -n "$outDir" ]; then
+   mkdir -p "$outDir"
+   case "$format" in
+       book )
+           rsync -a  /usr/share/SAPHanaSR-angi/icons "$outDir"
+           ;;
+   esac
+   outNr=0
+fi
+
+
+#
+####################
+#
+# for all sids process all pengine files and show the hana attributes
+#
+for sid in $sids; do
+    echo "================ replay for sid $sid ==============="
+    for cibBZ2 in $pFilesSorted; do
+       cib="${cibBZ2%.bz2}";
+       shortCIB="${cib##*/}"
+       echo "cib: $cib";
+       cibFile="$pengine_tmp"/"$shortCIB"
+       less -c "$cibBZ2" > "$cibFile";
+       case "$format" in
+           tables | script )
+                   SAPHanaSR-showAttr --cib="$cibFile" --sid="$sid" --format="$format";
+                   ;;
+           book )
+               if [ -n "$outDir" ]; then
+                   outOption="--out=$outDir/sapMonitor.$outNr.html"
+                   (( outNr ++ ))
+               fi
+               SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="html2" "$outOption";
+                   ;;
+           txt | ascii | html )
+               SAPHanaSR-monitor --cib="$cibFile" --sid="$sid" --format="$format"
+                   ;;
+       esac
+       rm "$cibFile" ;
+    done
+    case "$format" in
+        book )
+               if [ -n "$outDir" ]; then
+                  lastFile="$outDir/sapMonitor.$outNr.html"
+                  cat << EOF >"$lastFile"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>SAPHanaSR status</title>
+<meta http-equiv="refresh" content="1; url=./sapMonitor.0.html" />
+<meta charset="utf-8"/>
+</head>
+<body class="" style="background-color:#dcddde;">
+</body>
+</html>
+EOF
+               fi
+               ;;
+    esac
+done

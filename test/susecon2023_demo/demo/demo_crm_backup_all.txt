@@ -1,0 +1,72 @@
+node 1: pizbuin01 \
+	attributes hana_ha1_vhost=pizbuin01 hana_ha1_site=WDF
+node 2: pizbuin02 \
+	attributes hana_ha1_vhost=pizbuin02 hana_ha1_site=JWD
+#
+primitive rsc_SAPHanaCon_HA1_HDB00 ocf:suse:SAPHanaController \
+	op start interval=0 timeout=3600 \
+	op stop interval=0 timeout=3600 \
+	op promote interval=0 timeout=3600 \
+	op monitor interval=15 role=Master timeout=700 \
+	op monitor interval=20 role=Slave timeout=700 \
+	params SID=HA1 InstanceNumber=00 PREFER_SITE_TAKEOVER=yes DUPLICATE_PRIMARY_TIMEOUT=600 AUTOMATED_REGISTER=yes
+#
+primitive rsc_SAPHanaTop_HA1_HDB00 ocf:suse:SAPHanaTopology \
+	op monitor interval=10 timeout=600 \
+	op start interval=0 timeout=3600 \
+	op stop interval=0 timeout=300 \
+	params SID=HA1 InstanceNumber=00
+#
+primitive rsc_ip_HA1 IPaddr2 \
+	params ip=192.168.7.234 \
+	op monitor interval=60 timeout=20 \
+	op_params on_fail=restart
+#
+primitive rsc_stonith_sbd stonith:external/sbd \
+	params pcmk_delay_max=30
+#
+clone cln_SAPHanaTop_HA1_HDB00 rsc_SAPHanaTop_HA1_HDB00 \
+	meta clone-node-max=1 interleave=true target-role=Started
+#
+clone mst_SAPHanaCon_HA1_HDB00 rsc_SAPHanaCon_HA1_HDB00 \
+	meta clone-max=2 clone-node-max=1 interleave=true promotable=true maintenance=false target-role=Started
+#
+colocation col_ip_prim_SAPHana_HA1_HDB00 2000: rsc_ip_HA1:Started mst_SAPHanaCon_HA1_HDB00:Promoted
+#
+order ord_SAPHana_HA1_HDB00 Optional: cln_SAPHanaTop_HA1_HDB00 mst_SAPHanaCon_HA1_HDB00
+#
+property SAPHanaSR: \
+	hana_ha1_site_srHook_JWD=PRIM \
+	hana_ha1_site_srHook_WDF=SOK \
+	hana_ha1_glob_topology=ScaleUp \
+	hana_ha1_site_lss_WDF=4 \
+	hana_ha1_site_lss_JWD=4 \
+	hana_ha1_site_srr_WDF=S \
+	hana_ha1_site_srr_JWD=P \
+	hana_ha1_site_srMode_JWD=sync \
+	hana_ha1_site_srMode_WDF=sync \
+	hana_ha1_site_mns_WDF=pizbuin01 \
+	hana_ha1_site_mns_JWD=pizbuin02 \
+	hana_ha1_site_lpt_JWD=1684228436 \
+	hana_ha1_site_lpt_WDF=30 \
+	hana_ha1_site_opMode_JWD=logreplay \
+	hana_ha1_site_opMode_WDF=logreplay \
+	hana_ha1_site_srPoll_WDF=SOK \
+	hana_ha1_site_srPoll_JWD=PRIM \
+	hana_ha1_glob_prim=JWD \
+	hana_ha1_glob_sec=WDF
+property cib-bootstrap-options: \
+	have-watchdog=true \
+	dc-version="2.1.2+20211124.ada5c3b36-150400.4.9.2-2.1.2+20211124.ada5c3b36" \
+	cluster-infrastructure=corosync \
+	cluster-name=pizza \
+	stonith-enabled=true \
+	stonith-action=reboot \
+	stonith-timeout=150 \
+	last-lrm-refresh=1684163955
+rsc_defaults rsc-options: \
+	migration-threshold=5000 \
+	resource-stickiness=1000
+op_defaults op-options: \
+	timeout=600 \
+	record-pending=true
