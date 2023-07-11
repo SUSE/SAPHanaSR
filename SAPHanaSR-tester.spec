@@ -16,7 +16,7 @@
 #
 # Please submit bugfixes or comments via http://bugs.opensuse.org/
 
-Name:           SAPHanaSR-tester.spec
+Name:           SAPHanaSR-tester
 License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
@@ -31,20 +31,7 @@ Source0:        %{name}-%{version}.tgz
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
-Requires:       pacemaker > 2.1.2
-Requires:       resource-agents
-Requires:       perl
-
-# Require crmsh-scripts on SLES 12 SP1+ for the new HAWK wizards
-%if 0%{?sle_version} >= 120100
-Requires:       crmsh >= 4.4.0
-Requires:       crmsh-scripts >= 4.4.0
 Requires:       python3
-Requires:       /usr/bin/xmllint
-BuildRequires:  resource-agents >= 4.1.0
-BuildRequires:  crmsh
-BuildRequires:  crmsh-scripts
-%endif
 
 %description
 SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focussed test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
@@ -80,12 +67,15 @@ install -m 0755 test/SAPHanaSR-* %{buildroot}/usr/bin
 install -m 0644 test/saphana_sr_test.py %{buildroot}/usr/lib/%{name}
 
 # test help programs, test loops and test calls
-install -m 0644 test/test_* %{buildroot}/usr/bin
-install -m 0644 test/callTest* %{buildroot}/usr/bin
-install -m 0644 test/loopTests* %{buildroot}/usr/share/%{name}/
+install -m 0755 test/cs_* %{buildroot}/usr/bin
+install -m 0755 test/test_* %{buildroot}/usr/bin
+install -m 0755 test/callTest* %{buildroot}/usr/bin
+install -m 0755 test/loopTests* %{buildroot}/usr/bin
 
 # test definitions
-cp -va json %{buildroot}/usr/share/%{name}
+pwd
+ls test/json
+cp -va test/json %{buildroot}/usr/share/%{name}
 
 # manual pages
 #install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
