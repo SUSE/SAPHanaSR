@@ -54,10 +54,9 @@ function saphana_usage() {
     local rc=0
     methods=$(saphana_methods)
     methods=$(echo "$methods" | tr ' ' '|')
-    cat <<-EOF
-    usage: $0 ("$methods")
+    echo "usage: $0 ($methods)
 
-    "$0" manages two SAP HANA databases in system replication.
+    $0 manages two SAP HANA databases in system replication.
 
     The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
     The 'stop'         operation stops the HANA instance
@@ -69,16 +68,15 @@ function saphana_usage() {
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
     The 'reload'       operation allows to adapt resource parameters
-
-EOF
+    "
     return "$rc"
 } # end function saphana_usage
 
 function saphana_print_description() {
     # function saphana_print_description - ouput the XML description of the resource agent
     # called by: saphana_meta_data
-    cat <<END_OF_DESCR
-<shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
+    # shellcheck disable=
+    echo '<shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
 <longdesc lang="en">
 The SAPHanaSR resource agent manages two SAP HANA database systems which are configured
 in system replication. SAPHanaController supports Scale-Up and Scale-Out scenarios.
@@ -112,7 +110,7 @@ The resource agent uses the following four interfaces provided by SAP:
    Interface is SQL query into HANA (system replication table).  The hdbsql query will be replaced by a python script
    "systemReplicationStatus.py" in SAP HANA SPS8 or 9.
    As long as we need to use hdbsql you need to set up secure store users for linux user root to be able to
-   access the SAP HANA database. You need to configure a secure store user key "SAPHANA${SID}SR" which can connect the SAP
+   access the SAP HANA database. You need to configure a secure store user key "SAPHANA<SID>SR" which can connect the SAP
    HANA database:
 
 5. saphostctrl
@@ -120,14 +118,13 @@ The resource agent uses the following four interfaces provided by SAP:
    SAP HANA instance. This is the hostname used during the HANA installation.
 
 </longdesc>
-END_OF_DESCR
+'
 } # end function saphana_print_description
 
 function saphana_print_parameters() {
     # function saphana_print_parameters - output the XML parameter description of the resource agent
     # called by: saphana_meta_data
-    cat <<END
-<parameters>
+    echo '<parameters>
     <parameter name="SID" unique="0" required="1">
         <longdesc lang="en">SAP System Identifier (SID) like "SLE" or "HAE"</longdesc>
         <shortdesc lang="en">SAP System Identifier (SID)</shortdesc>
@@ -197,7 +194,7 @@ function saphana_print_parameters() {
         <content type="string" default="" />
     </parameter>
 </parameters>
-END
+'
 } # end function saphana_print_parameters
 
 function saphana_meta_data() {
@@ -208,17 +205,16 @@ function saphana_meta_data() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     # TODO PRIO2: check whether default is PREFER_SITE_TAKEOVER=false, then correct this meta-data.
-    cat <<END_OF_HEADER
-<?xml version="1.0"?>
+    # shellcheck disable=SC2016
+    echo '<?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaController" version="$raVersion">
 <version>1.0</version>
-END_OF_HEADER
+'
     saphana_print_description
     saphana_print_parameters
 
-    cat <<END_OF_ACTIONS
-<actions>
+echo '<actions>
     <action name="start"   timeout="3600" />
     <action name="stop"    timeout="3600" />
     <action name="status"  timeout="60" />
@@ -233,7 +229,7 @@ END_OF_HEADER
     <action name="reload" timeout="5" />
 </actions>
 </resource-agent>
-END_OF_ACTIONS
+'
 return "$rc"
 } # end function saphana_meta_data
 
@@ -529,7 +525,7 @@ function analyze_hana_sync_statusSRS() {
     #
     if [[ "$srRc" == 15 ]]; then
        # Fix for a HANA BUG, where a non-working SR resulted in RC 15:
-       if grep -q "ACTIVE" <<< "$FULL_SR_STATUS"; then
+       if grep -q "ACTIVE" < <(echo "$FULL_SR_STATUS"); then
           super_ocf_log info "FLOW ${FUNCNAME[0]} SOK"
           set_hana_site_attribute "$gRemSite" "SOK" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
           super_ocf_log info "ACT site $gSite, setting SOK for secondary on site $gRemSite"
@@ -1965,7 +1961,7 @@ function saphana_promote_clone() {
                                 # TODO PRIO2: NG handle errors of the new takeover
                                 super_ocf_log error "ACT: SAP HANA TAKEOVER FAILED. $tkMessage"
                                 echo "$tkMessage"
-                                if grep 'rc=50277' <<<"$tkMessage"; then
+                                if grep 'rc=50277' < <(echo "$tkMessage"); then
                                     super_ocf_log error "ACT: SAP HANA TAKEOVER BLOCKED. Most likely misconfigured takeover blocker hook script. Check sudoers and global.ini."
                                 fi
                                 set_hana_attribute "$NODENAME" "F" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"

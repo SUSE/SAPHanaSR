@@ -220,7 +220,7 @@ function scoring_crm_promote() {
     local lssPattern srrPattern rolePattern syncPattern myScore patternDescription fullRolePattern
     for scoring_rule in "${SCORING_TABLE[@]}"; do
         # parts are: lss-pattern srr-pattern role-pattern sync-pattern description
-        read -r lssPattern srrPattern rolePattern syncPattern myScore patternDescription <<< "$scoring_rule"
+        read -r lssPattern srrPattern rolePattern syncPattern myScore patternDescription < <(echo "$scoring_rule")
         fullRolePattern="$lssPattern:$srrPattern:$rolePattern"
         if [[ "${hana_roles}" =~ $fullRolePattern ]] && [[ "${hana_sync}" =~ $syncPattern ]]; then
               super_ocf_log info "DEC: scoring_crm_promote: roles($hana_roles) are matching pattern ($fullRolePattern)"
@@ -953,8 +953,6 @@ function is_master_nameserver() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=1
     gNodeRole="$(get_role_by_cluster_or_landscape "${NODENAME}" "$gVirtName")"
-    # IFS=: read -a nodeFields <<<"$with_colon"
-    # nFields=( ${nRole//:/ } )
     case "$gNodeRole" in
         master[123]:master:* )
            rc=0
