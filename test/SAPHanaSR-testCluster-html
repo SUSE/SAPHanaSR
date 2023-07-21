@@ -4,6 +4,7 @@
  Author:       Fabian Herschel, Jul 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
+ Version:      2023.07.21.15.44
 """
 
 import time
@@ -17,6 +18,13 @@ from subprocess import Popen, PIPE
 from paramiko import SSHClient
 
 tiles = {
+            'STAT': {
+                        'title': 'Statistics',
+                        'command': 'statistics',
+                        'file': '/tmp/SAPHanaSR-tester/SAPHanaSR-tester.log',
+                        'type': 'internal',
+                        'user': 'root',
+                      },
             'TILE01': {
                         'title': 'Cluster status',
                         'command': 'crm_mon -1r --include none,nodes,resources,failures,failcounts',
@@ -74,6 +82,20 @@ class SshMultiNode:
                         'report_hostname': True,
                         'user': 'root'
                       }
+        self.stat = {
+                        'all': 0,
+                        'succ': 0,
+                        'fail': 0,
+                        'fail-prereq': 0,
+                        'fail-recovery': 0,
+                        'fail-any': 0,
+                        'succ-any': 0,
+                        'succ-prereq': 0,
+                        'succ-recovery': 0,
+                        'sum-any': 0,
+                        'sum-prereq': 0,
+                        'sum-recovery': 0,
+                    }
 
 
     def do_ssh(self, host, user, cmd):
@@ -112,6 +134,37 @@ class SshMultiNode:
         stderr = stderr.decode()
         return (stdout, stderr, result.returncode)
 
+
+    def do_internal(self, cmd, file):
+        """
+        process an program internal action on the given file
+        """
+        if cmd == "statistics":
+            with open(file, "r") as testlogs:
+                lines = testlogs.readlines()
+            for line in lines:
+                if re.search(r"TEST:.*PASSED", line):
+                   self.stat['succ'] += 1
+                if re.search(r"TEST:.*FAILED", line):
+                   self.stat['fail'] += 1
+                if re.search(r"STATUS:.*step step10 FAILED", line):
+                   self.stat['fail-prereq'] += 1
+                if re.search(r"STATUS:.*step step40 FAILED", line):
+                   self.stat['fail-recovery'] += 1
+                if re.search(r"STATUS:.*step step.* FAILED", line):
+                   self.stat['fail-any'] += 1
+                if re.search(r"STATUS:.*step step.* passed", line):
+                   self.stat['succ-any'] += 1
+                if re.search(r"STATUS:.*step step40 passed", line):
+                   self.stat['succ-recovery'] += 1
+                if re.search(r"STATUS:.*step step10 passed", line):
+                   self.stat['succ-prereq'] += 1
+            self.stat['all'] = self.stat['succ'] + self.stat['fail']
+            self.stat['sum-any'] = self.stat['succ-any'] + self.stat['fail-any']
+            self.stat['sum-prereq'] = self.stat['succ-prereq'] + self.stat['fail-prereq']
+            self.stat['sum-recovery'] = self.stat['succ-recovery'] + self.stat['fail-recovery']
+            
+
 test01 = SshMultiNode()
 parser = argparse.ArgumentParser()
 parser.add_argument("--hosts", nargs="*", help="hosts to connect to (stops after first successful command)")
@@ -146,7 +199,6 @@ with open("testgrid.html.in", "r") as sources:
     lines = sources.readlines()
 with open("testgrid.html.out", "w") as sources:
     for tk in tiles:
-    #for tk in ['TILE01']:
         the_tile = tiles[tk]
         title = the_tile['title']
         command = the_tile['command']
@@ -165,11 +217,14 @@ with open("testgrid.html.out", "w") as sources:
                 else:
                     the_tile['content'] = stdout
                     break # only take the first host which answers with rc == 0
-        else: # currently this means 'local'
+        elif cmd_type == "local":
             #result = Popen(["df", "-hP"], stdout=PIPE, stderr=PIPE)
             #stdout, stderr = result.communicate()
             (stdout, stderr, rc) = test01.do_local(the_tile['command'])
             the_tile['content'] = stdout
+        else: # currently this means 'internal'
+            test01.do_internal(the_tile['command'], the_tile['file'])
+            pass
         regexp_title = f"@@{tk}_TITLE@@"
         regexp_content = f"@@{tk}_CONTENT@@"
         line_index = 0
@@ -180,11 +235,18 @@ with open("testgrid.html.out", "w") as sources:
             line_index += 1
     for line in lines:
         line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
-        line = re.sub(r"@@TEST_SUCC@@", str(test_succ), line)
-        line = re.sub(r"@@TEST_FAIL@@", str(test_fail), line)
-        line = re.sub(r"@@TEST_SUM@@", str(test_sum), line)
-        line = re.sub(r"@@TEST_FAIL_PREREQ@@", str(test_fail_prereq), line)
-        line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test_fail_recovery), line)
+        line = re.sub(r"@@TEST_SUCC@@", str(test01.stat['succ']), line)
+        line = re.sub(r"@@TEST_FAIL@@", str(test01.stat['fail']), line)
+        line = re.sub(r"@@TEST_SUM@@", str(test01.stat['all']), line)
+        line = re.sub(r"@@TEST_FAIL_PREREQ@@", str(test01.stat['fail-prereq']), line)
+        line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test01.stat['fail-recovery']), line)
+        line = re.sub(r"@@TEST_FAIL_ANY@@", str(test01.stat['fail-any']), line)
+        line = re.sub(r"@@TEST_SUCC_ANY@@", str(test01.stat['succ-any']), line)
+        line = re.sub(r"@@TEST_SUCC_RECOVERY@@", str(test01.stat['succ-recovery']), line)
+        line = re.sub(r"@@TEST_SUCC_PREREQ@@", str(test01.stat['succ-prereq']), line)
+        line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat['sum-any']), line)
+        line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat['sum-recovery']), line)
+        line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat['sum-prereq']), line)
         sources.write(line)
 
 
