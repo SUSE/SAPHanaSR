@@ -1,0 +1,190 @@
+#!/usr/bin/python3
+"""
+ SAPHanaSR-tester-html
+ Author:       Fabian Herschel, Jul 2023
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2023 SUSE LLC
+"""
+
+import time
+import re
+import sys
+import json
+import argparse
+from subprocess import Popen, PIPE
+# import random
+
+from paramiko import SSHClient
+
+tiles = {
+            'TILE01': {
+                        'title': 'Cluster status',
+                        'command': 'crm_mon -1r --include none,nodes,resources,failures,failcounts',
+                        'type': 'remote',
+                        'user': 'root',
+                      },
+            'TILE02': {
+                        'title': 'db-client log',
+                        'command': 'tail -15 /tmp/SAPHanaSR-tester/dbc.log',
+                        'type': 'remote',
+                        'user': 'root',
+                      },
+            'TILE03': {
+                        'title': 'SAP HANA SR Attributes',
+                        'command': 'SAPHanaSR-showAttr',
+                        'type': 'remote',
+                        'user': 'root',
+                      },
+            'TILE04': {
+                        'title': 'SAPHanaSR-tester',
+                        'command': 'tail -20 /tmp/SAPHanaSR-tester/SAPHanaSR-tester.log',
+                        'type': 'local',
+                        'user': 'root',
+                      },
+        }
+
+
+class SshMultiNode:
+
+    def message(self, msg, **kwargs):
+        """
+        message with formatted timestamp
+        """
+        stdout = True
+        if 'stdout' in kwargs:
+            stdout = kwargs['stdout']
+        # TODO: specify, if message should be written to stdout, stderr and/or log file
+        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        r_id = ""
+        msg_arr = msg.split(" ")
+        if stdout: 
+            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+
+
+    def __init__(self, **kwargs):
+        """
+        constructor
+        """
+        # if 'cmdparse' in kwargs:
+        #    cmdparse = kwargs['cmdparse']
+        self.config = { 
+                        'command': None,
+                        'hosts': [],
+                        'quiet': True,
+                        'report_hostname': True,
+                        'user': 'root'
+                      }
+
+
+    def do_ssh(self, host, user, cmd):
+        """
+        ssh remote cmd exectution
+        returns a tuple ( stdout-string, stderr, string, rc )
+        """
+        if host:
+            try:
+                ssh_client = SSHClient()
+                ssh_client.load_system_host_keys()
+                ssh_client.connect(host, username=user)
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+            except Exception as ssh_muell:
+                if test01.config['quiet'] is not True:
+                    self.message(f"ssh connection to {host} did not work ...")
+                    self.message(f"{type(ssh_muell)}")
+                check_result=("", "", 2)
+        else:
+            check_result=("", "", 2)
+        return check_result
+
+
+    def do_local(self, cmd):
+        """
+        execute a local command and capture stdout and return code
+        """
+        result = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
+        stdout, stderr = result.communicate()
+        stdout = stdout.decode()
+        stderr = stderr.decode()
+        return (stdout, stderr, result.returncode)
+
+test01 = SshMultiNode()
+parser = argparse.ArgumentParser()
+parser.add_argument("--hosts", nargs="*", help="hosts to connect to (stops after first successful command)")
+parser.add_argument("--user", help="linux user to be used for ssh connection (default is root)")
+args = parser.parse_args()
+if args.hosts:
+    test01.config['hosts'] = args.hosts
+if args.user:
+    test01.config['user'] = args.user
+
+date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+seconds = int(time.time())
+
+test_scenario = "SAPHanaSR-angi - ScaleUp"
+
+# simulate changing test numbers
+test_succ = seconds - 1689000000
+test_fail_prereq = int( seconds / 100 )  - 16890809
+test_fail_recovery = int( seconds / 1000 )  - 1689088
+
+test_fail = test_fail_prereq + test_fail_recovery
+test_sum = test_succ + test_fail
+
+test_file_in="testgrid.html.in"
+
+"""
+with open("/etc/apt/sources.list", "r") as sources:
+    lines = sources.readlines()
+"""
+
+with open("testgrid.html.in", "r") as sources:
+    lines = sources.readlines()
+with open("testgrid.html.out", "w") as sources:
+    for tk in tiles:
+    #for tk in ['TILE01']:
+        the_tile = tiles[tk]
+        title = the_tile['title']
+        command = the_tile['command']
+        user = the_tile['user']
+        cmd_type = the_tile['type']
+        the_tile['content'] = ""
+        print(f"tile tile={tk} title={title} command={command} type={cmd_type}") 
+        if cmd_type == "remote":
+            for host in test01.config['hosts']:
+                #result = test01.do_ssh(host, the_tile['user'], the_tile['command'])
+                (stdout, stderr, rc) = test01.do_ssh(host, the_tile['user'], the_tile['command'])
+                #if result[2] > 0:
+                if rc > 0:
+                    if True:
+                        test01.message(f"INFO: Connection to {host} failed rc={rc}") 
+                else:
+                    the_tile['content'] = stdout
+                    break # only take the first host which answers with rc == 0
+        else: # currently this means 'local'
+            #result = Popen(["df", "-hP"], stdout=PIPE, stderr=PIPE)
+            #stdout, stderr = result.communicate()
+            (stdout, stderr, rc) = test01.do_local(the_tile['command'])
+            the_tile['content'] = stdout
+        regexp_title = f"@@{tk}_TITLE@@"
+        regexp_content = f"@@{tk}_CONTENT@@"
+        line_index = 0
+        for line in lines:
+            line = re.sub(r"{}".format(regexp_title), f"{the_tile['title']} - {date_time}", line)
+            line = re.sub(r"{}".format(regexp_content), the_tile['content'], line)
+            lines[line_index] = line
+            line_index += 1
+    for line in lines:
+        line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
+        line = re.sub(r"@@TEST_SUCC@@", str(test_succ), line)
+        line = re.sub(r"@@TEST_FAIL@@", str(test_fail), line)
+        line = re.sub(r"@@TEST_SUM@@", str(test_sum), line)
+        line = re.sub(r"@@TEST_FAIL_PREREQ@@", str(test_fail_prereq), line)
+        line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test_fail_recovery), line)
+        sources.write(line)
+
+
