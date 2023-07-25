@@ -4,7 +4,7 @@
  Author:       Fabian Herschel, Jul 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
- Version:      2023.07.21.15.44
+ Version:      2023.07.25.13.49
 """
 
 import time
@@ -16,6 +16,23 @@ from subprocess import Popen, PIPE
 # import random
 
 from paramiko import SSHClient
+
+# TODO: start tasks later from  SAPHanaSR-tester-html
+tasks = {
+            'SAPHanaSR-tester' : {
+                                    'type': 'local',
+                                    'command': 'SAPHanaSR-tester --hosts @@HOSTS@@',
+                                    'user': 'root',
+                                    'repeat': 'no'
+                                },
+            'db-client' : { # to be started on all hosts in @@HOSTS@@ - alternatively do it on first host and fallback to second, if needed
+                            'type': 'remote',
+                            'command': 'source ./.bashrc; python disp_sql_counter --userkey=CLUSTER | tee -a /tmp/SAPHanaSR-tester/dbc.log',
+                            'user': '@@sidadm@@',
+                            'repeat': 'yes',
+                            'repeat_delay': '300'
+                        }
+        }
 
 tiles = {
             'STAT': {
@@ -179,6 +196,8 @@ date_time = time.strftime("%Y-%m-%d %H:%M:%S")
 seconds = int(time.time())
 
 test_scenario = "SAPHanaSR-angi - ScaleUp"
+# html_out: use this as output-path later once SAPHanaSR-tester-html runs more out of its own (not in a bash script loop)
+html_out = 'TestSAPHanaSR-angi-ScaleOut.html'
 
 # simulate changing test numbers
 test_succ = seconds - 1689000000
@@ -197,7 +216,7 @@ with open("/etc/apt/sources.list", "r") as sources:
 
 with open("testgrid.html.in", "r") as sources:
     lines = sources.readlines()
-with open("testgrid.html.out", "w") as sources:
+with open(f"{html_out}.out", "w") as sources:
     for tk in tiles:
         the_tile = tiles[tk]
         title = the_tile['title']
@@ -205,6 +224,7 @@ with open("testgrid.html.out", "w") as sources:
         user = the_tile['user']
         cmd_type = the_tile['type']
         the_tile['content'] = ""
+        tile_time_pre = int(time.time())
         print(f"tile tile={tk} title={title} command={command} type={cmd_type}") 
         if cmd_type == "remote":
             for host in test01.config['hosts']:
@@ -225,6 +245,8 @@ with open("testgrid.html.out", "w") as sources:
         else: # currently this means 'internal'
             test01.do_internal(the_tile['command'], the_tile['file'])
             pass
+        tile_time_post = int(time.time())
+        print(f"tile tile={tk} title={title} command={command} type={cmd_type} runtime={tile_time_post-tile_time_pre}") 
         regexp_title = f"@@{tk}_TITLE@@"
         regexp_content = f"@@{tk}_CONTENT@@"
         line_index = 0
@@ -249,4 +271,5 @@ with open("testgrid.html.out", "w") as sources:
         line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat['sum-prereq']), line)
         sources.write(line)
 
-
+print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
+test01.do_local(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
