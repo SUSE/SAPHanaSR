@@ -4,7 +4,7 @@
  Author:       Fabian Herschel, Jul 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
- Version:      2023.07.25.13.49
+ Version:      2023.07.25.14.49
 """
 
 import time
@@ -97,6 +97,7 @@ class SshMultiNode:
                         'hosts': [],
                         'quiet': True,
                         'report_hostname': True,
+                        'sleep': '10',
                         'user': 'root'
                       }
         self.stat = {
@@ -214,62 +215,64 @@ with open("/etc/apt/sources.list", "r") as sources:
     lines = sources.readlines()
 """
 
-with open("testgrid.html.in", "r") as sources:
-    lines = sources.readlines()
-with open(f"{html_out}.out", "w") as sources:
-    for tk in tiles:
-        the_tile = tiles[tk]
-        title = the_tile['title']
-        command = the_tile['command']
-        user = the_tile['user']
-        cmd_type = the_tile['type']
-        the_tile['content'] = ""
-        tile_time_pre = int(time.time())
-        print(f"tile tile={tk} title={title} command={command} type={cmd_type}") 
-        if cmd_type == "remote":
-            for host in test01.config['hosts']:
-                #result = test01.do_ssh(host, the_tile['user'], the_tile['command'])
-                (stdout, stderr, rc) = test01.do_ssh(host, the_tile['user'], the_tile['command'])
-                #if result[2] > 0:
-                if rc > 0:
-                    if True:
-                        test01.message(f"INFO: Connection to {host} failed rc={rc}") 
-                else:
-                    the_tile['content'] = stdout
-                    break # only take the first host which answers with rc == 0
-        elif cmd_type == "local":
-            #result = Popen(["df", "-hP"], stdout=PIPE, stderr=PIPE)
-            #stdout, stderr = result.communicate()
-            (stdout, stderr, rc) = test01.do_local(the_tile['command'])
-            the_tile['content'] = stdout
-        else: # currently this means 'internal'
-            test01.do_internal(the_tile['command'], the_tile['file'])
-            pass
-        tile_time_post = int(time.time())
-        print(f"tile tile={tk} title={title} command={command} type={cmd_type} runtime={tile_time_post-tile_time_pre}") 
-        regexp_title = f"@@{tk}_TITLE@@"
-        regexp_content = f"@@{tk}_CONTENT@@"
-        line_index = 0
+while True:
+    with open("testgrid.html.in", "r") as sources:
+        lines = sources.readlines()
+    with open(f"{html_out}.out", "w") as sources:
+        for tk in tiles:
+            the_tile = tiles[tk]
+            title = the_tile['title']
+            command = the_tile['command']
+            user = the_tile['user']
+            cmd_type = the_tile['type']
+            the_tile['content'] = ""
+            tile_time_pre = int(time.time())
+            print(f"tile tile={tk} title={title} command={command} type={cmd_type}") 
+            if cmd_type == "remote":
+                for host in test01.config['hosts']:
+                    #result = test01.do_ssh(host, the_tile['user'], the_tile['command'])
+                    (stdout, stderr, rc) = test01.do_ssh(host, the_tile['user'], the_tile['command'])
+                    #if result[2] > 0:
+                    if rc > 0:
+                        if True:
+                            test01.message(f"INFO: Connection to {host} failed rc={rc}") 
+                    else:
+                        the_tile['content'] = stdout
+                        break # only take the first host which answers with rc == 0
+            elif cmd_type == "local":
+                #result = Popen(["df", "-hP"], stdout=PIPE, stderr=PIPE)
+                #stdout, stderr = result.communicate()
+                (stdout, stderr, rc) = test01.do_local(the_tile['command'])
+                the_tile['content'] = stdout
+            else: # currently this means 'internal'
+                test01.do_internal(the_tile['command'], the_tile['file'])
+                pass
+            tile_time_post = int(time.time())
+            print(f"tile tile={tk} title={title} command={command} type={cmd_type} runtime={tile_time_post-tile_time_pre}") 
+            regexp_title = f"@@{tk}_TITLE@@"
+            regexp_content = f"@@{tk}_CONTENT@@"
+            line_index = 0
+            for line in lines:
+                line = re.sub(r"{}".format(regexp_title), f"{the_tile['title']} - {date_time}", line)
+                line = re.sub(r"{}".format(regexp_content), the_tile['content'], line)
+                lines[line_index] = line
+                line_index += 1
         for line in lines:
-            line = re.sub(r"{}".format(regexp_title), f"{the_tile['title']} - {date_time}", line)
-            line = re.sub(r"{}".format(regexp_content), the_tile['content'], line)
-            lines[line_index] = line
-            line_index += 1
-    for line in lines:
-        line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
-        line = re.sub(r"@@TEST_SUCC@@", str(test01.stat['succ']), line)
-        line = re.sub(r"@@TEST_FAIL@@", str(test01.stat['fail']), line)
-        line = re.sub(r"@@TEST_SUM@@", str(test01.stat['all']), line)
-        line = re.sub(r"@@TEST_FAIL_PREREQ@@", str(test01.stat['fail-prereq']), line)
-        line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test01.stat['fail-recovery']), line)
-        line = re.sub(r"@@TEST_FAIL_ANY@@", str(test01.stat['fail-any']), line)
-        line = re.sub(r"@@TEST_SUCC_ANY@@", str(test01.stat['succ-any']), line)
-        line = re.sub(r"@@TEST_SUCC_RECOVERY@@", str(test01.stat['succ-recovery']), line)
-        line = re.sub(r"@@TEST_SUCC_PREREQ@@", str(test01.stat['succ-prereq']), line)
-        line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat['sum-any']), line)
-        line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat['sum-recovery']), line)
-        line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat['sum-prereq']), line)
-        sources.write(line)
+            line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
+            line = re.sub(r"@@TEST_SUCC@@", str(test01.stat['succ']), line)
+            line = re.sub(r"@@TEST_FAIL@@", str(test01.stat['fail']), line)
+            line = re.sub(r"@@TEST_SUM@@", str(test01.stat['all']), line)
+            line = re.sub(r"@@TEST_FAIL_PREREQ@@", str(test01.stat['fail-prereq']), line)
+            line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test01.stat['fail-recovery']), line)
+            line = re.sub(r"@@TEST_FAIL_ANY@@", str(test01.stat['fail-any']), line)
+            line = re.sub(r"@@TEST_SUCC_ANY@@", str(test01.stat['succ-any']), line)
+            line = re.sub(r"@@TEST_SUCC_RECOVERY@@", str(test01.stat['succ-recovery']), line)
+            line = re.sub(r"@@TEST_SUCC_PREREQ@@", str(test01.stat['succ-prereq']), line)
+            line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat['sum-any']), line)
+            line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat['sum-recovery']), line)
+            line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat['sum-prereq']), line)
+            sources.write(line)
 
-print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
-test01.do_local(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
+    print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
+    test01.do_local(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
+    time.sleep(int(test01.config['sleep']))
