@@ -4,7 +4,7 @@
  Author:       Fabian Herschel, Jul 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
- Version:      2023.07.25.15.57
+ Version:      2023.07.26.12.02
 """
 
 import time
@@ -111,6 +111,7 @@ class SshMultiNode:
                         'fail-prereq': 0,
                         'fail-recovery': 0,
                         'fail-any': 0,
+                        'failed-tests': {},
                         'succ-any': 0,
                         'succ-prereq': 0,
                         'succ-recovery': 0,
@@ -167,25 +168,33 @@ class SshMultiNode:
                 lines = testlogs.readlines()
             for line in lines:
                 if re.search(r"TEST:.*PASSED", line):
-                   self.stat['succ'] += 1
-                if re.search(r"TEST:.*FAILED", line):
-                   self.stat['fail'] += 1
+                    self.stat['succ'] += 1
+                test_fail = re.search(r"TEST:\W*(\w*)\W.*FAILED", line)
+                if test_fail:
+                    test_name = test_fail.group(1)
+                    #print(f"test failed: {test_fail.group(1)}") 
+                    if test_name in self.stat['failed-tests']:
+                        self.stat['failed-tests'][test_name] += 1
+                    else:
+                        self.stat['failed-tests'][test_name] = 1
+                    self.stat['fail'] += 1
                 if re.search(r"STATUS:.*step step10 FAILED", line):
-                   self.stat['fail-prereq'] += 1
+                    self.stat['fail-prereq'] += 1
                 if re.search(r"STATUS:.*step step40 FAILED", line):
-                   self.stat['fail-recovery'] += 1
+                    self.stat['fail-recovery'] += 1
                 if re.search(r"STATUS:.*step step.* FAILED", line):
-                   self.stat['fail-any'] += 1
+                    self.stat['fail-any'] += 1
                 if re.search(r"STATUS:.*step step.* passed", line):
-                   self.stat['succ-any'] += 1
+                    self.stat['succ-any'] += 1
                 if re.search(r"STATUS:.*step step40 passed", line):
-                   self.stat['succ-recovery'] += 1
+                    self.stat['succ-recovery'] += 1
                 if re.search(r"STATUS:.*step step10 passed", line):
-                   self.stat['succ-prereq'] += 1
+                    self.stat['succ-prereq'] += 1
             self.stat['all'] = self.stat['succ'] + self.stat['fail']
             self.stat['sum-any'] = self.stat['succ-any'] + self.stat['fail-any']
             self.stat['sum-prereq'] = self.stat['succ-prereq'] + self.stat['fail-prereq']
             self.stat['sum-recovery'] = self.stat['succ-recovery'] + self.stat['fail-recovery']
+            print(f"failed tests dictionary {str(self.stat['failed-tests'])}")
             
 
 test01 = SshMultiNode()
@@ -279,6 +288,7 @@ while True:
             line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat['sum-any']), line)
             line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat['sum-recovery']), line)
             line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat['sum-prereq']), line)
+            line = re.sub(r"@@TEST_FAILED_LIST@@", str(str(test01.stat['failed-tests'])), line)
             sources.write(line)
 
     print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
