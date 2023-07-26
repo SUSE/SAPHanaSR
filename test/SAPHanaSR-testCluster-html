@@ -111,6 +111,7 @@ class SshMultiNode:
                         'fail-prereq': 0,
                         'fail-recovery': 0,
                         'fail-any': 0,
+                        'failed-id': {},
                         'failed-tests': {},
                         'succ-any': 0,
                         'succ-prereq': 0,
@@ -169,10 +170,12 @@ class SshMultiNode:
             for line in lines:
                 if re.search(r"TEST:.*PASSED", line):
                     self.stat['succ'] += 1
-                test_fail = re.search(r"TEST:\W*(\w*)\W.*FAILED", line)
+                test_fail = re.search(r"\[([0-9]*)\].*TEST:\W*(\w*)\W.*FAILED", line)
                 if test_fail:
-                    test_name = test_fail.group(1)
-                    #print(f"test failed: {test_fail.group(1)}") 
+                    test_id = test_fail.group(1)
+                    test_name = test_fail.group(2)
+                    print(f"test failed: {test_fail.group(0)}") 
+                    self.stat['failed-id'][test_name] = test_id
                     if test_name in self.stat['failed-tests']:
                         self.stat['failed-tests'][test_name] += 1
                     else:
@@ -279,6 +282,7 @@ while True:
 
         failed_test_names_sorted_first4 = list(test01.stat['failed-tests-rev'].keys())[0:4] # top 4
         print(f"top : {failed_test_names_sorted_first4}")
+        print(f"ids : {str(test01.stat['failed-id'])}")
         for line in lines:
             line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
             line = re.sub(r"@@TEST_SUCC@@", str(test01.stat['succ']), line)
@@ -302,6 +306,10 @@ while True:
             line = re.sub(r"@@TEST_FAILED_COUNT_02@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[1]]), line)
             line = re.sub(r"@@TEST_FAILED_COUNT_03@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[2]]), line)
             line = re.sub(r"@@TEST_FAILED_COUNT_04@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[3]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_01@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[0]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_02@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[1]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_03@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[2]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_04@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[3]]), line)
             sources.write(line)
 
     print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
