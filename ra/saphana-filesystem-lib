@@ -1,0 +1,401 @@
+# saphana-filesystem-lib
+#
+# Description:	Clone resource to analyze SAPHana-Filesystem
+#
+###################################################################################################################
+#
+# saphana-filesystem-lib: (short sht)
+# Author:       Fabian Herschel, February 2023
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2023 SUSE LLC
+#
+# An example usage:
+#      See usage() function below for more details...
+#
+# OCF instance parameters:
+#   OCF_RESKEY_SID              (LNX, SUS, SLE)
+#   OCF_RESKEY_InstanceNumber   (00..99)
+#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#
+#######################################################################
+#
+saphana_filesystem_lib_version="0.001.0"
+#
+#######################################################################
+
+function shfs_log_version() {
+    # called by: TODO
+    super_ocf_log info "RA: saphana_filesystem_lib_version=$saphana_filesystem_lib_version"
+} # end function shfs_log_version
+
+#
+# function: shfs_usage - short usage info
+# params:   -
+# globals:  $0(r)
+#
+function shfs_usage() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+    methods=$(sht_methods all)
+    methods="${methods// /|}"
+	echo "usage: $0 ($methods)
+
+    $0 manages a SAP HANA Instance as an HA resource.
+
+    The 'start'        operation bind-mounts the fS
+    The 'stop'         operation unmounts the fs
+    The 'status'       operation reports whether the HANA instance is running
+    The 'monitor'      operation reports whether the HANA instance seems to be working in multi-state configuration it also needs to check the system replication status
+    The 'notify'       operation always returns SUCCESS
+    The 'validate-all' operation reports whether the parameters are valid
+    The 'methods'      operation reports on the methods $0 supports
+    The 'reload'       operation allows to change parameters like HANA_CALL_TIMEOUT without forcing a recover of all instances
+    "
+	return "$rc"
+} # end function shfs_usage
+
+#
+# function: shfs_meta_data - print resource agent meta-data for cluster
+# params:   -
+# globals:  -
+#
+function shfs_meta_data() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=0
+    # shellcheck disable=SC2016
+    echo '<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="SAPHanaFilesystem" version="$SAPHanaFilesystemVersion">
+    <version>1.0</version>
+    <shortdesc lang="en">TODO shortdesc</shortdesc>
+    <longdesc lang="en">TODO longdesc
+    </longdesc>
+<parameters>
+    <parameter name="SID" unique="0" required="1">
+        <longdesc lang="en">The SAP System Identifier (SID)</longdesc>
+        <shortdesc lang="en">The SAP System Identifier (SID)</shortdesc>
+        <content type="string" default="" />
+    </parameter>
+    <parameter name="InstanceNumber" unique="0" required="1">
+        <longdesc lang="en">The SAP Instance Number</longdesc>
+        <shortdesc lang="en">The SAP Instance Number</shortdesc>
+        <content type="string" default="" />
+    </parameter>
+    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
+        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
+        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
+          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
+          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          of your cluster resources.
+        </longdesc>
+        <content type="string" default="120" />
+    </parameter>
+    <parameter name="DIR_EXECUTABLE" unique="0" required="0">
+        <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/$SID/$InstanceName/exe.
+        While InstanceName is the string of "HDB" and \$InstanceNumber for SAP Hana databases.
+        </longdesc>
+        <shortdesc lang="en">Path to the SAP Hana Instance executable directory.</shortdesc>
+        <content type="string" default="" />
+    </parameter>
+</parameters>
+<actions>
+    <action name="start" timeout="600" />
+    <action name="stop" timeout="300" />
+    <action name="status" timeout="60" />
+    <action name="monitor" depth="0" timeout="600" interval="60" />
+    <action name="validate-all" timeout="5" />
+    <action name="meta-data" timeout="5" />
+    <action name="methods" timeout="5" />
+    <action name="reload" timeout="5" />
+</actions>
+</resource-agent>
+'
+return "$rc"
+} # end function shfs_meta_data
+
+#
+# function: shfs_methods - report supported cluster methods
+# params:   all
+# globals:  -
+# methods: What methods/operations do we support?
+#
+function shfs_methods() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local set="${1:-all}"
+    local methods=""
+    local rc=0
+    case "$set" in
+        all )
+            methods="start stop status monitor notify validate-all methods meta-data usage admin-setup reload"
+            ;;
+        actions )
+            methods="start stop status monitor reload"
+            ;;
+    esac
+    # shellcheck disable=SC2086
+    printf "%s " $methods   # unquoted "methods" is intended here ( ##shellcheck disabled for this line)
+    return "$rc"
+} # end function shfs_methods
+
+#
+# function: shfs_init - initialize variables for the resource agent
+# params:   -
+# globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
+# globals:  HANA_SR_TOLOPOGY(w), sr_name(w)
+# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
+# globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
+# globals:  NODENAME(w), hdbver(w)
+# shfs_init : Define global variables with default values, if optional parameters are not set
+#
+#
+function shfs_init() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local myInstanceName=""
+    local rc=$OCF_SUCCESS
+    local hdbANSWER=""
+    local chkMethod=""
+    # TODO PRIO3: NG - some vars are marked for export to avoid 'unused' error in shellcheck. Check later, if these vars are valuable again when combining Filesystem and Controller in the next step
+    #
+    # global
+    #
+    #
+    SYSTEMCTL="/usr/bin/systemctl"
+    systemd_unit_name="saphostagent.service"
+    HOSTEXECNAME=saphostexec
+    USRSAP=/usr/sap
+    export SAPSERVICE_PATH=${USRSAP}/sapservices
+    SAPHOSTCTRL_PATH=${USRSAP}/hostctrl/exe
+    HOSTEXEC_PATH=${SAPHOSTCTRL_PATH}/${HOSTEXECNAME}
+    HOSTEXEC_PROFILE_PATH=${SAPHOSTCTRL_PATH}/host_profile
+    NODENAME=$(crm_node -n)
+    SID=$OCF_RESKEY_SID
+    mp_hana_shared="$HA_RSCTMP/SAPHanaFilesystem/${SID}/${NODENAME}"
+    fs_hana_shared="/hana/shared/${SID}"
+    InstanceNr=$OCF_RESKEY_InstanceNumber
+    export myInstanceName="${SID}_HDB${InstanceNr}"
+    InstanceName="HDB${InstanceNr}"
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
+    sid="${SID,,}"
+    export sidadm="${sid}adm"     # TODO PRIO3: NG - check if we use that var in a Filesystem/Controller common function in future
+    #ocf_env=$(env | grep 'OCF_RESKEY_CRM')
+    #super_ocf_log debug "DBG: OCF: $ocf_env"
+    #
+    # init attribute definitions
+    #
+    saphana_init_attribute_definitions
+    # optional OCF parameters, we try to guess which directories are correct
+
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
+
+    if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
+    then
+        DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
+    else
+        DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
+    fi
+
+    if [ -z "$DIR_EXECUTABLE" ]; then
+        # OCF_ERR_CONFIGURED is recovery-type 'fatal' which would prevent the resource to run anywhere
+        # OCF_NOT_RUNNING is recovery-type N/A
+        # OCF_ERR_GENERIC is recovery-type 'soft' during a start action would set inf failcount and prevents local restart
+        # best option gere is OCF_ERR_GENERIC
+        super_ocf_log err "DEC: Can not determine DIR_EXECUTABLE. Please set this parameter. -> OCF_NOT_RUNNING"
+        rc="$OCF_ERR_GENERIC"
+    fi
+
+    if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
+    then
+        export DIR_PROFILE="/usr/sap/$SID/SYS/profile"  # TODO PRIO3: NG - check if we use that var in a Top/Con common variable
+    else
+        export DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
+    fi
+
+    mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
+    #
+    # get HANA version
+    #
+    gHdbVer=$(saphana_get_hana_version)
+    super_ocf_log info "DEC: SAP HANA version $gHdbVer"
+
+    get_local_sr_config  # set global variables 'site' and 'srmode'
+    #
+    # get remote site
+    #
+    saphana_init_get_remote_site
+    super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
+    return "$OCF_SUCCESS"
+} # end function shfs_init
+
+#
+#############################################################################
+#
+# function: shfs_start - start a hana instance
+# params:   -
+# globals:  OCF_*
+# shfs_start : Start the SAP HANA instance
+#
+function shfs_start() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc="$OCF_NOT_RUNNING"
+    local output=""
+    local hanalrc=0
+    local mount_rc
+    mkdir -p "$mp_hana_shared"
+    mount -o bind "$fs_hana_shared" "$mp_hana_shared"; mount_rc=$?
+    # TODO check bind-mount e.g. hana-share-SID
+    case "$mount_rc" in
+        0 ) rc="$OCF_SUCCESS";;
+        * ) rc="$OCF_NOT_RUNNING";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
+    esac
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function shfs_start
+
+#
+# function: shfs_stop - stop a hana instance
+# params:   -
+# globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
+# shfs_stop: Stop the SAP HANA Filesystem Resource
+#
+function shfs_stop() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local output=""
+    local rc=0
+    local mount_rc
+    if ( mount | grep /run/resource-agents/SAPHanaFilesystem/HA1/pizbuin02 ); then 
+        umount "$mp_hana_shared"; mount_rc=$?
+    fi
+    case "$mount_rc" in
+        0 ) rc="$OCF_SUCCESS";;
+        * ) rc="$OCF_ERR_GENERIC";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
+    esac
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function shfs_stop
+
+#
+# function: shfs_monitor - monitor a hana topology instance
+# params:   --
+# globals:  OCF_*(r), SAPCONTROL(r), InstanveNr(r)
+# shfs_monitor: Can the given SAP instance do anything useful?
+#
+function shfs_monitor() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=0
+    local test_rc
+    ( set -x
+      mkdir -p "$mp_hana_shared/tmp" &&
+      dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
+      STATUSFILE="$mp_hana_shared/tmp/test"
+      dd if=/dev/zero of="${STATUSFILE}" $dd_opts &&
+      rm "${STATUSFILE}" &&
+      rmdir "$mp_hana_shared/tmp" &&
+      ls "$mp_hana_shared"
+    ); test_rc=$?
+    super_ocf_log info "RA monitor() test_rc=$test_rc"
+    case "$test_rc" in
+        0 ) rc="$OCF_SUCCESS";;
+        * ) rc="$OCF_ERR_GENERIC";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
+    esac
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function shfs_monitor
+
+#
+# function: shfs_status - get status of a hana instance (os tools only)
+# params:   -
+# globals:  SID(r), InstanceName(r), OCF_*(r), sidarm(r)
+# shfs_status: Lightweight check of SAP instance only with OS tools
+#
+function shfs_status() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=0
+    shfs_monitor; rc="$?"
+    return "$rc"
+} # end function shfs_status
+
+#
+# function: shfs_validate - validation of (some) variables/parameters
+# params:   -
+# globals:  OCF_*(r), SID(r), InstanceName(r), InstanceNr(r),
+# shfs_validate: Check the semantic of the input parameters
+#
+function shfs_validate() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc="$OCF_SUCCESS"
+    #
+    # check, if SID does NOT match ^[A-Z][A-Z0-9][A-Z0-9]$
+    # we 'substract' the regular pattern from the string, if the result is not empty, it's not a 1:1 hit
+    #
+    if [[ -n "${SID/#[A-Z][A-Z0-9][A-Z0-9]/}" ]]
+    then
+        super_ocf_log err "ACT: Parsing instance profile name: '$SID' is not a valid SID!"
+        rc="$OCF_ERR_ARGS"
+    fi
+    #
+    # check, if InstanceNr does NOT match ^[0-9][0-9]$
+    # we 'substract' the regular pattern from the string, if the result is not empty, it's not a 1:1 hit
+    #
+    if [[ -n  "${InstanceNr/#[0-9][0-9]/}" ]]
+    then
+        super_ocf_log err "ACT: Parsing instance profile name: '$InstanceNr' is not a valid instance number!"
+        rc="$OCF_ERR_ARGS"
+    fi
+
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function shfs_validate
+
+#
+# function: shfs_start_clone - start a hana clone instance
+# params:   -
+# globals:  OCF_*(r),
+# shfs_start_clone
+#
+function shfs_start_clone() { 
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc="$OCF_NOT_RUNNING"
+    shfs_start; rc="$?"
+    return "$rc"
+} # end function shfs_start_clone
+
+#
+# function: shfs_stop_clone - stop a hana clone instance
+# params:   -
+# globals:  NODENAME(r), HANA_STATE_*, ATTR_NAME_*
+# shfs_stop_clone
+#
+function shfs_stop_clone() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+    shfs_stop; rc="$?"
+    #return "$rc"
+    return 0
+} # end function shfs_stop_clone
+
+#
+# function: shfs_monitor_clone - monitor a hana clone instance
+# params:   -
+# globals:  OCF_*, SID, InstanceNr, InstanceName, MAPPING(r)
+# shfs_monitor_clone
+#
+function shfs_monitor_clone() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    shfs_monitor; rc=$?
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function shfs_monitor_clone
