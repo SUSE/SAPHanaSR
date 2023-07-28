@@ -20,7 +20,7 @@
 #
 #######################################################################
 #
-saphana_filesystem_lib_version="0.001.0"
+saphana_filesystem_lib_version="0.001.9"
 #
 #######################################################################
 
@@ -176,6 +176,7 @@ function shfs_init() {
     SID=$OCF_RESKEY_SID
     mp_hana_shared="$HA_RSCTMP/SAPHanaFilesystem/${SID}/${NODENAME}"
     fs_hana_shared="/hana/shared/${SID}"
+    pp_hana_shared="/dev/shm/poison_pill_${SID}"
     InstanceNr=$OCF_RESKEY_InstanceNumber
     export myInstanceName="${SID}_HDB${InstanceNr}"
     InstanceName="HDB${InstanceNr}"
@@ -273,13 +274,29 @@ function shfs_stop() {
     if ( mount | grep /run/resource-agents/SAPHanaFilesystem/HA1/pizbuin02 ); then 
         umount "$mp_hana_shared"; mount_rc=$?
     fi
-    case "$mount_rc" in
-        0 ) rc="$OCF_SUCCESS";;
-        * ) rc="$OCF_ERR_GENERIC";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
-    esac
+    if [ -e "$pp_hana_shared" ]; then
+	rm "$pp_hana_shared"
+        super_ocf_log info "RA poison pill detected - reporting stop error - sleep 10s"
+	sleep 10
+        rc="$OCF_ERR_GENERIC"
+    else
+        case "$mount_rc" in
+            0 ) rc="$OCF_SUCCESS";;
+            * ) rc="$OCF_ERR_GENERIC";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
+        esac
+    fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function shfs_stop
+
+function shfs_error_simulation() {
+    if [ -e "/tmp/break_SAPHanaFilesystem_${SID}" ]; then
+        rm "/tmp/break_SAPHanaFilesystem_${SID}"
+        return 0
+    else
+        return 1
+    fi 
+}
 
 #
 # function: shfs_monitor - monitor a hana topology instance
@@ -292,7 +309,11 @@ function shfs_monitor() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     local test_rc
-    ( set -x
+    if [ -e "$pp_hana_shared" ]; then
+        super_ocf_log info "reset ols RA poison pill"
+	rm "$pp_hana_shared"
+    fi
+    ( 
       mkdir -p "$mp_hana_shared/tmp" &&
       dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
       STATUSFILE="$mp_hana_shared/tmp/test"
@@ -301,10 +322,25 @@ function shfs_monitor() {
       rmdir "$mp_hana_shared/tmp" &&
       ls "$mp_hana_shared"
     ); test_rc=$?
-    super_ocf_log info "RA monitor() test_rc=$test_rc"
-    case "$test_rc" in
-        0 ) rc="$OCF_SUCCESS";;
-        * ) rc="$OCF_ERR_GENERIC";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
+    #
+    # only for PoC tests allow an error simulation
+    #  
+    if shfs_error_simulation; then
+	test_rc=42
+    fi
+    test_sr=$(get_SRHOOK "$gRemSite")
+    super_ocf_log info "RA monitor() test_rc=$test_rc test_sr=$test_sr"
+    case "${test_rc}_${test_sr}" in
+        0_* )   rc="$OCF_SUCCESS"
+                super_ocf_log info "RA monitor() ${test_rc}_${test_sr} The sun is shining"
+                ;;
+        *_SOK ) rc="$OCF_ERR_GENERIC"
+                super_ocf_log info "RA monitor() ${test_rc}_${test_sr} Go out of here"
+                touch "$pp_hana_shared"
+		;; 
+        *_* )   rc="$OCF_ERR_GENERIC"
+                super_ocf_log info "RA monitor() ${test_rc}_${test_sr} Thunderstorm"
+		;; 
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -382,7 +418,8 @@ function shfs_stop_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
     shfs_stop; rc="$?"
-    #return "$rc"
+    super_ocf_log info "RA: shfs_stop_clone got rc=$rc from shfs_stop()"
+    # return "$rc"
     return 0
 } # end function shfs_stop_clone
 
