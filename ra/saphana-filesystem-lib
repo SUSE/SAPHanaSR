@@ -185,9 +185,7 @@ function shfs_start() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_NOT_RUNNING"
-    local output=""
-    local hanalrc=0
-    local mount_rc
+    local ha_ps_rc
     shfs_reset_poison_pill
     ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" start; ha_ps_rc="$?"
     case "$ha_ps_rc" in
@@ -207,9 +205,8 @@ function shfs_start() {
 function shfs_stop() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
-    local output=""
     local rc=0
-    local mount_rc
+    local ha_ps_rc
     ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" stop; ha_ps_rc="$?"
     if [ -e "$pp_hana_shared" ]; then
 	rm "$pp_hana_shared"
@@ -260,6 +257,7 @@ function shfs_monitor() {
 	      mkdir -p "${td_hana_shared}/tmp" &&
 	      dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
 	      STATUSFILE="${td_hana_shared}/tmp/test"
+          # shellcheck disable=SC2086  # - dd_opts must not be quoted
 	      dd if=/dev/zero of="${STATUSFILE}" $dd_opts &&
 	      rm "${STATUSFILE}" &&
 	      rmdir "${td_hana_shared}/tmp" &&
