@@ -1,6 +1,6 @@
 # saphana-filesystem-lib
 #
-# Description:	Clone resource to analyze SAPHana-Filesystem
+# Description:	Clone resource to check vitality of SAP HANA filesystem
 #
 ###################################################################################################################
 #
@@ -16,11 +16,10 @@
 # OCF instance parameters:
 #   OCF_RESKEY_SID              (LNX, SUS, SLE)
 #   OCF_RESKEY_InstanceNumber   (00..99)
-#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
 #
 #######################################################################
 #
-saphana_filesystem_lib_version="0.001.9"
+saphana_filesystem_lib_version="0.002.10"
 #
 #######################################################################
 
@@ -51,7 +50,7 @@ function shfs_usage() {
     The 'notify'       operation always returns SUCCESS
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
-    The 'reload'       operation allows to change parameters like HANA_CALL_TIMEOUT without forcing a recover of all instances
+    The 'reload'       operation allows to change parameters without forcing a recover of all instances
     "
 	return "$rc"
 } # end function shfs_usage
@@ -80,24 +79,8 @@ function shfs_meta_data() {
         <content type="string" default="" />
     </parameter>
     <parameter name="InstanceNumber" unique="0" required="1">
-        <longdesc lang="en">The SAP Instance Number</longdesc>
+        <longdesc lang="en">The SAP Instance Number - currently not used (placeholder)</longdesc>
         <shortdesc lang="en">The SAP Instance Number</shortdesc>
-        <content type="string" default="" />
-    </parameter>
-    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
-        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
-        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
-          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
-          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
-          of your cluster resources.
-        </longdesc>
-        <content type="string" default="120" />
-    </parameter>
-    <parameter name="DIR_EXECUTABLE" unique="0" required="0">
-        <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/$SID/$InstanceName/exe.
-        While InstanceName is the string of "HDB" and \$InstanceNumber for SAP Hana databases.
-        </longdesc>
-        <shortdesc lang="en">Path to the SAP Hana Instance executable directory.</shortdesc>
         <content type="string" default="" />
     </parameter>
 </parameters>
@@ -145,17 +128,14 @@ function shfs_methods() {
 # function: shfs_init - initialize variables for the resource agent
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
-# globals:  HANA_SR_TOLOPOGY(w), sr_name(w)
-# globals:  ATTR_NAME_HANA_SYNC_STATUS(w), ATTR_NAME_HANA_CLONE_STATE(w)
-# globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w), nodelist(w)
+# globals:  ATTR_NAME_HANA_* 
+# globals:  nodelist(w)
 # globals:  NODENAME(w), hdbver(w)
 # shfs_init : Define global variables with default values, if optional parameters are not set
-#
 #
 function shfs_init() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local myInstanceName=""
     local rc=$OCF_SUCCESS
     local hdbANSWER=""
     local chkMethod=""
@@ -163,66 +143,26 @@ function shfs_init() {
     #
     # global
     #
-    #
-    SYSTEMCTL="/usr/bin/systemctl"
-    systemd_unit_name="saphostagent.service"
-    HOSTEXECNAME=saphostexec
-    USRSAP=/usr/sap
-    export SAPSERVICE_PATH=${USRSAP}/sapservices
-    SAPHOSTCTRL_PATH=${USRSAP}/hostctrl/exe
-    HOSTEXEC_PATH=${SAPHOSTCTRL_PATH}/${HOSTEXECNAME}
-    HOSTEXEC_PROFILE_PATH=${SAPHOSTCTRL_PATH}/host_profile
     NODENAME=$(crm_node -n)
-    SID=$OCF_RESKEY_SID
-    mp_hana_shared="$HA_RSCTMP/SAPHanaFilesystem/${SID}/${NODENAME}"
-    fs_hana_shared="/hana/shared/${SID}"
-    pp_hana_shared="/dev/shm/poison_pill_${SID}"
-    InstanceNr=$OCF_RESKEY_InstanceNumber
-    export myInstanceName="${SID}_HDB${InstanceNr}"
+    SID="$OCF_RESKEY_SID"
+    InstanceNr="$OCF_RESKEY_InstanceNumber"
     InstanceName="HDB${InstanceNr}"
-    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
+    fs_hana_shared="/hana/shared/${SID}"
+    td_hana_shared="$fs_hana_shared/${NODENAME}"
+    pp_hana_shared="/dev/shm/poison_pill_${SID}"
     sid="${SID,,}"
-    export sidadm="${sid}adm"     # TODO PRIO3: NG - check if we use that var in a Filesystem/Controller common function in future
-    #ocf_env=$(env | grep 'OCF_RESKEY_CRM')
-    #super_ocf_log debug "DBG: OCF: $ocf_env"
+    export sidadm="${sid}adm"
     #
     # init attribute definitions
     #
     saphana_init_attribute_definitions
-    # optional OCF parameters, we try to guess which directories are correct
-
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
-
-    if  [ -z "$OCF_RESKEY_DIR_EXECUTABLE" ]
-    then
-        DIR_EXECUTABLE="/usr/sap/$SID/$InstanceName/exe"
-    else
-        DIR_EXECUTABLE="$OCF_RESKEY_DIR_EXECUTABLE"
-    fi
-
-    if [ -z "$DIR_EXECUTABLE" ]; then
-        # OCF_ERR_CONFIGURED is recovery-type 'fatal' which would prevent the resource to run anywhere
-        # OCF_NOT_RUNNING is recovery-type N/A
-        # OCF_ERR_GENERIC is recovery-type 'soft' during a start action would set inf failcount and prevents local restart
-        # best option gere is OCF_ERR_GENERIC
-        super_ocf_log err "DEC: Can not determine DIR_EXECUTABLE. Please set this parameter. -> OCF_NOT_RUNNING"
-        rc="$OCF_ERR_GENERIC"
-    fi
-
-    if [ -z "$OCF_RESKEY_DIR_PROFILE" ]
-    then
-        export DIR_PROFILE="/usr/sap/$SID/SYS/profile"  # TODO PRIO3: NG - check if we use that var in a Top/Con common variable
-    else
-        export DIR_PROFILE="$OCF_RESKEY_DIR_PROFILE"
-    fi
-
     mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
     #
     # get HANA version
     #
     gHdbVer=$(saphana_get_hana_version)
     super_ocf_log info "DEC: SAP HANA version $gHdbVer"
-
     get_local_sr_config  # set global variables 'site' and 'srmode'
     #
     # get remote site
@@ -248,12 +188,11 @@ function shfs_start() {
     local output=""
     local hanalrc=0
     local mount_rc
-    mkdir -p "$mp_hana_shared"
-    mount -o bind "$fs_hana_shared" "$mp_hana_shared"; mount_rc=$?
-    # TODO check bind-mount e.g. hana-share-SID
-    case "$mount_rc" in
+    shfs_reset_poison_pill
+    ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" start; ha_ps_rc="$?"
+    case "$ha_ps_rc" in
         0 ) rc="$OCF_SUCCESS";;
-        * ) rc="$OCF_NOT_RUNNING";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
+        * ) rc="$OCF_NOT_RUNNING";;
     esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -271,23 +210,25 @@ function shfs_stop() {
     local output=""
     local rc=0
     local mount_rc
-    if ( mount | grep /run/resource-agents/SAPHanaFilesystem/HA1/pizbuin02 ); then 
-        umount "$mp_hana_shared"; mount_rc=$?
-    fi
+    ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" stop; ha_ps_rc="$?"
     if [ -e "$pp_hana_shared" ]; then
 	rm "$pp_hana_shared"
         super_ocf_log info "RA poison pill detected - reporting stop error - sleep 10s"
 	sleep 10
         rc="$OCF_ERR_GENERIC"
     else
-        case "$mount_rc" in
-            0 ) rc="$OCF_SUCCESS";;
-            * ) rc="$OCF_ERR_GENERIC";; # TODO: Maybe differ the mount_rc to rc mapping for different use cases
-        esac
+	rc="$ha_ps_rc"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function shfs_stop
+
+function shfs_reset_poison_pill() {
+    if [ -e "$pp_hana_shared" ]; then
+        super_ocf_log info "reset old RA poison pill"
+	rm "$pp_hana_shared"
+    fi
+}
 
 function shfs_error_simulation() {
     if [ -e "/tmp/break_SAPHanaFilesystem_${SID}" ]; then
@@ -309,39 +250,42 @@ function shfs_monitor() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     local test_rc
-    if [ -e "$pp_hana_shared" ]; then
-        super_ocf_log info "reset ols RA poison pill"
-	rm "$pp_hana_shared"
+    shfs_reset_poison_pill
+    ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" monitor; ha_ps_rc="$?"
+    if ocf_is_probe; then
+        rc="$ha_ps_rc"
+    else
+	    ( 
+	      set -u
+	      mkdir -p "${td_hana_shared}/tmp" &&
+	      dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
+	      STATUSFILE="${td_hana_shared}/tmp/test"
+	      dd if=/dev/zero of="${STATUSFILE}" $dd_opts &&
+	      rm "${STATUSFILE}" &&
+	      rmdir "${td_hana_shared}/tmp" &&
+	      ls "${td_hana_shared}"
+	    ); test_rc=$?
+	    #
+	    # only for PoC tests allow an error simulation
+	    #  
+	    if shfs_error_simulation; then
+		test_rc=42
+	    fi
+	    test_sr=$(get_SRHOOK "$gRemSite")
+	    super_ocf_log info "RA monitor() test_rc=$test_rc test_sr=$test_sr"
+	    case "${test_rc}_${test_sr}" in
+		0_* )   rc="$OCF_SUCCESS"
+			super_ocf_log info "RA monitor() ${test_rc}_${test_sr} The sun is shining"
+			;;
+		*_SOK ) rc="$OCF_ERR_GENERIC"
+			super_ocf_log info "RA monitor() ${test_rc}_${test_sr} Go out of here"
+			touch "$pp_hana_shared"
+			;; 
+		*_* )   rc="$OCF_ERR_GENERIC"
+			super_ocf_log info "RA monitor() ${test_rc}_${test_sr} Thunderstorm"
+			;; 
+	    esac
     fi
-    ( 
-      mkdir -p "$mp_hana_shared/tmp" &&
-      dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
-      STATUSFILE="$mp_hana_shared/tmp/test"
-      dd if=/dev/zero of="${STATUSFILE}" $dd_opts &&
-      rm "${STATUSFILE}" &&
-      rmdir "$mp_hana_shared/tmp" &&
-      ls "$mp_hana_shared"
-    ); test_rc=$?
-    #
-    # only for PoC tests allow an error simulation
-    #  
-    if shfs_error_simulation; then
-	test_rc=42
-    fi
-    test_sr=$(get_SRHOOK "$gRemSite")
-    super_ocf_log info "RA monitor() test_rc=$test_rc test_sr=$test_sr"
-    case "${test_rc}_${test_sr}" in
-        0_* )   rc="$OCF_SUCCESS"
-                super_ocf_log info "RA monitor() ${test_rc}_${test_sr} The sun is shining"
-                ;;
-        *_SOK ) rc="$OCF_ERR_GENERIC"
-                super_ocf_log info "RA monitor() ${test_rc}_${test_sr} Go out of here"
-                touch "$pp_hana_shared"
-		;; 
-        *_* )   rc="$OCF_ERR_GENERIC"
-                super_ocf_log info "RA monitor() ${test_rc}_${test_sr} Thunderstorm"
-		;; 
-    esac
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function shfs_monitor
@@ -419,8 +363,7 @@ function shfs_stop_clone() {
     local rc=0
     shfs_stop; rc="$?"
     super_ocf_log info "RA: shfs_stop_clone got rc=$rc from shfs_stop()"
-    # return "$rc"
-    return 0
+    return "$rc"
 } # end function shfs_stop_clone
 
 #
