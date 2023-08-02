@@ -16,10 +16,11 @@
 # OCF instance parameters:
 #   OCF_RESKEY_SID              (LNX, SUS, SLE)
 #   OCF_RESKEY_InstanceNumber   (00..99)
+#   OCF_RESKEY_DIRECTORY        (path to be monitored, default /hana/shared/<SID>)
 #
 #######################################################################
 #
-saphana_filesystem_lib_version="0.002.10"
+saphana_filesystem_lib_version="0.003.1415"
 #
 #######################################################################
 
@@ -82,6 +83,20 @@ function shfs_meta_data() {
         <longdesc lang="en">The SAP Instance Number - currently not used (placeholder)</longdesc>
         <shortdesc lang="en">The SAP Instance Number</shortdesc>
         <content type="string" default="" />
+    </parameter>
+    <parameter name="DIRECTORY" unique="0" required="0">
+        <longdesc lang="en">The SAP Instance Number - currently not used (placeholder)</longdesc>
+        <shortdesc lang="en">The directory to be checked. Default is "/hana/shared/\$SID"</shortdesc>
+        <content type="string" default="" />
+    </parameter>
+    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
+        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
+        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
+          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
+          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          of your cluster resources.
+        </longdesc>
+        <content type="string" default="120" />
     </parameter>
 </parameters>
 <actions>
@@ -147,7 +162,8 @@ function shfs_init() {
     SID="$OCF_RESKEY_SID"
     InstanceNr="$OCF_RESKEY_InstanceNumber"
     InstanceName="HDB${InstanceNr}"
-    fs_hana_shared="/hana/shared/${SID}"
+    fs_hana_shared="${OCF_RESKEY_DIRECTORY:-/hana/shared/$SID}"
+    HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
     td_hana_shared="$fs_hana_shared/${NODENAME}"
     pp_hana_shared="/dev/shm/poison_pill_${SID}"
     sid="${SID,,}"
@@ -161,13 +177,19 @@ function shfs_init() {
     #
     # get HANA version
     #
+    super_ocf_log info "DEC: pre-version-call"
     gHdbVer=$(saphana_get_hana_version)
     super_ocf_log info "DEC: SAP HANA version $gHdbVer"
+    super_ocf_log info "DEC: post-version-call"
+    super_ocf_log info "DEC: pre-sr_config-call"
     get_local_sr_config  # set global variables 'site' and 'srmode'
+    super_ocf_log info "DEC: post-sr_config-call"
     #
     # get remote site
     #
+    super_ocf_log info "DEC: pre-get_remote_site-call"
     saphana_init_get_remote_site
+    super_ocf_log info "DEC: post-get_remote_site-call"
     super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return "$OCF_SUCCESS"
@@ -236,6 +258,27 @@ function shfs_error_simulation() {
     fi 
 }
 
+function shfs_test_directory()
+{
+    local rc1=0 rc2=0 rc3=0
+    super_ocf_log info "RA td_hana_shared=$td_hana_shared - mkdir ... ${td_hana_shared}/tmp"
+    mkdir -p "${td_hana_shared}/tmp"; rc1="$?"
+    (
+        dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
+        STATUSFILE="${td_hana_shared}/tmp/test"
+        # shellcheck disable=SC2086  # - dd_opts must not be quoted
+        dd if=/dev/zero of="${STATUSFILE}" $dd_opts 
+    ); rc2="$?"
+    ls "${td_hana_shared}"
+    (( error_code = 1000 * rc2 + rc1 ))
+    super_ocf_log info "RA error_code=$error_code rc1=$rc1 rc2=$rc2"
+    if [[ "$error_code" != "0" ]]; then
+        return 2
+    else
+        return 0
+    fi
+}
+
 #
 # function: shfs_monitor - monitor a hana topology instance
 # params:   --
@@ -252,17 +295,7 @@ function shfs_monitor() {
     if ocf_is_probe; then
         rc="$ha_ps_rc"
     else
-	    ( 
-	      set -u
-	      mkdir -p "${td_hana_shared}/tmp" &&
-	      dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
-	      STATUSFILE="${td_hana_shared}/tmp/test"
-          # shellcheck disable=SC2086  # - dd_opts must not be quoted
-	      dd if=/dev/zero of="${STATUSFILE}" $dd_opts &&
-	      rm "${STATUSFILE}" &&
-	      rmdir "${td_hana_shared}/tmp" &&
-	      ls "${td_hana_shared}"
-	    ); test_rc=$?
+	    shfs_test_directory; test_rc="$?"
 	    #
 	    # only for PoC tests allow an error simulation
 	    #  
