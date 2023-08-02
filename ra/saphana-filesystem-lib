@@ -20,7 +20,7 @@
 #
 #######################################################################
 #
-saphana_filesystem_lib_version="0.003.1415"
+saphana_filesystem_lib_version="0.003.1415927"
 #
 #######################################################################
 
@@ -174,23 +174,6 @@ function shfs_init() {
     saphana_init_attribute_definitions
     SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     mapfile -t otherNodes < <( cluster_get_other_nodes "${NODENAME}" ) # the syntax < <(..) is intended
-    #
-    # get HANA version
-    #
-    super_ocf_log info "DEC: pre-version-call"
-    gHdbVer=$(saphana_get_hana_version)
-    super_ocf_log info "DEC: SAP HANA version $gHdbVer"
-    super_ocf_log info "DEC: post-version-call"
-    super_ocf_log info "DEC: pre-sr_config-call"
-    get_local_sr_config  # set global variables 'site' and 'srmode'
-    super_ocf_log info "DEC: post-sr_config-call"
-    #
-    # get remote site
-    #
-    super_ocf_log info "DEC: pre-get_remote_site-call"
-    saphana_init_get_remote_site
-    super_ocf_log info "DEC: post-get_remote_site-call"
-    super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return "$OCF_SUCCESS"
 } # end function shfs_init
@@ -261,7 +244,7 @@ function shfs_error_simulation() {
 function shfs_test_directory()
 {
     local rc1=0 rc2=0 rc3=0
-    super_ocf_log info "RA td_hana_shared=$td_hana_shared - mkdir ... ${td_hana_shared}/tmp"
+    #super_ocf_log info "RA td_hana_shared=$td_hana_shared - mkdir ... ${td_hana_shared}/tmp"
     mkdir -p "${td_hana_shared}/tmp"; rc1="$?"
     (
         dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
@@ -271,7 +254,7 @@ function shfs_test_directory()
     ); rc2="$?"
     ls "${td_hana_shared}"
     (( error_code = 1000 * rc2 + rc1 ))
-    super_ocf_log info "RA error_code=$error_code rc1=$rc1 rc2=$rc2"
+    #super_ocf_log info "RA error_code=$error_code rc1=$rc1 rc2=$rc2"
     if [[ "$error_code" != "0" ]]; then
         return 2
     else
@@ -291,19 +274,29 @@ function shfs_monitor() {
     local rc=0
     local test_rc
     shfs_reset_poison_pill
+    export -f shfs_test_directory # shfs_test_directory to be usable for sub-processes
+    export td_hana_shared
     ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" monitor; ha_ps_rc="$?"
     if ocf_is_probe; then
         rc="$ha_ps_rc"
     else
-	    shfs_test_directory; test_rc="$?"
+	    timeout --foreground -s 9 "$HANA_CALL_TIMEOUT" bash -c "shfs_test_directory"; test_rc="$?"
 	    #
 	    # only for PoC tests allow an error simulation
 	    #  
 	    if shfs_error_simulation; then
 		test_rc=42
 	    fi
-	    test_sr=$(get_SRHOOK "$gRemSite")
 	    super_ocf_log info "RA monitor() test_rc=$test_rc test_sr=$test_sr"
+    gSite="$(get_hana_attribute "${HOSTNAME}" "${ATTR_NAME_HANA_SITE[@]}")"
+    #
+    # get remote site
+    #
+    super_ocf_log info "DEC: pre-get_remote_site-call"
+    saphana_init_get_remote_site
+    test_sr=$(get_SRHOOK "$gRemSite")
+    super_ocf_log info "DEC: post-get_remote_site-call gSite=$gSite gRemSite=$gRemSite test_sr=$test_sr"
+    super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
 	    case "${test_rc}_${test_sr}" in
 		0_* )   rc="$OCF_SUCCESS"
 			super_ocf_log info "RA monitor() ${test_rc}_${test_sr} The sun is shining"
