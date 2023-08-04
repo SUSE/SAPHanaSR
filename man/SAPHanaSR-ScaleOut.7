@@ -1,6 +1,6 @@
-.\" Version: 0.181.0
+.\" Version: 1.001 
 .\"
-.TH SAPHanaSR-ScaleOut 7 "09 Aug 2022" "" "SAPHanaSR"
+.TH SAPHanaSR-ScaleOut 7 "09 May 2023" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-ScaleOut \- Tools for automating SAP HANA system replication in
@@ -11,10 +11,10 @@ scale-out setups.
 .\"
 \fBOverview\fR
 .PP
-The SAPHanaSR-ScaleOut package provides resource agents (RA) and tools for
-setting up and managing automation of SAP HANA system replication (SR) in
-scale-out setups.
-.pp
+This manual page SAPHanaSR-ScaleOut provides information for setting up 
+and managing automation of SAP HANA system replication (SR) in scale-out setups.
+For scale-up, please refer to SAPHanaSR(7).
+.PP
 System replication will help to replicate the database data from one site to
 another site in order to compensate for database failures. With this mode of
 operation, internal SAP HANA high-availability (HA) mechanisms and the Linux
@@ -51,9 +51,6 @@ In a nutshell: OLAP systems have many nodes. OLTP systems have few large nodes.
 HANA can handle site-internal fail-over. The Linux cluster handles split-brain
 detection, node fencing on general failures, takeover from primary to secondary
 site including IP address.
-.PP
-Note: To automate SAP HANA SR in scale-up setups, please use the package
-SAPHanaSR.
 .PP
 \fBScenarios\fR
 .PP
@@ -178,7 +175,7 @@ this additional pieces are not managed by the cluster. Therefor in multi-target
 setups, the AUTOMATED_REGISTER feature needs the register_secondaries_on_takeover
 feature of HANA.
 .PP
-The HANA HADR provider is used for detecting system replication status changes.
+The HANA HA/DR provider is used for detecting system replication status changes.
 .PP
 A common STONITH mechanism is set up for all nodes across all the sites.
 .PP
@@ -225,8 +222,8 @@ situation. The user is responsible for data integrity.
 .\"
 .SH REQUIREMENTS
 .PP
-For the current version of the package SAPHanaSR-ScaleOut, the support is
-limited to the following scenarios and parameters:
+For the current version of the package SAPHanaSR-angi, the scale-out capabilities
+are limited to the following scenarios and parameters:
 .PP
 1. HANA scale-out cluster with system replication.
 The HANA system replication secondary runs memory preload (aka performance-optimised scenario).
@@ -250,7 +247,7 @@ running memory-preload. Also MCOS is currently not supported for scale-out.
 .PP
 5. Only one system replication between the two SAP HANA database systems in
 the Linux cluster. Maximum one system replication to an HANA database outside
-the Linux cluster. See also item 9 below.
+the Linux cluster.
 .PP
 6. The replication mode is either sync or syncmem. Replication mode async is
 not supported. The operation modes delta_datashipping, logreplay and
@@ -269,14 +266,7 @@ However, all nodes in one Linux cluster have to use the same style.
 must be switched off.
 .PP
 10. For scale-out, the current resource agent supports SAP HANA in system
-replication beginning with HANA version 1.0 SPS11 patch level 112.02.
-Older versions do not provide the srHook method srConnectionChanged().
-With the mentioned HANA versions uni-directional chained system replication
-is possible. With HANA 2.0 SPS04 and later multi-target system replication
-is possible as well. Even in HANA multi-target environments, the current
-resource agent manages only two sites. Thus only two HANA sites are part
-of the Linux cluster. See also item 5 above.
-.\" TODO check HANA patch level for multi-target
+replication beginning with HANA version 2.0 SPS 05.
 .PP
 11. For scale-out, if the shared storage is implemented with another cluster,
 that one does not interfere with the Linux cluster. All three clusters
@@ -322,8 +312,12 @@ of a fall-back HA cluster in DR case, that HA cluster needs to be in standby.
 resources, OS and Linux cluster. The infrastructure needs to allow these call-outs
 to return in time.
 .PP
-23. The SAP HANA Fast Restart feature on RAM-tmfps as well as HANA on persistent
+23. The SAP HANA Fast Restart feature on RAM-tmpfs as well as HANA on persistent
 memory can be used, as long as they are transparent to SUSE HA.
+.PP
+24. The SAPHanaController RA, the SUSE HA cluster and several SAP components
+need read/write access and sufficient space in the Linux /tmp filesystem.
+.PP 
 .\"
 .SH BUGS
 .\" TODO
@@ -333,11 +327,12 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBocf_heartbeat_IPaddr2\fP(7) , \fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) ,
-\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR.py\fP(7) ,
-\fBSAPHanaSrMultiTarget.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
-\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBsystemctl\fP(1) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBsusHanaSR.py\fP(7) ,
+\fBsusHanaSrMultiTarget.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
+\fBchrony.conf\fP(5) , \fBsystemctl\fP(1) ,
 \fBstonith\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) ,
 \fBcrm\fP(8) , \fBcorosync.conf\fP(5) , \fBcrm_no_quorum_policy\fP(7) ,
 \fBsaptune\fP(8) , \fBcs_show_hana_info\fP(8) , \fBsupportconfig\fP(8) ,
@@ -370,11 +365,11 @@ A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2015-2017 SUSE Linux GmbH, Germany.
+(c) 2015-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2018-2022 SUSE LLC
+(c) 2019-2023 SUSE LLC
 .br
-The package SAPHanaSR-ScaleOut comes with ABSOLUTELY NO WARRANTY.
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html
