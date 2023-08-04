@@ -1,0 +1,250 @@
+.\" Version: 0.180.0
+.\"
+.TH ocf_suse_SAPFilesystem 7 "05 Aug 2023" "" "OCF resource agents"
+.\"
+.SH NAME
+SAPHanaFilesystem \- TODO.
+.PP
+.\"
+.SH SYNOPSIS
+\fBSAPHanaFilesystem\fP [start | stop | status | monitor | meta\-data | validate\-all | methods | usage ]
+.PP
+.\"
+.SH DESCRIPTION
+SAPHanaFilesystem is a resource agent (RA) that TODO 
+.PP
+The resource agent uses the following interfaces:
+.PP
+2. \fBhdbnsutil\fP
+.br
+The interface hdbnsutil is used to check the "topology" of the system
+replication as well as the current configuration (primary/secondary) of a
+SAP HANA database. A second task of the interface is the posibility to run
+a system replication takeover (sr_takeover) or to register a former primary
+to a newer one (sr_register). In scale-out setups, hdbnsutil sometimes
+might take some time. SAPHanaTopology uses only task one. SAPHanaController 
+or SAPHana are using all three tasks.
+.PP
+3. \fBTODO\fP
+.br
+Please see also the REQUIREMENTS section below.
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+This resource agent supports the following parameters:
+.PP
+\fBSID\fR
+.RS 4
+SAP System Identifier. Has to be same on both instances.
+Example "SID=SLE".
+.RE
+.PP
+\fBInstanceNumber\fR
+.RS 4
+Number of the SAP HANA database.
+For system replication also Instance Number+1 is blocked.
+Example "InstanceNumber=00".
+.RE
+.PP
+\fBHANA_CALL_TIMEOUT\fR
+.RS 4
+Define timeout how long a call to HANA to receive information can take. This
+could be e.g. landscapeHostConfiguration.py.
+There are some specific calls to HANA which have their own timeout values.
+For example the sr_takeover command does not timeout (inf).
+If the timeout is reached, the return code will be 124. If you increase the
+timeouts for HANA calls you should also adjust the operation timeouts of your
+Linux cluster resources.
+.br
+Optional. Default value: TODO.
+.RE
+.PP
+.\"
+.SH SUPPORTED PROPERTIES
+\fBhana_${sid}_glob_filter\fR
+.RS 4
+Global cluster property \fBhana_${sid}_glob_filter\fR . This property defines which messages are logged by the RA. It should only be set if requested by support engineers. The default is sufficient for normal operation.
+.br
+Message Types: [ act | dbg | dec | flow | top ]
+.\" TODO dbg2?
+.\" TODO message levels: (dbg)|info|warn|err|error
+.br
+ACT: Action. Start, stop, sr_takeover and others. See also section SUPPORTED ACTIONS.
+.br
+DBG: Debugging info. Usually not needed at customer site. See SUSE TID 7022678 for maximum RA tracing.
+.br
+DEC: Decision taken by the RA.
+.br
+FLOW: Function calls and the respective return codes.
+.br
+TOP: Topology. Messages related to HANA SR topology, like site name and remote site.
+.br
+Optional, advanced. Default value: ra-act-dec-lpa\&.
+.RE
+.PP
+.\"
+.SH SUPPORTED ACTIONS
+.br
+This resource agent supports the following actions (operations):
+.PP
+\fBstart\fR
+.RS 4
+Sets the status of the clone to "started".
+.RE
+.PP
+\fBstop\fR
+.RS 4
+Sets the status of the clone to "stopped".
+.RE
+.PP
+\fBstatus\fR
+.RS 4
+Reports whether the HANA instance is running.
+Suggested minimum timeout: 60\&.
+.RE
+.PP
+\fBmonitor\fR
+.RS 4
+Analyses the nodes HANA roles and landscape status.
+Suggested minimum timeout: 600\&.
+Suggested interval: 10\&.
+.RE
+.PP
+\fBvalidate\-all\fR
+.RS 4
+Reports whether the parameters are valid.
+Suggested minimum timeout: 5\&.
+.RE
+.PP
+\fBmeta\-data\fR
+.RS 4
+Retrieves resource agent metadata (internal use only).
+Suggested minimum timeout: 5\&.
+.RE
+.PP
+\fBmethods\fR
+.RS 4
+Suggested minimum timeout: 5\&.
+.RE
+.PP
+.\"
+.SH RETURN CODES
+The return codes are defined by the OCF cluster framework.
+Please refer to the OCF definition on the website mentioned below.
+.PP
+.\"
+.SH EXAMPLES
+* This is an example configuration for a SAPHanaTopology resource for HANA scale-up.
+.br
+In addition, a SAPHana resource is needed to make this work.
+.RE
+.PP
+.RS 4
+primitive rsc_SAPHanaTop_SLE_HDB00 ocf:suse:SAPHanaTopology \\
+.br
+op start interval="0" timeout="600" \\
+.br
+op stop interval="0" timeout="600" \\
+.br
+op monitor interval="10" timeout="600" \\
+.br
+params SID="SLE" InstanceNumber="00"
+.PP
+clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
+.br
+notify="true" interleave="true" clone-node-max="1"
+.RE
+.PP
+* Below is an example configuration for a SAPHanaTopology resource for HANA scale-out.
+.br
+The HANA consists of two sites with five nodes each. An additional cluster node
+is used as majority maker for split brain situations.
+In addition, a SAPHanaController resource is needed to make this work.
+.RE
+.PP
+.RS 4
+primitive rsc_SAPHanaTop_SLE_HDB00 ocf:suse:SAPHanaTopology \\
+.br
+op start interval="0" timeout="600" \\
+.br
+op stop interval="0" timeout="600" \\
+.br
+op monitor interval="10" timeout="600" \\
+.br
+params SID="SLE" InstanceNumber="00"
+.PP
+clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
+.br
+notify="true" interleave="true" clone-node-max="1"
+.PP
+location SAPHanaTop_not_on_majority_maker cln_SAPHanaTop_HAE_HDB00 -inf: vm-majority
+.PP
+order SAPHanaTop_first Optional: cln_SAPHanaTop_SLE_HDB00 mst_SAPHC_SLE_HDB00
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHana
+    the resource agent for scale-up
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaController
+    the resource agent for scale-out
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaTopology
+    the topology resource agent itself
+.TP
+$HA_RSCTMP/SAPHana/SAPTopologyON.$SID
+    the RA's status file (subject to change)
+.TP
+/usr/sap/$SID/$InstanceName/exe
+    default path for DIR_EXECUTABLE
+.TP
+/usr/sap/$SID/SYS/profile
+    default path for DIR_PROFILE
+.\"
+.\" TODO: INSTANCE_PROFILE
+.\"
+.PP
+.SH REQUIREMENTS
+For the current version of the SAPHanaTopology resource agent that comes with
+the software package SAPHanaSR or SAPHanaSR-ScaleOut, the support is limited
+to the scenarios and parameters described in the respective manual page
+SAPHanaSR(7) or SAPHanaSR-ScaleOut(7).
+.PP
+.\"
+.SH SEE ALSO
+\fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBstonith\fP(8)
+.br
+https://documentation.suse.com/sbp/all/?context=sles-sap ,
+.br
+https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
+.br
+https://www.susecon.com/doc/2016/sessions/TUT90846.pdf ,
+.br
+http://clusterlabs.org/doc/en-US/Pacemaker/1.1/html/Pacemaker_Explained/s-ocf-return-codes.html ,
+.br
+http://scn.sap.com/docs/DOC-60334
+.br
+http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy ,
+.PP
+.\"
+.SH AUTHORS
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2014 SUSE Linux Products GmbH, Germany.
+.br
+(c) 2015-2017 SUSE Linux GmbH, Germany.
+.br
+(c) 2018-2022 SUSE LLC
+.br
+SAPHanaTopology comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
