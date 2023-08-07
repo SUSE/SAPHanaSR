@@ -11,45 +11,44 @@ SAPHanaFilesystem \- TODO.
 .PP
 .\"
 .SH DESCRIPTION
-SAPHanaFilesystem is a resource agent (RA) that monitors filesystems by checking
-read/write access. This RA does neither start nor stop any filesystem.
-
-In case the filesystem monitor fails, TODO
-TODO fencing by default on stop .
-TODO on-fail action "fence" even faster
-
-If this RA reports monitor failures, the node gets fenced and takeover is initiated.
-The monitor and action timeouts can be significantly shorter than HANA timeouts.
-This results in faster failover actions.
-
-TODO Background
+SAPHanaFilesystem is a resource agent (RA) that monitors mounted filesystems by
+checking read/write access. This RA does neither mount nor umount any filesystem.
+In case the filesystem monitor fails, the RA decides how to proceed based on
+HANA system replication status.
+The monitor and action timeouts can be significantly shorter than SAPHanaController
+resource timeouts. This results in faster takeover actions.
+.PP
+* Behaviour on HANA primary sites
+.PP
+a. In case of monitor failure the Linux cluster tries to stop and restart the
+SAPHanaFilesystem resource (not the real filesystem). If that stop fails and the
+HANA system replication is in sync (srHook=SOK) in consequence an HANA sr_takeover
+will be triggered.
+.br
+b. In case of monitor failure the Linux cluster tries to stop and restart the
+SAPHanaFilesystem resource (not the real filesystem). If the HANA system replication
+is not in sync (srHook=SFAIL) this will be repeated until it gains success or
+migration-threshold is reached.
+.PP
+* Behaviour on HANA secondary sites
+.PP
+In case of monitor failure the Linux cluster tries to stop and restart the
+SAPHanaFilesystem resource (not the real filesystem). This will be repeated until
+it gains success or migration-threshold is reached.
+.\" TODO migration-threshold?
+.PP
+* Background information
+.PP
 For HANA scale-out systems, the directory /hana/shared/$SID/ is provided as NFS
 share to all nodes of a site. The directory contains binaries, tools and other
 components needed for running and monitoring the HANA database. 
-The NFS share for /hana/shared/<SID>/ is mounted by the OS as usual.
-
+The NFS share for /hana/shared/$SID/ is mounted by the OS as usual.
 In case of NFS failure, HANA might stop working but the Linux cluster might not
-take action in a reasonable time.
+take action in reasonable time.
 Due to obligatory NFS for the directory /hana/shared/$SID/, scale-out systems
-are affected more often than scale-up systems. 
-
-* On HANA primary sites this resource will show the following behaviour:
-.br
-a. In case of monitor failure the Linux cluster tries to restart the SAPHanaFilesystem
-resource (not the real filesystem). If that stop fails and the HANA system replication
-is in sync (srHook=SOK) in consequence an HANA sr_takeover will be triggered.
-.br
-b. In case of monitor failure the Linux cluster tries to restart the SAPHanaFilesystem
-resource (not the real filesystem). If the HANA system replication is not in sync
-(srHook=SFAIL) this will be repeated until it gains success or migration-threshold is
-reached.
-.PP
-* On HANA secondary sites this resource will show the following behaviour:
-.br
-In case of monitor failure the Linux cluster tries to restart the SAPHanaFilesystem
-resource (not the real filesystem). This will be repeated until it gains success or
-migration-threshold is reached.
-.\" TODO migration-threshold?
+are affected more often than scale-up systems.
+Even if SAPHanaFilesystem improves Linux cluster reaction on failed NFS shares,
+reliable filesystems are cornerstones for SAP HANA database availabilty.  
 .PP
 The resource agent uses the HANA interface hdbnsutil.
 This interface allows to check the "topology" of the system
