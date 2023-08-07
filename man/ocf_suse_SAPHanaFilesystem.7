@@ -33,37 +33,32 @@ take action in a reasonable time.
 Due to obligatory NFS for the directory /hana/shared/$SID/, scale-out systems
 are affected more often than scale-up systems. 
 
-* On HANA primary site this resource will show the following behaviour:
+* On HANA primary sites this resource will show the following behaviour:
 .br
 a. In case of monitor failure the Linux cluster tries to restart the SAPHanaFilesystem
 resource (not the real filesystem). If that stop fails and the HANA system replication
-is in sync (srHook=SOK) and in consequence HANA sr_takeover will be triggered.
+is in sync (srHook=SOK) in consequence an HANA sr_takeover will be triggered.
 .br
 b. In case of monitor failure the Linux cluster tries to restart the SAPHanaFilesystem
-resource (not the real filesystem). This will be repeated until it gains success or
-migration-threshold is reached.
+resource (not the real filesystem). If the HANA system replication is not in sync
+(srHook=SFAIL) this will be repeated until it gains success or migration-threshold is
+reached.
+.PP
+* On HANA secondary sites this resource will show the following behaviour:
 .br
-* On HANA secondary site this resource will show the following behaviour:
 In case of monitor failure the Linux cluster tries to restart the SAPHanaFilesystem
 resource (not the real filesystem). This will be repeated until it gains success or
 migration-threshold is reached.
 .\" TODO migration-threshold?
-
 .PP
-The resource agent uses the following interfaces:
-.PP
-2. \fBhdbnsutil\fP
-.br
-The interface hdbnsutil is used to check the "topology" of the system
+The resource agent uses the HANA interface hdbnsutil.
+This interface allows to check the "topology" of the system
 replication as well as the current configuration (primary/secondary) of a
 SAP HANA database. A second task of the interface is the posibility to run
 a system replication takeover (sr_takeover) or to register a former primary
 to a newer one (sr_register). In scale-out setups, hdbnsutil sometimes
-might take some time. SAPHanaTopology uses only task one. SAPHanaController 
-is using all three tasks.
+might take some time. SAPHanaFilesystem uses only task one.
 .PP
-3. \fBTODO\fP
-.br
 Please see also the REQUIREMENTS section below.
 .PP
 .\"
@@ -85,22 +80,22 @@ Example "InstanceNumber=00".
 .PP
 \fBDIRECTORY\fR
 .RS 4
-Path to diretory to be monitored.
+Path to directory to be monitored.
 TODO NFS see TID
-Optional. Default value: /hana/shared/$SID.
+Optional. Default value: "/hana/shared/$SID/".
 .RE
 .PP
 \fBHANA_CALL_TIMEOUT\fR
 .RS 4
 Define timeout how long a call to HANA to receive information can take. This
-could be e.g. landscapeHostConfiguration.py.
+could be e.g. hdbnsutil.
 There are some specific calls to HANA which have their own timeout values.
 For example the sr_takeover command does not timeout (inf).
 If the timeout is reached, the return code will be 124. If you increase the
 timeouts for HANA calls you should also adjust the operation timeouts of your
 Linux cluster resources.
 .br
-Optional. Default value: TODO.
+Optional. Default value: "120". TODO
 .RE
 .PP
 .\"
@@ -131,16 +126,18 @@ This resource agent supports the following actions (operations):
 \fBstart\fR
 .RS 4
 Sets the status of the clone to "started". No filesystem action is done.
+Suggested minimum timeout: 60\&.
 .RE
 .PP
 \fBstop\fR
 .RS 4
 Sets the status of the clone to "stopped". No filesystem action is done.
+Suggested minimum timeout: 60\&.
 .RE
 .PP
 \fBstatus\fR
 .RS 4
-TODO.
+Reports whether the SAPHanaFilesystem resource (not the filesystem) is running.
 Suggested minimum timeout: 60\&.
 .RE
 .PP
@@ -149,7 +146,7 @@ Suggested minimum timeout: 60\&.
 Checks access to the path specified in parameter DIRECTORY.
 The check is done by creating a sub-directory and writing a file.
 .\" TODO default timeout
-Suggested minimum timeout: 300\&.
+Suggested minimum timeout: 120\&.
 Suggested interval: 120\&.
 .RE
 .PP
@@ -184,7 +181,6 @@ In addition return code 124 is used if HANA_CALL_TIMEOUT has been exceeded.
 Might be useful if NFS is used for the /hana/shared/ filesystem instead of classical
 block devices. One NFS share is used per node. The NFS is not shared across sites.
 On each cluster node the NFS share is mounted statically.
-.RE
 .PP
 .RS 4
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
@@ -193,7 +189,7 @@ op start interval="0" timeout="60" \\
 .br
 op stop interval="0" timeout="60" \\
 .br
-op monitor interval="120" timeout="300" \\
+op monitor interval="120" timeout="120" \\
 .br
 params SID="SLE" InstanceNumber="00"
 .PP
@@ -209,7 +205,6 @@ is used as majority maker for split brain situations. One /hana/shared/ filesyst
 is used per site. This filesystem is provided by an NFS server and shared among
 all cluster nodes of that site. The NFS is not shared across sites. On each cluster
 node the NFS share is mounted statically.
-.RE
 .PP
 .RS 4
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
@@ -218,7 +213,7 @@ op start interval="0" timeout="60" \\
 .br
 op stop interval="0" timeout="60" \\
 .br
-op monitor interval="120" timeout="300" on-fail="fence" \\
+op monitor interval="120" timeout="180" \\
 .br
 params SID="SLE" InstanceNumber="00"
 .PP
@@ -236,7 +231,7 @@ The contsraints´ names are starting with "SAPHanaFil".
 .RE
 .PP
 .RS 4
-# crm configure show | grep SAPHanaFil
+# crm configure show | grep SAPHanaFil_
 .br
 # crm configure show rsc_SAPHanaFil_SLE_HDB00
 .br
@@ -247,12 +242,11 @@ The contsraints´ names are starting with "SAPHanaFil".
 .PP
 * Example for static NFS mount.
 .br
-TODO /etc/fstab
-NFS server is nfs1, SID is SLE.
-Mount options TODO
-.br
-#
-nfs1: /hana/shared/SLE/  defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock 0 0
+This is an example line in /etc/fstab. NFS server is nfs1, SID is SLE. The NFS share will be mounted
+at OS boot time. The shown export path and mount options need to be adjusted for the used NFS server.
+.PP
+.RS 4
+nfs1:/export/SLE/shared/ /hana/shared/SLE/ auto defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock 0 0
 .RE
 .PP
 .\"
@@ -275,11 +269,11 @@ $DIRECTORY/tmp/test
 the resource´s path used for monitoring, default DIRECTORY=/hana/shared/$SID/
 .TP
 $HA_RSCTMP/ TODO
-the resource´s status file
+the resource´s status file, do not touch this
 .TP
 .\" TODO poison pill file should be unique, like full resource name
 /dev/shm/poison_pill_$SID 
-the resource´s poison pill file 
+the resource´s poison pill file, do not touch this
 .TP
 /etc/fstab
 the static information about the filesystems
@@ -296,7 +290,7 @@ SAPHanaSR-angi(7) and its references.
 \fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaTopology\fP(7) ,
 \fBsusHanaSR.py\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBfstab\fB(5) , \fBmount\fP(8) , \fBnfs\fP(5) ,
+\fBfstab\fP(5) , \fBmount\fP(8) , \fBnfs\fP(5) ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
