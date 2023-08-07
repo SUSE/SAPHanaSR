@@ -23,7 +23,7 @@ SAP HANA database. A second task of the interface is the posibility to run
 a system replication takeover (sr_takeover) or to register a former primary
 to a newer one (sr_register). In scale-out setups, hdbnsutil sometimes
 might take some time. SAPHanaTopology uses only task one. SAPHanaController 
-or SAPHana are using all three tasks.
+is using all three tasks.
 .PP
 3. \fBTODO\fP
 .br
@@ -76,10 +76,6 @@ DBG: Debugging info. Usually not needed at customer site. See SUSE TID 7022678 f
 DEC: Decision taken by the RA.
 .br
 FLOW: Function calls and the respective return codes.
-.br
-TOP: Topology. Messages related to HANA SR topology, like site name and remote site.
-.br
-Optional, advanced. Default value: ra-act-dec-lpa\&.
 .RE
 .PP
 .\"
@@ -99,15 +95,16 @@ Sets the status of the clone to "stopped".
 .PP
 \fBstatus\fR
 .RS 4
-Reports whether the HANA instance is running.
+Reports whether the monitored filesystem is accessible.
 Suggested minimum timeout: 60\&.
 .RE
 .PP
 \fBmonitor\fR
 .RS 4
 Analyses the nodes HANA roles and landscape status.
-Suggested minimum timeout: 600\&.
-Suggested interval: 10\&.
+.\" TODO default timeout
+Suggested minimum timeout: 300\&.
+Suggested interval: 120\&.
 .RE
 .PP
 \fBvalidate\-all\fR
@@ -131,105 +128,83 @@ Suggested minimum timeout: 5\&.
 .SH RETURN CODES
 The return codes are defined by the OCF cluster framework.
 Please refer to the OCF definition on the website mentioned below.
+.br
+In addition return code 124 is used if HANA_CALL_TIMEOUT has been exceeded.
 .PP
 .\"
 .SH EXAMPLES
-* This is an example configuration for a SAPHanaTopology resource for HANA scale-up.
-.br
-In addition, a SAPHana resource is needed to make this work.
+* This is an example configuration for a SAPHanaFilesystem resource for HANA scale-up.
 .RE
 .PP
 .RS 4
-primitive rsc_SAPHanaTop_SLE_HDB00 ocf:suse:SAPHanaTopology \\
+primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
 .br
-op start interval="0" timeout="600" \\
+op start interval="0" timeout="60" \\
 .br
-op stop interval="0" timeout="600" \\
+op stop interval="0" timeout="60" \\
 .br
-op monitor interval="10" timeout="600" \\
+op monitor interval="120" timeout="300" \\
 .br
 params SID="SLE" InstanceNumber="00"
 .PP
-clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
+clone cln_SAPHanaFil_SLE_HDB00 rsc_SAPHanaFil_SLE_HDB00 \\
 .br
 notify="true" interleave="true" clone-node-max="1"
 .RE
 .PP
-* Below is an example configuration for a SAPHanaTopology resource for HANA scale-out.
+* Below is an example configuration for a SAPHanaFilesystem resource for HANA scale-out.
 .br
 The HANA consists of two sites with five nodes each. An additional cluster node
 is used as majority maker for split brain situations.
-In addition, a SAPHanaController resource is needed to make this work.
 .RE
 .PP
 .RS 4
-primitive rsc_SAPHanaTop_SLE_HDB00 ocf:suse:SAPHanaTopology \\
+primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
 .br
-op start interval="0" timeout="600" \\
+op start interval="0" timeout="60" \\
 .br
-op stop interval="0" timeout="600" \\
+op stop interval="0" timeout="60" \\
 .br
-op monitor interval="10" timeout="600" \\
+op monitor interval="120" timeout="300" \\
 .br
 params SID="SLE" InstanceNumber="00"
 .PP
-clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
+clone cln_SAPHanaFil_SLE_HDB00 rsc_SAPHanaFil_SLE_HDB00 \\
 .br
 notify="true" interleave="true" clone-node-max="1"
 .PP
-location SAPHanaTop_not_on_majority_maker cln_SAPHanaTop_HAE_HDB00 -inf: vm-majority
-.PP
-order SAPHanaTop_first Optional: cln_SAPHanaTop_SLE_HDB00 mst_SAPHC_SLE_HDB00
+location SAPHanaFil_not_on_majority_maker cln_SAPHanaFIL_SLE_HDB00 -inf: vm-majority
 .RE
 .PP
 .\"
 .SH FILES
 .TP
-/usr/lib/ocf/resource.d/suse/SAPHana
-    the resource agent for scale-up
-.TP
 /usr/lib/ocf/resource.d/suse/SAPHanaController
-    the resource agent for scale-out
+    the controller resource agent
 .TP
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
-    the topology resource agent itself
+    the topology resource agent
 .TP
-$HA_RSCTMP/SAPHana/SAPTopologyON.$SID
-    the RA's status file (subject to change)
+/usr/lib/ocf/resource.d/suse/SAPHanaFilesystem
+    the filesystem monitoring resource agent
 .TP
-/usr/sap/$SID/$InstanceName/exe
-    default path for DIR_EXECUTABLE
-.TP
-/usr/sap/$SID/SYS/profile
-    default path for DIR_PROFILE
-.\"
-.\" TODO: INSTANCE_PROFILE
+$HA_RSCTMP/TODO
+    the TODO poison pill file 
 .\"
 .PP
 .SH REQUIREMENTS
-For the current version of the SAPHanaTopology resource agent that comes with
-the software package SAPHanaSR or SAPHanaSR-ScaleOut, the support is limited
+For the current version of the SAPHanaFilesystem resource agent that comes with
+the software package SAPHanaSR-angi, the support is limited
 to the scenarios and parameters described in the respective manual page
-SAPHanaSR(7) or SAPHanaSR-ScaleOut(7).
+SAPHanaSR-angi(7) and its references.
 .PP
 .\"
 .SH SEE ALSO
-\fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
-\fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
-\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBstonith\fP(8)
+\fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaTopology\fP(7) ,
+\fBsusHanaSR.py\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap ,
-.br
-https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
-.br
-https://www.susecon.com/doc/2016/sessions/TUT90846.pdf ,
-.br
-http://clusterlabs.org/doc/en-US/Pacemaker/1.1/html/Pacemaker_Explained/s-ocf-return-codes.html ,
-.br
-http://scn.sap.com/docs/DOC-60334
-.br
-http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy ,
 .PP
 .\"
 .SH AUTHORS
@@ -237,13 +212,10 @@ F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2014 SUSE Linux Products GmbH, Germany.
 .br
-(c) 2015-2017 SUSE Linux GmbH, Germany.
+(c) 2023 SUSE LLC
 .br
-(c) 2018-2022 SUSE LLC
-.br
-SAPHanaTopology comes with ABSOLUTELY NO WARRANTY.
+SAPHanaFilesystem comes with ABSOLUTELY NO WARRANTY.
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

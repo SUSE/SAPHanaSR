@@ -1,6 +1,6 @@
 .\" Version: 0.180.0
 .\"
-.TH ocf_suse_SAPHanaTopology 7 "30 Jun 2022" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaTopology 7 "07 Aug 20223 "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaTopology \- Helps to manage two SAP HANA databases with system replication.
@@ -40,7 +40,7 @@ SAP HANA database. A second task of the interface is the posibility to run
 a system replication takeover (sr_takeover) or to register a former primary
 to a newer one (sr_register). In scale-out setups, hdbnsutil sometimes
 might take some time. SAPHanaTopology uses only task one. SAPHanaController 
-or SAPHana are using all three tasks.
+is using all three tasks.
 .PP
 3. \fBsaphostctrl\fP
 .br
@@ -83,7 +83,7 @@ If the timeout is reached, the return code will be 124. If you increase the
 timeouts for HANA calls you should also adjust the operation timeouts of your
 Linux cluster resources.
 .br
-Optional. Default value: 60 for scale-up, 120 for scale-out.
+Optional. Default value: 120
 .RE
 .PP
 .\"
@@ -158,6 +158,8 @@ Suggested minimum timeout: 5\&.
 .SH RETURN CODES
 The return codes are defined by the OCF cluster framework.
 Please refer to the OCF definition on the website mentioned below.
+.br
+In addition return code 124 is used if HANA_CALL_TIMEOUT has been exceeded.
 .PP
 .\"
 .SH EXAMPLES
@@ -204,7 +206,7 @@ clone cln_SAPHanaTop_SLE_HDB00 rsc_SAPHanaTop_SLE_HDB00 \\
 .br
 notify="true" interleave="true" clone-node-max="1"
 .PP
-location SAPHanaTop_not_on_majority_maker cln_SAPHanaTop_HAE_HDB00 -inf: vm-majority
+location SAPHanaTop_not_on_majority_maker cln_SAPHanaTop_SLE_HDB00 -inf: vm-majority
 .PP
 order SAPHanaTop_first Optional: cln_SAPHanaTop_SLE_HDB00 mst_SAPHC_SLE_HDB00
 .RE
@@ -212,14 +214,14 @@ order SAPHanaTop_first Optional: cln_SAPHanaTop_SLE_HDB00 mst_SAPHC_SLE_HDB00
 .\"
 .SH FILES
 .TP
-/usr/lib/ocf/resource.d/suse/SAPHana
-    the resource agent for scale-up
-.TP
 /usr/lib/ocf/resource.d/suse/SAPHanaController
-    the resource agent for scale-out
+    the controller resource agent
 .TP
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
-    the topology resource agent itself
+    the topology resource agent
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaFilesystem
+    the filesystem monitoring resource agent
 .TP
 $HA_RSCTMP/SAPHana/SAPTopologyON.$SID
     the RA's status file (subject to change)
@@ -237,14 +239,13 @@ $HA_RSCTMP/SAPHana/SAPTopologyON.$SID
 For the current version of the SAPHanaTopology resource agent that comes with
 the software package SAPHanaSR or SAPHanaSR-ScaleOut, the support is limited
 to the scenarios and parameters described in the respective manual page
-SAPHanaSR(7) or SAPHanaSR-ScaleOut(7).
+SAPHanaSR-angi(7) and its references.
 .PP
 .\"
 .SH SEE ALSO
-\fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaFilesystem\fP(7) ,
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
-\fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBntp.conf\fP(5) , \fBchrony.conf\fP(5) , \fBstonith\fP(8)
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 .br
 https://documentation.suse.com/sbp/all/?context=sles-sap ,
 .br
@@ -268,7 +269,7 @@ F.Herschel, L.Pinne.
 .br
 (c) 2015-2017 SUSE Linux GmbH, Germany.
 .br
-(c) 2018-2022 SUSE LLC
+(c) 2018-2023 SUSE LLC
 .br
 SAPHanaTopology comes with ABSOLUTELY NO WARRANTY.
 .br
