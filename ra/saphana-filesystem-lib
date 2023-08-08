@@ -155,7 +155,7 @@ function shfs_init() {
     InstanceName="HDB${InstanceNr}"
     fs_hana_shared="${OCF_RESKEY_DIRECTORY:-/hana/shared/$SID}"
     HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-90}"
-    td_hana_shared="$fs_hana_shared/${NODENAME}"
+    td_hana_shared="$fs_hana_shared/.suse_SAPHanaFilesystem/${NODENAME}"
     pp_hana_shared="/dev/shm/poison_pill_${SID}"
     sid="${SID,,}"
     export sidadm="${sid}adm"
@@ -234,11 +234,10 @@ function shfs_error_simulation() {
 function shfs_test_directory()
 {
     local rc1=0 rc2=0 rc3=0
-    #super_ocf_log info "RA td_hana_shared=$td_hana_shared - mkdir ... ${td_hana_shared}/tmp"
-    mkdir -p "${td_hana_shared}/tmp"; rc1="$?"
+    mkdir -p "${td_hana_shared}"; rc1="$?"
     (
         dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
-        STATUSFILE="${td_hana_shared}/tmp/test"
+        STATUSFILE="${td_hana_shared}/test"
         # shellcheck disable=SC2086  # - dd_opts must not be quoted
         dd if=/dev/zero of="${STATUSFILE}" $dd_opts 
     ); rc2="$?"
