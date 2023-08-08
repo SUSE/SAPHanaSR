@@ -70,8 +70,30 @@ function shfs_meta_data() {
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="SAPHanaFilesystem" version="$SAPHanaFilesystemVersion">
     <version>1.0</version>
-    <shortdesc lang="en">TODO shortdesc</shortdesc>
-    <longdesc lang="en">TODO longdesc
+    <shortdesc lang="en">SAPHanaFilesystem - Monitors mounted SAP HANA filesystems.</shortdesc>
+    <longdesc lang="en">The SAPHanaFilesystem resource agent (RA) monitors mounted SAP HANA filesystems
+by checking read/write access. This RA does neither mount nor umount any
+filesystem. In case the filesystem monitor fails, the RA decides how to proceed
+based on HANA system replication status.  The monitor and action timeouts are
+significantly shorter than SAPHanaController resource timeouts. This results in faster takeover actions.
+
+* Behaviour on HANA primary sites
+
+srHook=SOK: In case of monitor failure the Linux cluster tries to stop and
+restart the SAPHanaFilesystem resource (not the real filesystem). If that stop
+fails and the HANA system replication is in sync the node gets fenced.
+In consequence an HANA sr_takeover will be triggered.
+
+srHook=SFAIL: In case of monitor failure the Linux cluster tries to stop and
+restart the SAPHanaFilesystem resource (not the real filesystem). If the HANA
+system replication is not in sync this will be repeated until it gains success
+or migration-threshold is reached.
+
+* Behaviour on HANA secondary sites
+
+In case of monitor failure the Linux cluster tries to stop and restart the
+SAPHanaFilesystem resource (not the real filesystem). This will be repeated
+until it gains success or  migration-threshold is reached.
     </longdesc>
 <parameters>
     <parameter name="SID" unique="0" required="1">
