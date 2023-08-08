@@ -20,14 +20,14 @@ resource timeouts. This results in faster takeover actions.
 .PP
 * Behaviour on HANA primary sites
 .PP
-a. In case of monitor failure the Linux cluster tries to stop and restart the
-SAPHanaFilesystem resource (not the real filesystem). If that stop fails and the
-HANA system replication is in sync (srHook=SOK) in consequence an HANA sr_takeover
-will be triggered.
+srHook=SOK: In case of monitor failure the Linux cluster tries to stop and restart
+the SAPHanaFilesystem resource (not the real filesystem). If that stop fails and
+the HANA system replication is in sync the node gets fenced. In consequence an
+HANA sr_takeover will be triggered.
 .br
-b. In case of monitor failure the Linux cluster tries to stop and restart the
-SAPHanaFilesystem resource (not the real filesystem). If the HANA system replication
-is not in sync (srHook=SFAIL) this will be repeated until it gains success or
+srHook=SFAIL: In case of monitor failure the Linux cluster tries to stop and restart
+the SAPHanaFilesystem resource (not the real filesystem). If the HANA system
+replication is not in sync this will be repeated until it gains success or
 migration-threshold is reached.
 .PP
 * Behaviour on HANA secondary sites
@@ -37,7 +37,7 @@ SAPHanaFilesystem resource (not the real filesystem). This will be repeated unti
 it gains success or migration-threshold is reached.
 .\" TODO migration-threshold?
 .PP
-* Background information
+* Rational
 .PP
 For HANA scale-out systems, the directory /hana/shared/$SID/ is provided as NFS
 share to all nodes of a site. The directory contains binaries, tools and other
@@ -57,6 +57,7 @@ SAP HANA database. A second task of the interface is the posibility to run
 a system replication takeover (sr_takeover) or to register a former primary
 to a newer one (sr_register). In scale-out setups, hdbnsutil sometimes
 might take some time. SAPHanaFilesystem uses only task one.
+.\" TODO how is sr checked?
 .PP
 Please see also the REQUIREMENTS section below.
 .PP
@@ -70,13 +71,14 @@ SAP System Identifier. Has to be same on both instances.
 Example "SID=SLE".
 .RE
 .PP
-\fBInstanceNumber\fR
-.RS 4
-Number of the SAP HANA database.
-For system replication also Instance Number+1 is blocked.
-Example "InstanceNumber=00".
-.RE
-.PP
+.\" TODO InstanceNumber?
+.\" \fBInstanceNumber\fR
+.\" .RS 4
+.\" Number of the SAP HANA database.
+.\" For system replication also Instance Number+1 is blocked.
+.\" Example "InstanceNumber=00".
+.\" .RE
+.\" .PP
 \fBDIRECTORY\fR
 .RS 4
 Path to directory to be monitored.
@@ -239,10 +241,46 @@ The contsraints´ names are starting with "SAPHanaFil".
 # crm configure show SAPHanaFil_not_on_majority_maker
 .RE
 .PP
+* Search for log entries of the resource agent. Show errors only.
+.PP
+.RS 4
+# grep "SAPHanaFilesystem.*RA.*rc=[1-7,9]" /var/log/messages
+.RE
+.PP
+* Search for log entries of the resource agent.  Show date, time, return code, runtime.
+.PP
+.RS 4
+# grep "SAPHanaFilesystem.*end.action.monitor_clone.*rc=" /var/log/messages | awk '{print $1,$11,$13}' | colrm 20 32 | tr -d "=()rsc" | tr "T" " "
+.RE
+.PP
+* Search for log entries of the resource agent. Show poison pill only.
+.br
+.PP
+.RS 4
+# grep "SAPHanaFilesystem.*RA.*poison.pill.detected" /var/log/messages
+.RE
+.PP
+* Search for fence action caused by resource stop failure.
+.br
+.PP
+.RS 4
+# grep "Stop.of.failed.*is.fenced" /var/log/messages
+.RE
+.PP
+* Show failcount for resource agent.
+.br
+SID is SLE, instance number is 00.
+See also cluster properties migration-threshold and failure-timeout.
+.PP
+.RS 4
+# cibadmin -Ql | grep rsc_SAPHanaFil_SLE_HDB00.*fail-count
+.RE
+.PP
 * Example for static NFS mount.
 .br
-This is an example line in /etc/fstab. NFS server is nfs1, SID is SLE. The NFS share will be mounted
-at OS boot time. The shown export path and mount options need to be adjusted for the used NFS server.
+This is an example line in /etc/fstab. NFS server is nfs1, SID is SLE. The NFS share will
+be mounted at OS boot time. The shown export path and mount options need to be adjusted
+for the NFS server in use. See manual pages nfs(5) and fstab(5) for details.
 .PP
 .RS 4
 nfs1:/export/SLE/shared/ /hana/shared/SLE/ auto defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock 0 0
