@@ -89,21 +89,12 @@ function shfs_meta_data() {
         <shortdesc lang="en">The directory to be checked. Default is "/hana/shared/\$SID"</shortdesc>
         <content type="string" default="" />
     </parameter>
-    <parameter name="HANA_CALL_TIMEOUT" unique="0" required="0">
-        <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
-        <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
-          There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
-          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
-          of your cluster resources.
-        </longdesc>
-        <content type="string" default="120" />
-    </parameter>
 </parameters>
 <actions>
     <action name="start" timeout="10" />
     <action name="stop" timeout="20" />
     <action name="status" timeout="60" />
-    <action name="monitor" depth="0" timeout="120" interval="20" />
+    <action name="monitor" depth="0" timeout="120" interval="120" />
     <action name="validate-all" timeout="5" />
     <action name="meta-data" timeout="5" />
     <action name="methods" timeout="5" />
@@ -272,6 +263,14 @@ function shfs_monitor() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     local test_rc
+    local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout"
+    if [ -z "$actionTimeOut" ]; then
+        timeout=100
+    else
+        # timeout for FS IO should be 90% of the action timeout and in seconds (not ms) 90/(100000) => 9/10000
+        ((timeout = actionTimeOut * 9/10000))
+    fi
+    super_ocf_log info "DEC: Timeout for I/O action: timeout=$timeout"
     shfs_reset_poison_pill
     ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" monitor; ha_ps_rc="$?"
     if ocf_is_probe; then
@@ -294,10 +293,10 @@ function shfs_monitor() {
     test_rem_sr=$(get_SRHOOK "$gRemSite")
 
     if [[ "${test_loc_sr}_${test_rem_sr}" == "PRIM_SOK" ]]; then
-        super_ocf_log info "DEC: check directory as secondary is in sync"
+        super_ocf_log info "DEC: check directory as secondary is in sync (timeout=$timeout)"
         export -f shfs_test_directory # shfs_test_directory to be usable for sub-processes
         export td_hana_shared
-        timeout --foreground -s 9 "$HANA_CALL_TIMEOUT" bash -c "shfs_test_directory"; test_rc="$?"
+        timeout --foreground -s 9 "$timeout" bash -c "shfs_test_directory"; test_rc="$?"
     else
         super_ocf_log info "DEC: SKIP check directory (test_loc_sr=$test_loc_sr, test_rem_sr=$test_rem_sr)"
         test_rc=0
