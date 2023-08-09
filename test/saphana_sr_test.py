@@ -40,7 +40,7 @@ class SaphanasrTest:
         else:
             r_id = ""
         msg_arr = msg.split(" ")
-        if stdout: 
+        if stdout:
             print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
             if self.run['log_file_handle']:
@@ -54,7 +54,7 @@ class SaphanasrTest:
         """
         constructor
         """
-        cmdparse = True;
+        cmdparse = True
         if 'cmdparse' in kwargs:
             cmdparse = kwargs['cmdparse']
         self.config = { 'test_file': "-",
@@ -109,7 +109,7 @@ class SaphanasrTest:
                 # disable 'consider to use with ...' - I am pretty sure with does not match here
                 # pylint: disable-next=R1732
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
-        else: 
+        else:
             self.message("dbg: lib skips parsing cmdline")
         random.seed()
 
@@ -192,7 +192,7 @@ class SaphanasrTest:
         l_sloppy = False
         if 'sloppy' in kwargs:
             l_sloppy = kwargs['sloppy']
-            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}") 
+            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
         object_name = None
         l_sr = self.dict_sr
         # check, if 'area' is in the sr-data-dictionary
@@ -208,10 +208,10 @@ class SaphanasrTest:
                     if search_key in l_obj:
                         if l_sloppy:
                             # search value by regexp
-                            if not(re.search(search_value, l_obj[search_key])):
+                            if not re.search(search_value, l_obj[search_key]):
                                 all_match = False
                         else:
-                            if not(l_obj[search_key] == search_value):
+                            if not l_obj[search_key] == search_value:
                                 all_match = False
                     else:
                         all_match = False
@@ -221,7 +221,10 @@ class SaphanasrTest:
         return object_name
 
     def get_value(self, area_name, object_name, key):
-        """ method to query the value of a key (e.g. 'msn') for an object (e.g. site 'MAINZ' inside an area (e.g. 'Site') """
+        """ 
+        method to query the value of a key (e.g. 'msn') for an object 
+        (e.g. site 'MAINZ' inside an area (e.g. 'Site') 
+        """
         # Query runs from area-level via object-level to key-level
         l_value = None
         l_sr = self.dict_sr
@@ -563,7 +566,8 @@ class SaphanasrTest:
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
-            except Exception as ssh_muell:
+            except Exception:
+                # except Exception as ssh_muell:
                 #self.message("ssh connection did not work ...")
                 #self.message(f"{type(ssh_muell)}")
                 check_result=("", "", 20000)
@@ -599,7 +603,7 @@ if __name__ == "__main__":
 
         test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
 
-        if l_top['pHost'] == None:
+        if l_top['pHost'] is None:
             # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
             l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
             l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
