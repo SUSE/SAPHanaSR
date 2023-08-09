@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# pylint: disable=fixme
 """
  SAPHanaSR-tester-html
  Author:       Fabian Herschel, Jul 2023
@@ -6,11 +7,15 @@
  Copyright:    (c) 2023 SUSE LLC
  Version:      2023.07.26.15.01
 """
+# TODO: check pylint invalid-name cases later
+# pylint: disable=invalid-name
 
 import time
 import re
+# pylint: disable=unused-import
 import sys
 import json
+# pylint: enable=unused-import
 import argparse
 from subprocess import Popen, PIPE
 # import random
@@ -70,29 +75,32 @@ tiles = {
 
 
 class SshMultiNode:
+    """
+    SshMultiNode - class to act with multiple ssh remote hosts
+    """
 
     def message(self, msg, **kwargs):
         """
         message with formatted timestamp
         """
-        stdout = True
-        if 'stdout' in kwargs:
-            stdout = kwargs['stdout']
+        l_stdout = kwargs.get('stdout', True)
         # TODO: specify, if message should be written to stdout, stderr and/or log file
-        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        l_date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         r_id = ""
         msg_arr = msg.split(" ")
-        if stdout: 
-            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+        if l_stdout:
+            # pylint: disable=consider-using-f-string
+            print("{}{} {:<9s} {}".format(l_date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+            # pylint: enable=consider-using-f-string
 
 
-    def __init__(self, **kwargs):
+    def __init__(self):
         """
         constructor
         """
         # if 'cmdparse' in kwargs:
         #    cmdparse = kwargs['cmdparse']
-        self.config = { 
+        self.config = {
                         'command': None,
                         'hosts': [],
                         'quiet': True,
@@ -104,6 +112,9 @@ class SshMultiNode:
 
 
     def reset_statistics(self):
+        """
+        reset_statistics - reset statistic counters and lists
+        """
         self.stat = {
                         'all': 0,
                         'succ': 0,
@@ -122,25 +133,27 @@ class SshMultiNode:
                     }
 
 
-    def do_ssh(self, host, user, cmd):
+    def do_ssh(self, rhost, ruser, cmd):
         """
         ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
         """
-        if host:
+        if rhost:
             try:
                 ssh_client = SSHClient()
                 ssh_client.load_system_host_keys()
-                ssh_client.connect(host, username=user)
+                ssh_client.connect(rhost, username=ruser)
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
                 result_stderr = cmd_stderr.read().decode("utf8")
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
+            # pylint: disable=broad-exception-caught
             except Exception as ssh_muell:
+            # pylint: enable=broad-exception-caught
                 if test01.config['quiet'] is not True:
-                    self.message(f"ssh connection to {host} did not work ...")
+                    self.message(f"ssh connection to {rhost} did not work ...")
                     self.message(f"{type(ssh_muell)}")
                 check_result=("", "", 2)
         else:
@@ -152,11 +165,11 @@ class SshMultiNode:
         """
         execute a local command and capture stdout and return code
         """
-        result = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
-        stdout, stderr = result.communicate()
-        stdout = stdout.decode()
-        stderr = stderr.decode()
-        return (stdout, stderr, result.returncode)
+        with Popen(cmd.split(), stdout=PIPE, stderr=PIPE) as result:
+            lstdout, lstderr = result.communicate()
+            lstdout = lstdout.decode()
+            lstderr = lstderr.decode()
+            return (lstdout, lstderr, result.returncode)
 
 
     def do_internal(self, cmd, file):
@@ -165,33 +178,33 @@ class SshMultiNode:
         """
         if cmd == "statistics":
             self.reset_statistics()
-            with open(file, "r") as testlogs:
-                lines = testlogs.readlines()
-            for line in lines:
-                if re.search(r"TEST:.*PASSED", line):
+            with open(file, "r", encoding='UTF-8') as testlogs:
+                llines = testlogs.readlines()
+            for lline in llines:
+                if re.search(r"TEST:.*PASSED", lline):
                     self.stat['succ'] += 1
-                test_fail = re.search(r"\[([0-9]*)\].*TEST:\W*(\w*)\W.*FAILED", line)
-                if test_fail:
-                    test_id = test_fail.group(1)
-                    test_name = test_fail.group(2)
-                    print(f"test failed: {test_fail.group(0)}") 
+                ltest_fail = re.search(r"\[([0-9]*)\].*TEST:\W*(\w*)\W.*FAILED", lline)
+                if ltest_fail:
+                    test_id = ltest_fail.group(1)
+                    test_name = ltest_fail.group(2)
+                    print(f"test failed: {ltest_fail.group(0)}")
                     self.stat['failed-id'][test_name] = test_id
                     if test_name in self.stat['failed-tests']:
                         self.stat['failed-tests'][test_name] += 1
                     else:
                         self.stat['failed-tests'][test_name] = 1
                     self.stat['fail'] += 1
-                if re.search(r"STATUS:.*step step10 FAILED", line):
+                if re.search(r"STATUS:.*step step10 FAILED", lline):
                     self.stat['fail-prereq'] += 1
-                if re.search(r"STATUS:.*step step40 FAILED", line):
+                if re.search(r"STATUS:.*step step40 FAILED", lline):
                     self.stat['fail-recovery'] += 1
-                if re.search(r"STATUS:.*step step.* FAILED", line):
+                if re.search(r"STATUS:.*step step.* FAILED", lline):
                     self.stat['fail-any'] += 1
-                if re.search(r"STATUS:.*step step.* passed", line):
+                if re.search(r"STATUS:.*step step.* passed", lline):
                     self.stat['succ-any'] += 1
-                if re.search(r"STATUS:.*step step40 passed", line):
+                if re.search(r"STATUS:.*step step40 passed", lline):
                     self.stat['succ-recovery'] += 1
-                if re.search(r"STATUS:.*step step10 passed", line):
+                if re.search(r"STATUS:.*step step10 passed", lline):
                     self.stat['succ-prereq'] += 1
             self.stat['all'] = self.stat['succ'] + self.stat['fail']
             self.stat['sum-any'] = self.stat['succ-any'] + self.stat['fail-any']
@@ -200,7 +213,7 @@ class SshMultiNode:
             self.stat['failed-tests-rev'] = dict(reversed(sorted(self.stat['failed-tests'].items(), key=lambda item: item[1])))
             print(f"failed tests dictionary {str(self.stat['failed-tests'])}")
             print(f"sorted tests dictionary (reverse) {self.stat['failed-tests-rev']}")
-            
+
 
 test01 = SshMultiNode()
 parser = argparse.ArgumentParser()
@@ -237,26 +250,24 @@ with open("/etc/apt/sources.list", "r") as sources:
 """
 
 while True:
-    with open("testgrid.html.in", "r") as sources:
+    with open("testgrid.html.in", "r", encoding="utf-8") as sources:
         lines = sources.readlines()
-    with open(f"{html_out}.out", "w") as sources:
-        for tk in tiles:
-            the_tile = tiles[tk]
+    with open(f"{html_out}.out", "w", encoding="utf-8") as output_file:
+        for tk, the_tile in tiles.items():
             title = the_tile['title']
             command = the_tile['command']
             user = the_tile['user']
             cmd_type = the_tile['type']
             the_tile['content'] = ""
             tile_time_pre = int(time.time())
-            print(f"tile tile={tk} title={title} command={command} type={cmd_type}") 
+            print(f"tile tile={tk} title={title} command={command} type={cmd_type}")
             if cmd_type == "remote":
                 for host in test01.config['hosts']:
                     #result = test01.do_ssh(host, the_tile['user'], the_tile['command'])
                     (stdout, stderr, rc) = test01.do_ssh(host, the_tile['user'], the_tile['command'])
                     #if result[2] > 0:
                     if rc > 0:
-                        if True:
-                            test01.message(f"INFO: Connection to {host} failed rc={rc}") 
+                        test01.message(f"INFO: Connection to {host} failed rc={rc}")
                     else:
                         the_tile['content'] = stdout
                         break # only take the first host which answers with rc == 0
@@ -267,16 +278,17 @@ while True:
                 the_tile['content'] = stdout
             else: # currently this means 'internal'
                 test01.do_internal(the_tile['command'], the_tile['file'])
-                pass
             tile_time_post = int(time.time())
-            print(f"tile tile={tk} title={title} command={command} type={cmd_type} runtime={tile_time_post-tile_time_pre}") 
+            print(f"tile tile={tk} title={title} command={command} type={cmd_type} runtime={tile_time_post-tile_time_pre}")
             regexp_title = f"@@{tk}_TITLE@@"
             regexp_content = f"@@{tk}_CONTENT@@"
             line_index = 0
             date_time = time.strftime("%Y-%m-%d %H:%M:%S")
             for line in lines:
+                # pylint: disable=consider-using-f-string
                 line = re.sub(r"{}".format(regexp_title), f"{the_tile['title']} - {date_time}", line)
                 line = re.sub(r"{}".format(regexp_content), the_tile['content'], line)
+                # pylint: enable=consider-using-f-string
                 lines[line_index] = line
                 line_index += 1
 
@@ -310,7 +322,7 @@ while True:
             line = re.sub(r"@@TEST_FAILED_LAST_ID_02@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[1]]), line)
             line = re.sub(r"@@TEST_FAILED_LAST_ID_03@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[2]]), line)
             line = re.sub(r"@@TEST_FAILED_LAST_ID_04@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[3]]), line)
-            sources.write(line)
+            output_file.write(line)
 
     print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
     test01.do_local(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
