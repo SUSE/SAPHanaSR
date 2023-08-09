@@ -30,9 +30,7 @@ class SaphanasrTest:
         """
         message with formatted timestamp
         """
-        stdout = True
-        if 'stdout' in kwargs:
-            stdout = kwargs['stdout']
+        stdout = kwargs.get('stdout', True)
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.run['r_id']:
@@ -54,9 +52,7 @@ class SaphanasrTest:
         """
         constructor
         """
-        cmdparse = True
-        if 'cmdparse' in kwargs:
-            cmdparse = kwargs['cmdparse']
+        cmdparse = kwargs.get('cmdparse', True)
         self.config = { 'test_file': "-",
                         'defaults_checks_file': None,
                         'properties_file': "properties.json",
@@ -566,6 +562,7 @@ class SaphanasrTest:
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
+            # pylint: disable=broad-exception-caught
             except Exception:
                 # except Exception as ssh_muell:
                 #self.message("ssh connection did not work ...")

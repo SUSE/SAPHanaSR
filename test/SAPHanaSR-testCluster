@@ -1,67 +1,69 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# TODO: check which imports could be removed in the future (time, re, json)?
 # TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
 """
- saphanasrtest.py
+ SAPHanaSR-testCluster
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
 """
 
+# pylint: disable=unused-import
 import time
-#import subprocess
 import re
-import sys
 import json
+# pylint: enable=unused-import
+#import subprocess
+import sys
 import argparse
 import random
-sys.path.insert(1, '/usr/lib/SAAPHanaSR-tester')
+sys.path.insert(1, '/usr/lib/SAPHanaSR-tester')
+#pylint: disable=wrong-import-position
 from saphana_sr_test import SaphanasrTest
-
-# TODO: move command-param-handling from class/lib to here
-"""
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--testFile", help="specify the test file")
-        parser.add_argument("--defaultChecksFile", help="specify the default checks file")
-        parser.add_argument("--properties", help="specify the properties file")
-        parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
-        parser.add_argument("--simulate", help="only simulate, dont call actions",
-                            action="store_true")
-        parser.add_argument("--repeat", help="how often to repeat the test")
-        parser.add_argument("--dumpFailures", help="print failed checks per loop",
-                            action="store_true")
-        parser.add_argument("--logFile", help="log file to write the messages")
-        args = parser.parse_args()
-        if args.testFile:
-            self.message("PARAM: testFile: {}".format(args.testFile))
-            self.config['test_file'] = args.testFile
-        if args.defaultChecksFile:
-            self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-            self.config['defaults_checks_file'] = args.defaultChecksFile
-        if args.properties:
-            self.message("PARAM: properties: {}".format(args.properties))
-            self.config['properties_file'] = args.properties
-        if args.remoteNode:
-            self.message("PARAM: remoteNode: {}".format(args.remoteNode))
-            self.config['remote_node'] = args.remoteNode
-        if args.repeat:
-            self.message("PARAM: repeat: {}".format(args.repeat))
-            self.config['repeat'] = int(args.repeat)
-        if args.dumpFailures:
-            self.message("PARAM: dumpFailures")
-            self.config['dump_failures'] = args.dumpFailures
-        if args.logFile:
-            self.message("PARAM: logFile: {}".format(args.logFile))
-            self.config['log_file'] = args.logFile
-            # disable 'consider to use with ...' - I am pretty sure with does not match here
-            # pylint: disable-next=R1732
-            self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
-"""
-
+#pylint: enable=wrong-import-position
 
 # TODO: impement test sequences instead of "only" repeating the same test
-test01 = SaphanasrTest()
+test01 = SaphanasrTest(cmdparse=False)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--testFile", help="specify the test file")
+parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+parser.add_argument("--properties", help="specify the properties file")
+parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
+parser.add_argument("--simulate", help="only simulate, dont call actions",
+                    action="store_true")
+parser.add_argument("--repeat", help="how often to repeat the test")
+parser.add_argument("--dumpFailures", help="print failed checks per loop",
+                    action="store_true")
+parser.add_argument("--logFile", help="log file to write the messages")
+args = parser.parse_args()
+if args.testFile:
+    test01.message("PARAM: testFile: {}".format(args.testFile))
+    test01.config['test_file'] = args.testFile
+if args.defaultChecksFile:
+    test01.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
+    test01.config['defaults_checks_file'] = args.defaultChecksFile
+if args.properties:
+    test01.message("PARAM: properties: {}".format(args.properties))
+    test01.config['properties_file'] = args.properties
+if args.remoteNode:
+    test01.message("PARAM: remoteNode: {}".format(args.remoteNode))
+    test01.config['remote_node'] = args.remoteNode
+if args.repeat:
+    test01.message("PARAM: repeat: {}".format(args.repeat))
+    test01.config['repeat'] = int(args.repeat)
+if args.dumpFailures:
+    test01.message("PARAM: dumpFailures")
+    test01.config['dump_failures'] = args.dumpFailures
+if args.logFile:
+    test01.message("PARAM: logFile: {}".format(args.logFile))
+    test01.config['log_file'] = args.logFile
+    # disable 'consider to use with ...' - I am pretty sure with does not match here
+    # pylint: disable-next=R1732
+    test01.run['log_file_handle'] = open(test01.config['log_file'], 'a', encoding="utf-8")
+
 while test01.run['count'] <= test01.config['repeat']:
     test01.run['r_id'] = random.randrange(10000,99999,1)
     test01.read_saphana_sr()
@@ -92,7 +94,7 @@ while test01.run['count'] <= test01.config['repeat']:
     l_top.update({'pWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)})
     l_top.update({'sWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)})
 
-    if l_top['pHost'] == None:
+    if l_top['pHost'] is None:
         # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
         l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
         l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
