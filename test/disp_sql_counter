@@ -21,18 +21,21 @@ select * from fhcounter;
 # pylint: disable=unused-import
 import os
 # pylint: enable=unused-import
+import sys
 import time
 import threading
 import argparse
 
 # pylint: enable=invalid-name
 try:
+    sys.path.append('/usr/sap/hdbclient/hdbcli')
+    sys.path.append('/usr/sap/hdbclient/hdbcli/ext')
     from hdbcli import dbapi
 except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-FHVERSION = "1.9.20230512.1734"
+VERSION = "1.10.0"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -206,7 +209,11 @@ class DbThreads:
             cursor.execute(count_sql)
             for row in cursor:
                 result = row[0]
+            if result > 1024:
+                delete_sql = "delete * from fhcounter"
+                cursor.execute(delete_sql)
         except Exception as exerr:
+            print(str(exeerr))
             self._err_flag = True
             self._err_txt = "Q-ERR-02"
         cursor.close()
@@ -263,7 +270,7 @@ sql.start_threads()
 # pylint is not smart enought to differ constants and variables but does complain about wrong constant names for variables
 # pylint: disable=invalid-name
 g_loop_counter = 0
-print(f"version: {FHVERSION}")
+print(f"version: {VERSION}")
 while True:
     g_loop_counter = g_loop_counter + 1
     g_status = ""
