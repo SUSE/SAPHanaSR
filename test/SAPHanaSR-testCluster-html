@@ -5,7 +5,7 @@
  Author:       Fabian Herschel, Jul 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
- Version:      2023.07.26.15.01
+ Version:      1.2.1
 """
 # TODO: check pylint invalid-name cases later
 # pylint: disable=invalid-name
@@ -124,6 +124,7 @@ class SshMultiNode:
                         'fail-any': 0,
                         'failed-id': {},
                         'failed-tests': {},
+                        'skipped': {},
                         'succ-any': 0,
                         'succ-prereq': 0,
                         'succ-recovery': 0,
@@ -187,14 +188,21 @@ class SshMultiNode:
                 if ltest_fail:
                     test_id = ltest_fail.group(1)
                     test_name = ltest_fail.group(2)
-                    print(f"test failed: {ltest_fail.group(0)}")
-                    self.stat['failed-id'][test_name] = test_id
-                    if test_name in self.stat['failed-tests']:
-                        self.stat['failed-tests'][test_name] += 1
+                    if self.stat.get('skipped', {}).get(test_id, False):
+                        print(f"test skipped: {ltest_fail.group(0)}")
                     else:
-                        self.stat['failed-tests'][test_name] = 1
+                        print(f"test failed: {ltest_fail.group(0)}")
+                        self.stat['failed-id'][test_name] = test_id
+                        if test_name in self.stat['failed-tests']:
+                            self.stat['failed-tests'][test_name] += 1
+                        else:
+                            self.stat['failed-tests'][test_name] = 1
                     self.stat['fail'] += 1
-                if re.search(r"STATUS:.*step step10 FAILED", lline):
+                ltest_fail = re.search(r"\[([0-9]*)\].*STATUS:.*step step10 FAILED", lline)
+                if ltest_fail:
+                    # the test was skipped, because prereq did already fail
+                    test_id = ltest_fail.group(1)
+                    self.stat['skipped'][test_id] = True
                     self.stat['fail-prereq'] += 1
                 if re.search(r"STATUS:.*step step40 FAILED", lline):
                     self.stat['fail-recovery'] += 1
@@ -297,19 +305,20 @@ while True:
         print(f"ids : {str(test01.stat['failed-id'])}")
         for line in lines:
             line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
-            line = re.sub(r"@@TEST_SUCC@@", str(test01.stat['succ']), line)
-            line = re.sub(r"@@TEST_FAIL@@", str(test01.stat['fail']), line)
+            line = re.sub(r"@@TEST_SUCC@@", str(test01.stat.get('succ',0)), line)
+            line = re.sub(r"@@TEST_FAIL@@", str(test01.stat.get('fail',0)-test01.stat.get('fail-prereq',0)), line)
             line = re.sub(r"@@TEST_SUM@@", str(test01.stat['all']), line)
-            line = re.sub(r"@@TEST_FAIL_PREREQ@@", str(test01.stat['fail-prereq']), line)
+            line = re.sub(r"@@TEST_SKIPPED@@", str(test01.stat['fail-prereq']), line)
+            line = re.sub(r"@@TEST_FAIL_PREREQ@@", "-", line)
             line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test01.stat['fail-recovery']), line)
-            line = re.sub(r"@@TEST_FAIL_ANY@@", str(test01.stat['fail-any']), line)
-            line = re.sub(r"@@TEST_SUCC_ANY@@", str(test01.stat['succ-any']), line)
-            line = re.sub(r"@@TEST_SUCC_RECOVERY@@", str(test01.stat['succ-recovery']), line)
-            line = re.sub(r"@@TEST_SUCC_PREREQ@@", str(test01.stat['succ-prereq']), line)
-            line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat['sum-any']), line)
-            line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat['sum-recovery']), line)
-            line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat['sum-prereq']), line)
-            line = re.sub(r"@@TEST_FAILED_LIST@@", str(str(test01.stat['failed-tests'])), line)
+            line = re.sub(r"@@TEST_FAIL_ANY@@", str(test01.stat.get('fail-any',0)-test01.stat.get('fail-prereq',0)), line)
+            line = re.sub(r"@@TEST_SUCC_ANY@@", str(test01.stat.get('succ-any',0)), line)
+            line = re.sub(r"@@TEST_SUCC_RECOVERY@@", str(test01.stat.get('succ-recovery',0)), line)
+            line = re.sub(r"@@TEST_SUCC_PREREQ@@", str(test01.stat.get('succ-prereq',0)), line)
+            line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat.get('sum-any',0)), line)
+            line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat.get('sum-recovery',0)), line)
+            line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat.get('sum-prereq',0)), line)
+            line = re.sub(r"@@TEST_FAILED_LIST@@", str(test01.stat.get('failed-tests',0)), line)
             line = re.sub(r"@@TEST_FAILED_NAME_01@@", failed_test_names_sorted_first4[0], line)
             line = re.sub(r"@@TEST_FAILED_NAME_02@@", failed_test_names_sorted_first4[1], line)
             line = re.sub(r"@@TEST_FAILED_NAME_03@@", failed_test_names_sorted_first4[2], line)
