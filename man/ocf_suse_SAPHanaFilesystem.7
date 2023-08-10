@@ -66,14 +66,16 @@ This resource agent supports the following parameters:
 \fBSID\fR
 .RS 4
 SAP System Identifier. Has to be same on both instances.
-Example "SID=SLE".
+.br
+Mandatory. Example: "SID=SLE".
 .RE
 .PP
 \fBInstanceNumber\fR
 .RS 4
 Instance Number of the SAP HANA database.
 For system replication also Instance Number+1 is blocked.
-Example "InstanceNumber=00".
+.br
+Mandatory. Example: "InstanceNumber=00".
 .RE
 .PP
 \fBDIRECTORY\fR
@@ -82,7 +84,20 @@ Path to directory to be monitored.
 The RA creates data in an own subdirectory ".suse_SAPHanaFilesystem". Do not touch this hidden
 subdirectory.
 .\" TODO NFS see TID
-Optional. Default value: "/hana/shared/$SID/".
+.br
+Optional. Default: "DIRECTORY=/hana/shared/$SID/".
+.RE
+.PP
+\fBFAILURE_ACTION\fR
+.RS 4
+.\" TODO check this
+Internal RA decision  in case of monitor failure. Values: [ ignore | fence].
+.br
+ignore - report failure into logs
+.br
+fence - trigger stop failure and node fencing, if conditions are matched 
+.br
+Optional. Default: "FAILURE_ACTION=fence".
 .RE
 .PP
 .\"
@@ -164,7 +179,7 @@ In addition the internal return code 124 is logged, if the timeout has been exce
 .\"
 .SH EXAMPLES
 * Example configuration for a SAPHanaFilesystem resource for HANA scale-up.
-.br
+.PP
 Might be useful if NFS is used for the /hana/shared/ filesystem instead of classical
 block devices. One NFS share is used per node. The NFS is not shared across sites.
 On each cluster node the NFS share is mounted statically.
@@ -186,7 +201,7 @@ meta clone-node-max="1" notify="true" interleave="true"
 .RE
 .PP
 * Example configuration for a SAPHanaFilesystem resource for HANA scale-out.
-.br
+.PP
 The HANA consists of two sites with several nodes each. An additional cluster node
 is used as majority maker for split brain situations. One /hana/shared/ filesystem
 is used per site. This filesystem is provided by an NFS server and shared among
@@ -212,7 +227,7 @@ location SAPHanaFil_not_on_majority_maker cln_SAPHanaFIL_SLE_HDB00 -inf: vm-majo
 .RE
 .PP
 * Example on showing the current SAPHanaFilesystem rescource configuration on scale-out.
-.br
+.PP
 The primitive is "rsc_SAPHanaFil_SLE_HDB00" and clone is "cln_SAPHanaFil_SLE_HDB00".
 The constraints´ names are starting with "SAPHanaFil".
 .RE
@@ -240,21 +255,19 @@ The constraints´ names are starting with "SAPHanaFil".
 .RE
 .PP
 * Search for log entries of the resource agent. Show poison pill only.
-.br
 .PP
 .RS 4
 # grep "SAPHanaFilesystem.*RA.*poison.pill.detected" /var/log/messages
 .RE
 .PP
 * Search for node fence actions caused by resource stop failure.
-.br
 .PP
 .RS 4
 # grep "Stop.of.failed.*is.fenced" /var/log/messages
 .RE
 .PP
 * Show failcount for resource agent.
-.br
+.PP
 SID is SLE, instance number is 00.
 See also cluster properties migration-threshold and failure-timeout.
 .PP
@@ -263,7 +276,7 @@ See also cluster properties migration-threshold and failure-timeout.
 .RE
 .PP
 * Example for static NFS mount.
-.br
+.PP
 This is an example line in /etc/fstab. NFS server is nfs1, SID is SLE. The NFS share will
 be mounted at OS boot time. The shown export path and mount options need to be adjusted
 for the NFS server in use. See manual pages nfs(5) and fstab(5) for details.
@@ -311,15 +324,26 @@ the software package SAPHanaSR-angi, the support is limited
 to the scenarios and parameters described in the respective manual page
 SAPHanaSR-angi(7) and its references.
 .PP
-1. on-fail=fence is set for the stop action of SAPHanaFilesystem.
+1. A Linux cluster STONITH method for all nodes is needed,
 .br
-2. User root needs read/write access to the monitored directory. 
+2. on-fail=fence is set for the stop action of SAPHanaFilesystem.
 .br
-3. SAPHanaTopology is working.
+3. User root needs read/write access to the monitored directory. 
 .br
-4. Each site has its own filesystems. The filesystems are not shared across sites. 
+4. SAPHanaTopology is working.
 .br
-5. SAP HANA host auto-failover is currently not supported.
+5. Each site has its own filesystems. The filesystems are not shared across sites. 
+.br
+6. SAP HANA host auto-failover is currently not supported.
+.br
+7. If an HANA worker node of a scale-out site got fenced but not the master
+nameserver, the time needed for stopping the whole site depends on HANA timeouts.
+.PP
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
