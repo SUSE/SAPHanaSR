@@ -66,15 +66,14 @@ Usage, syntax or execution errors.
 .\"
 .SH EXAMPLES
 .PP
-* Example for entry in sudo permissions /etc/sudoers
-.PP
+\fB*\fR Example for entry in sudo permissions /etc/sudoers
 .RS 2
 # SAPHanaSR (Scale-Up) needs for srHook
 .br
 ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_ha1_site_srHook_*
 .RE
 .PP
-* Example for looking up the sudo permission for the srHook script.
+\fB*\fR Example for looking up the sudo permission for the srHook script.
 .br
 All related files (/etc/sudoers and /etc/sudoers.d/*) are scanned.
 Example SID is HA1.
@@ -83,7 +82,7 @@ Example SID is HA1.
 # sudo -U ha1adm -l | grep "NOPASSWD.*crm_attribute.*hana_ha1"
 .RE
 .PP
-* Example for entry in SAP HANA global configuration
+\fB*\fR Example for entry in SAP HANA global configuration
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 .br
 This file is needed at both sites. The HANA has to be stopped before the files
@@ -101,8 +100,9 @@ execution_order = 1
 [trace]
 .br
 ha_dr_sushanasr = info
+.RE
 .PP
-* Example for entry in SAP HANA 2.0 global configuration
+\fB*\fR Example for entry in SAP HANA 2.0 global configuration
 /hana/shared/$SID/global/hdb/custom/config/global.ini to enable multi-target aware third site.
 .br
 This entry is needed to allow ocf_suse_SAPHanaController(7) parameter
@@ -120,13 +120,17 @@ register_secondaries_on_takeover = true
  ...
 .RE
 .PP
-* Example for checking the system log for srHook setting HANA system replication status in the CIB properties section. To be executed on respective HANA primary site's master nameserver.
+\fB*\fR Example for checking the system log for srHook setting HANA system replication status in the CIB properties section.
+.br
+To be executed on respective HANA primary site's master nameserver.
 .PP
 .RS 2
 # grep "sudo.*crm_attribute.*srHook" /var/log/messages
 .RE
 .PP
-* Example for checking the HANA tracefiles for srConnectionChanged() events. To be executed on respective HANA primary site's master nameserver.
+\fB*\fR Example for checking the HANA tracefiles for srConnectionChanged() events.
+.br
+To be executed on respective HANA primary site's master nameserver.
 .PP
 .RS 2
 # su - sleadm
@@ -140,7 +144,9 @@ register_secondaries_on_takeover = true
 # exit
 .RE
 .PP
-* Example for checking the HANA tracefiles for when the hook script has been loaded. To be executed on both sites' master nameservers.
+\fB*\fR Example for checking the HANA tracefiles for when the hook script has been loaded.
+.br
+To be executed on both sites' master nameservers.
 .PP
 .RS 2
 # su - sleadm
@@ -150,7 +156,9 @@ register_secondaries_on_takeover = true
 ~> grep HADR.*load.*susHanaS nameserver_*.trc
 .RE
 .PP
-* Example for comparing Linux cluster srHook attribute with current HANA SR state. SID is HA1. To be executed on current HANA primary site.
+\fB*\fR Example for comparing Linux cluster srHook attribute with current HANA SR state.
+.br
+SID is HA1. To be executed on current HANA primary site.
 .PP
 .RS 2
 # SAPHanaSR-showAttr | grep -A4 srHook
@@ -158,10 +166,11 @@ register_secondaries_on_takeover = true
 # su - ha1adm -c "HDBSettings.sh systemReplicationStatus.py"
 .RE
 .PP
-* Potentially dangerous example for manually changing Linux cluster srHook
-attribute according to current HANA SR state. This might be desired if the
-HANA SR state has changed while the Linux cluster was completely down.
-SID is ICE, site is BERG, current HANA SR state is SFAIL.
+\fB*\fR Potentially dangerous example for manually changing Linux cluster srHook
+attribute according to current HANA SR state.
+.br
+This might be desired if the HANA SR state has changed while the Linux cluster
+was completely down. SID is ICE, site is BERG, current HANA SR state is SFAIL.
 .br
 Note: Understand the impact before trying.
 .PP
@@ -176,6 +185,7 @@ Note: Understand the impact before trying.
 .RE
 .PP
 \fB*\fR Example for removing orphaned global srHook attribute.
+.br
 This might be done after upgrading from old-style srHook, to avoid confusion
 caused by different HANA HADR provider API versions.
 SID is HA1.
@@ -196,6 +206,46 @@ SID is HA1.
 .br
 # SAPHanaSR-showAttr
 .RE
+.PP
+\fB*\fR Example for temporarily blocking HANA system replication.
+.br
+This could be done for testing the HA/DR provider hook script integration.
+Blocking the HANA system replication is dangerous. This test should not be done
+on production systems.
+Instance number is 00, the resulting network ports are depending on the HANA
+setup. Please refer to SAP HANA documentation. See also manual page iptables(8).  
+.br
+Note: Understand the impact before trying.
+.PP
+1. Check HANA and Linux cluster for clean idle state.
+.PP
+2. On secondary, check for used network ports.
+.RS 2
+# ss -tulpan | grep hdb.*server | grep -v 127.0.0.1 |\\
+.br
+grep -v "\*" | awk '{print $6}' | awk -F: '{print $2}'
+.RE
+.PP
+3. On secondary, block HANA system replication, example ports are 4000[123].
+.RS 2
+# iptables -I INPUT -p tcp -m multiport --ports 40001,40002,40003 -j ACCEPT
+.RE
+Note: The ACCEPT needs to be replaced by appropriate action.
+.PP
+4. Check the nameserver tracefile for srConnectionChanged() events, check the
+system log for crm_attribute calls, check the Linux cluster attributes for srHook
+status.
+.PP
+5. On secondary, unblock HANA system replication.
+.RS 2
+# iptables -D INPUT -p tcp -m multiport --ports 40001,40002,40003 -j DROP
+.RE
+.PP
+6. Check the nameserver tracefile for srConnectionChanged() events, check the
+system log for crm_attribute calls, check the Linux cluster attributes for srHook
+status.
+.PP
+7. Check HANA and Linux cluster for clean idle state.
 .PP
 .\"
 .SH FILES
@@ -247,6 +297,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR-manageProvider\fP(8) , \fBSAPHanaSR-hookHelper\fP(8) ,
 \fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython\fP(8) ,
+\fBitables\fP(8) , \fBss\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
 .br
