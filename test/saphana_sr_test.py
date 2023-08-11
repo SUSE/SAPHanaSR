@@ -24,15 +24,13 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.1.20230705.1446"
+    version = "0.2.0"
 
     def message(self, msg, **kwargs):
         """
         message with formatted timestamp
         """
-        stdout = True
-        if 'stdout' in kwargs:
-            stdout = kwargs['stdout']
+        stdout = kwargs.get('stdout', True)
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.run['r_id']:
@@ -40,7 +38,7 @@ class SaphanasrTest:
         else:
             r_id = ""
         msg_arr = msg.split(" ")
-        if stdout: 
+        if stdout:
             print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
         try:
             if self.run['log_file_handle']:
@@ -54,9 +52,7 @@ class SaphanasrTest:
         """
         constructor
         """
-        cmdparse = True;
-        if 'cmdparse' in kwargs:
-            cmdparse = kwargs['cmdparse']
+        cmdparse = kwargs.get('cmdparse', True)
         self.config = { 'test_file': "-",
                         'defaults_checks_file': None,
                         'properties_file': "properties.json",
@@ -109,7 +105,7 @@ class SaphanasrTest:
                 # disable 'consider to use with ...' - I am pretty sure with does not match here
                 # pylint: disable-next=R1732
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
-        else: 
+        else:
             self.message("dbg: lib skips parsing cmdline")
         random.seed()
 
@@ -192,7 +188,7 @@ class SaphanasrTest:
         l_sloppy = False
         if 'sloppy' in kwargs:
             l_sloppy = kwargs['sloppy']
-            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}") 
+            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
         object_name = None
         l_sr = self.dict_sr
         # check, if 'area' is in the sr-data-dictionary
@@ -208,10 +204,10 @@ class SaphanasrTest:
                     if search_key in l_obj:
                         if l_sloppy:
                             # search value by regexp
-                            if not(re.search(search_value, l_obj[search_key])):
+                            if not re.search(search_value, l_obj[search_key]):
                                 all_match = False
                         else:
-                            if not(l_obj[search_key] == search_value):
+                            if not l_obj[search_key] == search_value:
                                 all_match = False
                     else:
                         all_match = False
@@ -221,7 +217,10 @@ class SaphanasrTest:
         return object_name
 
     def get_value(self, area_name, object_name, key):
-        """ method to query the value of a key (e.g. 'msn') for an object (e.g. site 'MAINZ' inside an area (e.g. 'Site') """
+        """ 
+        method to query the value of a key (e.g. 'msn') for an object 
+        (e.g. site 'MAINZ' inside an area (e.g. 'Site') 
+        """
         # Query runs from area-level via object-level to key-level
         l_value = None
         l_sr = self.dict_sr
@@ -508,6 +507,9 @@ class SaphanasrTest:
         elif action_name == "kill_prim_node":
             remote = self.topolo['pHost']
             cmd = "systemctl reboot --force"
+        elif action_name == "simulate_split_brain":
+            remote = self.topolo['sHost']
+            cmd = f"iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
@@ -538,7 +540,7 @@ class SaphanasrTest:
             action_rc = 0
         elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
@@ -560,7 +562,9 @@ class SaphanasrTest:
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
-            except Exception as ssh_muell:
+            # pylint: disable=broad-exception-caught
+            except Exception:
+                # except Exception as ssh_muell:
                 #self.message("ssh connection did not work ...")
                 #self.message(f"{type(ssh_muell)}")
                 check_result=("", "", 20000)
@@ -596,7 +600,7 @@ if __name__ == "__main__":
 
         test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
 
-        if l_top['pHost'] == None:
+        if l_top['pHost'] is None:
             # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
             l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
             l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})

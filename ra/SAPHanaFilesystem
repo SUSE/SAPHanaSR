@@ -1,20 +1,16 @@
 #!/bin/bash
 #
-# SAPHanaTopology
+# SAPHanaFilesystem
 #
-# Description:	Analyses two  SAP HANA Databases in System Replication
-#               SAPHanaTopology and SAPHanaController are both needed
-#               SAPHanaController is dependent of the analysis of
-#               SAPHanaTopology
+# Description:	Analyses FSt for  SAPHanaTopology and/or SAPHanaController resources
 #
 ##############################################################################
 #
-# SAPHanaTopology: (short sht)
-# Author:       Fabian Herschel, February 2014
+# SAPHanaFilesystem: (short shfs)
+# Author:       Fabian Herschel, February 2023
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
-# Copyright:    (c) 2014 SUSE Linux Products GmbH
-#               (c) 2015-2023 SUSE LLC
+# Copyright:    (c) 2023 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -24,28 +20,22 @@
 #   OCF_RESKEY_InstanceNumber
 #   OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
 #
-# HANA must support the following commands:
-#     hdbnsutil -sr_stateConfiguration
-#     hdbnsutil -sr_takeover
-#     hdbnsutil -sr_register
-#     landscapeHostConfiguration.py
-#     systemReplicationStatus.py
-#
 #######################################################################
-SAPHanaTopologyVersion="1.001.7"
+SAPHanaFilesystemVersion="0.3.0"
 #
 # Initialization:
 timeB=$(date '+%s')
 
-raType="sht_"
+raType="shfs_"
 OCF_FUNCTIONS_DIR="${OCF_FUNCTIONS_DIR:-${OCF_ROOT}/lib/heartbeat}"
 # shellcheck source=/dev/null
 source "${OCF_FUNCTIONS_DIR}/ocf-shellfuncs"
-# TODO PRIO1: NG - adjust the correct path and file name for the library to be sourced for first testing use current directory
 # shellcheck source=./ra/saphana-common-lib
 source /usr/lib/SAPHanaSR-angi/saphana-common-lib
-# shellcheck source=./ra/saphana-topology-lib
-source /usr/lib/SAPHanaSR-angi/saphana-topology-lib
+# shellcheck source=./ra/saphana-controller-common-lib
+source /usr/lib/SAPHanaSR-angi/saphana-controller-common-lib
+# shellcheck source=./ra/saphana-filesystem-lib
+source /usr/lib/SAPHanaSR-angi/saphana-filesystem-lib
 
 #
 #######################################################################
@@ -86,12 +76,12 @@ case "$ACTION" in
     usage|methods)  "${raType}""$ACTION"
                     exit "$OCF_SUCCESS";;
     meta-data)      "${raType}"meta_data
-                   exit "$OCF_SUCCESS";;
+                    exit "$OCF_SUCCESS";;
     notify)         # just ignore
                     exit "$OCF_SUCCESS";;
     *)
-                    super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaTopologyVersion) ===="
-                    core_init "$SAPHanaTopologyVersion" "$timeB"
+                    super_ocf_log info "RA ==== begin action $ACTION$CLACT ($SAPHanaFilesystemVersion) ===="
+                    core_init "$SAPHanaFilesystemVersion" "$timeB"
                     ;;
 esac
 "${raType}"init
@@ -118,23 +108,20 @@ fi
 ra_rc="$OCF_ERR_UNIMPLEMENTED"
 case "$ACTION" in
     start|stop|monitor) # Standard controlling actions
-        "${raType}""$ACTION$CLACT"
-        ra_rc="$?"
+        "${raType}""$ACTION$CLACT"; ra_rc="$?"
         ;;
     validate-all)
-        "${raType}"validate
-        ra_rc="$?"
+        "${raType}"validate; ra_rc="$?"
         ;;
     reload)
         ra_rc="$OCF_SUCCESS"
         ;;
     *)  # seems to be an unknown request
-        "${raType}"methods
-        ra_rc="$OCF_ERR_UNIMPLEMENTED"
+        "${raType}"methods; ra_rc="$OCF_ERR_UNIMPLEMENTED"
         ;;
 esac
 timeE="$(date '+%s')"
 (( timeR = timeE - timeB ))
-super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaTopologyVersion) (${timeR}s)===="
+super_ocf_log info "RA ==== end action $ACTION$CLACT with rc=${ra_rc} ($SAPHanaFilesystemVersion) (${timeR}s)===="
 exit "${ra_rc}"
 # set ts=4 sw=4 sts=4 et

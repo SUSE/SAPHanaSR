@@ -11,14 +11,21 @@
 # TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
 """
 
+# TODO pylint's constant vs variable detection is broken
+# pylint: disable=invalid-name
+
+# pylint: disable=wrong-import-position
+# pylint: disable=unused-import
 import argparse
-from dateutil import parser as dateutil_parser
 import json
 import os
 import re
 import sys
+from dateutil import parser as dateutil_parser
 sys.path.insert(1, '/usr/lib/SAPHanaSR-angi')
 from saphana_sr_tools import HanaCluster,HanaStatus
+# pylint: enable=wrong-import-position
+# pylint: enable=unused-import
 
 if __name__ == "__main__":
     myCluster = HanaCluster()
@@ -36,10 +43,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.cib:
         #myCluster.config['cib_file'] = args.cib[0] # later we need to iterate
-        myCluster.config['cib_file_list'] = args.cib 
+        myCluster.config['cib_file_list'] = args.cib
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
     if 'from' in vars(args) and vars(args)['from']:
-        dt = dateutil_parser.parse(vars(args)['from']) 
+        dt = dateutil_parser.parse(vars(args)['from'])
         myCluster.config['from'] = int(dt.timestamp())
     if args.format:
         myCluster.config['format'] = args.format
@@ -59,7 +66,7 @@ if __name__ == "__main__":
         else:
             myCluster.config['sort'] = args.sort
     if args.to:
-        dt = dateutil_parser.parse(args.to) 
+        dt = dateutil_parser.parse(args.to)
         myCluster.config['to'] = int(dt.timestamp())
     myCluster.read_properties()
     #
@@ -72,7 +79,7 @@ if __name__ == "__main__":
         myHana    = HanaStatus(myCluster.config)
         myHana.xml_import(cib_file)
         multi_sid = False
-        if myCluster.config['sid'] == None:
+        if myCluster.config['sid'] is None:
             myHana.get_sids()
             if len(myHana.sids) == 0:
                 print("ERR: No SID found in cluster config")
@@ -82,15 +89,15 @@ if __name__ == "__main__":
                 multi_sid = False
                 sys.exit(1)
             else:
-               myHana.config['sid'] = myHana.sids[0].lower()
-               myCluster.config['sid'] = myHana.sids[0].lower()
+                myHana.config['sid'] = myHana.sids[0].lower()
+                myCluster.config['sid'] = myHana.sids[0].lower()
         myHana.fill_glob_dict()
         if 'cib-time' in myHana.glob_dict['global']:
             #print(f"dbg: test time filter")
             dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
             cibtime = int(dt.timestamp())
             myHana.ts = cibtime
-            if cibtime >= myCluster.config['from'] and cibtime <= myCluster.config['to']:
+            if myCluster.config['from'] <= cibtime <= myCluster.config['to']:
                 pass
             else:
                 print(f"Filter cib-time {myHana.glob_dict['global']['cib-time']}")
@@ -106,8 +113,7 @@ if __name__ == "__main__":
                     myCluster.multi_status.insert(pos, myHana)
                     inserted = 1
                     break
-                else:
-                    pos += 1
+                pos += 1
             if inserted == 0:
                 myCluster.multi_status.insert(pos, myHana)  # insert at the end, if it is not inserted before
         myHana.fill_res_dict()
@@ -122,19 +128,19 @@ if __name__ == "__main__":
             index = myCluster.config['sort']
             index_type = 'str'
             index_reverse = myCluster.config['sort-reverse']
-            if index == None:
+            if index is None:
                 myHana.print_dic_as_table(myHana.glob_dict, "global", "Global")
                 myHana.print_dic_as_table(myHana.res_dict, "resource", "Resource")
                 myHana.print_dic_as_table(myHana.site_dict, "site", "Site")
                 myHana.print_dic_as_table(myHana.host_dict, "host", "Host")
             else:
-                myHana.print_dic_as_table(dict(sorted(myHana.glob_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "global",   "Global")
-                myHana.print_dic_as_table(dict(sorted(myHana.res_dict.items(),  key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "resource", "Resource")
-                myHana.print_dic_as_table(dict(sorted(myHana.site_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "site",     "Site")
-                myHana.print_dic_as_table(dict(sorted(myHana.host_dict.items(), key=lambda item: (get_sort_value(item[1],index, type=index_type)), reverse=index_reverse)), "host",     "Host")
+                myHana.print_dic_as_table_sort_by(myHana.glob_dict, index, index_type, index_reverse, "global",   "Global")
+                myHana.print_dic_as_table_sort_by(myHana.res_dict, index, index_type, index_reverse, "resource", "Resource")
+                myHana.print_dic_as_table_sort_by(myHana.site_dict, index, index_type, index_reverse, "site",     "Site")
+                myHana.print_dic_as_table_sort_by(myHana.host_dict, index, index_type, index_reverse, "host",     "Host")
         elif oformat == "json":
             myHana.print_all_as_json()
-        elif oformat == "path" or oformat == "script":
+        elif oformat in {"path", "script"}:
             myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"')
             myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"')
             myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"')

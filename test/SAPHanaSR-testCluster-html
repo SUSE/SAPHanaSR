@@ -1,0 +1,338 @@
+#!/usr/bin/python3
+# pylint: disable=fixme
+"""
+ SAPHanaSR-tester-html
+ Author:       Fabian Herschel, Jul 2023
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2023 SUSE LLC
+ Version:      1.2.2
+"""
+# TODO: check pylint invalid-name cases later
+# pylint: disable=invalid-name
+
+import time
+import re
+# pylint: disable=unused-import
+import sys
+import json
+# pylint: enable=unused-import
+import argparse
+from subprocess import Popen, PIPE
+# import random
+
+from paramiko import SSHClient
+
+# TODO: start tasks later from  SAPHanaSR-tester-html
+tasks = {
+            'SAPHanaSR-tester' : {
+                                    'type': 'local',
+                                    'command': 'SAPHanaSR-tester --hosts @@HOSTS@@',
+                                    'user': 'root',
+                                    'repeat': 'no'
+                                },
+            'db-client' : {
+                            'type': 'local',
+                            'command': 'source ./.bashrc; python disp_sql_counter --userkey=CLUSTER | tee -a /tmp/SAPHanaSR-tester/dbClient.log',
+                            'repeat': 'yes',
+                            'repeat_delay': '300'
+                        }
+        }
+
+tiles = {
+            'STAT': {
+                        'title': 'Statistics',
+                        'command': 'statistics',
+                        'file': '/tmp/SAPHanaSR-tester/SAPHanaSR-tester.log',
+                        'type': 'internal',
+                        'user': 'root',
+                      },
+            'TILE01': {
+                        'title': 'Cluster status',
+                        'command': 'crm_mon -1r --include none,nodes,resources,failures,failcounts',
+                        'type': 'remote',
+                        'user': 'root',
+                      },
+            'TILE02': {
+                        'title': 'db-client log',
+                        'command': 'tail -15 /tmp/SAPHanaSR-tester/dbClient.log',
+                        'type': 'local',
+                        'user': 'root',
+                      },
+            'TILE03': {
+                        'title': 'SAP HANA SR Attributes',
+                        'command': 'SAPHanaSR-showAttr --select=sr --sort=mns',
+                        'type': 'remote',
+                        'user': 'root',
+                      },
+            'TILE04': {
+                        'title': 'SAPHanaSR-tester',
+                        'command': 'tail -20 /tmp/SAPHanaSR-tester/SAPHanaSR-tester.log',
+                        'type': 'local',
+                        'user': 'root',
+                      },
+        }
+
+
+class SshMultiNode:
+    """
+    SshMultiNode - class to act with multiple ssh remote hosts
+    """
+
+    def message(self, msg, **kwargs):
+        """
+        message with formatted timestamp
+        """
+        l_stdout = kwargs.get('stdout', True)
+        # TODO: specify, if message should be written to stdout, stderr and/or log file
+        l_date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        r_id = ""
+        msg_arr = msg.split(" ")
+        if l_stdout:
+            # pylint: disable=consider-using-f-string
+            print("{}{} {:<9s} {}".format(l_date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+            # pylint: enable=consider-using-f-string
+
+
+    def __init__(self):
+        """
+        constructor
+        """
+        # if 'cmdparse' in kwargs:
+        #    cmdparse = kwargs['cmdparse']
+        self.config = {
+                        'command': None,
+                        'hosts': [],
+                        'quiet': True,
+                        'report_hostname': True,
+                        'sleep': '10',
+                        'user': 'root'
+                      }
+        self.reset_statistics()
+
+
+    def reset_statistics(self):
+        """
+        reset_statistics - reset statistic counters and lists
+        """
+        self.stat = {
+                        'all': 0,
+                        'succ': 0,
+                        'fail': 0,
+                        'fail-prereq': 0,
+                        'fail-recovery': 0,
+                        'fail-any': 0,
+                        'failed-id': {},
+                        'failed-tests': {},
+                        'skipped': {},
+                        'succ-any': 0,
+                        'succ-prereq': 0,
+                        'succ-recovery': 0,
+                        'sum-any': 0,
+                        'sum-prereq': 0,
+                        'sum-recovery': 0,
+                    }
+
+
+    def do_ssh(self, rhost, ruser, cmd):
+        """
+        ssh remote cmd exectution
+        returns a tuple ( stdout-string, stderr, string, rc )
+        """
+        if rhost:
+            try:
+                ssh_client = SSHClient()
+                ssh_client.load_system_host_keys()
+                ssh_client.connect(rhost, username=ruser)
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+            # pylint: disable=broad-exception-caught
+            except Exception as ssh_muell:
+            # pylint: enable=broad-exception-caught
+                if test01.config['quiet'] is not True:
+                    self.message(f"ssh connection to {rhost} did not work ...")
+                    self.message(f"{type(ssh_muell)}")
+                check_result=("", "", 2)
+        else:
+            check_result=("", "", 2)
+        return check_result
+
+
+    def do_local(self, cmd):
+        """
+        execute a local command and capture stdout and return code
+        """
+        with Popen(cmd.split(), stdout=PIPE, stderr=PIPE) as result:
+            lstdout, lstderr = result.communicate()
+            lstdout = lstdout.decode()
+            lstderr = lstderr.decode()
+            return (lstdout, lstderr, result.returncode)
+
+
+    def do_internal(self, cmd, file):
+        """
+        process an program internal action on the given file
+        """
+        if cmd == "statistics":
+            self.reset_statistics()
+            with open(file, "r", encoding='UTF-8') as testlogs:
+                llines = testlogs.readlines()
+            for lline in llines:
+                if re.search(r"TEST:.*PASSED", lline):
+                    self.stat['succ'] += 1
+                ltest_fail = re.search(r"\[([0-9]*)\].*TEST:\W*(\w*)\W.*FAILED", lline)
+                if ltest_fail:
+                    test_id = ltest_fail.group(1)
+                    test_name = ltest_fail.group(2)
+                    if self.stat.get('skipped', {}).get(test_id, False):
+                        #print(f"test skipped: {ltest_fail.group(0)}")
+                        pass
+                    else:
+                        #print(f"test failed: {ltest_fail.group(0)}")
+                        self.stat['failed-id'][test_name] = test_id
+                        if test_name in self.stat['failed-tests']:
+                            self.stat['failed-tests'][test_name] += 1
+                        else:
+                            self.stat['failed-tests'][test_name] = 1
+                    self.stat['fail'] += 1
+                ltest_fail = re.search(r"\[([0-9]*)\].*STATUS:.*step step10 FAILED", lline)
+                if ltest_fail:
+                    # the test was skipped, because prereq did already fail
+                    test_id = ltest_fail.group(1)
+                    self.stat['skipped'][test_id] = True
+                    self.stat['fail-prereq'] += 1
+                if re.search(r"STATUS:.*step step40 FAILED", lline):
+                    self.stat['fail-recovery'] += 1
+                if re.search(r"STATUS:.*step step.* FAILED", lline):
+                    self.stat['fail-any'] += 1
+                if re.search(r"STATUS:.*step step.* passed", lline):
+                    self.stat['succ-any'] += 1
+                if re.search(r"STATUS:.*step step40 passed", lline):
+                    self.stat['succ-recovery'] += 1
+                if re.search(r"STATUS:.*step step10 passed", lline):
+                    self.stat['succ-prereq'] += 1
+            self.stat['all'] = self.stat['succ'] + self.stat['fail']
+            self.stat['sum-any'] = self.stat['succ-any'] + self.stat['fail-any']
+            self.stat['sum-prereq'] = self.stat['succ-prereq'] + self.stat['fail-prereq']
+            self.stat['sum-recovery'] = self.stat['succ-recovery'] + self.stat['fail-recovery']
+            self.stat['failed-tests-rev'] = dict(reversed(sorted(self.stat['failed-tests'].items(), key=lambda item: item[1])))
+            print(f"failed tests dictionary {str(self.stat['failed-tests'])}")
+            print(f"sorted tests dictionary (reverse) {self.stat['failed-tests-rev']}")
+
+
+test01 = SshMultiNode()
+parser = argparse.ArgumentParser()
+parser.add_argument("--hosts", nargs="*", help="hosts to connect to (stops after first successful command)")
+parser.add_argument("--user", help="linux user to be used for ssh connection (default is root)")
+parser.add_argument("--sleep", help="sleep time in the loop")
+args = parser.parse_args()
+if args.hosts:
+    test01.config['hosts'] = args.hosts
+if args.user:
+    test01.config['user'] = args.user
+if args.sleep:
+    test01.config['sleep'] = args.sleep
+
+seconds = int(time.time())
+
+test_scenario = "SAPHanaSR-angi - ScaleUp"
+# html_out: use this as output-path later once SAPHanaSR-tester-html runs more out of its own (not in a bash script loop)
+html_out = 'TestSAPHanaSR-angi-ScaleOut.html'
+
+# simulate changing test numbers
+test_succ = seconds - 1689000000
+test_fail_prereq = int( seconds / 100 )  - 16890809
+test_fail_recovery = int( seconds / 1000 )  - 1689088
+
+test_fail = test_fail_prereq + test_fail_recovery
+test_sum = test_succ + test_fail
+
+test_file_in="testgrid.html.in"
+
+"""
+with open("/etc/apt/sources.list", "r") as sources:
+    lines = sources.readlines()
+"""
+
+while True:
+    with open("testgrid.html.in", "r", encoding="utf-8") as sources:
+        lines = sources.readlines()
+    with open(f"{html_out}.out", "w", encoding="utf-8") as output_file:
+        for tk, the_tile in tiles.items():
+            title = the_tile['title']
+            command = the_tile['command']
+            user = the_tile['user']
+            cmd_type = the_tile['type']
+            the_tile['content'] = ""
+            tile_time_pre = int(time.time())
+            print(f"tile tile={tk} title={title} command={command} type={cmd_type}")
+            if cmd_type == "remote":
+                for host in test01.config['hosts']:
+                    #result = test01.do_ssh(host, the_tile['user'], the_tile['command'])
+                    (stdout, stderr, rc) = test01.do_ssh(host, the_tile['user'], the_tile['command'])
+                    #if result[2] > 0:
+                    if rc > 0:
+                        test01.message(f"INFO: Connection to {host} failed rc={rc}")
+                    else:
+                        the_tile['content'] = stdout
+                        break # only take the first host which answers with rc == 0
+            elif cmd_type == "local":
+                #result = Popen(["df", "-hP"], stdout=PIPE, stderr=PIPE)
+                #stdout, stderr = result.communicate()
+                (stdout, stderr, rc) = test01.do_local(the_tile['command'])
+                the_tile['content'] = stdout
+            else: # currently this means 'internal'
+                test01.do_internal(the_tile['command'], the_tile['file'])
+            tile_time_post = int(time.time())
+            print(f"tile tile={tk} title={title} command={command} type={cmd_type} runtime={tile_time_post-tile_time_pre}")
+            regexp_title = f"@@{tk}_TITLE@@"
+            regexp_content = f"@@{tk}_CONTENT@@"
+            line_index = 0
+            date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            for line in lines:
+                # pylint: disable=consider-using-f-string
+                line = re.sub(r"{}".format(regexp_title), f"{the_tile['title']} - {date_time}", line)
+                line = re.sub(r"{}".format(regexp_content), the_tile['content'], line)
+                # pylint: enable=consider-using-f-string
+                lines[line_index] = line
+                line_index += 1
+
+        failed_test_names_sorted_first4 = list(test01.stat['failed-tests-rev'].keys())[0:4] # top 4
+        print(f"top : {failed_test_names_sorted_first4}")
+        print(f"ids : {str(test01.stat['failed-id'])}")
+        for line in lines:
+            line = re.sub(r"@@TEST_SCENARIO@@", test_scenario, line)
+            line = re.sub(r"@@TEST_SUCC@@", str(test01.stat.get('succ',0)), line)
+            line = re.sub(r"@@TEST_FAIL@@", str(test01.stat.get('fail',0)-test01.stat.get('fail-prereq',0)), line)
+            line = re.sub(r"@@TEST_SUM@@", str(test01.stat['all']), line)
+            line = re.sub(r"@@TEST_SKIPPED@@", str(test01.stat['fail-prereq']), line)
+            line = re.sub(r"@@TEST_FAIL_PREREQ@@", "-", line)
+            line = re.sub(r"@@TEST_FAIL_RECOVERY@@", str(test01.stat['fail-recovery']), line)
+            line = re.sub(r"@@TEST_FAIL_ANY@@", str(test01.stat.get('fail-any',0)-test01.stat.get('fail-prereq',0)), line)
+            line = re.sub(r"@@TEST_SUCC_ANY@@", str(test01.stat.get('succ-any',0)), line)
+            line = re.sub(r"@@TEST_SUCC_RECOVERY@@", str(test01.stat.get('succ-recovery',0)), line)
+            line = re.sub(r"@@TEST_SUCC_PREREQ@@", str(test01.stat.get('succ-prereq',0)), line)
+            line = re.sub(r"@@TEST_SUM_ANY@@", str(test01.stat.get('sum-any',0)), line)
+            line = re.sub(r"@@TEST_SUM_RECOVERY@@", str(test01.stat.get('sum-recovery',0)), line)
+            line = re.sub(r"@@TEST_SUM_PREREQ@@", str(test01.stat.get('sum-prereq',0)), line)
+            line = re.sub(r"@@TEST_FAILED_LIST@@", str(test01.stat.get('failed-tests',0)), line)
+            line = re.sub(r"@@TEST_FAILED_NAME_01@@", failed_test_names_sorted_first4[0], line)
+            line = re.sub(r"@@TEST_FAILED_NAME_02@@", failed_test_names_sorted_first4[1], line)
+            line = re.sub(r"@@TEST_FAILED_NAME_03@@", failed_test_names_sorted_first4[2], line)
+            line = re.sub(r"@@TEST_FAILED_NAME_04@@", failed_test_names_sorted_first4[3], line)
+            line = re.sub(r"@@TEST_FAILED_COUNT_01@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[0]]), line)
+            line = re.sub(r"@@TEST_FAILED_COUNT_02@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[1]]), line)
+            line = re.sub(r"@@TEST_FAILED_COUNT_03@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[2]]), line)
+            line = re.sub(r"@@TEST_FAILED_COUNT_04@@", str(test01.stat['failed-tests-rev'][failed_test_names_sorted_first4[3]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_01@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[0]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_02@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[1]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_03@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[2]]), line)
+            line = re.sub(r"@@TEST_FAILED_LAST_ID_04@@", str(test01.stat['failed-id'][failed_test_names_sorted_first4[3]]), line)
+            output_file.write(line)
+
+    print(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
+    test01.do_local(f"mv {html_out}.out /srv/www/htdocs/{html_out}")
+    time.sleep(int(test01.config['sleep']))
