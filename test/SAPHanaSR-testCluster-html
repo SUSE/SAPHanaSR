@@ -5,7 +5,7 @@
  Author:       Fabian Herschel, Jul 2023
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
- Version:      1.2.1
+ Version:      1.2.2
 """
 # TODO: check pylint invalid-name cases later
 # pylint: disable=invalid-name
@@ -30,10 +30,9 @@ tasks = {
                                     'user': 'root',
                                     'repeat': 'no'
                                 },
-            'db-client' : { # to be started on all hosts in @@HOSTS@@ - alternatively do it on first host and fallback to second, if needed
-                            'type': 'remote',
-                            'command': 'source ./.bashrc; python disp_sql_counter --userkey=CLUSTER | tee -a /tmp/SAPHanaSR-tester/dbc.log',
-                            'user': '@@sidadm@@',
+            'db-client' : {
+                            'type': 'local',
+                            'command': 'source ./.bashrc; python disp_sql_counter --userkey=CLUSTER | tee -a /tmp/SAPHanaSR-tester/dbClient.log',
                             'repeat': 'yes',
                             'repeat_delay': '300'
                         }
@@ -55,8 +54,8 @@ tiles = {
                       },
             'TILE02': {
                         'title': 'db-client log',
-                        'command': 'tail -15 /tmp/SAPHanaSR-tester/dbc.log',
-                        'type': 'remote',
+                        'command': 'tail -15 /tmp/SAPHanaSR-tester/dbClient.log',
+                        'type': 'local',
                         'user': 'root',
                       },
             'TILE03': {
@@ -189,9 +188,10 @@ class SshMultiNode:
                     test_id = ltest_fail.group(1)
                     test_name = ltest_fail.group(2)
                     if self.stat.get('skipped', {}).get(test_id, False):
-                        print(f"test skipped: {ltest_fail.group(0)}")
+                        #print(f"test skipped: {ltest_fail.group(0)}")
+                        pass
                     else:
-                        print(f"test failed: {ltest_fail.group(0)}")
+                        #print(f"test failed: {ltest_fail.group(0)}")
                         self.stat['failed-id'][test_name] = test_id
                         if test_name in self.stat['failed-tests']:
                             self.stat['failed-tests'][test_name] += 1
