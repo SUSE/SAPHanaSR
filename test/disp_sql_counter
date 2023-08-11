@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # pylint: disable=invalid-name,fixme,broad-except
 # pylint: disable=unused-variable,too-many-instance-attributes
 # TODO: check pylint skipped issues invalid-name,fixme,broad-except,unused-variable later
@@ -35,7 +36,7 @@ except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-VERSION = "1.10.0"
+VERSION = "1.10.2"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -61,8 +62,11 @@ class DbThreads:
         self.err_status = False
         # TODO: do we need err_txt AND _err_txt?
         self.err_txt = ""
+        self.msg_txt = ""
         self._err_txt = ""
+        self._msg_txt = ""
         self._err_flag = False
+        self._msg_flag = False
         self.run_time = time.time()
         self.kick_me = False
         self.thread_sql = None
@@ -98,6 +102,7 @@ class DbThreads:
             lstatus = ""
             #print(f"@@RUN-LOOP@@",end='',flush=True)
             self._err_flag = False
+            self._msg_flag = False
             self._err_txt = "<>"
             sleep_in_sec = 2
             if _connection is None:
@@ -118,6 +123,8 @@ class DbThreads:
                     self.list = _list[:]
                 self.err_status = self._err_flag
                 self.err_txt = self._err_txt[:]
+                self.msg_status = self._err_flag
+                self.msg_txt = self._msg_txt[:]
                 self.run_time = time.time()
             time.sleep(sleep_in_sec)
         self.disconnect()
@@ -209,10 +216,18 @@ class DbThreads:
             cursor.execute(count_sql)
             for row in cursor:
                 result = row[0]
-            if result > 1024:
-                delete_sql = "delete * from fhcounter"
-                cursor.execute(delete_sql)
-        except Exception as exerr:
+            if not result is None and result > 1024:
+                try:
+                    delete_sql = "delete from fhcounter"
+                    cursor.execute(delete_sql)
+                    self._msg_flag = True
+                    self._msg_txt = f"DATA RESET"
+                except Exception as d_err:
+                    self._err_flag = True
+                    self._err_txt = f"D-ERR-01 {d_err}"
+            else:
+                self._msg_txt = f""
+        except Exception as exeerr:
             print(str(exeerr))
             self._err_flag = True
             self._err_txt = "Q-ERR-02"
@@ -284,7 +299,7 @@ while True:
             if sql.err_status is True:
                 g_msg = f"status=FAIL ({sql.err_txt})"
             else:
-                g_msg = "status=OK"
+                g_msg = f"status=OK {sql.msg_txt}"
         print(f"{g_time_str} {sql.userkey:<8}",end='', flush=True)
         print(f"{g_msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
         sql.list_last(10)
