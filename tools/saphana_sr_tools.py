@@ -9,7 +9,6 @@
 # pylint: disable=global-variable-undefined
 # pylint: disable=too-few-public-methods
 # pylint: disable=consider-using-get
-# pylint: disable=no-self-use
 # flake8-in-file-ignores: noqa: E501
 """
  saphana_sr_tools.py
