@@ -307,41 +307,41 @@ function shfs_monitor() {
 	    # only for PoC tests allow an error simulation
 	    #  
 	    if shfs_error_simulation; then
-		test_rc=42
+            test_rc=42
 	    fi
-	    super_ocf_log info "RA monitor() test_rc=$test_rc test_sr=$test_sr"
+	    super_ocf_log info "RA monitor() test_rc=$test_rc"
         gSite="$(get_hana_attribute "${HOSTNAME}" "${ATTR_NAME_HANA_SITE[@]}")"
-    #
-    # get remote site
-    #
-    super_ocf_log info "DEC: pre-get_remote_site-call"
-    saphana_init_get_remote_site
-    test_loc_sr=$(get_SRHOOK "$gSite")
-    test_rem_sr=$(get_SRHOOK "$gRemSite")
+        #
+        # get remote site
+        #
+        super_ocf_log info "DEC: pre-get_remote_site-call"
+        saphana_init_get_remote_site
+        test_loc_sr=$(get_SRHOOK "$gSite")
+        test_rem_sr=$(get_SRHOOK "$gRemSite")
 
-    if [[ "${test_loc_sr}_${test_rem_sr}" == "PRIM_SOK" ]]; then
-        super_ocf_log info "DEC: check directory as secondary is in sync (timeout=$timeout)"
-        export -f shfs_test_directory # shfs_test_directory to be usable for sub-processes
-        export td_hana_shared
-        timeout --foreground -s 9 "$timeout" bash -c "shfs_test_directory"; test_rc="$?"
-    else
-        super_ocf_log info "DEC: SKIP check directory (test_loc_sr=$test_loc_sr, test_rem_sr=$test_rem_sr)"
-        test_rc=0
-    fi
-    super_ocf_log info "DEC: post-get_remote_site-call gSite=$gSite gRemSite=$gRemSite test_loc_sr=$test_loc_sr test_rem_sr=$test_rem_sr"
-    super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
-	    case "${test_rc}_${test_rem_sr}" in
-		0_* )   rc="$OCF_SUCCESS"
-			super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} The sun is shining"
-			;;
-		*_SOK ) rc="$OCF_ERR_GENERIC"
-			super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} Go out of here"
-			touch "$pp_hana_shared"
-			;; 
-		*_* )   rc="$OCF_ERR_GENERIC"
-			super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} Thunderstorm"
-			;; 
-	    esac
+        if [[ "${test_loc_sr}_${test_rem_sr}" == "PRIM_SOK" ]]; then
+            super_ocf_log info "DEC: check directory as secondary is in sync (timeout=$timeout)"
+            export -f shfs_test_directory # shfs_test_directory to be usable for sub-processes
+            export td_hana_shared
+            timeout --foreground -s 9 "$timeout" bash -c "shfs_test_directory"; test_rc="$?"
+        else
+            super_ocf_log info "DEC: SKIP check directory (test_loc_sr=$test_loc_sr, test_rem_sr=$test_rem_sr)"
+            test_rc=0
+        fi
+        super_ocf_log info "DEC: post-get_remote_site-call gSite=$gSite gRemSite=$gRemSite test_loc_sr=$test_loc_sr test_rem_sr=$test_rem_sr"
+        super_ocf_log debug "INFO: site=$gSite, mode=$gSrMode"
+            case "${test_rc}_${test_rem_sr}" in
+            0_* )   rc="$OCF_SUCCESS"
+                super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} The sun is shining"
+                ;;
+            *_SOK ) rc="$OCF_ERR_GENERIC"
+                super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} Go out of here"
+                touch "$pp_hana_shared"
+                ;; 
+            *_* )   rc="$OCF_ERR_GENERIC"
+                super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} Thunderstorm"
+                ;; 
+            esac
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
