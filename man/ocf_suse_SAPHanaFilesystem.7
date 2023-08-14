@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH ocf_suse_SAPHanaFilesystem 7 "08 Aug 2023" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaFilesystem 7 "14 Aug 2023" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaFilesystem \- Monitors mounted SAP HANA filesystems.
@@ -88,16 +88,15 @@ subdirectory.
 Optional. Default: "DIRECTORY=/hana/shared/$SID/".
 .RE
 .PP
-\fBFAILURE_ACTION\fR
+\fBON_FAIL_ACTION\fR
 .RS 4
-.\" TODO check this
-Internal RA decision  in case of monitor failure. Values: [ ignore | fence].
+Internal RA decision in case of monitor failure. Values: [ ignore | fence].
 .br
-ignore - report failure into logs
+- ignore: do nothing, just report failure into logs.
 .br
-fence - trigger stop failure and node fencing, if conditions are matched 
+- fence: trigger stop failure and node fencing, if conditions are matched.
 .br
-Optional. Default: "FAILURE_ACTION=fence".
+Optional. Default: "ON_FAIL_ACTION=fence".
 .RE
 .PP
 .\"
@@ -178,11 +177,12 @@ In addition the internal return code 124 is logged, if the timeout has been exce
 .PP
 .\"
 .SH EXAMPLES
-* Example configuration for a SAPHanaFilesystem resource for HANA scale-up.
+* Example configuration for a SAPHanaFilesystem resource on HANA scale-up.
 .PP
 Might be useful if NFS is used for the /hana/shared/ filesystem instead of classical
 block devices. One NFS share is used per node. The NFS is not shared across sites.
-On each cluster node the NFS share is mounted statically.
+On each cluster node the NFS share is mounted statically. SID is SLE, instance number
+is 00.
 .PP
 .RS 4
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
@@ -200,13 +200,39 @@ clone cln_SAPHanaFil_SLE_HDB00 rsc_SAPHanaFil_SLE_HDB00 \\
 meta clone-node-max="1" notify="true" interleave="true"
 .RE
 .PP
+* Example configuration for a SAPHanaFilesystem resource on HANA scale-up that does nothing.
+.PP
+Might be useful for logging issues with accessing the /hana/shared/ filesystem.
+The RA does nothing except logging monitor failures. SID is SLE, instance number
+is 00.
+See also example on showing monitor failures in system logs.
+.PP
+.RS 4
+primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
+.br
+op start interval="0" timeout="10" \\
+.br
+op stop interval="0" timeout="20" \\
+.br
+op monitor interval="120" timeout="120" \\
+.br
+params SID="SLE" InstanceNumber="00" ON_FAIL_ACTION="ignore"
+.PP
+clone cln_SAPHanaFil_SLE_HDB00 rsc_SAPHanaFil_SLE_HDB00 \\
+.br
+meta clone-node-max="1" notify="true" interleave="true"
+.RE
+.PP
+* Example configuration for a SAPHanaFilesystem resource on HANA scale-out.
+.PP
+The HANA consists of two sites with several nodes each. An additional cluster node
 * Example configuration for a SAPHanaFilesystem resource for HANA scale-out.
 .PP
 The HANA consists of two sites with several nodes each. An additional cluster node
 is used as majority maker for split brain situations. One /hana/shared/ filesystem
 is used per site. This filesystem is provided by an NFS server and shared among
 all cluster nodes of that site. The NFS is not shared across sites. On each cluster
-node the NFS share is mounted statically.
+node the NFS share is mounted statically. SID is SLE, instance number is 00.
 .PP
 .RS 4
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
