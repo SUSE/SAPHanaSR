@@ -42,7 +42,6 @@ try:
             self.tracer.info(f"{self.__class__.__name__}.{method}()"
                              f" version {FH_SR_HOOK_VERSION}")
 
-        # pylint: disable-next=no-self-use
         def about(self):
             """ tell about the HADR hook """
             return {"provider_company": "SUSE",

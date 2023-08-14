@@ -1,4 +1,7 @@
+#!/usr/bin/python3
 # pylint: disable=invalid-name,fixme,broad-except
+# pylint: disable=unused-variable,too-many-instance-attributes
+# TODO: check pylint skipped issues invalid-name,fixme,broad-except,unused-variable later
 """
 # disp_sql_counter
 # Authors:      Fabian Herschel, May 2023
@@ -15,27 +18,38 @@ select * from fhcounter;
 """
 
 # loading classes and libraries
+# TODO: check if we could remove unsused imports later
+# pylint: disable=unused-import
 import os
+# pylint: enable=unused-import
+import sys
 import time
 import threading
 import argparse
 
 # pylint: enable=invalid-name
 try:
+    sys.path.append('/usr/sap/hdbclient/hdbcli')
+    sys.path.append('/usr/sap/hdbclient/hdbcli/ext')
     from hdbcli import dbapi
 except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-FHVERSION = "1.9.20230512.1734"
+VERSION = "1.10.2"
 USERKEY_DFLT = "TESTER"
 #
 
 
 # pylint: disable-next=invalid-name
 class DbThreads:
+    """
+    DbThreads - class to handle db threads (query, update, healthcheck)
+    """
     AccessData = threading.Lock()
 
+    # TODO: add args, kwargs handling later or remove from __init__()
+    # pylint: disable-next=unused-argument
     def __init__(self, *args, **kwargs):
         super().__init__()
         #my_sid_upper = os.environ.get('SAPSYSTEMNAME')
@@ -46,39 +60,52 @@ class DbThreads:
         self.list=[]
         self.count_sql = None
         self.err_status = False
+        # TODO: do we need err_txt AND _err_txt?
         self.err_txt = ""
+        self.msg_txt = ""
+        self._err_txt = ""
+        self._msg_txt = ""
         self._err_flag = False
-        self.run_time = time.time() 
+        self._msg_flag = False
+        self.run_time = time.time()
         self.kick_me = False
         self.thread_sql = None
         self.thread_watchdog = None
 
     def start_thread_sql(self):
-        self.thread_sql = threading.Thread(target=self.run_sql).start()
+        """ start_thread_sql - start a sql thread """
+        self.thread_sql = threading.Thread(target=self.run_sql)
+        self.thread_sql.start()
 
     def start_thread_watchdog(self):
-        self.thread_watchdog = threading.Thread(target=self.run_watchdog).start()
+        """ start a watchdog thread """
+        self.thread_watchdog = threading.Thread(target=self.run_watchdog)
+        self.thread_watchdog.start()
 
     def del_thread_sql(self):
+        """ remove a sql thread """
         del self.thread_sql
 
     def start_threads(self):
+        """ start set of threads """
         self.start_thread_sql()
         self.start_thread_watchdog()
 
     def run_sql(self):
+        """ run sql """
         _connection = self.connect()
         _i = 0
         _count = None
         _list = []
         while True:
             _i += 1
-            status = ""
+            lstatus = ""
             #print(f"@@RUN-LOOP@@",end='',flush=True)
             self._err_flag = False
+            self._msg_flag = False
             self._err_txt = "<>"
-            sleep = 2
-            if _connection == None:
+            sleep_in_sec = 2
+            if _connection is None:
                 #print(f"@@RUN-CONN@@",end='',flush=True)
                 _connection = self.connect()
             else:
@@ -96,25 +123,31 @@ class DbThreads:
                     self.list = _list[:]
                 self.err_status = self._err_flag
                 self.err_txt = self._err_txt[:]
+                # self.msg_status = self._err_flag
+                self.msg_txt = self._msg_txt[:]
                 self.run_time = time.time()
-            time.sleep(sleep)
+            time.sleep(sleep_in_sec)
         self.disconnect()
 
     def run_watchdog(self):
-        sleep = 6
+        """ runner for watchdog """
+        sleep_in_sec = 6
         while True:
             loop_time = time.time()
             with DbThreads.AccessData:
                 time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
-                if (loop_time - self.run_time) > 3*sleep:
-                    msg = f"expired data - KICK!!"
+                if (loop_time - self.run_time) > 3*sleep_in_sec:
+                    msg = "expired data - KICK!!"
                     self.kick_me = True
                 else:
-                    msg = f"current data"
+                    msg = "current data"
                 #print(f"{time_str}: WDog {msg}", flush=True)
-            time.sleep(sleep)
+            time.sleep(sleep_in_sec)
 
+    # TODO: add args, kwargs handling later or remove from connect()
+    # pylint: disable-next=unused-argument
     def connect(self, **kargs):
+        """ connect to the database """
         # TODO: key=userkey, table=tablename
         try:
             connection = dbapi.connect(key=self.userkey)
@@ -130,10 +163,12 @@ class DbThreads:
         return connection
 
     def disconnect(self):
+        """ close connection to the database """
         if self.connection:
             self.connection.close()
 
     def check_and_reconnect(self, i):
+        """ reconnect to database, if needed """
         connection = None
         if not self.connection.isconnected() or i % 100 == 0:
             sql.disconnect()
@@ -141,15 +176,16 @@ class DbThreads:
         return connection
 
     def insert(self):
+        """ insert timestamp to test table """
         count = 1
         time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
         insert_sql = f"insert into fhcounter (timestamp, counter) VALUES ( '{time_str}', {count} );"
 
         connection = self.connection
-        if connection == None or not connection.isconnected():
+        if connection is None or not connection.isconnected():
             self._err_flag = True
             self._err_txt = "I-ERR-01"
-            return(1)
+            return 1
         cursor = connection.cursor()
         try:
             cursor.execute(insert_sql)
@@ -164,11 +200,13 @@ class DbThreads:
         cursor.close()
         return 0
 
+    # pylint: disable-next=unused-argument
     def count(self, **kargs):
+        """ count values in test_table """
         count_sql = "select count(*) from fhcounter"
         connection = self.connection
         result = None
-        if connection == None or not connection.isconnected():
+        if connection is None or not connection.isconnected():
             self._err_flag = True
             self._err_txt = "Q-ERR-01"
             return result
@@ -178,20 +216,33 @@ class DbThreads:
             cursor.execute(count_sql)
             for row in cursor:
                 result = row[0]
-        except Exception as exerr:
+            if not result is None and result > 1024:
+                try:
+                    delete_sql = "delete from fhcounter"
+                    cursor.execute(delete_sql)
+                    self._msg_flag = True
+                    self._msg_txt = "DATA RESET"
+                except Exception as d_err:
+                    self._err_flag = True
+                    self._err_txt = f"D-ERR-01 {d_err}"
+            else:
+                self._msg_txt = ""
+        except Exception as exeerr:
+            print(str(exeerr))
             self._err_flag = True
             self._err_txt = "Q-ERR-02"
         cursor.close()
         return result
 
     def select(self):
+        """ slelect values from test table """
         select_sql = "SELECT timestamp, counter FROM fhcounter ORDER BY timestamp, counter"
         connection = self.connection
         result = []
-        if connection == None or not connection.isconnected():
+        if connection is None or not connection.isconnected():
             self._err_flag = True
             self._err_txt = "S-ERR-01"
-            return None 
+            return None
 
         cursor = connection.cursor()
         try:
@@ -203,56 +254,60 @@ class DbThreads:
             self._err_flag = True
             self._err_txt = "S-ERR-02"
         cursor.close()
-        return result 
+        return result
 
     def list_last(self, maxnr):
+        """ list last entries """
         now = time.time()
-        outList = []
+        out_list = []
         for element in self.list[0:maxnr]:
             etime = element.timestamp()
             dtime = now - etime
             if dtime < 70:
-                status = "*"
+                lstatus = "*"
             else:
-                status = "-"
-            outList.append(f"{status}")
-        outStr = "".join(outList)
-        print(f"List: [{outStr}]", end='', flush=True)
+                lstatus = "-"
+            out_list.append(f"{lstatus}")
+        out_str = "".join(out_list)
+        print(f"List: [{out_str}]", end='', flush=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--userkey", help="specify sap user key")
-args = parser.parse_args()
-            
+cmd_line_args = parser.parse_args()
+
 sql = DbThreads()
 
-if args.userkey:
-    sql.userkey = args.userkey
+if cmd_line_args.userkey:
+    sql.userkey = cmd_line_args.userkey
 
 sql.start_threads()
 
-i = 0
-print(f"version: {FHVERSION}")
+# pylint is not smart enought to differ constants and variables but does complain about wrong constant names for variables
+# pylint: disable=invalid-name
+g_loop_counter = 0
+print(f"version: {VERSION}")
 while True:
-    i += 1
-    status = ""
-    sleep = 2
+    g_loop_counter = g_loop_counter + 1
+    g_status = ""
+    g_sleep_in_sec = 2
     with DbThreads.AccessData:
-        time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
-        loop_time = time.time()
-        if loop_time - sql.run_time > 10:
-            msg = f"status=FAIL (EXPIRED)"
+        g_time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
+        g_loop_time = time.time()
+        if g_loop_time - sql.run_time > 10:
+            g_msg = "status=FAIL (EXPIRED)"
         else:
-            if sql.err_status == True:
-                msg = f"status=FAIL ({sql.err_txt})"
+            if sql.err_status is True:
+                g_msg = f"status=FAIL ({sql.err_txt})"
             else:
-                msg = f"status=OK"
-        print(f"{time_str} {sql.userkey:<8}",end='', flush=True)
-        print(f"{msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
+                g_msg = f"status=OK {sql.msg_txt}"
+        print(f"{g_time_str} {sql.userkey:<8}",end='', flush=True)
+        print(f"{g_msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
         sql.list_last(10)
         print('',flush=True)
-        if sql.kick_me == True:
+        if sql.kick_me is True:
             sql.del_thread_sql()
             sql.start_thread_sql()
             sql.kick_me = False
-    time.sleep(sleep)
+    time.sleep(g_sleep_in_sec)
+    # pylint: enable=invalid-name
 sql.disconnect()

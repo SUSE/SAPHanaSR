@@ -1,6 +1,6 @@
 .\" Version: 1.001
 .\"
-.TH ocf_suse_SAPHanaController 7 "08 May 2022" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "09 Aug 2022" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication.
@@ -249,7 +249,9 @@ Suggested minimum timeout: 5\&.
 .PP
 .\"
 .SH RETURN CODES
-The return codes are defined by the OCF cluster framework. Please refer to the OCF definition on the website mentioned below. 
+The return codes are defined by the OCF cluster framework. Please refer to the
+OCF definition on the website mentioned below. 
+In addition return code 124 will be logged if HANA_CALL_TIMEOUT has been exceeded.
 .br
 In addition, log entries are written, which can be scanned by using a pattern like "SAPHanaController.*RA.*rc=[1-7,9]" for errors. Regular operations might be found with "SAPHanaController.*RA.*rc=0".
 .PP
@@ -273,7 +275,7 @@ op demote interval="0" timeout="320" \\
 .br
 op monitor interval="60" role="Promoted" timeout="700" \\
 .br
-op monitor interval="61" role="Started" timeout="700" \\
+op monitor interval="61" role="Unpromoted" timeout="700" \\
 .br
 params SID="SLE" InstanceNumber="00" PREFER_SITE_TAKEOVER="true" \\
 .br
@@ -283,7 +285,7 @@ HANA_CALL_TIMEOUT="120"
 .PP
 clone mst_SAPHanaCon_SLE_HDB00 rsc_SAPHanaCon_SLE_HDB00 \\
 .br
-clone-node-max="1" promotable="true" interleave="true"
+meta clone-node-max="1" promotable="true" interleave="true"
 .PP
 location SAPHanaCon_not_on_majority_maker mst_SAPHanaCon_HAE_HDB00 -inf: vm-majority
 .RE
@@ -445,16 +447,22 @@ nodeB: 1479202132
 .SH FILES
 .TP
 /usr/lib/ocf/resource.d/suse/SAPHanaController
-    the resource agent
+the resource agent
 .TP
 /usr/lib/ocf/resource.d/suse/SAPHanaTopology
-    the also needed topology resource agent
+the also needed topology resource agent
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaFilesystem
+the filesystem monitoring resource agent
+.TP
+/usr/lib/SAPHanaSR-angi/
+directory with function libraries
 .TP
 /usr/sap/$SID/$InstanceName/exe
-    default path for DIR_EXECUTABLE
+default path for DIR_EXECUTABLE
 .TP
 /usr/sap/$SID/SYS/profile
-    default path for DIR_PROFILE
+default path for DIR_PROFILE
 .\"
 .\" TODO: INSTANCE_PROFILE
 .PP
@@ -471,9 +479,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_heartbeat_IPaddr2\fP(8) , \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR_basic_cluster\fP(7) , \fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) , \fBSAPHanaSR-manageAttr\fP(8) , \fBchrony.conf\fP(5) , \fBstonith\fP(8) , \fBcrm\fP(8) 
+\fBocf_suse_SAPHanaTopology\fP(7) ,  \fBocf_suse_SAPHanaFilesystem\fP(7) , \fBocf_heartbeat_IPaddr2\fP(8) , \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR_basic_cluster\fP(7) , \fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) , \fBSAPHanaSR-manageAttr\fP(8) , \fBchrony.conf\fP(5) , \fBstonith\fP(8) , \fBcrm\fP(8) 
 .br
-https://documentation.suse.com/sbp/all/?context=sles-sap ,
+https://documentation.suse.com/sbp/sap/ ,
 .br
 https://www.suse.com/support/kb/doc/?id=000019138 ,
 .br

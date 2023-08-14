@@ -178,17 +178,17 @@ try:
             self.tracer.info(msg)
 
             # analysis, if the event looks like an dying indexserver (LOST)
-            isIndexserver = (service == "indexserver")
-            serviceActive = (status == "yes")
-            serviceRestart = (status in ["starting", "stopping", "no"])
-            serviceStop = (status in ["stopping", "no"])
-            serviceStopping = (status in ["stopping"])
-            serviceDown = (status == "no")
-            daemonActive = (daemonStatus == "yes")
-            daemonStop = (daemonStatus == "stopping")
-            daemonStarting = (daemonStatus == "starting")
-            databaseActive = (databaseStatus == "yes")
-            databaseStop = (databaseStatus == "stopping")
+            isIndexserver = service == "indexserver"
+            serviceActive = status == "yes"
+            serviceRestart = status in ["starting", "stopping", "no"]
+            serviceStop = status in ["stopping", "no"]
+            serviceStopping = status in ["stopping"]
+            serviceDown = status == "no"
+            daemonActive = daemonStatus == "yes"
+            daemonStop = daemonStatus == "stopping"
+            daemonStarting = daemonStatus == "starting"
+            databaseActive = databaseStatus == "yes"
+            databaseStop = databaseStatus == "stopping"
 
             eventKnown = False
             isLostIndexserver = False
