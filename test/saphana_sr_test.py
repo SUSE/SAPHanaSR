@@ -289,7 +289,7 @@ class SaphanasrTest:
             return self.run['failed']
         return None
 
-    def run_checks(self, checks, area_name, object_name ):
+    def run_checks(self, checks, area_name, object_name, step_step ):
         """ run all checks for area and object """
         l_sr = self.dict_sr
         check_result = -1
@@ -318,7 +318,7 @@ class SaphanasrTest:
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message(f"FAILED: {self.__get_failed__()}", stdout=False)
+            self.message(f"FAILED: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -333,7 +333,7 @@ class SaphanasrTest:
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
-                rc_checks = self.run_checks(checks, area_name, object_name)
+                rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''))
         return rc_checks
 
     def process_step(self, step):
@@ -360,6 +360,7 @@ class SaphanasrTest:
                      f" step_name='{step_name}'"
                      f" step_next={step_next}"
                      f" step_action='{step_action}'"
+                     f" max_loops='{max_loops}'"
                  )
         self.message(_l_msg)
         while loops < max_loops:
@@ -475,6 +476,12 @@ class SaphanasrTest:
         elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_prim_worker_indexserver":
+            remote = self.topolo['pWorker']
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_secn_worker_indexserver":
+            remote = self.topolo['sWorker']
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
@@ -538,7 +545,8 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver",
+                                   "kill_prim_worker_indexserver", "kill_secn_worker_indexserver" , "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain"):
             action_rc = self.action_on_cluster(action_name)
