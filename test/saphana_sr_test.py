@@ -39,14 +39,15 @@ class SaphanasrTest:
             r_id = ""
         msg_arr = msg.split(" ")
         if stdout:
-            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])), flush=True)
         try:
             if self.run['log_file_handle']:
                 _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
                 _l_msg += ' '.join(msg_arr[1:])
                 self.run['log_file_handle'].write(_l_msg + "\n")
+                self.run['log_file_handle'].flush()
         except OSError:
-            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
+            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"), flush=True)
 
     def __init__(self, *args, **kwargs):
         """
