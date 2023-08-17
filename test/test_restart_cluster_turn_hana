@@ -21,6 +21,15 @@ source .test_properties
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
 currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+echo "p=$currPrimary, s=$currSecondary"
+
+sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary="${sitePrimary//\"/}"
+
+echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 echo "p=$currPrimary, s=$currSecondary"
