@@ -311,7 +311,7 @@ for the NFS server in use. See manual pages nfs(5) and fstab(5) for details.
 nfs1:/export/SLE/shared/ /hana/shared/SLE/ auto defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock 0 0
 .RE
 .PP
-* Example for temporarily blocking HANA filesystems.
+* Example for temporarily blocking HANA access to local filesystems.
 .PP
 This could be done for testing the SAPHanaFilesystem RA integration.
 Blocking the HANA filesystem is dangerous. This test should not be done on production
@@ -335,6 +335,37 @@ Note: Understand the impact before trying.
 4. On secondary, unblock /hana/shared/SLE/ filesystem.
 .RS 2
 # fsfreeze --unfreeze /hana/shared/SLE/
+.RE
+.PP
+5. Check HANA and Linux cluster for clean idle state.
+.RE
+.PP
+* Example for temporarily blocking HANA access to NFS filesystems.
+.PP
+This could be done for testing the SAPHanaFilesystem RA integration.
+Blocking the HANA filesystem is dangerous. This test should not be done on production
+systems.
+Used TCP port is 2049. See also SUSE TID 7000524.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+1. Check HANA and Linux cluster for clean idle state.
+.PP
+2. On secondary, block /hana/shared/SLE/ filesystem.
+.RS 2
+# sync /hana/shared/SLE/
+.br
+# iptables -I OUTPUT -p tcp -m multiport --ports 2049 -j ACCEPT
+.br
+Note: The ACCEPT needs to be replaced by appropriate action.
+.RE
+.PP
+3. Check system log for SAPHanaFilsystem entries.
+.PP
+4. On secondary, unblock /hana/shared/SLE/ filesystem.
+.RS 2
+# iptables -D OUTPUT -p tcp -m multiport --ports 2049 -j ACCEPT
 .RE
 .PP
 5. Check HANA and Linux cluster for clean idle state.
@@ -409,7 +440,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
-https://www.suse.com/support/kb/doc/?id=000019904
+https://www.suse.com/support/kb/doc/?id=000019904 ,
+.br
+https://www.suse.com/support/kb/doc/?id=000016649
 .PP
 .\"
 .SH AUTHORS
