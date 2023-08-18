@@ -61,7 +61,8 @@ class SaphanasrTest:
                         'repeat': 1,
                         'dump_failures': False,
                         'remote_node': None,
-                        'remote_nodes': []
+                        'remote_nodes': [],
+                        'printTestProperties': False
                       }
         self.dict_sr = {}
         self.test_data = {}
@@ -253,19 +254,36 @@ class SaphanasrTest:
     def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
         if self.config['properties_file']:
+            print(f"read properties file {self.config['properties_file']}")
             with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
                 self.test_data.update(json.load(prop_fh))
         if self.config['defaults_checks_file']:
+            print(f"read defaults file {self.config['defaults_checks_file']}")
             with open(self.config['defaults_checks_file'], encoding="utf-8") as dc_fh:
                 self.test_data.update(json.load(dc_fh))
         if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
+                print(f"read test file {self.config['test_file']}")
                 self.test_data.update(json.load(tf_fh))
         self.run['test_id'] = self.test_data['test']
         self.message("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
+
+    def write_test_properties(self, l_top):
+        with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
+            test_prop_fh.write(f"node01={l_top.get('pHost','node01')}\n")
+            test_prop_fh.write(f"node02={l_top.get('sHost','node02')}\n")
+            test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
+            test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
+            test_prop_fh.write(f"srMode=sync\n")
+            test_prop_fh.write(f"opMode=logreplay\n")
+            test_prop_fh.write(f"SID={self.test_data.get('sid','C11')}\n")
+            test_prop_fh.write(f"instNr={self.test_data.get('instNo','00')}\n")
+            test_prop_fh.write(f"sidadm={self.test_data.get('sid','C11').lower()}adm\n")
+            test_prop_fh.write(f"userkey={self.test_data.get('userKey','')}\n")
+            test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg):
         """ document failed checks """
