@@ -475,8 +475,7 @@ function sht_init() {
     local myInstanceName=""
     local rc=$OCF_SUCCESS
     local hdbANSWER=""
-    local siteID
-    local siteNAME
+    local site=""
     local chkMethod=""
     SYSTEMCTL="/usr/bin/systemctl"
     systemd_unit_name="saphostagent.service"
@@ -562,11 +561,10 @@ function sht_init() {
     # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
     #
     hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
     if version "$hdbver" "<" "1.00.111"; then
         hdbState="hdbnsutil -sr_state"
-        hdbMap="hdbnsutil -sr_state"
     fi
+    srmode=""
     #### SAP-CALL
     # hdbnsutil was a bit unstable in some tests so we recall the tool, if it fails to report the srmode
     for chkMethod in  hU hU hU gP ; do
@@ -576,21 +574,21 @@ function sht_init() {
         #super_ocf_log debug "DBG2: hdbANSWER=$hdbANSWER"
         #srmode=$(echo "$hdbANSWER" | awk -F= '/mode/ {print $2}')
         case "$chkMethod" in
-            gP ) # call getParameter (gP)
+            gP ) # call getParameter (gP) - fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+                [[ "$hdbANSWER" =~ actual_mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$srmode" ]; then
-                    srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                    [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
                 fi
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
                 ;;
         esac
         case "$srmode" in
@@ -605,23 +603,22 @@ function sht_init() {
         esac
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    siteID=$(echo "$hdbANSWER" | awk -F= '/site.id/ {print $2}')       # allow 'site_id' AND 'site id'
-    siteNAME=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
-    site=$siteNAME
+    [[ "$hdbANSWER" =~ site.name=([^$'\n']+) ]] && site=${BASH_REMATCH[1]}
     if [ -z "$srmode" ]; then
-        srmode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+        [[ "$hdbANSWER" =~ actual_mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
         # if 'actual_mode' is not available, fallback to 'mode'
         if [ -z "$srmode" ]; then
-            srmode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+            [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
         fi
     fi
     #
     # for rev >= 111 we use the new mapping query
     #
     if version "$hdbver" ">=" "1.00.111"; then
+        hdbMap="hdbnsutil -sr_stateHostMapping"
         hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
     fi
-    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site=$site)
+    MAPPING=$(echo "$hdbANSWER" | awk -F[=/] '$1 == "mapping" && $3 != site { print $4 }' site="$site")
     super_ocf_log debug "DBG: site=$site, mode=$srmode, MAPPING=$MAPPING"
     if [ -n "$MAPPING" ]; then
         # we have a mapping from HANA, lets use it

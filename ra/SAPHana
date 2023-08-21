@@ -1021,10 +1021,9 @@ function saphana_init() {
     # since rev 112.03 the old option is changed and we should use -sr_stateConfiguration where ever possible
     #
     hdbState="hdbnsutil -sr_stateConfiguration"
-    hdbMap="hdbnsutil -sr_stateHostMapping"
+    # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
     if version "$hdbver" "<" "1.00.111"; then
         hdbState="hdbnsutil -sr_state"
-        hdbMap="hdbnsutil -sr_state"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$OCF_SUCCESS"
     return $OCF_SUCCESS
@@ -1241,50 +1240,49 @@ function check_for_primary() {
     # DONE: PRIO2: Maybe we need to use a fallback interface when hdbnsutil does not answer properly -> lookup in config files?
     # TODO:        This might also solve some problems when we could not figure-out the local or remote site name (site_name,site_id from global.ini)
     local chkMethod=""
-    local ini_mode=""
+    local node_status=""
+    local node_full_status=""
     for chkMethod in  hU hU hU gP; do
-       case "$chkMethod" in
-           gP )
+        case "$chkMethod" in
+            gP )
                 # fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode})
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
                 # first try to get the value of 'actual_mode' from the global.ini
-                ini_mode=$(echo "$node_full_status" | awk -F= '$1=="actual_mode" {print $2}')
+                [[ "$node_full_status" =~ actual_mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
                 # if 'actual_mode' is not available, fallback to 'mode'
-                if [ -z "$ini_mode" ]; then
-                    ini_mode=$(echo "$node_full_status" | awk -F= '$1=="mode" {print $2}')
+                if [ -z "$node_status" ]; then
+                    [[ "$node_full_status" =~ mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
                 fi
-                node_status="$ini_mode"
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
-           hU | * )
-                # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
-                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState" 2>/dev/null )
-                node_status=$(echo "$node_full_status" | awk '$1=="mode:" {print $2}')
+            hU | * )
+                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null )
+                [[ "$node_full_status" =~ mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
                 ;;
-       esac
-       case "$node_status" in
-           primary )
-               rc=$HANA_STATE_PRIMARY
-               break;;
-           syncmem | sync | async )
-               rc=$HANA_STATE_SECONDARY
-               break;;
-           none ) # have seen that mode on second side BEFEORE we registered it as replica
-               rc=$HANA_STATE_STANDALONE
-               break;;
-           * )
-               super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
-               dump=$( echo $node_status | hexdump -C );
-               super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
-               # TODO: Limit the runtime of hdbnsutil and use getParameter.py as fallback
-               # SAP_CALL
-               super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
-               # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
-       esac;
-       sleep 2
+        esac
+        case "$node_status" in
+            primary )
+                rc=$HANA_STATE_PRIMARY
+                break;;
+            syncmem | sync | async )
+                rc=$HANA_STATE_SECONDARY
+                break;;
+            none ) # have seen that mode on second side BEFEORE we registered it as replica
+                rc=$HANA_STATE_STANDALONE
+                break;;
+            * )
+                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: <$node_status>"
+                dump=$( echo $node_status | hexdump -C );
+                super_ocf_log err "ACT: check_for_primary:  we didn't expect node_status to be: DUMP <$dump>"
+                ((i++))
+                super_ocf_log debug "DEC: check_for_primary: loop=$i: node_status=$node_status"
+                # TODO: PRIO1: Maybe we need to keep the old value for P/S/N, if hdbnsutil just crashes
+                # lets pause a bit to give hdbnsutil a chance to answer next time
+                sleep 2
+        esac;
     done
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc
