@@ -114,12 +114,11 @@ function saphana_usage() {
     local rc=0
     methods=$(saphana_methods)
     methods=$(echo $methods | tr ' ' '|')
-    cat <<-EOF
-    usage: $0 ($methods)
+    echo "    usage: $0 ($methods)
 
     $0 manages two SAP HANA databases (scale-up) in system replication.
 
-    The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
+    The 'start'        operation starts the HANA instance or bring the \"clone instance\" to a WAITING status
     The 'stop'         operation stops the HANA instance
     The 'status'       operation reports whether the HANA instance is running
     The 'monitor'      operation reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status
@@ -129,8 +128,7 @@ function saphana_usage() {
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
     The 'reload'       operation allows to adapt resource parameters
-
-EOF
+"
     return $rc
 }
 
@@ -151,11 +149,9 @@ function backup_global_and_nameserver() {
 function saphana_meta_data() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-#
-    cat <<END
-<?xml version="1.0"?>
+    echo '<?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
-<resource-agent name="SAPHana" version="$SAPHanaVersion">
+<resource-agent name="SAPHana" version="'$SAPHanaVersion'">
 <version>1.0</version>
 
 <shortdesc lang="en">Manages two SAP HANA database systems in system replication (SR).</shortdesc>
@@ -192,7 +188,7 @@ The resource agent uses the following four interfaces provided by SAP:
    Interface is SQL query into HANA (system replication table).  The hdbsql query will be replaced by a python script
    "systemReplicationStatus.py" in SAP HANA SPS8 or 9.
    As long as we need to use hdbsql you need to set up secure store users for linux user root to be able to
-   access the SAP HANA database. You need to configure a secure store user key "SAPHANA${SID}SR" which can connect the SAP
+   access the SAP HANA database. You need to configure a secure store user key "SAPHANA'${SID}'SR" which can connect the SAP
    HANA database:
 
 5. saphostctrl
@@ -290,8 +286,7 @@ The resource agent uses the following four interfaces provided by SAP:
     <action name="methods" timeout="5" />
     <action name="reload" timeout="5" />
 </actions>
-</resource-agent>
-END
+</resource-agent>'
 super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
 return $rc
 }
@@ -593,8 +588,10 @@ scoring_crm_master()
     local sync="$2"
     local myScore=''
     for scan in "${SCORING_TABLE[@]}"; do
-        read rolePatt syncPatt score <<< $scan
+        # $scan needs "" to prevent globbing, as the scoring tables include '.*'
+        read rolePatt syncPatt score < <(echo "$scan")
         if [[ "$roles" =~ $rolePatt ]] ; then
+            # $syncPatt must NOT have "" for correct matching
             if [[ "$sync" =~ $syncPatt ]] ; then
                 super_ocf_log info "DEC: scoring_crm_master: roles($roles) are matching pattern ($rolePatt)"
                 super_ocf_log info "DEC: scoring_crm_master: sync($sync) is matching syncPattern ($syncPatt)"
@@ -675,9 +672,9 @@ function HANA_CALL()
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
-                  su_err_log=/tmp/HANA_CALL_SU_RA_${errExt}
-                  cmd_out_log=/tmp/HANA_CALL_CMD_RA_OUT_${errExt}
-                  cmd_err_log=/tmp/HANA_CALL_CMD_RA_${errExt}
+                  su_err_log=/run/HANA_CALL_SU_RA_${errExt}
+                  cmd_out_log=/run/HANA_CALL_CMD_RA_OUT_${errExt}
+                  cmd_err_log=/run/HANA_CALL_CMD_RA_${errExt}
 
                   output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
@@ -1673,8 +1670,8 @@ function saphana_start_primary()
             if ocf_is_true "${PreferSiteTakeover}"; then
                 remoteStatus="$remoteRole:$remoteSync"
                 case "$remoteStatus" in
-		    [234]:S:*:SOK | [234]:S:*:PRIM )
-		        lpa_advice="wait"
+                    [234]:S:*:SOK | [234]:S:*:PRIM )
+                        lpa_advice="wait"
                         # TODO: PRIO3: Split WAIT into WAIT4TAKEOVER
                         super_ocf_log info "DEC: saphana_primary - waiting for secondary to takeover (SOK, PreferSiteTakover)"
                     ;;
@@ -1835,7 +1832,7 @@ check_for_primary_master()
                 super_ocf_log debug "DBG: check_for_primary_master (3) ch_role=$ch_role"
                 awk -F: 'BEGIN { rc=1 }
                          $1 ~ "[34]" && $2 == "P" && $4 == "master" { rc=0 }
-                         END { exit rc }' <<< $ch_role  ; rc=$?
+                         END { exit rc }' < <(echo $ch_role) ; rc=$?
                 super_ocf_log debug "DBG: check_for_primary_master (4) rc=$rc"
             fi
         done
@@ -2056,7 +2053,7 @@ function lpa_pull_lpt() {
     local readrest=0
     local lpa_file="$LPA_DIRECTORY/lpa_${sid}_${NODENAME}"
     if [ -f $lpa_file ]; then
-        read lpt readrest <<<$(cat $lpa_file) # exactly load first word from file to lpt
+        read lpt readrest < <(cat $lpa_file) # exactly load first word from file to lpt
     fi
     if [ -n "$lpt" ]; then
         rc=0
@@ -2499,7 +2496,7 @@ function saphana_monitor_primary()
                 else
                     rc=$OCF_SUCCESS
                 fi
-	            set_SRHOOK_PRIM
+                set_SRHOOK_PRIM
                 my_role=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"
                 scoring_crm_master "$my_role" "$my_sync"
@@ -2729,15 +2726,15 @@ function saphana_monitor_clone() {
     my_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
     set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
 
-	if ocf_is_probe; then
-		super_ocf_log debug "DBG: PROBE ONLY"
-	else
-		super_ocf_log debug "DBG: REGULAR MONITOR"
-	fi
-	#
-	# First check, if we are PRIMARY or SECONDARY
-	#
-	check_for_primary; primary_status=$?
+    if ocf_is_probe; then
+        super_ocf_log debug "DBG: PROBE ONLY"
+    else
+        super_ocf_log debug "DBG: REGULAR MONITOR"
+    fi
+    #
+    # First check, if we are PRIMARY or SECONDARY
+    #
+    check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
         # TODO: PRIO1: Maybe we need a lpa-check here to
@@ -2843,7 +2840,7 @@ function saphana_promote_clone() {
         fi
     fi
     if [ $rc -eq $OCF_SUCCESS ]; then
-	    set_SRHOOK_PRIM
+        set_SRHOOK_PRIM
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return $rc

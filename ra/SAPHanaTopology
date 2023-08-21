@@ -2,7 +2,7 @@
 #
 # SAPHanaTopology
 #
-# Description:	Clone resource to analyze SAPHana-Topology
+# Description: Clone resource to analyze SAPHana-Topology
 #
 ###################################################################################################################
 #
@@ -22,7 +22,7 @@
 # OCF instance parameters:
 #   OCF_RESKEY_SID            (LNX, NDB, SLE)
 #   OCF_RESKEY_InstanceNumber (00..99)
-#	OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
+#   OCF_RESKEY_DIR_EXECUTABLE   (optional, well known directories will be searched by default)
 #   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
 #
 #######################################################################
@@ -96,12 +96,11 @@ function sht_usage() {
     local rc=0
     methods=$(sht_methods)
     methods=$(echo $methods | tr ' ' '|')
-  cat <<-!
-	usage: $0 ($methods)
+    echo "usage: $0 ($methods)
 
     $0 manages a SAP HANA Instance as an HA resource.
 
-    The 'start'        operation starts the HANA instance or bring the "instance" to a WAITING (for primary) status
+    The 'start'        operation starts the HANA instance or bring the \"instance\" to a WAITING (for primary) status
     The 'stop'         operation stops the HANA instance
     The 'status'       operation reports whether the HANA instance is running
     The 'monitor'      operation reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status
@@ -109,9 +108,8 @@ function sht_usage() {
     The 'validate-all' operation reports whether the parameters are valid
     The 'methods'      operation reports on the methods $0 supports
     The 'reload'       operation allows to change parameters like HANA_CALL_TIMEOUT without forcing a recover of all instances
-
-	!
-	return $rc
+"
+    return $rc
 }
 
 #
@@ -122,10 +120,9 @@ function sht_usage() {
 function sht_meta_data() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0
-	cat <<END
-<?xml version="1.0"?>
+    echo '<?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
-<resource-agent name="SAPHanaTopology" version="$SAPHanaTopologyVersion">
+<resource-agent name="SAPHanaTopology" version="'$SAPHanaTopologyVersion'">
     <version>1.0</version>
     <shortdesc lang="en">Analyzes SAP HANA System Replication Topology.</shortdesc>
     <longdesc lang="en">This RA analyzes the SAP HANA topology and "sends" all findings via the node status attributes to
@@ -174,8 +171,8 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
         <content type="string" default="60" />
     </parameter>
     <parameter name="DIR_EXECUTABLE" unique="0" required="0">
-        <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/\$SID/\$InstanceName/exe.
-        While InstanceName is the string of "HDB" and \$InstanceNumber for SAP Hana databases.
+        <longdesc lang="en">Path to the SAP Hana Instance executable directory. If not set the RA tries /usr/sap/$SID/$InstanceName/exe.
+        While InstanceName is the string of "HDB" and $InstanceNumber for SAP Hana databases.
         </longdesc>
         <shortdesc lang="en">Path to the SAP Hana Instance executable directory.</shortdesc>
         <content type="string" default="" />
@@ -196,10 +193,9 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
     <action name="methods" timeout="5" />
     <action name="reload" timeout="5" />
 </actions>
-</resource-agent>
-END
-super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
-return $rc
+</resource-agent>'
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return $rc
 }
 
 #
@@ -276,22 +272,21 @@ function set_hana_attribute()
 # methods: What methods/operations do we support?
 #
 function sht_methods() {
-  super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-  local rc=0
-  cat <<-!
-    start
-    stop
-    status
-    monitor
-    notify
-    validate-all
-    methods
-    meta-data
-    usage
-    admin-setup
-    reload
-	!
-	return $rc
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    local rc=0
+    echo "
+      start
+      stop
+      status
+      monitor
+      notify
+      validate-all
+      methods
+      meta-data
+      usage
+      admin-setup
+      reload"
+    return $rc
 }
 
 #
@@ -422,9 +417,9 @@ function HANA_CALL()
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
-                  su_err_log=/tmp/HANA_CALL_SU_TOP_${errExt}
-                  cmd_out_log=/tmp/HANA_CALL_CMD_TOP_OUT_${errExt}
-                  cmd_err_log=/tmp/HANA_CALL_CMD_TOP_${errExt}
+                  su_err_log=/run/HANA_CALL_SU_TOP_${errExt}
+                  cmd_out_log=/run/HANA_CALL_CMD_TOP_OUT_${errExt}
+                  cmd_err_log=/run/HANA_CALL_CMD_TOP_${errExt}
 
                   output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
@@ -991,7 +986,7 @@ function sht_stop_clone() {
     sht_stop; rc=$? # till now it returns everytime $OCF_SUCCESS
     if [ "$tout" -eq 1 ]; then
         # timeout of landscapeHostConfiguration.py - let stop fail
-	rc=$OCF_ERR_GENERIC
+        rc=$OCF_ERR_GENERIC
     fi
 
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -1007,13 +1002,13 @@ function sht_stop_clone() {
 function sht_monitor_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     #
-	local rc=$OCF_ERR_GENERIC
-	local promoted=0
+    local rc=$OCF_ERR_GENERIC
+    local promoted=0
     local init_attribute=0
 
 
-	if ocf_is_probe; then
-		super_ocf_log debug "DBG: PROBE ONLY"
+    if ocf_is_probe; then
+        super_ocf_log debug "DBG: PROBE ONLY"
         sht_monitor; rc=$?
         local hana_version
         hana_version=$(grep -s -m1 -oP 'fullversion: \K.+(?= Build)' "/usr/sap/$SID/$InstanceName/exe/manifest")
@@ -1022,18 +1017,18 @@ function sht_monitor_clone() {
         if [[ -n $hana_version ]]; then
             set_hana_attribute "${NODENAME}" "$hana_version" ${ATTR_NAME_HANA_VERSION[@]}
         fi
-	else
-		super_ocf_log debug "DBG: REGULAR MONITOR"
+    else
+        super_ocf_log debug "DBG: REGULAR MONITOR"
         if ! check_saphostagent; then
              start_saphostagent
         fi
-	#
-	# First check, if we are PRIMARY or SECONDARY
-	#
-    super_ocf_log debug "DBG: HANA SID $SID"
-    super_ocf_log debug "DBG: HANA InstanceName $InstanceName"
-    super_ocf_log debug "DBG: HANA InstanceNr $InstanceNr"
-	check_for_primary; primary_status=$?
+        #
+        # First check, if we are PRIMARY or SECONDARY
+        #
+        super_ocf_log debug "DBG: HANA SID $SID"
+        super_ocf_log debug "DBG: HANA InstanceName $InstanceName"
+        super_ocf_log debug "DBG: HANA InstanceNr $InstanceNr"
+        check_for_primary; primary_status=$?
     if [ $primary_status -eq $HANA_STATE_PRIMARY ]; then
         hanaPrim="P"
         super_ocf_log debug "DBG: HANA IS PRIMARY"
