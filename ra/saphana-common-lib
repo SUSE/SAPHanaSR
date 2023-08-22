@@ -559,12 +559,22 @@ function get_local_sr_config() {
             gP ) # call getParameter (gP)
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+                hdbANSWER_OLD=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1) 
+                [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>"(.*)"SAPCONTROL-OK: <end>" ]] && hdbANSWER="${BASH_REMATCH[1]}" || hdbANSWER=""
+                # TODO: delete gSrModeOLD after checking, that gSrModeOLD == gSrMode (new method)
+                gSrModeOLD=$(echo "$hdbANSWER_OLD" | awk -F= '$1=="actual_mode" {print $2}')
+                [[ "$hdbANSWER" =~ "/actual_mode"=([^$'\n']+) ]] && gSrMode=${BASH_REMATCH[1]}
+                # TODO: delete gSrModeOLD after checking, that gSrModeOLD == gSrMode (new method)
+                if [ -z "$gSrModeOLD" ]; then
+                    gSrModeOLD=$(echo "$hdbANSWER_OLD" | awk -F= '$1=="mode" {print $2}')
+                fi
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$gSrMode" ]; then
-                    gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                    [[ "$hdbANSWER" =~ "/mode="([^$'\n']+) ]] && gSrMode=${BASH_REMATCH[1]}
                 fi
+                # TODO: delete gSrModeOLD after checking, that gSrModeOLD == gSrMode (new method)
+                super_ocf_log info "ACT: gSrModeOLD=$gSrModeOLD; gSrMode=$gSrMode"
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$gSrMode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
