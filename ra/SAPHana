@@ -672,9 +672,9 @@ function HANA_CALL()
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
-                  su_err_log=/run/HANA_CALL_SU_RA_${errExt}
-                  cmd_out_log=/run/HANA_CALL_CMD_RA_OUT_${errExt}
-                  cmd_err_log=/run/HANA_CALL_CMD_RA_${errExt}
+                  su_err_log=${SAPHanaSR_RUN}/HANA_CALL_SU_RA_${errExt}
+                  cmd_out_log=${SAPHanaSR_RUN}/HANA_CALL_CMD_RA_OUT_${errExt}
+                  cmd_err_log=${SAPHanaSR_RUN}/HANA_CALL_CMD_RA_${errExt}
 
                   output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
@@ -819,6 +819,10 @@ function saphana_init() {
     super_ocf_log debug "DBG: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid="${SID,,}"
     sidadm="${sid}adm"
+    # create subdirectory in /run
+    SAPHanaSR_RUN="/run/SAPHanaSR_${sid}"
+    mkdir -p $SAPHanaSR_RUN
+    chown $sidadm $SAPHanaSR_RUN
     # TODO PRIO3: Do we need a parameter for the RA to be able to adjust hdbSrQueryTimeout?
     hdbSrQueryTimeout=180
     # DONE: PRIO4: SAPVIRHOST might be different to NODENAME
@@ -1239,24 +1243,25 @@ function check_for_primary() {
     local chkMethod=""
     local node_status=""
     local node_full_status=""
+    local i=0
     for chkMethod in  hU hU hU gP; do
         case "$chkMethod" in
             gP )
                 # fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode})
-                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
+                node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1)
                 # first try to get the value of 'actual_mode' from the global.ini
-                [[ "$node_full_status" =~ actual_mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
+                [[ "$node_full_status" =~ "SAPCONTROL-OK: <begin>".*"/actual_mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && node_status=${BASH_REMATCH[1]}
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$node_status" ]; then
-                    [[ "$node_full_status" =~ mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
+                    [[ "$node_full_status" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && node_status=${BASH_REMATCH[1]}
                 fi
                 super_ocf_log info "ACT: Using getParameter.py as fallback - node_status=$node_status"
                 ;;
             hU | * )
                 node_full_status=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null )
-                [[ "$node_full_status" =~ mode=([^$'\n']+) ]] && node_status=${BASH_REMATCH[1]}
+                [[ "$node_full_status" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && node_status=${BASH_REMATCH[1]}
                 super_ocf_log debug "DBG: check_for_primary: node_status=$node_status"
                 ;;
         esac

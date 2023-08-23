@@ -417,9 +417,9 @@ function HANA_CALL()
                   ;;
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
-                  su_err_log=/run/HANA_CALL_SU_TOP_${errExt}
-                  cmd_out_log=/run/HANA_CALL_CMD_TOP_OUT_${errExt}
-                  cmd_err_log=/run/HANA_CALL_CMD_TOP_${errExt}
+                  su_err_log=${SAPHanaSR_RUN}/HANA_CALL_SU_TOP_${errExt}
+                  cmd_out_log=${SAPHanaSR_RUN}/HANA_CALL_CMD_TOP_OUT_${errExt}
+                  cmd_err_log=${SAPHanaSR_RUN}/HANA_CALL_CMD_TOP_${errExt}
 
                   output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
 
@@ -489,6 +489,10 @@ function sht_init() {
     super_ocf_log debug "DBG2: Used new method to get SID ($SID) and InstanceNr ($InstanceNr)"
     sid="${SID,,}"
     sidadm="${sid}adm"
+    # create subdirectory in /run
+    SAPHanaSR_RUN="/run/SAPHanaSR_${sid}"
+    mkdir -p $SAPHanaSR_RUN
+    chown $sidadm $SAPHanaSR_RUN
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG3: OCF: $ocf_env"
     ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
@@ -572,18 +576,18 @@ function sht_init() {
             gP ) # call getParameter (gP) - fallback for 'hdbnsutil' failing 3 times.
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                [[ "$hdbANSWER" =~ actual_mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1)
+                [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/actual_mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$srmode" ]; then
-                    [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
+                    [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
                 fi
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$srmode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
+                [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
                 ;;
         esac
         case "$srmode" in
@@ -598,12 +602,12 @@ function sht_init() {
         esac
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    [[ "$hdbANSWER" =~ site.name=([^$'\n']+) ]] && site=${BASH_REMATCH[1]}
+    [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/site_name="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && site=${BASH_REMATCH[1]}
     if [ -z "$srmode" ]; then
-        [[ "$hdbANSWER" =~ actual_mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
+        [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/actual_mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
         # if 'actual_mode' is not available, fallback to 'mode'
         if [ -z "$srmode" ]; then
-            [[ "$hdbANSWER" =~ mode=([^$'\n']+) ]] && srmode=${BASH_REMATCH[1]}
+            [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
         fi
     fi
     #
