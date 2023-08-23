@@ -587,7 +587,7 @@ function sht_init() {
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
                 # DONE: PRIO1: Beginning from SAP HANA rev 112.03 -sr_state is not longer supported
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
+                [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*(^|$'\n')"mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[2]}
                 ;;
         esac
         case "$srmode" in
@@ -602,12 +602,15 @@ function sht_init() {
         esac
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/site_name="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && site=${BASH_REMATCH[1]}
+    # following pattern matching needs to work the output of getParameter.py and
+    # hdbnsutil as we do not know which of these commands succeeded in the loop
+    # above.
+    [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*/?"site"."name="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && site=${BASH_REMATCH[1]}
     if [ -z "$srmode" ]; then
-        [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/actual_mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
+        [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*/?"actual"."mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
         # if 'actual_mode' is not available, fallback to 'mode'
         if [ -z "$srmode" ]; then
-            [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*"/mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
+            [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>".*/?"mode="([^$'\n']*).*"SAPCONTROL-OK: <end>" ]] && srmode=${BASH_REMATCH[1]}
         fi
     fi
     #
