@@ -1591,10 +1591,10 @@ function saphana_monitor_running_secondary() {
     fi
     lpa_set_lpt  30 "$gSite"
     sync_attr=$(get_SRHOOK "$gSite")
-    # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the operationMode
+    # DONE: PRIO 3: check, if using getParameter.py is the best option to analyze the operationMode
     hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
-    hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-    hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
+    [[ "$hanaOut1" =~ "SAPCONTROL-OK: <begin>"(.*)"SAPCONTROL-OK: <end>" ]] && hanaFilter1="${BASH_REMATCH[1]}" || hanaFilter1=""
+    [[ "$hanaFilter1" =~ "/operation_mode="([^$'\n']+) ]] && hanaOM="${BASH_REMATCH[1]}" || hanaOM=""
     set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
     if [[ -n "$remoteNode" && -n "$remSite" ]]; then
         set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
