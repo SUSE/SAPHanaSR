@@ -17,6 +17,7 @@
 #   OCF_RESKEY_SID              (LNX, SUS, SLE)
 #   OCF_RESKEY_InstanceNumber   (00..99)
 #   OCF_RESKEY_DIRECTORY        (path to be monitored, default /hana/shared/<SID>)
+#   OCF_RESKEY_ON_FAIL_ACTION   (optional: fail, ignore; default is fail)
 #
 #######################################################################
 #
@@ -162,7 +163,7 @@ function shfs_methods() {
 # function: shfs_init - initialize variables for the resource agent
 # params:   -
 # globals:  OCF_*(r), SID(w), sid(rw), sidadm(w), InstanceName(w), InstanceNr(w),
-# globals:  ATTR_NAME_HANA_* 
+# globals:  ATTR_NAME_HANA_*
 # globals:  nodelist(w)
 # globals:  NODENAME(w), hdbver(w)
 # shfs_init : Define global variables with default values, if optional parameters are not set
@@ -181,13 +182,15 @@ function shfs_init() {
     SID="$OCF_RESKEY_SID"
     InstanceNr="$OCF_RESKEY_InstanceNumber"
     InstanceName="HDB${InstanceNr}"
+    runDir="/run/SAPHanaSR_${SID}"
     fs_hana_shared="${OCF_RESKEY_DIRECTORY:-/hana/shared/$SID}"
     HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-90}"
+    ON_FAIL_ACTION="${OCF_RESKEY_ON_FAIL_ACTION:-fail}"
     td_hana_shared="$fs_hana_shared/.suse_SAPHanaFilesystem/${NODENAME}"
     pp_hana_shared="/dev/shm/poison_pill_${SID}"
     sid="${SID,,}"
     export sidadm="${sid}adm"
-    RemoveSAPSockets="" # not needed in SAPHanaFilesystem, but referened in shell lib saphana-controller-common-lib used by SAPHanaFilesystem    
+    RemoveSAPSockets="" # not needed in SAPHanaFilesystem, but referened in shell lib saphana-controller-common-lib used by SAPHanaFilesystem
     #
     # init attribute definitions
     #
@@ -222,7 +225,7 @@ function shfs_start() {
 } # end function shfs_start
 
 #
-# function: shfs_stop - stop a hana pseudo FS resource 
+# function: shfs_stop - stop a hana pseudo FS resource
 # params:   -
 # globals:  OCF_*(r), SAPCONTROL(r), SID(r), InstanceName(r)
 # shfs_stop: Stop the SAP HANA pseudo FS resource instance
@@ -257,7 +260,7 @@ function shfs_error_simulation() {
         return 0
     else
         return 1
-    fi 
+    fi
 }
 
 function shfs_test_directory()
@@ -268,7 +271,7 @@ function shfs_test_directory()
         dd_opts="oflag=direct,sync bs=4k count=1 conv=fsync,sync"
         STATUSFILE="${td_hana_shared}/test"
         # shellcheck disable=SC2086  # - dd_opts must not be quoted
-        dd if=/dev/zero of="${STATUSFILE}" $dd_opts 
+        dd if=/dev/zero of="${STATUSFILE}" $dd_opts
     ); rc2="$?"
     ls "${td_hana_shared}"
     (( error_code = 1000 * rc2 + rc1 ))
@@ -306,7 +309,7 @@ function shfs_monitor() {
     else
 	    #
 	    # only for PoC tests allow an error simulation
-	    #  
+	    #
 	    if shfs_error_simulation; then
             test_rc=42
 	    fi
@@ -337,11 +340,19 @@ function shfs_monitor() {
                 ;;
             *_SOK ) rc="$OCF_ERR_GENERIC"
                 super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} Go out of here"
-                touch "$pp_hana_shared"
-                ;; 
+                case "$ON_FAIL_ACTION" in
+                    ignore )
+                        super_ocf_log info "RA monitor() ON_FAIL_ACTION=$ON_FAIL_ACTION => ignore FS error, do not create poison pill file"
+                        ;;
+                    * )
+                        super_ocf_log info "RA monitor() ON_FAIL_ACTION=$ON_FAIL_ACTION => do not ignore FS error, create poison pill file"
+                        touch "$pp_hana_shared"
+                        ;;
+                esac
+                ;;
             *_* )   rc="$OCF_ERR_GENERIC"
                 super_ocf_log info "RA monitor() ${test_rc}_${test_rem_sr} Thunderstorm"
-                ;; 
+                ;;
             esac
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -401,7 +412,7 @@ function shfs_validate() {
 # globals:  OCF_*(r),
 # shfs_start_clone
 #
-function shfs_start_clone() { 
+function shfs_start_clone() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_NOT_RUNNING"
