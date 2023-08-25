@@ -1839,7 +1839,8 @@ function saphana_monitor_clone() {
         # check during probe, if this instance is *NOT* running as master
         # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
         #
-        master_node_name=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE"  | awk '$7 == "Master" { print $6 }')
+        crm_res=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE")
+        [[ "$crm_res" =~ "is running on: "(.+)" Master" ]] && master_node_name="${BASH_REMATCH[1]}" || master_node_name=""
         if [ "$master_node_name" != "$NODENAME" ]; then
             if [ "$gLss" -ge 2 ]; then
                 # we are in a probe, hana is running and we need to reset the clone_state
