@@ -395,7 +395,7 @@ function HANA_CALL() {
 
     if [ "$use_su" == "1" ]; then
         pre_cmd_type="su"
-        [[ "$cmd" == python* ]] && pre_script="cd $DIR_EXECUTABLE/python_support" || pre_script='true'
+        [[ "$cmd" == python* ]] && pre_script=": [$$]; cd $DIR_EXECUTABLE/python_support" || pre_script=": [$$]"
     else
         # as root user we need the library path to the SAP kernel to be able to call sapcontrol
         # check, if we already added DIR_EXECUTABLE at the beginning of LD_LIBRARY_PATH
@@ -420,9 +420,9 @@ function HANA_CALL() {
         *       )
                   errExt=$(date '+%s%N')_${sid}adm
                   # TODO PRIO1: NG - need to differ files for Topology and Controller
-                  su_err_log="/tmp/HANA_CALL_SU_${raType}${errExt}"
-                  cmd_out_log="/tmp/HANA_CALL_CMD_${raType}OUT_${errExt}"
-                  cmd_err_log="/tmp/HANA_CALL_CMD_${raType}ERR_${errExt}"
+                  su_err_log="${runDir}/HANA_CALL_SU_${raType}${errExt}"
+                  cmd_out_log="${runDir}/HANA_CALL_CMD_${raType}OUT_${errExt}"
+                  cmd_err_log="${runDir}/HANA_CALL_CMD_${raType}ERR_${errExt}"
 
                   # TODO PRIO2: NG - ScaleUp had 'timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log)'
                   #                  'output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
@@ -559,19 +559,20 @@ function get_local_sr_config() {
             gP ) # call getParameter (gP)
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1 | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-                gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1) 
+                [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>"(.*)"SAPCONTROL-OK: <end>" ]] && hdbANSWER="${BASH_REMATCH[1]}" || hdbANSWER=""
+                [[ "$hdbANSWER" =~ "/actual_mode"=([^$'\n']+) ]] && gSrMode=${BASH_REMATCH[1]}
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$gSrMode" ]; then
-                    gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                    [[ "$hdbANSWER" =~ "/mode="([^$'\n']+) ]] && gSrMode=${BASH_REMATCH[1]}
                 fi
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$gSrMode"
                 ;;
             hU | * ) # call hdbnsUtil (hU) ( also for unknown chkMethod )
-                # TODO PRIO 2: Debug-Log for result
-                # TODO PRIO 2: Check '--sacontrol=1 Output' for the begin and end mark to check valiity and completeness
                 hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbState --sapcontrol=1" 2>/dev/null)
-                gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
+                super_ocf_log info "ACT: HU: hdbANSWER=$hdbANSWER"
+                [[ "$hdbANSWER" =~ (^|$'\n')"mode="([^$'\n']+) ]] && gSrMode="${BASH_REMATCH[2]}"
+                super_ocf_log debug "ACT: HU: hdbANSWER=$hdbANSWER"
                 ;;
         esac
         case "$gSrMode" in
@@ -602,16 +603,7 @@ function get_local_sr_config() {
         esac
     done
     # TODO PRIO3: Implement a file lookup, if we did not get a result
-    gSite=$(echo "$hdbANSWER" | awk -F= '/site.name/ {print $2}')
-    # from scale-up: only set srmode, if it is still empty
-    # from scale-up: first search for 'actual_mode', then for 'mode' as key
-    if [ -z "$gSrMode" ]; then
-        gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="actual_mode" {print $2}')
-        # if 'actual_mode' is not available, fallback to 'mode'
-        if [ -z "$gSrMode" ]; then
-            gSrMode=$(echo "$hdbANSWER" | awk -F= '$1=="mode" {print $2}')
-        fi
-    fi
+    [[ "$hdbANSWER" =~ (^|$'\n'|/)site.name=([^$'\n']+) ]] && gSite="${BASH_REMATCH[2]}" || gSite=""
 } # end function get_local_sr_config
 
 #
@@ -664,7 +656,7 @@ function check_for_primary() {
     local rc=0
     case "$raType" in
         saphana* ) # SAPHanaController
-            get_local_sr_config  # sets global variables gSrMode and gSite
+            get_local_sr_config >/dev/null # sets global variables gSrMode and gSite
             ;;
         sht* )     # SAPHanaTopology - did that already in sht_init() - maybe we can align that later
             ;;

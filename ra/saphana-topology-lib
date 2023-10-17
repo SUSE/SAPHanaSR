@@ -201,6 +201,13 @@ function sht_init() {
     HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-120}"
     sid="${SID,,}"
     export sidadm="${sid}adm"     # TODO PRIO3: NG - check if we use that var in a Topology/Controller common function in future
+    #
+    # create directory for HANA_CALL command sdtout and stderr tracking
+    #
+    runDir="/run/SAPHanaSR_${SID}"
+    mkdir -p "$runDir"
+    chown "${SID,,}adm" "$runDir"
+    super_ocf_log info "DEC: preparing runDir ($runDir) for access of user ${SID,,}adm"
     #ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     #super_ocf_log debug "DBG: OCF: $ocf_env"
     #
@@ -321,8 +328,29 @@ function sht_monitor() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
+    local vName="${NODENAME}"
     # TODO PRIO 1: 'node_role_walk' is only needed for scale-out; how to differ that here?
     node_role_walk --standbyFilter=off
+    # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
+    # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
+    # We rely on the following format: SID is word#4, NR is word#6, vHost is word#8
+    #### SAP-CALL
+    if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
+        vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
+            | awk '$4 == SID && $6=NR { print $8 }' SID="$SID" NR="$InstanceNr" 2>/dev/null )
+        super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
+    else
+        super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
+    fi
+    if [ -n "$vName" ]; then
+       set_hana_attribute "${NODENAME}" "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
+    else
+       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
+    fi
+    # last fallback, if neither the HANA call NOR the Attribute "knows" the vName - try the local hostname
+    if [ -z "$vName" ]; then
+       vName=${NODENAME}
+    fi
     if [ -f "$HA_RSCTMP/SAPHana/SAPTopologyON.${SID}" ]; then
         rc="$OCF_SUCCESS"
     else

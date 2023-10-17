@@ -38,6 +38,8 @@ parser.add_argument("--repeat", help="how often to repeat the test")
 parser.add_argument("--dumpFailures", help="print failed checks per loop",
                     action="store_true")
 parser.add_argument("--logFile", help="log file to write the messages")
+parser.add_argument("--printTestProperties", help="print test properties and exit",
+                    action="store_true")
 args = parser.parse_args()
 if args.testFile:
     test01.message("PARAM: testFile: {}".format(args.testFile))
@@ -65,6 +67,9 @@ if args.logFile:
     # disable 'consider to use with ...' - I am pretty sure with does not match here
     # pylint: disable-next=R1732
     test01.run['log_file_handle'] = open(test01.config['log_file'], 'a', encoding="utf-8")
+if args.printTestProperties:
+    test01.config['printTestProperties'] = args.printTestProperties
+    test01.message(f"PARAM: printTestProperties: {test01.config['printTestProperties']}")
 
 while test01.run['count'] <= test01.config['repeat']:
     test01.run['r_id'] = random.randrange(10000,99999,1)
@@ -115,7 +120,27 @@ while test01.run['count'] <= test01.config['repeat']:
                 f" sWorker={l_top['sWorker']}"
             )
     test01.message(l_msg)
+
     test01.read_test_file()
+    ### debug exit after printing test properties
+    if test01.config['printTestProperties'] is True:
+        p_msg = (
+                    f"test_properties:" 
+                    f" node01={l_top.get('pHost','node01')}"
+                    f" node02={l_top.get('sHost','node02')}"
+                    f" mstResource={test01.test_data.get('mstResource','')}"
+                    f" clnResource={test01.test_data.get('clnResource','')}"
+                    f" srMode=sync"
+                    f" opMode=logreplay"
+                    f" SID={test01.test_data.get('sid','C11')}"
+                    f" instNr={test01.test_data.get('instNo','00')}"
+                    f" sidadm={test01.test_data.get('sid','C11').lower()}adm"
+                    f" userkey={test01.test_data.get('userKey','')}"
+                )
+        test01.message(p_msg)
+        break
+    test01.write_test_properties(l_top)
+
     my_test_id = test01.run['test_id']
     if test01.config['repeat'] != 1:
         test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))

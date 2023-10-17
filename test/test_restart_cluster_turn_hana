@@ -21,6 +21,15 @@ source .test_properties
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
 currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+echo "p=$currPrimary, s=$currSecondary"
+
+sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary="${sitePrimary//\"/}"
+
+echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=script" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 echo "p=$currPrimary, s=$currSecondary"
@@ -35,15 +44,24 @@ ssh "${node02}" 'crm cluster run "crm cluster stop"'
 
 echo "==== SUSE Cluster Stopped ===="
 
-ssh "$node01" 'su - '"$sidadm"' -c "HDB start"' &
-ssh "$node02" 'su - '"$sidadm"' -c "HDB start"' &
-wait
+ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function StartSystem"'
+ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function StartSystem"'
+ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
+ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
+
+while true; do
+    ssh "$currPrimary" 'su - '"$sidadm"' -c "cdpy; python3 systemReplicationStatus.py 1>/dev/null"'; rc=$?
+    if [[ "$rc" != 15 ]]; then
+        sleep 60
+    else
+        break
+    fi
+done
 
 echo "==== SAP HANA DBs started ===="
 
 ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
 ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$currSecondary"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
-
 
 ssh "$node01" 'crm cluster run "crm cluster start"'
 

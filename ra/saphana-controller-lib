@@ -413,6 +413,13 @@ function saphana_init() {
     NODENAME=$(crm_node -n)
     saphana_init_get_ocf_parameters # set SID, sid, sidadm, InstanceNr, InstanceName HANA_CALL_TIMEOUT, PreferSiteTakeover, AUTOMATED_REGISTER, RemoveSAPSockets
     #
+    # create directory for HANA_CALL command sdtout and stderr tracking
+    #
+    runDir="/run/SAPHanaSR_${SID}"
+    mkdir -p "$runDir"
+    chown "${SID,,}adm" "$runDir"
+    super_ocf_log info "DEC: preparing runDir ($runDir) for access of user ${SID,,}adm"
+    #
     # get sap virtual host name
     #
     get_local_virtual_name; SAPVIRHOST=${gVirtName}
@@ -585,6 +592,7 @@ function register_hana_secondary() {
     local rc=2;
     local remoteInstance="";
     local remoteHanaHost="";
+    local vHost=""
     # TODO PRIO1: NG - scale-up is normally always the_master_nameserver
     if is_the_master_nameserver; then
         remoteInstance="$InstanceNr"
@@ -602,13 +610,17 @@ function register_hana_secondary() {
             set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_SEC[@]}"
             remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
             # TODO PRIO2: NG - only start register, if all variables are set
-            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"
+            vHost=$(get_hana_attribute "$remoteHanaHost" "${ATTR_NAME_HANA_VHOST[@]}") 
+            if [ -z "$vHost" ]; then
+                vHost="$remoteHanaHost"
+            fi
+            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$vHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"
             #
             # set status "R" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
             #
             set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
             set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"; rc=$?
+            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$vHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"; rc=$?
             #
             # resset status "-" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
             #
@@ -1584,10 +1596,10 @@ function saphana_monitor_running_secondary() {
     fi
     lpa_set_lpt  30 "$gSite"
     sync_attr=$(get_SRHOOK "$gSite")
-    # TODO: PRIO 3: check, if using getParameter.py is the best option to analyze the operationMode
+    # DONE: PRIO 3: check, if using getParameter.py is the best option to analyze the operationMode
     hanaOut1=$(HANA_CALL --timeout 10 --use-su --cmd "python getParameter.py --key=global.ini/system_replication/operation_mode --sapcontrol=1")
-    hanaFilter1=$(echo "$hanaOut1" | awk -F/ 'BEGIN {out=0} /^SAPCONTROL-OK: <begin>/ { out=1 } /^SAPCONTROL-OK: <end>/ { out=0 } /=/ {if (out==1) {print $3} }')
-    hanaOM=$(echo "$hanaFilter1" | awk -F= '$1=="operation_mode" {print $2}')
+    [[ "$hanaOut1" =~ "SAPCONTROL-OK: <begin>"(.*)"SAPCONTROL-OK: <end>" ]] && hanaFilter1="${BASH_REMATCH[1]}" || hanaFilter1=""
+    [[ "$hanaFilter1" =~ "/operation_mode="([^$'\n']+) ]] && hanaOM="${BASH_REMATCH[1]}" || hanaOM=""
     set_hana_site_attribute "${gSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}"
     if [[ -n "$remoteNode" && -n "$remSite" ]]; then
         set_hana_site_attribute "${remSite}" "$hanaOM" "${ATTR_NAME_HANA_SITE_OPERATION_MODE[@]}" # also set attribute for remote site
@@ -1832,7 +1844,8 @@ function saphana_monitor_clone() {
         # check during probe, if this instance is *NOT* running as master
         # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
         #
-        master_node_name=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE"  | awk '$7 == "Master" { print $6 }')
+        crm_res=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE")
+        [[ "$crm_res" =~ "is running on: "(.+)" Master" ]] && master_node_name="${BASH_REMATCH[1]}" || master_node_name=""
         if [ "$master_node_name" != "$NODENAME" ]; then
             if [ "$gLss" -ge 2 ]; then
                 # we are in a probe, hana is running and we need to reset the clone_state

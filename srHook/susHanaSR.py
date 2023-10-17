@@ -89,6 +89,8 @@ try:
                 ret_code = os.system(my_cmd)
                 my_msg = f"CALLING CRM: <{my_cmd}> ret_code={ret_code}"
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
+                fallback_file_name = f"../.crm_attribute.{my_site}"
+                fallback_stage_file_name = f"../.crm_attribute.stage.{my_site}"
                 if ret_code != 0:
                     #
                     # FALLBACK
@@ -104,16 +106,14 @@ try:
                     # however we go one level up (..) to have the file accessible for all
                     # SAP HANA swarm nodes
                     #
-                    stage_file = f"../.crm_attribute.stage.{my_site}"
                     attribute_name = f"hana_{mysid_lower}_site_srHook_{my_site}"
-                    with open(f"{stage_file}", "w", encoding="UTF-8") as fallback_file_obj:
+                    with open(fallback_stage_file_name, "w", encoding="UTF-8") as fallback_file_obj:
                         fallback_file_obj.write(f"{attribute_name} = {my_srs}")
                     #
                     # release the stage file to the original name (move is used to be atomic)
                     #      .crm_attribute.stage.<site> is renamed to .crm_attribute.<site>
                     #
-                    os.rename(f"../.crm_attribute.stage.{my_site}",
-                              f"../.crm_attribute.{my_site}")
+                    os.rename(fallback_stage_file_name, fallback_file_name)
             return 0
 except NameError as e:
     print(f"Could not find base class ({e})")

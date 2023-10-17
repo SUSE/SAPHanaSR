@@ -39,14 +39,15 @@ class SaphanasrTest:
             r_id = ""
         msg_arr = msg.split(" ")
         if stdout:
-            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])))
+            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])), flush=True)
         try:
             if self.run['log_file_handle']:
                 _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
                 _l_msg += ' '.join(msg_arr[1:])
                 self.run['log_file_handle'].write(_l_msg + "\n")
+                self.run['log_file_handle'].flush()
         except OSError:
-            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"))
+            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"), flush=True)
 
     def __init__(self, *args, **kwargs):
         """
@@ -60,7 +61,8 @@ class SaphanasrTest:
                         'repeat': 1,
                         'dump_failures': False,
                         'remote_node': None,
-                        'remote_nodes': []
+                        'remote_nodes': [],
+                        'printTestProperties': False
                       }
         self.dict_sr = {}
         self.test_data = {}
@@ -252,19 +254,36 @@ class SaphanasrTest:
     def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
         if self.config['properties_file']:
+            print(f"read properties file {self.config['properties_file']}")
             with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
                 self.test_data.update(json.load(prop_fh))
         if self.config['defaults_checks_file']:
+            print(f"read defaults file {self.config['defaults_checks_file']}")
             with open(self.config['defaults_checks_file'], encoding="utf-8") as dc_fh:
                 self.test_data.update(json.load(dc_fh))
         if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
+                print(f"read test file {self.config['test_file']}")
                 self.test_data.update(json.load(tf_fh))
         self.run['test_id'] = self.test_data['test']
         self.message("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
+
+    def write_test_properties(self, l_top):
+        with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
+            test_prop_fh.write(f"node01={l_top.get('pHost','node01')}\n")
+            test_prop_fh.write(f"node02={l_top.get('sHost','node02')}\n")
+            test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
+            test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
+            test_prop_fh.write(f"srMode=sync\n")
+            test_prop_fh.write(f"opMode=logreplay\n")
+            test_prop_fh.write(f"SID={self.test_data.get('sid','C11')}\n")
+            test_prop_fh.write(f"instNr={self.test_data.get('instNo','00')}\n")
+            test_prop_fh.write(f"sidadm={self.test_data.get('sid','C11').lower()}adm\n")
+            test_prop_fh.write(f"userkey={self.test_data.get('userKey','')}\n")
+            test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg):
         """ document failed checks """
@@ -289,7 +308,7 @@ class SaphanasrTest:
             return self.run['failed']
         return None
 
-    def run_checks(self, checks, area_name, object_name ):
+    def run_checks(self, checks, area_name, object_name, step_step ):
         """ run all checks for area and object """
         l_sr = self.dict_sr
         check_result = -1
@@ -318,7 +337,7 @@ class SaphanasrTest:
             if (found == 0) and (check_result < 2 ):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message(f"FAILED: {self.__get_failed__()}", stdout=False)
+            self.message(f"FAILED: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -333,7 +352,7 @@ class SaphanasrTest:
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
-                rc_checks = self.run_checks(checks, area_name, object_name)
+                rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''))
         return rc_checks
 
     def process_step(self, step):
@@ -360,6 +379,7 @@ class SaphanasrTest:
                      f" step_name='{step_name}'"
                      f" step_next={step_next}"
                      f" step_action='{step_action}'"
+                     f" max_loops='{max_loops}'"
                  )
         self.message(_l_msg)
         while loops < max_loops:
@@ -475,6 +495,12 @@ class SaphanasrTest:
         elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_prim_worker_indexserver":
+            remote = self.topolo['pWorker']
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_secn_worker_indexserver":
+            remote = self.topolo['sWorker']
+            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
@@ -538,7 +564,8 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver",
+                                   "kill_prim_worker_indexserver", "kill_secn_worker_indexserver" , "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain"):
             action_rc = self.action_on_cluster(action_name)
