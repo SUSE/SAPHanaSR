@@ -592,6 +592,7 @@ function register_hana_secondary() {
     local rc=2;
     local remoteInstance="";
     local remoteHanaHost="";
+    local vHost=""
     # TODO PRIO1: NG - scale-up is normally always the_master_nameserver
     if is_the_master_nameserver; then
         remoteInstance="$InstanceNr"
@@ -609,13 +610,17 @@ function register_hana_secondary() {
             set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_SEC[@]}"
             remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
             # TODO PRIO2: NG - only start register, if all variables are set
-            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"
+            vHost=$(get_hana_attribute "$remoteHanaHost" "${ATTR_NAME_HANA_VHOST[@]}") 
+            if [ -z "$vHost" ]; then
+                vHost="$remoteHanaHost"
+            fi
+            super_ocf_log info "ACT: SAP HANA REGISTER: hdbnsutil -sr_register --remoteHost=$vHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"
             #
             # set status "R" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
             #
             set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION[@]}"
             set_hana_attribute "$NODENAME" "R" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$remoteHanaHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"; rc=$?
+            HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_register --remoteHost=$vHost --remoteInstance=$remoteInstance --replicationMode=$hanaRM --operationMode=$hanaOM --name=$gSite"; rc=$?
             #
             # resset status "-" for SRACTION attribute to interact with srTkOver; SRACTION_HISTORY is kept till next monitor
             #
