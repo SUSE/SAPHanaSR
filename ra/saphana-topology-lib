@@ -337,15 +337,15 @@ function sht_monitor() {
     #### SAP-CALL
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
         vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-            | awk '$4 == SID && $6=NR { print $8 }' SID=$SID NR=$InstanceNr 2>/dev/null )
+            | awk '$4 == SID && $6=NR { print $8 }' SID="$SID" NR="$InstanceNr" 2>/dev/null )
         super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
     else
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
     fi
     if [ -n "$vName" ]; then
-       set_hana_attribute ${NODENAME} "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
+       set_hana_attribute "${NODENAME}" "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
     else
-       vName=$(get_hana_attribute ${NODENAME} "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
+       vName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}")
     fi
     # last fallback, if neither the HANA call NOR the Attribute "knows" the vName - try the local hostname
     if [ -z "$vName" ]; then
