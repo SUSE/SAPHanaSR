@@ -198,8 +198,11 @@ class HanaStatus():
         if filename is None:
             # use cibadmin as input
             cmd = "cibadmin -Ql"
-            xml_string = subprocess.check_output(cmd.split(" "))
-            self.root = ET.fromstring(xml_string)
+            try:
+                xml_string = subprocess.check_output(cmd.split(" "))
+                self.root = ET.fromstring(xml_string)
+            except FileNotFoundError as f_err:
+                print(f"Could not call {cmd}: {f_err}") 
         elif filename == "-":
             # read from stdin
             self.tree = ET.parse(sys.stdin)
@@ -523,8 +526,11 @@ class HanaStatus():
         """
         root = self.root
         sids = []
-        for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
-            sids.append(ia.attrib['value'])
+        try: 
+            for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
+                sids.append(ia.attrib['value'])
+        except AttributeError:
+            print(f"Could not find any SAPHanaController resource in cluster config")
         self.sids = sids
 
 
