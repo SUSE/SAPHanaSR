@@ -202,7 +202,7 @@ class HanaStatus():
                 xml_string = subprocess.check_output(cmd.split(" "))
                 self.root = ET.fromstring(xml_string)
             except FileNotFoundError as f_err:
-                print(f"Could not call {cmd}: {f_err}") 
+                print(f"Could not call {cmd}: {f_err}")
         elif filename == "-":
             # read from stdin
             self.tree = ET.parse(sys.stdin)
@@ -258,7 +258,7 @@ class HanaStatus():
             s_cib_timestamp = cib_attrs["execution-date"]
             s_cib_time_fmt = datetime.datetime.utcfromtimestamp(int(s_cib_timestamp))
             global_glob_dict.update({'cib-time': s_cib_time_fmt.strftime('%Y-%m-%dT%H:%M:%S')})
-        if 'admin_epoch' in cib_attrs and 'num_updates' in cib_attrs and 'epoch' in cib_attrs: 
+        if 'admin_epoch' in cib_attrs and 'num_updates' in cib_attrs and 'epoch' in cib_attrs:
             global_glob_dict.update({'cib-update': f'{cib_attrs["admin_epoch"]}.{cib_attrs["epoch"]}.{cib_attrs["num_updates"]}'})
         if 'dc-uuid' in cib_attrs:
             global_glob_dict.update({'dcid': cib_attrs["dc-uuid"]})
@@ -526,7 +526,7 @@ class HanaStatus():
         """
         root = self.root
         sids = []
-        try: 
+        try:
             for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
                 sids.append(ia.attrib['value'])
         except AttributeError:
