@@ -7,10 +7,12 @@
  License:      GNU General Public License (GPL)
  Copyright:    (c) 2023 SUSE LLC
 
-# TODO: STEP01: extract files from crm_report-archive - find pengine directories 
+# TODO: STEP01: extract files from crm_report-archive - find pengine directories
 # TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
 """
 
+#global TOOL_VERSION
+TOOL_VERSION = "1.0.20231030.1809"
 # TODO pylint's constant vs variable detection is broken
 # pylint: disable=invalid-name
 
@@ -42,7 +44,6 @@ if __name__ == "__main__":
     #                    action="store_true")
     args = parser.parse_args()
     if args.cib:
-        #myCluster.config['cib_file'] = args.cib[0] # later we need to iterate
         myCluster.config['cib_file_list'] = args.cib
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
     if 'from' in vars(args) and vars(args)['from']:
@@ -141,7 +142,10 @@ if __name__ == "__main__":
         elif oformat == "json":
             myHana.print_all_as_json()
         elif oformat in {"path", "script"}:
-            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"')
-            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"')
-            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"')
-            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"')
+            cib_time=0
+            if 'cib-time' in myHana.glob_dict["global"]:
+                cib_time = myHana.glob_dict["global"]['cib-time']
+            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"', ts=cib_time)

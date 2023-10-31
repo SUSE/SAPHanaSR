@@ -29,6 +29,7 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 import bz2
+import datetime
 # from dateutil import parser as dateutil_parser
 
 # global lib_version
@@ -95,7 +96,7 @@ class HanaCluster():
                                     'host': ['.*'],
                                },
                     'default': {
-                                    'global': ['Global', 'cib-time', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
+                                    'global': ['Global', 'timestamp', 'cib-time', 'cib-update', 'dcid', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
                                     'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
                                     'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
@@ -197,8 +198,11 @@ class HanaStatus():
         if filename is None:
             # use cibadmin as input
             cmd = "cibadmin -Ql"
-            xml_string = subprocess.check_output(cmd.split(" "))
-            self.root = ET.fromstring(xml_string)
+            try:
+                xml_string = subprocess.check_output(cmd.split(" "))
+                self.root = ET.fromstring(xml_string)
+            except FileNotFoundError as f_err:
+                print(f"Could not call {cmd}: {f_err}")
         elif filename == "-":
             # read from stdin
             self.tree = ET.parse(sys.stdin)
@@ -245,9 +249,19 @@ class HanaStatus():
         # handle all cib attributes at top-level
         cib_attrs = self.root.attrib
         if 'cib-last-written' in cib_attrs:
-            global_glob_dict.update({'cib-time': cib_attrs["cib-last-written"]})
+            global_glob_dict.update({'cib-last-written': cib_attrs["cib-last-written"]})
         if 'have-quorum' in cib_attrs:
             global_glob_dict.update({'have-quorum': cib_attrs["have-quorum"]})
+        # TODO: for live cib the execution-date does not exist. use system time 'now' instead
+        if 'execution-date' in cib_attrs:
+            global_glob_dict.update({'timestamp': cib_attrs["execution-date"]})
+            s_cib_timestamp = cib_attrs["execution-date"]
+            s_cib_time_fmt = datetime.datetime.utcfromtimestamp(int(s_cib_timestamp))
+            global_glob_dict.update({'cib-time': s_cib_time_fmt.strftime('%Y-%m-%dT%H:%M:%S')})
+        if 'admin_epoch' in cib_attrs and 'num_updates' in cib_attrs and 'epoch' in cib_attrs:
+            global_glob_dict.update({'cib-update': f'{cib_attrs["admin_epoch"]}.{cib_attrs["epoch"]}.{cib_attrs["num_updates"]}'})
+        if 'dc-uuid' in cib_attrs:
+            global_glob_dict.update({'dcid': cib_attrs["dc-uuid"]})
 
     def fill_res_dict(self):
         """
@@ -471,14 +485,17 @@ class HanaStatus():
         """
         TODO: description
         """
+        time_string = ""
         quote = ''
         if 'quote' in kargs:
             quote = kargs['quote']
+        if 'ts' in kargs:
+            time_string = kargs['ts']
         for key in print_dic:
             for col in print_dic[key]:
                 if self.filter(area, col) is True:
                     value = print_dic[key][col]
-                    print(f"{table_name}/{key}/{col}={quote}{value}{quote}")
+                    print(f"{time_string} {table_name}/{key}/{col}={quote}{value}{quote}")
 
     def filter(self, area, column_name):
         ''' filter column_names
@@ -509,8 +526,11 @@ class HanaStatus():
         """
         root = self.root
         sids = []
-        for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
-            sids.append(ia.attrib['value'])
+        try:
+            for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
+                sids.append(ia.attrib['value'])
+        except AttributeError:
+            print(f"Could not find any SAPHanaController resource in cluster config")
         self.sids = sids
 
 
