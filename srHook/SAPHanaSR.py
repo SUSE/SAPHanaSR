@@ -30,7 +30,7 @@ try:
         def __init__(self, *args, **kwargs):
             # delegate construction to base class
             super(SAPHanaSR, self).__init__(*args, **kwargs)
-            self.tracer.info("SAPHanaSR init()") 
+            self.tracer.info("SAPHanaSR init()")
 
         def about(self):
             return {"provider_company": "SUSE",
@@ -72,7 +72,16 @@ try:
                 rc = os.system(myCMD)
                 myMSG = "CALLING CRM: <{0}> rc={1}".format(myCMD, rc)
                 self.tracer.info("{0}.{1}() {2}\n".format(self.__class__.__name__, method, myMSG))
-                if rc != 0:
+                fallback_file_name = "../.crm_attribute.{0}".format(mySite)
+                fallback_stage_file_name = "../.crm_attribute.stage.{0}".format(mySite)
+                if rc == 0:
+                    # cluster attribute set was successfull - delete pending fallback file, if existing
+                    try:
+                        os.remove(fallback_file_name)
+                        self.tracer.info("new event - pending fallback file {0} deleted".format(fallback_file_name))
+                    except FileNotFoundError:
+                        pass
+                else:
                     #
                     # FALLBACK
                     # sending attribute to the cluster failed - using fallback method and write status to a file - RA to pick-up the value during next SAPHanaController monitor operation
@@ -83,14 +92,13 @@ try:
                     # cwd of hana is /hana/shared/<SID>/HDB00/<hananode> we use a relative path to cwd this gives us a <sid>adm permitted directory
                     #     however we go one level up (..) to have the file accessible for all SAP HANA swarm nodes
                     #
-                    fallbackFileObject = open("../.crm_attribute.stage.{0}".format(mySite), "w")
-                    fallbackFileObject.write("hana_{0}_site_srHook_{1} = {2}".format(mysid, mySite, mySRS))
-                    fallbackFileObject.close()
+                    with open(fallback_stage_file_name, "w", encoding='utf-8') as fallbackFileObject:
+                        fallbackFileObject.write("hana_{0}_site_srHook_{1} = {2}".format(mysid, mySite, mySRS))
                     #
                     # release the stage file to the original name (move is used to be atomic)
                     #      .crm_attribute.stage.<site> is renamed to .crm_attribute.<site>
                     #
-                    os.rename("../.crm_attribute.stage.{0}".format(mySite), "../.crm_attribute.{0}".format(mySite))
+                    os.rename(fallback_stage_file_name, fallback_file_name)
             return 0
 except NameError as e:
     print("Could not find base class ({0})".format(e))
