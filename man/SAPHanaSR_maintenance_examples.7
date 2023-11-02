@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR_maintenance_examples 7 "12 Jun 2023" "" "SAPHanaSR"
+.TH SAPHanaSR_maintenance_examples 7 "31 Oct 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR_maintenance_examples \- maintenance examples for SAPHana and SAPHanaController.
@@ -41,7 +41,7 @@ REQUIREMENTS below.
 This might be convenient when performing administrative actions or cluster tests. It does not replace the afore mentioned checks. See also cs_show_saphanasr_status(8).
 .PP
 .RS 4
-# watch -n 9 "(crm_mon -1r;SAPHanaSR-showAttr;cs_clusterstate -i)|egrep -v'(^$|configured|###)'"
+# watch -n9 "crm_mon -1r --include=none,nodes,resources,failures;echo;SAPHanaSR-showAttr;cs_clusterstate -i|grep -v '#'"
 .RE
 .PP
 \fB*\fR Initiate an administrative takeover of the HANA primary from one node to the other by using the Linux cluster. 
@@ -357,48 +357,59 @@ before proceeding with the new procedure for pacemaker-2.0.
 .PP
 \fB*\fR Overview on maintenance procedure for Linux, HANA remains running, on pacemaker-2.0.
 
+It is necessary to wait for each step to complete and to check the result. It
+also is necessary to test and document the whole procedure before applying in production.
 See also section REQUIREMENTS below and example on checking status of HANA and cluster above.
-.\" TODO details
 .PP
 .RS 2
 1. Check status of Linux cluster and HANA, see above.
 .br
-2. Set the Linux cluster into maintenance mode, on either node.
+2. Set HANA multistate resource into maintenance mode.
+.RE
+.RS 4
+# crm resource maintenance msl_... on
+.RE
+.RS 2
+3. Set the Linux cluster into maintenance mode, on either node.
 .RE
 .RS 4
 # crm maintenance on
 .RE
 .RS 2
-3. Stop Linux Cluster on all nodes. Make sure to do that on all nodes.
-.RE
-.RS 3
-# crm cluster stop
-.RE
-.RS 2
-4. Perform Linux maintenance.
-.br
-5. Start Linux cluster on all nodes. Make sure to do that on all nodes.
+4. Stop Linux Cluster on all nodes. Make sure to do that on all nodes.
 .RE
 .RS 4
-# crm cluster start
+# crm cluster run "crm cluster stop"
 .RE
 .RS 2
-6. Let Linux cluster detect status of HANA resource, on either node.
+.PP
+5. Perform Linux maintenance.
+.PP
+6. Start Linux cluster on all nodes. Make sure to do that on all nodes.
 .RE
 .RS 4
-# crm resource refresh cln_...
-.br
-# crm resource refresh msl_...
+# crm cluster run "crm cluster start"
 .RE
 .RS 2
 7. Set cluster ready for operations, on either node.
 .RE
 .RS 4
 # crm maintenance off
-.\" TODO delete property, optional?
 .RE
 .RS 2
-8. Check status of Linux cluster and HANA, see above.
+8. Let Linux cluster detect status of HANA multistate resource, on either node.
+.RE
+.RS 4
+# crm resource refresh msl_...
+.RE
+.RS 2
+9. Set HANA multistate resource ready for operations, on either node.
+.RE
+.RS 4
+# crm maintenance msl_... off
+.RE
+.RS 2
+10. Check status of Linux cluster and HANA, see above.
 .RE
 .PP
 \fB*\fR Overview on simple procedure for stopping and temporarily disabling the Linux cluster,
@@ -583,12 +594,17 @@ landscape status, and the HANA SR status.
 .PP
 \fB*\fR Maintenance attributes for cluster, nodes and resources must not be mixed.
 .PP
-\fB*\fR The Linux cluster needs to be up and running to allow HA/DR provider events being written into CIB attributes. 
-The current HANA SR status might differ from CIB srHook attribute after Linux cluster maintenance.
+\fB*\fR The Linux cluster needs to be up and running to allow HA/DR provider events
+being written into CIB attributes. The current HANA SR status might differ from CIB
+srHook attribute after Linux cluster maintenance.
 .PP
-\fB*\fR Manually activating an HANA primary, like start of HANA primary or takeover outside
-the cluster creates risk of a duplicate-primary situation. The user is responsible for data
-integrity, particularly when activating an HANA primary.
+\fB*\fR Manually activating an HANA primary, like start of HANA primary or takeover
+outside the cluster creates risk of a duplicate-primary situation. The user is
+responsible for data integrity, particularly when activating an HANA primary. See
+also susTkOver.py(7).
+.PP
+\fB*\fR HANA site names are discovered automatically when the RAs are activated the
+very first time. That exact site names have to be used later for all manual tasks.
 .PP
 .\"
 .SH BUGS
