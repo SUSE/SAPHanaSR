@@ -1,6 +1,6 @@
 .\" Version: 0.160.1
 .\"
-.TH SAPHanaSR.py 7 "02 Nov 2022" "" "SAPHanaSR"
+.TH SAPHanaSR.py 7 "03 Nov 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
@@ -213,6 +213,46 @@ SID is HA1.
 # SAPHanaSR-showAttr
 .RE
 .PP
+\fB*\fR Example for temporarily blocking HANA system replication.
+.br
+This could be done for testing the HA/DR provider hook script integration.
+Blocking the HANA system replication is dangerous. This test should not be done
+on production systems.
+Instance number is 00, the resulting network ports are depending on the HANA
+setup. Please refer to SAP HANA documentation. See also manual page iptables(8).
+.br
+Note: Understand the impact before trying.
+.PP
+1. Check HANA and Linux cluster for clean idle state.
+.PP
+2. On secondary, check for used network ports.
+.RS 2
+# ss -tulpan | grep hdb.*server | grep -v 127.0.0.1 |\\
+.br
+grep -v "\*" | awk '{print $6}' | awk -F: '{print $2}'
+.RE
+.PP
+3. On secondary, block HANA system replication, example ports are 4000[123].
+.RS 2
+# iptables -I INPUT -p tcp -m multiport --ports 40001,40002,40003 -j ACCEPT
+.RE
+Note: The ACCEPT needs to be replaced by appropriate action.
+.PP
+4. Check the nameserver tracefile for srConnectionChanged() events, check the
+system log for crm_attribute calls, check the Linux cluster attributes for srHook
+status.
+.PP
+5. On secondary, unblock HANA system replication.
+.RS 2
+# iptables -D INPUT -p tcp -m multiport --ports 40001,40002,40003 -j DROP
+.RE
+.PP
+6. Check the nameserver tracefile for srConnectionChanged() events, check the
+system log for crm_attribute calls, check the Linux cluster attributes for srHook
+status.
+.PP
+7. Check HANA and Linux cluster for clean idle state.
+.PP
 .\"
 .SH FILES
 .TP
@@ -269,6 +309,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBSAPHanaSR-monitor\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR-manageProvider\fP(8) , \fBSAPHanaSR-hookHelper\fP(8) ,
 \fBcrm_attribute\fP(8) , \fBsudo\fP(8) , \fBsudoers\fP(5), \fBpython\fP(8) ,
+\fBitables\fP(8) , \fBss\fP(8) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
 .br
@@ -282,7 +323,7 @@ F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2015-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2022 SUSE LLC
+(c) 2019-2023 SUSE LLC
 .br
 SAPHanaSR.py comes with ABSOLUTELY NO WARRANTY.
 .br
