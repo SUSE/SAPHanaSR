@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-ScaleOut 7 "18 Sep 2023" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-ScaleOut 7 "31 Oct 2023" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-ScaleOut \- Tools for automating SAP HANA system replication in
@@ -140,7 +140,7 @@ to repair a local failure.
 5. \fBRecovering from failure of master nameserver\fR
 .br
 If the master nameserver of an HANA database system fails, the HANA will start
-the nameserver on another node. Therefore usually up to two nodes are
+the nameserver on another node. Therefor usually up to two nodes are
 configured as additional nameserver candidates. At least one of them should be
 a standby node to optimize failover time. The Linux cluster will detect the
 change and move the IP address to the new active master nameserver.
@@ -210,14 +210,14 @@ cluster tests.
 .PP
 \fB*\fR Be patient. For detecting the overall HANA status, the Linux cluster
 needs a certain amount of time, depending on the HANA and the configured
-intervalls and timeouts.
+intervals and timeouts.
 .PP
 \fB*\fR Before doing anything, always check for the Linux cluster's idle status,
 left-over migration constraints, and resource failures as well as the HANA
 landscape status, and the HANA SR status.
 .PP
 \fB*\fR Manually activating an HANA primary creates risk of a dual-primary
-situation. The user is responsible for data integrity.
+situation. The user is responsible for data integrity. See also susTkOver.py(7).
 .PP
 .\"
 .SH REQUIREMENTS
@@ -240,19 +240,20 @@ neccessary. Substitute user (su) to sidadm needs to work reliable and without
 customized actions or messages. Supported shell is bash.
 .PP
 3. Strict time synchronization between the cluster nodes, e.g. NTP. All nodes of
-a cluster are in the same timezone.
+the Linux cluster have configured the same timezone.
 .PP
 4. For scale-out there is no other SAP HANA system (like QA) on the nodes
 which needs to be stopped during takeover. Both HANA database systems are
 running memory-preload. Also MCOS is currently not supported for scale-out.
 .PP
-5. Only one system replication between the two SAP HANA database systems in
-the Linux cluster. Maximum one system replication to an HANA database outside
-the Linux cluster.
+5. Only one system replication between the two SAP HANA databases in the Linux
+cluster. Maximum one system replication to an HANA database outside the Linux
+cluster.
 .PP
-6. The replication mode is either sync or syncmem. Replication mode async is
-not supported. The operation modes delta_datashipping, logreplay and
-logreplay_readaccess are supported.
+6. The replication mode is either sync or syncmem for the controlled replication.
+Replication mode async is not supported. The operation modes delta_datashipping,
+logreplay and logreplay_readaccess are supported. The operation mode logreplay
+is default.
 .PP
 7. Both SAP HANA database systems have the same SAP Identifier (SID) and
 Instance Number (INO).
@@ -276,18 +277,19 @@ that one does not interfere with the Linux cluster. All three clusters
 12. The RAs SAPHanaController and SAPHanaToplogy need to be installed on all
 cluster nodes, even the majority maker.
 .PP
-13. Colocation constraints between the SAPHanaController or SAPHana RA and
+13. Colocation constraints between the SAPHanaController RA and
 other resources are allowed only if they do not affect the RA's scoring.
 The location scoring finally depends on system replication status an must not
 be over-ruled by additional constraints. Thus it is not allowed to define rules
-forcing a SAPHanaController or SAPHana master to follow another resource.
+forcing a SAPHanaController promoted instance to follow another resource.
 .PP
 14. The Linux cluster needs to be up and running to allow HA/DR provider events
 being written into CIB attributes. The current HANA SR status might differ
 from CIB srHook attribute after cluster maintenance.
 .PP
 15. Once an HANA system replication site is known to the Linux cluster, that
-exact site name has to be used whenever the site is registered manually.
+exact site name has to be used whenever the site is registered manually. At any
+time only one site is configured as primary replication source.
 .PP
 16. In two-node HANA scale-out systems only one master nameserver candidate is
 configured.
@@ -302,7 +304,7 @@ Tennant-specific takeover groups are not supported. Sharing standby nodes
 across sites is not supported.
 .PP
 20. In MDC configurations the HANA database is treated as a single system
-including all database containers. Therefore, cluster takeover decisions are
+including all database containers. Therefor, cluster takeover decisions are
 based on the complete status independent of the status of individual containers.
 .PP
 21. If a third HANA site is connected by system replication, that HANA is not
@@ -325,7 +327,7 @@ need read/write access and sufficient space in the Linux /tmp filesystem.
 26. SAP HANA Native Storage Extension (NSE) is supported.
 Important is that this feature does not change the HANA topology or interfaces.
 In opposite to Native Storage Extension, the HANA Extension Nodes are changing
-the topology and thus currently are not supported.           
+the topology and thus currently are not supported. 
 Please refer to SAP documentation for details.
 .PP 
 .\"
@@ -375,9 +377,9 @@ A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2015-2018 SUSE Linux GmbH, Germany.
+(c) 2015-2017 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2023 SUSE LLC
+(c) 2018-2023 SUSE LLC
 .br
 The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
 .br
