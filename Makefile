@@ -14,6 +14,7 @@ FILE_LIST = LICENSE \
 		wizard
 
 #TAR_EXTRAS = -X tools/SAPHanaSR-testDriver
+TAR_EXTRAS = --exclude="man/*adoc"
 
 PKG = SAPHanaSR-angi
 SPECFILE = ${PKG}.spec
