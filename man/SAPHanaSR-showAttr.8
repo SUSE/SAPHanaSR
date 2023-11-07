@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-showAttr 8 "04 Oct 2023" "" "SAPHanaSR"
+.TH SAPHanaSR-showAttr 8 "07 Nov 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replication.
@@ -27,7 +27,7 @@ Global section
 .br
 global (\fBGlobal\fP)
 .br
-date and time of record (\fBcib-time\fP)
+sequence number of record (\fBcib-update\fP)
 .br
 maintenance status of Linux cluster (\fBmaintenance\fP)
 .br
@@ -35,6 +35,8 @@ filter for resource agent logging (\fBfilter\fP)
 .br
 .\" TODO Linux cluster scale-out multi-target support (\fBmts\fP)
 .\" .br
+designated coordinater node id (\fBdcid\fP)
+.br
 HANA primary replication site (\fBprim\fP)
 .br
 HANA secondary replication site (\fBsec\fP)
@@ -50,6 +52,8 @@ Resources section
 name of Linux cluster resources (\fBResources\fP)
 .br
 maintenance status of Linux cluster resources (\fBmaintenance\fP)
+.br
+promotability of Linux cluster clone resources (\fBpromotable\fP) 
 .TP
 Sites section
 HANA site name (\fBSites\fP)
@@ -233,6 +237,16 @@ This is a Linux cluster node attribute. It is set by an admin.
 The attribute is shown after it has been changed from the default.
 The field might appear or disappear, depending on cluster maintenance tasks.
 See also the standby attribute below.
+.PP
+.B promotable
+- promotability of Linux cluster clone resource
+
+Value: [ true ]
+
+This is a Linux cluster clone resource attribute. It is set as resource configuration
+meta attribute. The attribute is shown after it has been changed from the default.
+For the SAPHanaController multi-state clone resource this has to be "true". See
+also ocf_suse_SAPHanaController(7).
 .PP
 .B filter
 - SAPHanaController filter for logging
@@ -505,7 +519,7 @@ show version.
 \fB --path2table\fR
 convert script-style input pipe back into normal output.
 .TP 4
-.\fB --select=\fISELECTION\fR
+\fB --select=\fISELECTION\fR
 .\" TODO explain meaning of values
 show selected information only. Allowed values: [ all | default | minimal | sr ]. Default is default.
 .TP 4
@@ -513,11 +527,11 @@ show selected information only. Allowed values: [ all | default | minimal | sr ]
 use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
 Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
 .TP 4
---sort=\fIFIELD\fR
+\fB --sort=\fIFIELD\fR
 sort Hosts section table by field. Allowed values: [ roles | site ]. Default is sort by hostnames.
 .TP 4
 \fB --format=\fIFORMAT\fR
-output format. Allowed values: [ script | tables ]. Default is tables.
+output format. Allowed values: [ script | tables | tester ]. Default is tables.
 .TP 4
 \fB --cib=\fIOFFLINE_CIB_FILE\fR
 read data from given offline CIB file.
@@ -534,7 +548,7 @@ Usage, syntax or execution errors.
 # SAPHanaSR-showAttr
 show all SAPHanaSR attributes and relevant cluster maintenance states.
 .br
-If the roles sub-fields are 1:P:::: landscapeHostConfiguration.py has not been able to detect the HANA roles during last recent RA monitor operation. Likely HANA was down or sudo <sid>adm failed.
+If the roles sub-fields are :::: landscapeHostConfiguration.py has not been able to detect the HANA roles during last recent RA monitor operation. Likely HANA was down or sudo <sid>adm failed.
 .TP 4
 # SAPHanaSR-showAttr --sort=roles
 show all SAPHanaSR attributes in the cluster and sort host table output by roles.
@@ -547,6 +561,12 @@ show SAPHanaSR promotion scores on running nodes.
 .TP 4 
 # SAPHanaSR-showAttr --format=script | egrep -v '/(version|op_mode|vhost|remoteHost|node_state|site)=' | SAPHanaSR-showAttr --path2table
 reduce output to selected fields.
+.TP 4
+# watch -n9 "crm_mon -1r --include=none,nodes,resources,failures;echo; \\
+.br
+SAPHanaSR-showAttr;cs_clusterstate -i|grep -v '#'"
+.br
+display comprehensive overview on Linux cluster and HANA resources, update every nine seconds.
 .\"
 .SH FILES
 .TP
