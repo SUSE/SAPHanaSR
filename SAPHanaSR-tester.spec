@@ -34,7 +34,7 @@ Requires:       python3
 %description
 SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focussed test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
 
-The test cases are described in JSON files. Each tests is separated into one ore multiple steps. For each step there is an expection about the SAPHanaSR attributes, which needs to match.
+The test cases are described in JSON files. Each test is separated into one ore multiple steps. For each step there is an expection about the SAPHanaSR attributes, which needs to match.
 Additionally each step defines the 'next' step and an optional action to be triggered if the step status has been reached (all expectations match).
 
 The following SUSE blog series gives a good overview about running SAP HANA in System Replication in the SUSE cluster:
