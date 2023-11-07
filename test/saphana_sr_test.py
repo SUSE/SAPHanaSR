@@ -149,7 +149,7 @@ class SaphanasrTest:
         structure representing the data
         """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
-        cmd = "SAPHanaSR-showAttr --format=script"
+        cmd = "SAPHanaSR-showAttr --format=tester"
         self.dict_sr={}
         result_sr = self.__do_ssh__(self.config['remote_node'], "root", cmd)
         if result_sr[2] == 20000:
