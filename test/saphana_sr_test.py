@@ -55,7 +55,7 @@ class SaphanasrTest:
         """
         cmdparse = kwargs.get('cmdparse', True)
         self.config = { 'test_file': "-",
-                        'defaults_checks_file': None,
+                        'defaults_file': None,
                         'properties_file': "properties.json",
                         'log_file': "",
                         'repeat': 1,
@@ -73,7 +73,7 @@ class SaphanasrTest:
             self.message("dbg: lib parses cmdline")
             parser = argparse.ArgumentParser()
             parser.add_argument("--testFile", help="specify the test file")
-            parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+            parser.add_argument("--defaultsFile", help="specify the defaults file")
             parser.add_argument("--properties", help="specify the properties file")
             parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
             parser.add_argument("--simulate", help="only simulate, dont call actions",
@@ -86,9 +86,9 @@ class SaphanasrTest:
             if args.testFile:
                 self.message("PARAM: testFile: {}".format(args.testFile))
                 self.config['test_file'] = args.testFile
-            if args.defaultChecksFile:
-                self.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-                self.config['defaults_checks_file'] = args.defaultChecksFile
+            if args.defaultsFile:
+                self.message("PARAM: defaultsFile: {}".format(args.defaultsFile))
+                self.config['defaults_file'] = args.defaultsFile
             if args.properties:
                 self.message("PARAM: properties: {}".format(args.properties))
                 self.config['properties_file'] = args.properties
@@ -253,20 +253,20 @@ class SaphanasrTest:
 
     def read_test_file(self):
         """ read Test Description, optionally defaultchecks and properties """
-        if self.config['properties_file']:
-            print(f"read properties file {self.config['properties_file']}")
-            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
-                self.test_data.update(json.load(prop_fh))
-        if self.config['defaults_checks_file']:
-            print(f"read defaults file {self.config['defaults_checks_file']}")
-            with open(self.config['defaults_checks_file'], encoding="utf-8") as dc_fh:
+        if self.config['defaults_file']:
+            #print(f"read defaults file {self.config['defaults_file']}")
+            with open(self.config['defaults_file'], encoding="utf-8") as dc_fh:
                 self.test_data.update(json.load(dc_fh))
         if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
             with open(self.config['test_file'], encoding="utf-8") as tf_fh:
-                print(f"read test file {self.config['test_file']}")
+                #print(f"read test file {self.config['test_file']}")
                 self.test_data.update(json.load(tf_fh))
+        if self.config['properties_file']:
+            #print(f"read properties file {self.config['properties_file']}")
+            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
+                self.test_data.update(json.load(prop_fh))
         self.run['test_id'] = self.test_data['test']
         self.message("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
@@ -277,8 +277,8 @@ class SaphanasrTest:
             test_prop_fh.write(f"node02={l_top.get('sHost','node02')}\n")
             test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
             test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
-            test_prop_fh.write(f"srMode=sync\n")
-            test_prop_fh.write(f"opMode=logreplay\n")
+            test_prop_fh.write(f"srMode={self.test_data.get('srMode','sync')}\n")
+            test_prop_fh.write(f"opMode={self.test_data.get('opMode','logreplay')}\n")
             test_prop_fh.write(f"SID={self.test_data.get('sid','C11')}\n")
             test_prop_fh.write(f"instNr={self.test_data.get('instNo','00')}\n")
             test_prop_fh.write(f"sidadm={self.test_data.get('sid','C11').lower()}adm\n")
@@ -590,6 +590,7 @@ class SaphanasrTest:
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
             # pylint: disable=broad-exception-caught
+            # TODO: improve error messages for ssh exceptions
             except Exception:
                 # except Exception as ssh_muell:
                 #self.message("ssh connection did not work ...")
