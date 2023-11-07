@@ -490,12 +490,12 @@ class HanaStatus():
         if 'quote' in kargs:
             quote = kargs['quote']
         if 'ts' in kargs:
-            time_string = kargs['ts']
+            time_string = f"{kargs['ts']} "
         for key in print_dic:
             for col in print_dic[key]:
                 if self.filter(area, col) is True:
                     value = print_dic[key][col]
-                    print(f"{time_string} {table_name}/{key}/{col}={quote}{value}{quote}")
+                    print(f"{time_string}{table_name}/{key}/{col}={quote}{value}{quote}")
 
     def filter(self, area, column_name):
         ''' filter column_names
