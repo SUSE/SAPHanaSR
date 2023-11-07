@@ -36,8 +36,7 @@ Requires:       pacemaker > 2.1.2
 Requires:       resource-agents
 Requires:       perl
 
-# Require crmsh-scripts on SLES 12 SP1+ for the new HAWK wizards
-%if 0%{?sle_version} >= 120100
+# Require crmsh-scripts for the HAWK2 wizards
 Requires:       crmsh >= 4.4.0
 Requires:       crmsh-scripts >= 4.4.0
 Requires:       python3
@@ -45,7 +44,6 @@ Requires:       /usr/bin/xmllint
 BuildRequires:  resource-agents >= 4.1.0
 BuildRequires:  crmsh
 BuildRequires:  crmsh-scripts
-%endif
 
 %description
 SAPHanaSR-angi is "SAP HANA SR - An Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
