@@ -13,7 +13,7 @@ SAPHanaSR-tester \- Tools for automating functional tests of SAPHanaSR clusters.
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
 
-The test cases are described in JSON files. Each test is separated into steps.
+The test cases are defined in JSON files. Each test is separated into steps.
 For each step there is an expectation for SAPHanaSR attributes, which need to
 match. Additionally each step defines the 'next' step and an optional action
 to be triggered if the step status has been reached (all expectations match).
@@ -33,28 +33,35 @@ a. Predefined functional tests for scale-up:
 block_sr_and_freeze_prim_fs
 .TP
 bmt
-.TP
-demo_kill_prim_inst
+blocked manual takeover
 .TP
 free_log_area
+free log area on primary
 .TP
 freeze_prim_fs
 .TP
 kill_prim_indexserver
+Kill primary indexserver
 .TP
 kill_prim_inst
+Kill primary instance
 .TP
 kill_prim_node
+Kill primary master node
 .TP
 kill_secn_indexserver
+Kill secondary indexserver
 .TP
 kill_secn_inst
+Kill secondary instance
 .TP
 kill_secn_node
+Kill secondary master node
 .TP
 maintenance_cluster_turn_hana
 .TP
 nop
+no operation - check, wait and check again (stability check)
 .TP
 restart_cluster_hana_running
 .TP
@@ -63,18 +70,84 @@ restart_cluster
 restart_cluster_turn_hana
 .TP
 sap
+standby+online secondary then standby+online primary
 .TP
 split_brain_prio
+split brain with prio fencing to simulate fence of secondary
 .TP
 spn
+standby secondary node (and online again)
 .TP
 ssn
+standby secondary node (and online again)
 .RE
 .PP
 b. Predefined functional tests for scale-out:
-.RS 2
+.TP
+bmt
+blocked manual takeover
+.TP
+free_log_area
+free log area on primary
+.TP
+kill_prim_indexserver
+Kill primary indexserver
+.TP
+kill_prim_inst
+Kill primary instance
+.TP
+kill_prim_node
+Kill primary master node
+.TP
+kill_prim_worker_indexserver
+Kill primary worker indexserver
+.TP
+kill_prim_worker_inst
+Kill primary worker instance
+.TP
+kill_prim_worker_node
+Kill primary worker node
+.TP
+kill_secn_indexserver
+Kill secondary indexserver
+.TP
+kill_secn_inst
+Kill secondary instance
+.TP
+kill_secn_node
+Kill secondary master node
+.TP
+kill_secn_worker_inst
+Kill secondary worker instance
+.TP
+kill_secn_worker_node
+Kill secondary worker node
+.TP
+maintenance_cluster_turn_hana
 
+.TP
+nop
+no operation - check, wait and check again (stability check)
+.TP
+restart_cluster
+
+.TP
+restart_cluster_hana_running
+
+.TP
+restart_cluster_turn_hana
+
+.TP
+sap
+standby+online secondary then standby+online primary
+.TP
+spn
+standby primary node (and online again)
+.TP
+ssn
+standby secondary node (and online again)
 .RE
+.PP
 The predefined test cases can be used for creating custom test definitions. 
 In that tests, parameters for timing and expected attributes can be customised.
 .PP
@@ -84,7 +157,7 @@ See also the REQUIREMENTS section below.
 .PP
 .\"
 .SH EXAMPLES
-* Example for installing SAPHanaSR-tester.
+* Installing SAPHanaSR-tester.
 .PP
 The software packages are installed on an node outside the Linux cluster.
 Password-less login for user root is prepared. The tester properties are
@@ -106,18 +179,28 @@ adapted to the SAPHanaSR scale-up cluster.
 # cp /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/properties.json ~/properties_q42.json
 .br
 # vi ~/properties_q42.json
+.br
 {
+.br
     "sid": "Q42",
+.br
     "instNo": "85",
+.br
     "mstResource": "mst_SAPHanaCon_Q42_HDB85",
+.br
     "clnResource": "cln_SAPHanaTop_Q42_HDB85"
+.br
 }
+.br
 :wq
 .RE
 .PP
 * Showing predefined functional test cases.
 .PP
 .\" TODO
+# ls /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/*.json | \\
+.br
+while read; do echo $REPLY; grep "name" $REPLY | head -1; done
 .RE
 .PP
 * Running a very basic functional test.
