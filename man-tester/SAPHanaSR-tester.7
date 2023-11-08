@@ -30,15 +30,26 @@ could be run out-of-the-box.
 .PP
 a. Predefined functional tests for scale-up:
 .TP
-block_sr_and_freeze_prim_fs
-.TP
-bmt
+block_manual_takeover
 blocked manual takeover
+.TP
+block_sr
+block sr and check SFAIL attribute; unblock to recover
+.TP
+block_sr_and_freeze_prim_fs
+
+.TP
+flup
+like nop but very short sleep only - only for checking the test engine
+.TP
+freeze_prim_fs
+freeze sap hana fs on primary master node
 .TP
 free_log_area
 free log area on primary
 .TP
 freeze_prim_fs
+
 .TP
 kill_prim_indexserver
 Kill primary indexserver
@@ -59,32 +70,36 @@ kill_secn_node
 Kill secondary master node
 .TP
 maintenance_cluster_turn_hana
+
+.TP
+maintenance_with_standby_nodes
+standby+online secondary then standby+online primary
 .TP
 nop
 no operation - check, wait and check again (stability check)
 .TP
 restart_cluster_hana_running
+
 .TP
 restart_cluster
+
 .TP
 restart_cluster_turn_hana
-.TP
-sap
-standby+online secondary then standby+online primary
+
 .TP
 split_brain_prio
 split brain with prio fencing to simulate fence of secondary
 .TP
-spn
-standby secondary node (and online again)
+standby_primary_node
+standby primary node (and online again)
 .TP
-ssn
+standby_secondary_node
 standby secondary node (and online again)
 .RE
 .PP
 b. Predefined functional tests for scale-out:
 .TP
-bmt
+block_manual_takeover
 blocked manual takeover
 .TP
 free_log_area
@@ -126,6 +141,9 @@ Kill secondary worker node
 maintenance_cluster_turn_hana
 
 .TP
+maintenance_with_standby_nodes
+standby+online secondary then standby+online primary
+.TP
 nop
 no operation - check, wait and check again (stability check)
 .TP
@@ -138,13 +156,10 @@ restart_cluster_hana_running
 restart_cluster_turn_hana
 
 .TP
-sap
-standby+online secondary then standby+online primary
-.TP
-spn
+standby_primary_node
 standby primary node (and online again)
 .TP
-ssn
+standby_secondary_node
 standby secondary node (and online again)
 .RE
 .PP
@@ -226,6 +241,25 @@ A dedicated working directory and logfile for this test is used.
 --logFile test.log
 .RE
 .PP
+* Showing failed tests from logfile.
+.PP
+Failed step 10 are ignored. That step checks for pre-requisites. A failed step
+10 means the test can not be performed successfully. Logfile is test.log.
+.PP
+.RS 2
+# grep "STATUS.*FAILED" test.log | \\
+.br
+grep -v step10 | awk '{print $3}' | sort -u
+.RE
+.PP
+* Showing details for a single test.
+.PP
+Test ID is 8585, logfile is test.log, debug output is omitted.
+.PP
+.RS 2
+# grep "\\[8585\\]" test.log | grep -v "DEBUG:"
+.RE
+.PP
 .\"
 .SH FILES
 .TP
@@ -239,13 +273,16 @@ functional tests for SAPHanaSR-angi scale-out ERP scenarios, without HANA host a
 functional tests for SAPHanaSR-angi scale-out BW scenarios, with HANA host auto-autofailover. Not yet implemented.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleUp/
-Not yet implemented.
+not yet implemented.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleOut/
-Not yet implemented.
+not yet implemented.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleOut-BW/
-Not yet implemented.
+not yet implemented.
+.TP
+$PWD/.test_properties
+auto-generated properties file for called shell scripts. No need to touch.
 .TP
 /usr/bin/
 TODO
@@ -259,28 +296,31 @@ to the following:
 .PP
 1. Resource agents and configuration of SAPHanaSR-angi.
 .PP
-2. SAPHanaSR-tester is installed and used on an node outside the Linux cluster.
-.PP
-3. User root needs password-free access to the Linux cluster nodes and the node
-where SAPHanaSr-tester is installed.
-.PP
-4. Package python3-paramiko is needed for the tester´s multi-node feature.
-.PP
-5. Strict time synchronization between the cluster nodes and the tester node,
-e.g. NTP. All nodes have configured the same timezone.
-.PP
-6. Scale-up setups with or without multi-target replication.
+2. Scale-up setups with or without multi-target replication.
 No scale-up multi-SID (MCOS) setups.
 .PP
-7. Scale-out setups with or without multi-target replication.
+3. Scale-out setups with or without multi-target replication.
 No HANA host auto-failover.
 .PP
-8. The tester must not be used for production systems.
+4. SAPHanaSR-tester is installed and used on an node outside the Linux cluster.
+.PP
+5. User root needs password-free access to the Linux cluster nodes and the node
+where SAPHanaSR-tester is installed.
+.PP
+6. Package python3-paramiko is needed for the tester´s multi-node feature.
+.PP
+7. Strict time synchronization between the cluster nodes and the tester node,
+e.g. NTP. All nodes have configured the same timezone.
+.PP
+8. If disk-based SBD is used, then SBD_STARTMODE=always is needed for this tests.
+.PP
+9. The tester must not be used for production systems.
+Most tests are disruptive.
 .PP
 .\"
 .SH BUGS
-.\" In case of any problem, please use your favourite SAP support process to open
-.\" a request for the component BC-OP-LNX-SUSE.
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
