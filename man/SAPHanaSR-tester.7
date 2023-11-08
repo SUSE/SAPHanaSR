@@ -1,0 +1,228 @@
+.\" Version: 1.001 
+.\"
+.TH SAPHanaSR-tester 7 "11 Nov 2023" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+SAPHanaSR-tester \- Tools for automating functional tests of SAPHanaSR clusters.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+\fBOverview\fP
+.PP
+SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
+system replication HA clusters.
+
+The test cases are described in JSON files. Each test is separated into steps.
+For each step there is an expectation for SAPHanaSR attributes, which need to
+match. Additionally each step defines the 'next' step and an optional action
+to be triggered if the step status has been reached (all expectations match).
+
+For tests involving complex actions on the cluster nodes, predefined shell
+scripts are executed remotely.
+
+.\" TODO state machine.
+.PP
+\fBTest cases\fP
+.PP
+Functional test are shipped for scale-up and scale-out scenarios. This tests
+could be run out-of-the-box.
+.PP
+a. Predefined functional tests for scale-up:
+.TP
+block_sr_and_freeze_prim_fs
+.TP
+bmt
+.TP
+demo_kill_prim_inst
+.TP
+free_log_area
+.TP
+freeze_prim_fs
+.TP
+kill_prim_indexserver
+.TP
+kill_prim_inst
+.TP
+kill_prim_node
+.TP
+kill_secn_indexserver
+.TP
+kill_secn_inst
+.TP
+kill_secn_node
+.TP
+maintenance_cluster_turn_hana
+.TP
+nop
+.TP
+restart_cluster_hana_running
+.TP
+restart_cluster
+.TP
+restart_cluster_turn_hana
+.TP
+sap
+.TP
+split_brain_prio
+.TP
+spn
+.TP
+ssn
+.RE
+.PP
+b. Predefined functional tests for scale-out:
+.RS 2
+
+.RE
+The predefined test cases can be used for creating custom test definitions. 
+In that tests, parameters for timing and expected attributes can be customised.
+.PP
+.B SAPHanaSR-tester is shipped as technology preview.
+.PP
+See also the REQUIREMENTS section below.
+.PP
+.\"
+.SH EXAMPLES
+* Example for installing SAPHanaSR-tester.
+.PP
+The software packages are installed on an node outside the Linux cluster.
+Password-less login for user root is prepared. The tester properties are
+adapted to the SAPHanaSR scale-up cluster.
+.PP
+.RS 2
+# zypper in SAPHanaSR-tester
+.br
+# zypper in python3-paramiko
+.br
+# ssh-kegen -t rsa -b 4096
+.br
+# ssh-copy-id root@node1
+.br
+# ssh-copy-id root@node2
+.br
+# ssh-copy-id root@localhost
+.br
+# cp /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/properties.json ~/properties_q42.json
+.br
+# vi ~/properties_q42.json
+{
+    "sid": "Q42",
+    "instNo": "85",
+    "mstResource": "mst_SAPHanaCon_Q42_HDB85",
+    "clnResource": "cln_SAPHanaTop_Q42_HDB85"
+}
+:wq
+.RE
+.PP
+* Showing predefined functional test cases.
+.PP
+.\" TODO
+.RE
+.PP
+* Running a very basic functional test.
+.PP
+The functional test "nop" is performed on the Linux cluster defined above.
+A dedicated working directory and logfile for this test is used. 
+.PP
+.RS 2
+# mkdir ~/test_nop; cd ~/test_nop
+.br
+# export TROOT=/usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
+.br
+# SAPHanaSR-testCluster-multiNode \\
+.br
+--testFile $TROOT/nop.json \\
+.br
+--remoteNodes node01 node02 \\
+.br
+--defaultsFile $TROOT/defaults.json \\
+.br
+--properties ~/properties_q42.json \\
+.br
+--logFile test.log
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
+functional tests for SAPHanaSR-angi scale-up scenarios.
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleOut/
+functional tests for SAPHanaSR-angi scale-out ERP scenarios, without HANA host auto-autofailover.
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleOut-BW/
+functional tests for SAPHanaSR-angi scale-out BW scenarios, with HANA host auto-autofailover. Not yet implemented.
+.TP
+/usr/share/SAPHanaSR-tester/json/classic-ScaleUp/
+Not yet implemented.
+.TP
+/usr/share/SAPHanaSR-tester/json/classic-ScaleOut/
+Not yet implemented.
+.TP
+/usr/share/SAPHanaSR-tester/json/classic-ScaleOut-BW/
+Not yet implemented.
+.TP
+/usr/bin/
+TODO
+.RE
+.PP
+.\"
+.SH REQUIREMENTS
+.PP
+For the current version of the SAPHanaSR-tester, the capabilities are limited
+to the following:
+.PP
+1. Resource agents and configuration of SAPHanaSR-angi.
+.PP
+2. SAPHanaSR-tester is installed and used on an node outside the Linux cluster.
+.PP
+3. User root needs password-free access to the Linux cluster nodes and the node
+where SAPHanaSr-tester is installed.
+.PP
+4. Package python3-paramiko is needed for the tester´s multi-node feature.
+.PP
+5. Strict time synchronization between the cluster nodes and the tester node,
+e.g. NTP. All nodes have configured the same timezone.
+.PP
+6. Scale-up setups with or without multi-target replication.
+No scale-up multi-SID (MCOS) setups.
+.PP
+7. Scale-out setups with or without multi-target replication.
+No HANA host auto-failover.
+.PP
+8. The tester must not be used for production systems.
+.PP
+.\"
+.SH BUGS
+.\" In case of any problem, please use your favourite SAP support process to open
+.\" a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) ,
+\fBssh-keygen\fP(1) , \fBssh-copy-id\fP(1) ,
+.br
+https://documentation.suse.com/sbp/sap/ ,
+.br
+https://documentation.suse.com/sles-sap/ ,
+.br
+https://www.suse.com/releasenotes/
+.\"
+.PP
+.SH AUTHORS
+.br
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2023 SUSE Linux GmbH, Germany.
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
+
