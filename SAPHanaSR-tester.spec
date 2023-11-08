@@ -19,7 +19,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.1
+Version:        1.2.2
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -49,14 +49,14 @@ tar xf %{S:0}
 #%define crmscr_path /usr/share/crmsh/scripts/
 
 %build
-#gzip man/*
+gzip man-tester/*
 
 %install
 mkdir -p %{buildroot}/usr/bin
 #mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}
 mkdir -p %{buildroot}/usr/lib/%{name}
-#mkdir -p %{buildroot}%{_mandir}/man7
+mkdir -p %{buildroot}%{_mandir}/man7
 #mkdir -p %{buildroot}%{_mandir}/man8
 
 # test engine itself
@@ -76,7 +76,7 @@ ls test/json
 cp -va test/json %{buildroot}/usr/share/%{name}
 
 # manual pages
-#install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
+install -m 0444 man-tester/*.7.gz %{buildroot}%{_mandir}/man7
 #install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 %files
@@ -89,7 +89,7 @@ cp -va test/json %{buildroot}/usr/share/%{name}
 %license LICENSE
 #%dir %{_docdir}/%{name}
 %doc README.md
-#%doc %{_mandir}/man7/*
+%doc %{_mandir}/man*/*
 #%doc %{_mandir}/man8/*
 
 %changelog
