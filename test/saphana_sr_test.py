@@ -292,8 +292,8 @@ class SaphanasrTest:
         else:
             ( _area, _obj ) = area_object
             _l_failed = f"{_area}={_obj}: "
-        ( _key, _val, _reg ) = key_val_reg
-        _l_failed += f"{_key}={_val} !~ {_reg}; "
+        ( _key, _val, _reg, _comp ) = key_val_reg
+        _l_failed += f"{_key}={_val} {_comp} {_reg}; "
         self.run['failed'] = _l_failed
         self.message("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
@@ -314,11 +314,13 @@ class SaphanasrTest:
         check_result = -1
         self.__reset_failed__()
         for single_check in checks:
-            # match <key>=<regExp>
-            match_obj = re.search("(.*)(=)(.*)", single_check)
+            # match <key> <comp> <regExp>
+            # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
+            match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|is) (.*)", single_check)
             c_key = match_obj.group(1)
-            #c_comp = match_obj.group(2)
+            c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
+            #self.message(f"INFO: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp}")
             found = 0
             if area_name in l_sr:
                 l_area = l_sr[area_name]
@@ -327,14 +329,42 @@ class SaphanasrTest:
                     if c_key in l_obj:
                         l_val = l_obj[c_key]
                         found = 1
-                        if re.search(c_reg_exp, l_val):
-                            check_result = max(check_result, 0)
-                        else:
-                            self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
+                        # TODO '==' must be exact match, '~' is for regexp
+                        if c_comp == "==":
+                            if l_val == c_reg_exp:
+                                check_result = max(check_result, 0)
+                            else:
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == "~":
+                            if re.search(c_reg_exp, l_val):
+                                #self.message(f"INFO: l_val({l_val}) MATCHES c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                #self.message(f"INFO: l_val({l_val}) DOES NOT MATCH c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == ">":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) > int(c_reg_exp):
+                                #self.message(f"INFO: l_val({l_val}) > c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                #self.message(f"INFO: l_val({l_val}) NOT > c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == "is" and c_reg_exp == "None":
+                            self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
                             check_result = max(check_result, 1)
                     else:
-                        self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp))
-            if (found == 0) and (check_result < 2 ):
+                        if c_comp == "is" and c_reg_exp == "None":
+                            found = 1
+                            check_result = max(check_result, 0)
+                        else:
+                            # TODO  for "is None" set check_result to max(check_result, 0) and no __add_failed__
+                            self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp, c_comp))
+                            check_result = max(check_result, 1)
+            if (found == 0) and (check_result < 2):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
             self.message(f"FAILED: step={step_step} {self.__get_failed__()}", stdout=False)
