@@ -336,8 +336,22 @@ class SaphanasrTest:
                             else:
                                 self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
                                 check_result = max(check_result, 1)
+                        elif c_comp == "!=":
+                            if l_val != c_reg_exp:
+                                check_result = max(check_result, 0)
+                            else:
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
                         elif c_comp == "~":
                             if re.search(c_reg_exp, l_val):
+                                #self.message(f"INFO: l_val({l_val}) MATCHES c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                #self.message(f"INFO: l_val({l_val}) DOES NOT MATCH c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == "!~":
+                            if  not re.search(c_reg_exp, l_val):
                                 #self.message(f"INFO: l_val({l_val}) MATCHES c_reg_exp({c_reg_exp})")
                                 check_result = max(check_result, 0)
                             else:
@@ -347,6 +361,33 @@ class SaphanasrTest:
                         elif c_comp == ">":
                             # TODO check l_val and c_reg_exp if they could transformed into int
                             if int(l_val) > int(c_reg_exp):
+                                #self.message(f"INFO: l_val({l_val}) > c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                #self.message(f"INFO: l_val({l_val}) NOT > c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == ">=":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) >= int(c_reg_exp):
+                                #self.message(f"INFO: l_val({l_val}) > c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                #self.message(f"INFO: l_val({l_val}) NOT > c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == "<":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) < int(c_reg_exp):
+                                #self.message(f"INFO: l_val({l_val}) > c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                #self.message(f"INFO: l_val({l_val}) NOT > c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == "<=":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) >= int(c_reg_exp):
                                 #self.message(f"INFO: l_val({l_val}) > c_reg_exp({c_reg_exp})")
                                 check_result = max(check_result, 0)
                             else:
