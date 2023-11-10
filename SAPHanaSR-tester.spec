@@ -19,7 +19,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.1
+Version:        1.2.2
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -34,7 +34,7 @@ Requires:       python3
 %description
 SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focussed test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
 
-The test cases are described in JSON files. Each tests is separated into one ore multiple steps. For each step there is an expection about the SAPHanaSR attributes, which needs to match.
+The test cases are described in JSON files. Each test is separated into one ore multiple steps. For each step there is an expectation about the SAPHanaSR attributes, which needs to match.
 Additionally each step defines the 'next' step and an optional action to be triggered if the step status has been reached (all expectations match).
 
 The following SUSE blog series gives a good overview about running SAP HANA in System Replication in the SUSE cluster:
@@ -49,14 +49,14 @@ tar xf %{S:0}
 #%define crmscr_path /usr/share/crmsh/scripts/
 
 %build
-#gzip man/*
+gzip man-tester/*
 
 %install
 mkdir -p %{buildroot}/usr/bin
 #mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}
 mkdir -p %{buildroot}/usr/lib/%{name}
-#mkdir -p %{buildroot}%{_mandir}/man7
+mkdir -p %{buildroot}%{_mandir}/man7
 #mkdir -p %{buildroot}%{_mandir}/man8
 
 # test engine itself
@@ -76,7 +76,7 @@ ls test/json
 cp -va test/json %{buildroot}/usr/share/%{name}
 
 # manual pages
-#install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
+install -m 0444 man-tester/*.7.gz %{buildroot}%{_mandir}/man7
 #install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
 %files
@@ -89,7 +89,7 @@ cp -va test/json %{buildroot}/usr/share/%{name}
 %license LICENSE
 #%dir %{_docdir}/%{name}
 %doc README.md
-#%doc %{_mandir}/man7/*
+%doc %{_mandir}/man*/*
 #%doc %{_mandir}/man8/*
 
 %changelog

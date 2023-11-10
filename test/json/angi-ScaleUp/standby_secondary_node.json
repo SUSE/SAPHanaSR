@@ -1,7 +1,9 @@
 {
-    "test": "spn",
+    "test": "standby_secondary_node",
     "name": "standby secondary node (and online again)",
     "start": "step10",
+    "sid": "HA1",
+    "mstResource": "ms_SAPHanaCon_HA1_HDB00",
     "steps": [
        {
            "step": "step10",
@@ -9,10 +11,10 @@
            "next": "step20",
            "loop": 1,
            "wait": 1,
-           "post": "spn",
+           "post": "ssn",
            "pSite": "pSiteUp",
-           "sSite": "sSiteUp",
-           "pHost": "pHostUp", 
+           "sSite": "sSiteUp", 
+           "pHost": "pHostUp",
            "sHost": "sHostUp"
        },
        {
@@ -21,63 +23,63 @@
             "next": "step30",
             "loop": 120,
             "wait": 2,
+            "post": "osn",
             "pSite": [
-                "lss=1" ,
+                "lss=4" ,
                 "srr=P" ,
                 "lpt=1[6-9]........" ,
                 "srHook=PRIM" ,
                 "srPoll=PRIM"
            ],
             "sSite": [
-                "lpt=(30|1[6-9]........)",
-                "lss=4",
+                "lpt=10",
+                "lss=1",
                 "srr=S",
-                "srHook=(PRIM|SOK)",
-                "srPoll=SOK"
+                "srHook=SFAIL",
+                "srPoll=SFAIL"
            ],
            "pHost": [
-               "clone_state=UNDEFINED" ,
-               "roles=master1::worker:" ,
-               "score=150" ,
-               "standby=on"
-           ],
-           "sHost": [
                "clone_state=PROMOTED" ,
                "roles=master1:master:worker:master" ,
-               "score=(100|145)"
+               "score=150"
+           ],
+           "sHost": [
+               "clone_state=UNDEFINED" ,
+               "roles=master1::worker:" ,
+               "score=100" ,
+               "standby=on"
            ]
        },
        {
             "step": "step30",
-            "name": "takeover on secondary",
+            "name": "node back online",
             "next": "step40",
             "loop": 120,
-            "post": "opn",
             "wait": 2,
+            "todo": "pHost+sHost to check site-name",
             "pSite": [
-               "lss=1" ,
+               "lss=4" ,
                "srr=P" ,
-               "lpt=10" ,
-               "srHook=SWAIT" ,
-               "srPoll=SFAIL"
-           ],
-            "sSite": [
-               "lpt=1[6-9]........",
-               "lss=4",
-               "srr=P",
-               "srHook=PRIM",
+               "lpt=1[6-9]........" ,
+               "srHook=PRIM" ,
                "srPoll=PRIM"
            ],
-           "pHost": [
-               "clone_state=UNDEFINED" ,
-               "roles=master1::worker:" ,
-               "score=150" ,
-               "standby=on"
+            "sSite": [
+               "lpt=10",
+               "lss=1",
+               "srr=S",
+               "srHook=SWAIT",
+               "srPoll=SFAIL"
            ],
-           "sHost": [
+           "pHost": [
                "clone_state=PROMOTED" ,
                "roles=master1:master:worker:master" ,
                "score=150"
+           ],
+           "sHost": [
+               "clone_state=DEMOTED" ,
+               "roles=master1::worker:" ,
+               "score=(-INFINITY|0)"
            ]
        },
        {
@@ -87,11 +89,10 @@
            "loop": 120,
            "wait": 2,
            "post": "cleanup",
-           "todo": "allow pointer to step10",
-           "pSite": "sSiteUp",
-           "sSite": "pSiteUp",
-           "pHost": "sHostUp",
-           "sHost": "pHostUp"
+           "pSite": "pSiteUp",
+           "sSite": "sSiteUp",
+           "pHost": "pHostUp",
+           "sHost": "sHostUp"
        }
     ]
 }

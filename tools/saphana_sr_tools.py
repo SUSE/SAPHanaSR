@@ -97,7 +97,7 @@ class HanaCluster():
                                },
                     'default': {
                                     'global': ['Global', 'timestamp', 'cib-time', 'cib-update', 'dcid', 'maintenance', 'prim', 'sec', 'sid', 'topology'],
-                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable', 'target_role'],
                                     'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'version', 'vhost'],
                                },
@@ -115,19 +115,19 @@ class HanaCluster():
                                  },
                     'cluster': {
                                     'global': ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
-                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable', 'target_role'],
                                     'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost'],
                                },
                     'cluster2': {
                                     'global': ['Global', 'cib-time', 'cluster-name', 'have-quorum', 'maintenance', 'sid', 'stonith-enabled', 'stonith-timeout', 'stonith-watchdog-timeout', 'topology'],
-                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable', 'target_role'],
                                     'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
                                },
                     'cluster3': {
                                     'global': ['-dc.*'],
-                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable'],
+                                    'resource': ['Resource', 'maintenance', 'is_managed', 'promotable', 'target_role'],
                                     'site': ['Site', 'lpt', 'lss', 'mns', 'opMode', 'srHook', 'srMode', 'srPoll', 'srr'],
                                     'host': ['Host', 'clone_state', 'node_state', 'roles', 'score', 'site', 'sra', 'srah', 'standby', 'vhost', 'fail.*'],
                                },
@@ -490,12 +490,12 @@ class HanaStatus():
         if 'quote' in kargs:
             quote = kargs['quote']
         if 'ts' in kargs:
-            time_string = kargs['ts']
+            time_string = f"{kargs['ts']} "
         for key in print_dic:
             for col in print_dic[key]:
                 if self.filter(area, col) is True:
                     value = print_dic[key][col]
-                    print(f"{time_string} {table_name}/{key}/{col}={quote}{value}{quote}")
+                    print(f"{time_string}{table_name}/{key}/{col}={quote}{value}{quote}")
 
     def filter(self, area, column_name):
         ''' filter column_names
