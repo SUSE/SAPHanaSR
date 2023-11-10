@@ -316,11 +316,21 @@ class SaphanasrTest:
         for single_check in checks:
             # match <key> <comp> <regExp>
             # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
-            match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|is) (.*)", single_check)
+            match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
             c_key = match_obj.group(1)
             c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
-            #self.message(f"INFO: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp}")
+            c_reg_exp_a = ""
+            c_reg_exp_b = ""
+            try:
+                if c_comp == ">~":
+                    comp_obj = re.search("(.*):(.*)",c_reg_exp)
+                    c_reg_exp_a = comp_obj.group(1)
+                    c_reg_exp_b = comp_obj.group(2)
+            except Exception:
+                pass
+                #echo(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp}")
+            self.message(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             found = 0
             if area_name in l_sr:
                 l_area = l_sr[area_name]
@@ -392,6 +402,15 @@ class SaphanasrTest:
                                 check_result = max(check_result, 0)
                             else:
                                 #self.message(f"INFO: l_val({l_val}) NOT > c_reg_exp({c_reg_exp})")
+                                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                                check_result = max(check_result, 1)
+                        elif c_comp == ">~":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
+                                self.message(f"INFO: l_val({l_val}) >~ c_reg_exp({c_reg_exp})")
+                                check_result = max(check_result, 0)
+                            else:
+                                self.message(f"INFO: l_val({l_val}) NOT >~ c_reg_exp({c_reg_exp})")
                                 self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
                                 check_result = max(check_result, 1)
                         elif c_comp == "is" and c_reg_exp == "None":
