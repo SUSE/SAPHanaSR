@@ -280,13 +280,13 @@ class SaphanasrTest:
         self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
 
-    def write_test_properties(self, l_top):
+    def write_test_properties(self, topology):
         """
         write_test_properties - write bash test properties file so bash test helper could source the key-value settings
         """
         with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
-            test_prop_fh.write(f"node01={l_top.get('pHost','node01')}\n")
-            test_prop_fh.write(f"node02={l_top.get('sHost','node02')}\n")
+            test_prop_fh.write(f"node01={topology.get('pHost','node01')}\n")
+            test_prop_fh.write(f"node02={topology.get('sHost','node02')}\n")
             test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
             test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
             test_prop_fh.write(f"srMode={self.test_data.get('srMode','sync')}\n")
