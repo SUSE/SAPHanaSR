@@ -40,6 +40,7 @@ parser.add_argument("--dumpFailures", help="print failed checks per loop",
 parser.add_argument("--logFile", help="log file to write the messages")
 parser.add_argument("--printTestProperties", help="print test properties and exit",
                     action="store_true")
+parser.add_argument("--debug", help="output and log debug messages", action="store_true")
 args = parser.parse_args()
 if args.testFile:
     test01.message("PARAM: testFile: {}".format(args.testFile))
@@ -54,7 +55,6 @@ if args.remoteNodes:
     test01.message("PARAM: remoteNodes: {}".format(args.remoteNodes))
     test01.config['remote_node'] = args.remoteNodes[0]
     test01.config['remote_nodes'] = args.remoteNodes
-    #test01.message(f"dbg: len remote_hosts: {len(test01.config['remote_nodes'])}")
 if args.repeat:
     test01.message("PARAM: repeat: {}".format(args.repeat))
     test01.config['repeat'] = int(args.repeat)
@@ -70,9 +70,14 @@ if args.logFile:
 if args.printTestProperties:
     test01.config['printTestProperties'] = args.printTestProperties
     test01.message(f"PARAM: printTestProperties: {test01.config['printTestProperties']}")
+if args.debug:
+    test01.config['debug'] = args.debug
+    test01.message("PARAM:  DEBUG activated")
 
 while test01.run['count'] <= test01.config['repeat']:
-    test01.run['r_id'] = random.randrange(10000,99999,1)
+    test01.message(f"count: {test01.run['count']}")
+    if test01.run['count'] > 1:
+        test01.run['r_id'] = random.randrange(10000,99999,1)
     test01.read_saphana_sr()
     l_top = test01.topolo
     l_top.update({'global': 'global'})

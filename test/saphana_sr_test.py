@@ -49,10 +49,20 @@ class SaphanasrTest:
         except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"), flush=True)
 
+    def debug(self, msg, **kwargs):
+        """
+        debug output/log only if option debug is set
+        """
+        if self.config['debug']:
+            self.message(msg, **kwargs)
+
     def __init__(self, *args, **kwargs):
         """
         constructor
         """
+        random.seed()
+        self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
+        self.run['r_id'] = random.randrange(10000,99999,1)
         cmdparse = kwargs.get('cmdparse', True)
         self.config = { 'test_file': "-",
                         'defaults_file': None,
@@ -62,15 +72,15 @@ class SaphanasrTest:
                         'dump_failures': False,
                         'remote_node': None,
                         'remote_nodes': [],
-                        'printTestProperties': False
+                        'printTestProperties': False,
+                        'debug': False
                       }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
-        self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
         self.message("INIT: tester version: {}".format(self.version))
         if cmdparse:
-            self.message("dbg: lib parses cmdline")
+            self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
             parser.add_argument("--testFile", help="specify the test file")
             parser.add_argument("--defaultsFile", help="specify the defaults file")
@@ -108,8 +118,7 @@ class SaphanasrTest:
                 # pylint: disable-next=R1732
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         else:
-            self.message("dbg: lib skips parsing cmdline")
-        random.seed()
+            self.debug("DEBUG: lib skips parsing cmdline")
 
     def __insert_to_area__(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
@@ -190,7 +199,7 @@ class SaphanasrTest:
         l_sloppy = False
         if 'sloppy' in kwargs:
             l_sloppy = kwargs['sloppy']
-            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
+            self.debug(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
         object_name = None
         l_sr = self.dict_sr
         # check, if 'area' is in the sr-data-dictionary
@@ -233,7 +242,7 @@ class SaphanasrTest:
                 if key in l_obj:
                     l_value = l_obj[key]
                 else:
-                    self.message(f'DEBUG: key {key} not found')
+                    self.debug(f'DEBUG: key {key} not found')
         return l_value
 
     def pretty_print(self, dictionary,level):
@@ -268,10 +277,13 @@ class SaphanasrTest:
             with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
                 self.test_data.update(json.load(prop_fh))
         self.run['test_id'] = self.test_data['test']
-        self.message("DEBUG: test_data: {}".format(str(self.test_data)),
+        self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
 
     def write_test_properties(self, l_top):
+        """
+        write_test_properties - write bash test properties file so bash test helper could source the key-value settings
+        """
         with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
             test_prop_fh.write(f"node01={l_top.get('pHost','node01')}\n")
             test_prop_fh.write(f"node02={l_top.get('sHost','node02')}\n")
@@ -295,7 +307,7 @@ class SaphanasrTest:
         ( _key, _val, _reg, _comp ) = key_val_reg
         _l_failed += f"{_key}={_val} {_comp} {_reg}; "
         self.run['failed'] = _l_failed
-        self.message("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
+        self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
@@ -329,8 +341,7 @@ class SaphanasrTest:
                     c_reg_exp_b = comp_obj.group(2)
             except Exception:
                 pass
-                #echo(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp}")
-            self.message(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+            self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             found = 0
             if area_name in l_sr:
                 l_area = l_sr[area_name]
@@ -381,10 +392,10 @@ class SaphanasrTest:
                 if c_err == 1:
                     self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp, c_comp))
                     check_result = max(check_result, 1)
-                    self.message(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+                    self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
                 else:
                     check_result = max(check_result, 0)
-                    self.message(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+                    self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             if (found == 0) and (check_result < 2):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
@@ -398,7 +409,7 @@ class SaphanasrTest:
             checks = step[topology_object_name]
             if isinstance(checks,str):
                 check_ptr = checks
-                self.message(f"DEBUG: check_ptr {check_ptr}", stdout=False)
+                self.debug(f"DEBUG: check_ptr {check_ptr}", stdout=False)
                 checks = self.test_data["checkPtr"][check_ptr]
             topolo = self.topolo
             if topology_object_name in topolo:
@@ -677,7 +688,7 @@ if __name__ == "__main__":
         l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
         l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
 
-        test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
+        test01.debug(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
 
         if l_top['pHost'] is None:
             # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
