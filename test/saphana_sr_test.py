@@ -655,10 +655,9 @@ class SaphanasrTest:
                 ssh_client.close()
             # pylint: disable=broad-exception-caught
             # TODO: improve error messages for ssh exceptions
-            except Exception:
+            except Exception as ssh_muell:
                 # except Exception as ssh_muell:
-                #self.message("ssh connection did not work ...")
-                #self.message(f"{type(ssh_muell)}")
+                self.message(f"FAILURE: ssh connection to {user}@{remote_host}: {ssh_muell}")
                 check_result=("", "", 20000)
         else:
             check_result=("", "", 20000)
