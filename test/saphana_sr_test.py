@@ -292,8 +292,8 @@ class SaphanasrTest:
         else:
             ( _area, _obj ) = area_object
             _l_failed = f"{_area}={_obj}: "
-        ( _key, _val, _reg ) = key_val_reg
-        _l_failed += f"{_key}={_val} !~ {_reg}; "
+        ( _key, _val, _reg, _comp ) = key_val_reg
+        _l_failed += f"{_key}={_val} {_comp} {_reg}; "
         self.run['failed'] = _l_failed
         self.message("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
@@ -314,27 +314,78 @@ class SaphanasrTest:
         check_result = -1
         self.__reset_failed__()
         for single_check in checks:
-            # match <key>=<regExp>
-            match_obj = re.search("(.*)(=)(.*)", single_check)
+            # match <key> <comp> <regExp>
+            # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
+            match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
             c_key = match_obj.group(1)
-            #c_comp = match_obj.group(2)
+            c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
+            c_reg_exp_a = ""
+            c_reg_exp_b = ""
+            try:
+                if c_comp == ">~":
+                    comp_obj = re.search("(.*):(.*)",c_reg_exp)
+                    c_reg_exp_a = comp_obj.group(1)
+                    c_reg_exp_b = comp_obj.group(2)
+            except Exception:
+                pass
+                #echo(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp}")
+            self.message(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             found = 0
             if area_name in l_sr:
                 l_area = l_sr[area_name]
+                c_err = 1
                 if object_name in l_area:
                     l_obj = l_area[object_name]
                     if c_key in l_obj:
                         l_val = l_obj[c_key]
                         found = 1
-                        if re.search(c_reg_exp, l_val):
-                            check_result = max(check_result, 0)
-                        else:
-                            self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp))
-                            check_result = max(check_result, 1)
+                        # TODO '==' must be exact match, '~' is for regexp
+                        if c_comp == "==":
+                            if l_val == c_reg_exp:
+                                c_err = 0
+                        elif c_comp == "!=":
+                            if l_val != c_reg_exp:
+                                c_err = 0
+                        elif c_comp == "~":
+                            if re.search(c_reg_exp, l_val):
+                                c_err = 0
+                        elif c_comp == "!~":
+                            if not re.search(c_reg_exp, l_val):
+                                c_err = 0
+                        elif c_comp == ">":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) > int(c_reg_exp):
+                                c_err = 0
+                        elif c_comp == ">=":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) >= int(c_reg_exp):
+                                c_err = 0
+                        elif c_comp == "<":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) < int(c_reg_exp):
+                                c_err = 0
+                        elif c_comp == "<=":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) <= int(c_reg_exp):
+                                c_err = 0
+                        elif c_comp == ">~":
+                            # TODO check l_val and c_reg_exp if they could transformed into int
+                            if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
+                                c_err = 0
                     else:
-                        self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp))
-            if (found == 0) and (check_result < 2 ):
+                        if c_comp == "is" and c_reg_exp == "None":
+                            found = 1
+                            c_err = 0
+                            check_result = max(check_result, 0)
+                if c_err == 1:
+                    self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp, c_comp))
+                    check_result = max(check_result, 1)
+                    self.message(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+                else:
+                    check_result = max(check_result, 0)
+                    self.message(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+            if (found == 0) and (check_result < 2):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
             self.message(f"FAILED: step={step_step} {self.__get_failed__()}", stdout=False)

@@ -1,18 +1,16 @@
 {
-    "test": "sap",
+    "test": "maintenance_with_standby_nodes",
     "name": "standby+online secondary then standby+online primary",
     "start": "step10",
-    "sid": "HA1",
-    "mstResource": "ms_SAPHanaCon_HA1_HDB00",
     "todo": "expectations needs to be fixed - e.g. step20 sHostDown is wrong, because topology will also be stopped. roles will be ::: not master1:...",
     "steps": [
        {
            "step": "step10",
-           "name": "test prerequitsites ssn",
+           "name": "test prerequitsites standby_secn_node",
            "next": "step20",
            "loop": 1,
            "wait": 1,
-           "post": "ssn",
+           "post": "standby_secn_node",
            "pSite": "pSiteUp",
            "sSite": "sSiteUp",
            "pHost": "pHostUp", 
@@ -24,7 +22,7 @@
             "next": "step30",
             "loop": 120,
             "wait": 2,
-            "post": "osn",
+            "post": "online_secn_node",
             "pSite": "pSiteUp",
             "sSite": "sSiteDown",
            "pHost": "pHostUp",
@@ -39,17 +37,17 @@
             "todo": "pHost+sHost to check site-name",
             "pSite": "pSiteUp",
             "sSite": [
-               "lpt=10",
-               "lss=1",
-               "srr=S",
-               "srHook=SWAIT",
-               "srPoll=SFAIL"
+               "lpt == 10",
+               "lss == 1",
+               "srr == S",
+               "srHook == SWAIT",
+               "srPoll == SFAIL"
            ],
            "pHost": "pHostUp",
            "sHost": [
-               "clone_state=DEMOTED" ,
-               "roles=master1::worker:" ,
-               "score=(-INFINITY|0)"
+               "clone_state == DEMOTED",
+               "roles == master1::worker:",
+               "score ~ (-INFINITY|0)"
            ]
        },
        {
@@ -65,11 +63,11 @@
        },
        {
            "step": "step110",
-           "name": "test prerequitsites spn",
+           "name": "test prerequitsites standby_prim_node",
            "next": "step120",
            "loop": 1,
            "wait": 1,
-           "post": "spn",
+           "post": "standby_prim_node",
            "pSite": "pSiteUp",
            "sSite": "sSiteUp",
            "pHost": "pHostUp",
@@ -83,17 +81,17 @@
             "wait": 2,
             "pSite": "pSiteDown",
             "sSite": [
-                "lpt=(30|1[6-9]........)",
-                "lss=4",
-                "srr=S",
-                "srHook=(PRIM|SOK)",
-                "srPoll=SOK"
+                "lpt >~ 1000000000:30",
+                "lss == 4",
+                "srr == S",
+                "srHook ~ (PRIM|SOK)",
+                "srPoll == SOK"
            ],
            "pHost": "pHostDown",
            "sHost": [
-               "clone_state=PROMOTED" ,
-               "roles=master1:master:worker:master" ,
-               "score=(100|145)"
+               "clone_state == PROMOTED",
+               "roles == master1:master:worker:master",
+               "score ~ (100|145)"
            ]
        },
        {
@@ -101,21 +99,21 @@
             "name": "takeover on secondary",
             "next": "step140",
             "loop": 120,
-            "post": "opn",
+            "post": "online_prim_node",
             "wait": 2,
             "pSite": [
-               "lss=1" ,
-               "srr=P" ,
-               "lpt=10" ,
-               "srHook=SWAIT" ,
-               "srPoll=SFAIL"
+               "lss == 1",
+               "srr == P",
+               "lpt == 10",
+               "srHook == SWAIT",
+               "srPoll == SFAIL"
             ],
             "sSite": "pSiteUp",
             "pHost": [
-               "clone_state=UNDEFINED" ,
-               "roles=master1::worker:" ,
-               "score=150" ,
-               "standby=on"
+               "clone_state == UNDEFINED",
+               "roles == master1::worker:",
+               "score == 150",
+               "standby == on"
             ],
             "sHost": "pHostUp"
        },
