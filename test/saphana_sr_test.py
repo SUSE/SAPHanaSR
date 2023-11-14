@@ -24,7 +24,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.3.0"
+    version = "0.3.1"
 
     def message(self, msg, **kwargs):
         """
@@ -173,6 +173,8 @@ class SaphanasrTest:
                         self.message(f"STATUS: get data from {remote_node}")
                         self.config['remote_node'] = remote_node
                         break
+                    else:
+                        self.message(f"STATUS: FAILED to get data from {remote_node}")
         for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
