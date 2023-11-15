@@ -16,10 +16,12 @@ This tests could be run out-of-the-box. The predefined tests also can be used
 for creating new test definitions. So parameters for timing and expected
 attributes can be customised.
 
-The test cases are defined in JSON files. Each test is separated into steps.
+The test cases are defined in dedicated files. Each test is separated into
+steps.
 For each step there is an expectation for SAPHanaSR attributes, which need to
 match. Additionally each step defines the 'next' step and an optional action
 to be triggered if the step status has been reached (all expectations match).
+See section SYNTAX below for comparators and other details.
 
 For tests involving complex actions on the cluster nodes, predefined shell
 scripts are executed remotely.
@@ -30,6 +32,106 @@ SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases and further details.
 See also the REQUIREMENTS section below.
 
 .B SAPHanaSR-tester is shipped as technology preview.
+.PP
+.\"
+.SH SYNTAX
+.\" 
+The test cases are defined in JSON files. Each test case is described in one
+file. It also can reference to defaults.json for common status definitions.
+.PP
+\fB*\fP Test step status
+.PP
+Each step contains an expectation for SAPHanaSR attributes, which need to
+match. The step status are:
+.TP
+globalUp
+both sites are up and in sync
+.TP
+globalDown
+not yet implemented
+.TP
+pHostUp
+host p (expected to be primary before the test starts) is up  
+.TP
+pSiteUp
+site p is up  
+.TP
+sSiteUp
+site s (expected to be secondary before the test starts) is up  
+.TP
+sHostUp
+host s is up  
+.TP
+pHostDown
+host p is down 
+.TP
+pSiteDown
+site p is down 
+.TP
+sSiteDown
+site s is down 
+.TP
+sHostDown
+host s is down 
+.PP
+Note: Prefixes "s" and "p" are statically indicating geographical sites, as
+seen at the beginning of a test. If a takeover happens during that test, the
+final secondary site might be prefixed "p". 
+.PP
+Each test step status is described by one or more conditions.
+Each conditions is described by one comparision.
+Each comparision consists of one CIB SAPHanaSR attribute name, one
+comparator and one value or regular expression.
+A status with two conditions looks like this:
+.PP
+"\fR<test_step_status>\fP": [
+.br
+               "\fR<parameter_name> <comparator> <value>" ,
+.br
+               "\fR<parameter_name> <comparator> <value>"
+.br
+           ]
+.PP
+See also the EXAMPLES section in manual pages SAPHanaSR-tests-angi-ScaleUp(7)
+and SAPHanaSR-tests-angi-ScaleOut(7).
+.\"
+.PP
+\fB*\fP Test comparators
+.PP
+A set of comparators is implemented. Some take integers, take some regular
+expression. In addition the "None" TODO. 
+.\" saphana_sr_test.py
+.\" re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+.TP
+==
+equal
+.TP
+!=
+not equal
+.TP
+>=
+greater or equal
+.TP
+<=
+less or equal
+.TP
+>
+greater
+.TP
+<
+less
+.TP
+>~
+greater or like
+.TP
+~
+like
+.TP
+!~
+not like
+.TP
+is
+TODO
 .PP
 .\"
 .SH EXAMPLES
