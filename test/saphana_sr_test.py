@@ -18,7 +18,8 @@ import argparse
 import random
 
 # for ssh remote calls this module uses paramiko
-from paramiko import SSHClient
+#from paramiko import SSHClient
+import paramiko
 
 class SaphanasrTest:
     """
@@ -173,8 +174,7 @@ class SaphanasrTest:
                         self.message(f"STATUS: get data from {remote_node}")
                         self.config['remote_node'] = remote_node
                         break
-                    else:
-                        self.message(f"STATUS: FAILED to get data from {remote_node}")
+                    self.message(f"STATUS: FAILED to get data from {remote_node}")
         for line in result_sr[0].splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
@@ -341,7 +341,7 @@ class SaphanasrTest:
                     comp_obj = re.search("(.*):(.*)",c_reg_exp)
                     c_reg_exp_a = comp_obj.group(1)
                     c_reg_exp_b = comp_obj.group(2)
-            except Exception:
+            except (IndexError, AttributeError):
                 pass
             self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             found = 0
@@ -644,7 +644,7 @@ class SaphanasrTest:
         """
         if remote_host:
             try:
-                ssh_client = SSHClient()
+                ssh_client = paramiko.SSHClient()
                 ssh_client.load_system_host_keys()
                 ssh_client.connect(remote_host, username=user)
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
@@ -653,13 +653,16 @@ class SaphanasrTest:
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
-            # pylint: disable=broad-exception-caught
-            # TODO: improve error messages for ssh exceptions
+                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            except paramiko.ssh_exception.SSHException as para_err:
+                self.message(f"FAILURE01: ssh connection to {user}@{remote_host}: {para_err}")
+                check_result=("", "", 20000)
             except Exception as ssh_muell:
                 # except Exception as ssh_muell:
-                self.message(f"FAILURE: ssh connection to {user}@{remote_host}: {ssh_muell}")
+                self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
                 check_result=("", "", 20000)
         else:
+            self.message(f"FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)
         return check_result
 
