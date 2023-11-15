@@ -439,9 +439,9 @@ class SaphanasrTest:
             step_action = ""
         _l_msg = (
                      "PROC:"
-                     f" step_id={step_id}"
+                     f" step_id='{step_id}'"
                      f" step_name='{step_name}'"
-                     f" step_next={step_next}"
+                     f" step_next='{step_next}'"
                      f" step_action='{step_action}'"
                      f" max_loops='{max_loops}'"
                  )
@@ -508,11 +508,11 @@ class SaphanasrTest:
         test_resource = self.test_data['mstResource']
         _l_run = self.run
         _l_msg = "PROC:"
-        _l_msg += f" test_id={test_id}"
-        _l_msg += f" test_sid={test_sid}"
-        _l_msg += f" test_name={test_name}"
-        _l_msg += f" test_start={test_start}"
-        _l_msg += f" test_resource={test_resource}"
+        _l_msg += f" test_id='{test_id}'"
+        _l_msg += f" test_sid='{test_sid}'"
+        _l_msg += f" test_name='{test_name}'"
+        _l_msg += f" test_start='{test_start}'"
+        _l_msg += f" test_resource='{test_resource}'"
         self.message(_l_msg)
         r_code = self.process_steps()
         return r_code
@@ -662,7 +662,7 @@ class SaphanasrTest:
                 self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
                 check_result=("", "", 20000)
         else:
-            self.message(f"FAILURE: ssh connection to failed - remote_host not specified")
+            self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)
         return check_result
 
