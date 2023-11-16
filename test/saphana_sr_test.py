@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.3.1"
+    version = "0.3.2"
 
     def message(self, msg, **kwargs):
         """
@@ -401,7 +401,7 @@ class SaphanasrTest:
             if (found == 0) and (check_result < 2):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message(f"FAILED: step={step_step} {self.__get_failed__()}", stdout=False)
+            self.message(f"MISSED: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
