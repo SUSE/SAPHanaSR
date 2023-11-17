@@ -133,7 +133,7 @@ TODO
 .TP
 post
 action after step, [ bmt | cleanup | spn | ssn | osn | script <script> | kill_... ] 
-
+.RE
 See also the EXAMPLES section in manual pages SAPHanaSR-tests-angi-ScaleUp(7)
 and SAPHanaSR-tests-angi-ScaleOut(7).
 .PP
@@ -151,7 +151,8 @@ See also example below.
 The SAPHanaSR-tester is installed on an node outside the Linux cluster.
 Password-less login for user root is prepared. The tester properties are
 adapted to the SAPHanaSR scale-up cluster. Example scale-up cluster nodes are
-node1 and node2, SID is Q42, instance number is 85.
+node1 and node2, SID is Q42, instance number is 85, database user key is
+TESTER.
 .PP
 .RS 2
 # zypper in SAPHanaSR-tester
@@ -180,10 +181,37 @@ node1 and node2, SID is Q42, instance number is 85.
 .br
     "clnResource": "cln_SAPHanaTop_Q42_HDB85"
 .br
+    "userKey": "TESTER"
+.br
 }
 .br
 :wq
 .RE
+.PP
+\fB*\fR Creating an userkey for databse access.
+.PP
+A userkey for user <sid>admin is created to allow password-less login as user
+SYSTEM to the HANA database. This is needed for some test cases, e.g. 
+free_log_backup. The example user is q42admin, key is TESTER, instance number
+is 85, database user SYSTEM´s password is SuSE12345. Do this on both nodes.
+.br
+Refer to SAP HANA documentation for further information on database users,
+permissions and the user keystore.
+.PP
+# su - q42admin
+.br
+~> cd
+.br
+~> hdbuserstore SET TESTER localhost:38513 SYSTEM SuSE12345
+.br
+~> hdbuserstore LIST TESTER
+.br
+~> hdbsql -U TESTER "select * from dummy"
+.br
+~> exit
+.RE
+.PP
+Note: Do this only on test systems. Never do this on production systems.
 .PP
 \fB*\fR Showing predefined functional scale-up test cases.
 .PP
@@ -218,13 +246,10 @@ A dedicated working directory and logfile for this test is used.
 .PP
 \fB*\fR Showing failed tests from logfile.
 .PP
-Failed step 10 are ignored. That step checks for pre-requisites. A failed step
-10 means the test can not be performed successfully. Logfile is test.log.
+Logfile is test.log, shown are time, test ID, test case.
 .PP
 .RS 2
-# grep "STATUS.*FAILED" test.log | \\
-.br
-grep -v step10 | awk '{print $3}' | sort -u
+# grep "TEST:.*FAILED" test.log | awk '{print $2,$3,$5}'
 .RE
 .PP
 \fB*\fR Showing details for a single test.
@@ -268,30 +293,40 @@ TODO
 For the current version of the SAPHanaSR-tester, the capabilities are limited
 to the following:
 .PP
-1. Resource agents and configuration of SAPHanaSR-angi.
+\fB*\fP Resource agents and configuration of SAPHanaSR-angi.
 .PP
-2. Scale-up setups with or without multi-target replication.
+\fB*\fP Scale-up setups with or without multi-target replication.
 No scale-up multi-SID (MCOS) setups.
 .PP
-3. Scale-out setups with or without multi-target replication.
+\fB*\fP Scale-out setups with or without multi-target replication.
 No HANA host auto-failover.
 .PP
-4. SAPHanaSR-tester is installed and used on an node outside the Linux cluster.
+\fB*\fP SAPHanaSR-tester is installed and used on an node outside the Linux
+cluster.
 .PP
-5. User root needs password-free access to the Linux cluster nodes and the node
-where SAPHanaSR-tester is installed.
+\fB*\fP User root needs password-less access to the Linux cluster nodes and the
+node where SAPHanaSR-tester is installed.
 .PP
-6. Package python3-paramiko is needed for the tester´s multi-node feature.
+\fB*\fP On the cluster nodes, user <sid>adm has a userkey for password-less
+login as database user SYSTEM into the HANA database. This is only needed for
+some test cases.
 .PP
-7. Strict time synchronization between the cluster nodes and the tester node,
-e.g. NTP. All nodes have configured the same timezone.
+\fB*\fP Package python3-paramiko is needed for the tester´s multi-node feature.
 .PP
-8. The services pacemaker and corosync need to be enabled for this tests. 
+\fB*\fP Strict time synchronization between the cluster nodes and the tester
+node, e.g. NTP. All nodes have configured the same timezone.
+.PP
+\fB*\fP The services pacemaker and corosync need to be enabled for this tests. 
 If disk-based SBD is used, then service sbd enabled and SBD_STARTMODE=always
 is needed for this tests. The stonith-action=reboot is needed in any case.
 This cluster basics might be different for production.
 .PP
-9. The tester must not be used for production systems.
+\fB*\fP Sufficient disk space, particularly for HANA transaction logs, e.g.
+/hana/log/. Depending on the backup implementation, also space for log backups
+might be needed, e.g. /hana/shared/<SID>/HDB<nr>/backup/. Strict housekeeping
+might help as well.
+.PP
+\fB*\fP The tester must not be used for production systems.
 Most tests are disruptive.
 .PP
 .\"
