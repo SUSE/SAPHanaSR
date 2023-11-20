@@ -10,7 +10,7 @@
 """
 
 import time
-#import subprocess
+import subprocess
 import re
 import sys
 import json
@@ -530,10 +530,16 @@ class SaphanasrTest:
         """ do the action itself """
         action_rc = 0
         if cmd != "":
-            self.message("ACTION: {} at {}: {}".format(action_name, remote, cmd))
-            a_result = self.__do_ssh__(remote, "root", cmd)
-            action_rc = a_result[2]
-            self.message("ACTION: {} at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+            if remote == "localhost":
+                self.message("ACTION: {} LOCAL: {}".format(action_name, cmd))
+                local_call_result = subprocess.run(cmd.split())
+                action_rc = local_call_result.returncode
+                self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
+            else:
+                self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
+                a_result = self.__do_ssh__(remote, "root", cmd)
+                action_rc = a_result[2]
+                self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
 
     def action_on_hana(self, action_name):
