@@ -161,21 +161,33 @@ class SaphanasrTest:
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=tester"
         self.dict_sr={}
-        result_sr = self.__do_ssh__(self.config['remote_node'], "root", cmd)
-        if result_sr[2] == 20000:
-            #self.message("remote node broken !!")
-            # try other remoteNodes (if given via parameter)
-            #self.message(f"len array {len(self.config['remote_nodes'])}")
-            if len(self.config['remote_nodes']) > 1:
-                for remote_node in self.config['remote_nodes']:
-                    #self.message(f"test now with host {remote_node}")
-                    result_sr = self.__do_ssh__(remote_node, "root", cmd)
-                    if result_sr[2] != 20000:
-                        self.message(f"STATUS: get data from {remote_node}")
-                        self.config['remote_node'] = remote_node
-                        break
-                    self.message(f"STATUS: FAILED to get data from {remote_node}")
-        for line in result_sr[0].splitlines():
+        sr_out = ""
+        #self.message("remote node broken !!")
+        # try other remoteNodes (if given via parameter)
+        #self.message(f"len array {len(self.config['remote_nodes'])}")
+        l_remotes = [self.config['remote_node']]
+        if len(self.config['remote_nodes']) > 1:
+            l_remotes.extend(self.config['remote_nodes'])
+        for remote_node in l_remotes:
+            self.message(f"test now with host {remote_node}")
+            if remote_node == "localhost":
+                self.message("LOCAL")
+                local_sr = subprocess.run(cmd.split(), capture_output=True, check=False)
+                if local_sr.returncode != 20000:
+                    self.message("STATUS: get data from localhost")
+                    self.config['remote_node'] = remote_node
+                    sr_out = local_sr.stdout.decode()
+                    break
+            else:
+                self.message("REMOTE")
+                result_sr = self.__do_ssh__(remote_node, "root", cmd)
+                if result_sr[2] != 20000:
+                    self.message(f"STATUS: get data from {remote_node}")
+                    self.config['remote_node'] = remote_node
+                    sr_out = result_sr[0]
+                    break
+            self.message(f"STATUS: FAILED to get data from {remote_node}")
+        for line in sr_out.splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
             if match_obj:
@@ -532,7 +544,7 @@ class SaphanasrTest:
         if cmd != "":
             if remote == "localhost":
                 self.message("ACTION: {} LOCAL: {}".format(action_name, cmd))
-                local_call_result = subprocess.run(cmd.split())
+                local_call_result = subprocess.run(cmd.split(), check=False)
                 action_rc = local_call_result.returncode
                 self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
             else:
