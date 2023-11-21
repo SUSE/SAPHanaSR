@@ -79,7 +79,7 @@ class SaphanasrTest:
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
-        self.message("INIT: tester version: {}".format(self.version))
+        self.debug("INIT: tester version: {}".format(self.version))
         if cmdparse:
             self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
@@ -169,9 +169,8 @@ class SaphanasrTest:
         if len(self.config['remote_nodes']) > 1:
             l_remotes.extend(self.config['remote_nodes'])
         for remote_node in l_remotes:
-            self.message(f"test now with host {remote_node}")
+            # self.message(f"test now with host {remote_node}")
             if remote_node == "localhost":
-                self.message("LOCAL")
                 local_sr = subprocess.run(cmd.split(), capture_output=True, check=False)
                 if local_sr.returncode != 20000:
                     self.message("STATUS: get data from localhost")
@@ -179,7 +178,6 @@ class SaphanasrTest:
                     sr_out = local_sr.stdout.decode()
                     break
             else:
-                self.message("REMOTE")
                 result_sr = self.__do_ssh__(remote_node, "root", cmd)
                 if result_sr[2] != 20000:
                     self.message(f"STATUS: get data from {remote_node}")
@@ -492,10 +490,10 @@ class SaphanasrTest:
             step_next = step['next']
             process_result = self.process_step(step)
             if process_result == 0:
-                self.message("STATUS: Test step {} passed successfully".format(step_step))
+                self.message("STATUS: Test step {} PASSED successfully".format(step_step))
             else:
                 r_code = 1
-                self.message("STATUS: Test step {} FAILED successfully ;-)".format(step_step))
+                self.message("STATUS: Test step {} FAILED successfully ;)".format(step_step))
                 # TODO: add onfail handling
                 # (curently only break for first step and continue for others)
                 if onfail == 'break':
