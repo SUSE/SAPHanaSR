@@ -10,7 +10,7 @@
 """
 
 import time
-#import subprocess
+import subprocess
 import re
 import sys
 import json
@@ -18,13 +18,14 @@ import argparse
 import random
 
 # for ssh remote calls this module uses paramiko
-from paramiko import SSHClient
+#from paramiko import SSHClient
+import paramiko
 
 class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.3.0"
+    version = "0.3.2"
 
     def message(self, msg, **kwargs):
         """
@@ -49,10 +50,20 @@ class SaphanasrTest:
         except OSError:
             print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"), flush=True)
 
+    def debug(self, msg, **kwargs):
+        """
+        debug output/log only if option debug is set
+        """
+        if self.config['debug']:
+            self.message(msg, **kwargs)
+
     def __init__(self, *args, **kwargs):
         """
         constructor
         """
+        random.seed()
+        self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
+        self.run['r_id'] = random.randrange(10000,99999,1)
         cmdparse = kwargs.get('cmdparse', True)
         self.config = { 'test_file': "-",
                         'defaults_file': None,
@@ -62,15 +73,15 @@ class SaphanasrTest:
                         'dump_failures': False,
                         'remote_node': None,
                         'remote_nodes': [],
-                        'printTestProperties': False
+                        'printTestProperties': False,
+                        'debug': False
                       }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
-        self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
         self.message("INIT: tester version: {}".format(self.version))
         if cmdparse:
-            self.message("dbg: lib parses cmdline")
+            self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
             parser.add_argument("--testFile", help="specify the test file")
             parser.add_argument("--defaultsFile", help="specify the defaults file")
@@ -108,8 +119,7 @@ class SaphanasrTest:
                 # pylint: disable-next=R1732
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         else:
-            self.message("dbg: lib skips parsing cmdline")
-        random.seed()
+            self.debug("DEBUG: lib skips parsing cmdline")
 
     def __insert_to_area__(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
@@ -151,20 +161,33 @@ class SaphanasrTest:
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "SAPHanaSR-showAttr --format=tester"
         self.dict_sr={}
-        result_sr = self.__do_ssh__(self.config['remote_node'], "root", cmd)
-        if result_sr[2] == 20000:
-            #self.message("remote node broken !!")
-            # try other remoteNodes (if given via parameter)
-            #self.message(f"len array {len(self.config['remote_nodes'])}")
-            if len(self.config['remote_nodes']) > 1:
-                for remote_node in self.config['remote_nodes']:
-                    #self.message(f"test now with host {remote_node}")
-                    result_sr = self.__do_ssh__(remote_node, "root", cmd)
-                    if result_sr[2] != 20000:
-                        self.message(f"STATUS: get data from {remote_node}")
-                        self.config['remote_node'] = remote_node
-                        break
-        for line in result_sr[0].splitlines():
+        sr_out = ""
+        #self.message("remote node broken !!")
+        # try other remoteNodes (if given via parameter)
+        #self.message(f"len array {len(self.config['remote_nodes'])}")
+        l_remotes = [self.config['remote_node']]
+        if len(self.config['remote_nodes']) > 1:
+            l_remotes.extend(self.config['remote_nodes'])
+        for remote_node in l_remotes:
+            self.message(f"test now with host {remote_node}")
+            if remote_node == "localhost":
+                self.message("LOCAL")
+                local_sr = subprocess.run(cmd.split(), capture_output=True, check=False)
+                if local_sr.returncode != 20000:
+                    self.message("STATUS: get data from localhost")
+                    self.config['remote_node'] = remote_node
+                    sr_out = local_sr.stdout.decode()
+                    break
+            else:
+                self.message("REMOTE")
+                result_sr = self.__do_ssh__(remote_node, "root", cmd)
+                if result_sr[2] != 20000:
+                    self.message(f"STATUS: get data from {remote_node}")
+                    self.config['remote_node'] = remote_node
+                    sr_out = result_sr[0]
+                    break
+            self.message(f"STATUS: FAILED to get data from {remote_node}")
+        for line in sr_out.splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
             if match_obj:
@@ -190,7 +213,7 @@ class SaphanasrTest:
         l_sloppy = False
         if 'sloppy' in kwargs:
             l_sloppy = kwargs['sloppy']
-            self.message(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
+            self.debug(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
         object_name = None
         l_sr = self.dict_sr
         # check, if 'area' is in the sr-data-dictionary
@@ -233,7 +256,7 @@ class SaphanasrTest:
                 if key in l_obj:
                     l_value = l_obj[key]
                 else:
-                    self.message(f'DEBUG: key {key} not found')
+                    self.debug(f'DEBUG: key {key} not found')
         return l_value
 
     def pretty_print(self, dictionary,level):
@@ -268,13 +291,16 @@ class SaphanasrTest:
             with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
                 self.test_data.update(json.load(prop_fh))
         self.run['test_id'] = self.test_data['test']
-        self.message("DEBUG: test_data: {}".format(str(self.test_data)),
+        self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
 
-    def write_test_properties(self, l_top):
+    def write_test_properties(self, topology):
+        """
+        write_test_properties - write bash test properties file so bash test helper could source the key-value settings
+        """
         with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
-            test_prop_fh.write(f"node01={l_top.get('pHost','node01')}\n")
-            test_prop_fh.write(f"node02={l_top.get('sHost','node02')}\n")
+            test_prop_fh.write(f"node01={topology.get('pHost','node01')}\n")
+            test_prop_fh.write(f"node02={topology.get('sHost','node02')}\n")
             test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
             test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
             test_prop_fh.write(f"srMode={self.test_data.get('srMode','sync')}\n")
@@ -295,7 +321,7 @@ class SaphanasrTest:
         ( _key, _val, _reg, _comp ) = key_val_reg
         _l_failed += f"{_key}={_val} {_comp} {_reg}; "
         self.run['failed'] = _l_failed
-        self.message("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
+        self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
@@ -327,10 +353,9 @@ class SaphanasrTest:
                     comp_obj = re.search("(.*):(.*)",c_reg_exp)
                     c_reg_exp_a = comp_obj.group(1)
                     c_reg_exp_b = comp_obj.group(2)
-            except Exception:
+            except (IndexError, AttributeError):
                 pass
-                #echo(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp}")
-            self.message(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+            self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             found = 0
             if area_name in l_sr:
                 l_area = l_sr[area_name]
@@ -381,14 +406,14 @@ class SaphanasrTest:
                 if c_err == 1:
                     self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp, c_comp))
                     check_result = max(check_result, 1)
-                    self.message(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+                    self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
                 else:
                     check_result = max(check_result, 0)
-                    self.message(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+                    self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             if (found == 0) and (check_result < 2):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:
-            self.message(f"FAILED: step={step_step} {self.__get_failed__()}", stdout=False)
+            self.message(f"MISSED: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -398,7 +423,7 @@ class SaphanasrTest:
             checks = step[topology_object_name]
             if isinstance(checks,str):
                 check_ptr = checks
-                self.message(f"DEBUG: check_ptr {check_ptr}", stdout=False)
+                self.debug(f"DEBUG: check_ptr {check_ptr}", stdout=False)
                 checks = self.test_data["checkPtr"][check_ptr]
             topolo = self.topolo
             if topology_object_name in topolo:
@@ -426,9 +451,9 @@ class SaphanasrTest:
             step_action = ""
         _l_msg = (
                      "PROC:"
-                     f" step_id={step_id}"
+                     f" step_id='{step_id}'"
                      f" step_name='{step_name}'"
-                     f" step_next={step_next}"
+                     f" step_next='{step_next}'"
                      f" step_action='{step_action}'"
                      f" max_loops='{max_loops}'"
                  )
@@ -495,11 +520,11 @@ class SaphanasrTest:
         test_resource = self.test_data['mstResource']
         _l_run = self.run
         _l_msg = "PROC:"
-        _l_msg += f" test_id={test_id}"
-        _l_msg += f" test_sid={test_sid}"
-        _l_msg += f" test_name={test_name}"
-        _l_msg += f" test_start={test_start}"
-        _l_msg += f" test_resource={test_resource}"
+        _l_msg += f" test_id='{test_id}'"
+        _l_msg += f" test_sid='{test_sid}'"
+        _l_msg += f" test_name='{test_name}'"
+        _l_msg += f" test_start='{test_start}'"
+        _l_msg += f" test_resource='{test_resource}'"
         self.message(_l_msg)
         r_code = self.process_steps()
         return r_code
@@ -517,10 +542,16 @@ class SaphanasrTest:
         """ do the action itself """
         action_rc = 0
         if cmd != "":
-            self.message("ACTION: {} at {}: {}".format(action_name, remote, cmd))
-            a_result = self.__do_ssh__(remote, "root", cmd)
-            action_rc = a_result[2]
-            self.message("ACTION: {} at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+            if remote == "localhost":
+                self.message("ACTION: {} LOCAL: {}".format(action_name, cmd))
+                local_call_result = subprocess.run(cmd.split(), check=False)
+                action_rc = local_call_result.returncode
+                self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
+            else:
+                self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
+                a_result = self.__do_ssh__(remote, "root", cmd)
+                action_rc = a_result[2]
+                self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
 
     def action_on_hana(self, action_name):
@@ -631,7 +662,7 @@ class SaphanasrTest:
         """
         if remote_host:
             try:
-                ssh_client = SSHClient()
+                ssh_client = paramiko.SSHClient()
                 ssh_client.load_system_host_keys()
                 ssh_client.connect(remote_host, username=user)
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
@@ -640,14 +671,16 @@ class SaphanasrTest:
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
-            # pylint: disable=broad-exception-caught
-            # TODO: improve error messages for ssh exceptions
-            except Exception:
+                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            except paramiko.ssh_exception.SSHException as para_err:
+                self.message(f"FAILURE01: ssh connection to {user}@{remote_host}: {para_err}")
+                check_result=("", "", 20000)
+            except Exception as ssh_muell:
                 # except Exception as ssh_muell:
-                #self.message("ssh connection did not work ...")
-                #self.message(f"{type(ssh_muell)}")
+                self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
                 check_result=("", "", 20000)
         else:
+            self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)
         return check_result
 
@@ -677,7 +710,7 @@ if __name__ == "__main__":
         l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
         l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
 
-        test01.message(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
+        test01.debug(f"DEBUG: get 'other' worker - {test01.get_area_object_by_key_val('Host', { 'roles': ':worker:slave'}, sloppy=True)}")
 
         if l_top['pHost'] is None:
             # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles

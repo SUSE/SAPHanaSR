@@ -29,28 +29,32 @@ test01 = SaphanasrTest(cmdparse=False)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--testFile", help="specify the test file")
-parser.add_argument("--defaultChecksFile", help="specify the default checks file")
+parser.add_argument("--defaultsFile", help="specify the default checks file")
 parser.add_argument("--properties", help="specify the properties file")
-parser.add_argument("--remoteNode", help="cluster node to use for ssh connection")
+parser.add_argument("--remoteNodes", nargs="*", help="cluster nodes to use for ssh connection")
 parser.add_argument("--simulate", help="only simulate, dont call actions",
                     action="store_true")
 parser.add_argument("--repeat", help="how often to repeat the test")
 parser.add_argument("--dumpFailures", help="print failed checks per loop",
                     action="store_true")
 parser.add_argument("--logFile", help="log file to write the messages")
+parser.add_argument("--printTestProperties", help="print test properties and exit",
+                    action="store_true")
+parser.add_argument("--debug", help="output and log debug messages", action="store_true")
 args = parser.parse_args()
 if args.testFile:
     test01.message("PARAM: testFile: {}".format(args.testFile))
     test01.config['test_file'] = args.testFile
-if args.defaultChecksFile:
-    test01.message("PARAM: defaultChecksFile: {}".format(args.defaultChecksFile))
-    test01.config['defaults_checks_file'] = args.defaultChecksFile
+if args.defaultsFile:
+    test01.message("PARAM: defaultsFile: {}".format(args.defaultsFile))
+    test01.config['defaults_file'] = args.defaultsFile
 if args.properties:
     test01.message("PARAM: properties: {}".format(args.properties))
     test01.config['properties_file'] = args.properties
-if args.remoteNode:
-    test01.message("PARAM: remoteNode: {}".format(args.remoteNode))
-    test01.config['remote_node'] = args.remoteNode
+if args.remoteNodes:
+    test01.message("PARAM: remoteNodes: {}".format(args.remoteNodes))
+    test01.config['remote_node'] = args.remoteNodes[0]
+    test01.config['remote_nodes'] = args.remoteNodes
 if args.repeat:
     test01.message("PARAM: repeat: {}".format(args.repeat))
     test01.config['repeat'] = int(args.repeat)
@@ -63,9 +67,17 @@ if args.logFile:
     # disable 'consider to use with ...' - I am pretty sure with does not match here
     # pylint: disable-next=R1732
     test01.run['log_file_handle'] = open(test01.config['log_file'], 'a', encoding="utf-8")
+if args.printTestProperties:
+    test01.config['printTestProperties'] = args.printTestProperties
+    test01.message(f"PARAM: printTestProperties: {test01.config['printTestProperties']}")
+if args.debug:
+    test01.config['debug'] = args.debug
+    test01.message("PARAM: DEBUG activated")
 
 while test01.run['count'] <= test01.config['repeat']:
-    test01.run['r_id'] = random.randrange(10000,99999,1)
+    # test01.message(f"count: {test01.run['count']}")
+    if test01.run['count'] > 1:
+        test01.run['r_id'] = random.randrange(10000,99999,1)
     test01.read_saphana_sr()
     l_top = test01.topolo
     l_top.update({'global': 'global'})
@@ -76,6 +88,9 @@ while test01.run['count'] <= test01.config['repeat']:
     # sHost is the host with site-attribute == sSite
     # TODO: for angi-ScaleOut and classic-ScaleOut we might need to differ msn-host, plain-worker (no mns-candidate) and standby node
     # TODO: classic-ScaleUp
+    # TODO: allow 2 types of parameter set:
+    #       1: --testFile=... --defaultsFile=... --properties=... [ --defaultPropertiesFile=... ]
+    #       2: --testDir=...
     # pHost could be the host with roles-attr like [0-4]:P:*
     # sHost could be the host with roles-attr like [0-4]:S:*
     # pSite is referenced by pHost-site-attr
@@ -113,16 +128,39 @@ while test01.run['count'] <= test01.config['repeat']:
                 f" sWorker={l_top['sWorker']}"
             )
     test01.message(l_msg)
+
     test01.read_test_file()
+    ### debug exit after printing test properties
+    if test01.config['printTestProperties'] is True:
+        p_msg = (
+                    f"test_properties:" 
+                    f" node01={l_top.get('pHost','node01')}"
+                    f" node02={l_top.get('sHost','node02')}"
+                    f" mstResource={test01.test_data.get('mstResource','')}"
+                    f" clnResource={test01.test_data.get('clnResource','')}"
+                    f" srMode=sync"
+                    f" opMode=logreplay"
+                    f" SID={test01.test_data.get('sid','C11')}"
+                    f" instNr={test01.test_data.get('instNo','00')}"
+                    f" sidadm={test01.test_data.get('sid','C11').lower()}adm"
+                    f" userkey={test01.test_data.get('userKey','')}"
+                )
+        test01.message(p_msg)
+        break
+    test01.write_test_properties(l_top)
+
     my_test_id = test01.run['test_id']
     if test01.config['repeat'] != 1:
         test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
     test01.run['test_rc'] = test01.process_test()
-    MSG_TEMPL = "TEST: {} testNr={} {} successfully :) ######"
+    MSG_TEMPL = "TEST: {} testNr={} testRc={} {} successfully :) ######"
     if test01.run['test_rc'] == 0:
-        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], 'PASSED'))
+        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'PASSED'))
     else:
-        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], 'FAILED'))
+        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'FAILED'))
     test01.run['count'] += 1
 if  test01.run['log_file_handle']:
     test01.run['log_file_handle'].close()
+if test01.run['test_rc'] == 0:
+    sys.exit (0)
+sys.exit(1)

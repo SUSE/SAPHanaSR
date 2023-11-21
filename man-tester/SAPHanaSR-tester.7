@@ -1,182 +1,158 @@
-.\" Version: 1.001 
+.\" Version: 1.001
 .\"
 .TH SAPHanaSR-tester 7 "11 Nov 2023" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
-SAPHanaSR-tester \- Tools for automating functional tests of SAPHanaSR clusters.
+SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
 .PP
 .\"
 .SH DESCRIPTION
 .\"
-\fBOverview\fP
-.PP
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
 
-The test cases are defined in JSON files. Each test is separated into steps.
+Predefined functional tests are shipped for scale-up and scale-out scenarios.
+This tests could be run out-of-the-box. The predefined tests also can be used
+for creating new test definitions. So parameters for timing and expected
+attributes can be customised.
+
+The test cases are defined in dedicated files. Each test is separated into
+steps.
 For each step there is an expectation for SAPHanaSR attributes, which need to
 match. Additionally each step defines the 'next' step and an optional action
 to be triggered if the step status has been reached (all expectations match).
+See section SYNTAX below for comparators and other details.
 
 For tests involving complex actions on the cluster nodes, predefined shell
 scripts are executed remotely.
-
 .\" TODO state machine.
-.PP
-\fBTest cases\fP
-.PP
-Functional test are shipped for scale-up and scale-out scenarios. This tests
-could be run out-of-the-box.
-.PP
-a. Predefined functional tests for scale-up:
-.TP
-block_manual_takeover
-blocked manual takeover
-.TP
-block_sr
-block sr and check SFAIL attribute; unblock to recover
-.TP
-block_sr_and_freeze_prim_fs
 
-.TP
-flup
-like nop but very short sleep only - only for checking the test engine
-.TP
-freeze_prim_fs
-freeze sap hana fs on primary master node
-.TP
-free_log_area
-free log area on primary
-.TP
-freeze_prim_fs
+See manual pages SAPHanaSR-tests-angi-ScaleUp(7) and
+SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases and further details.
+See also the REQUIREMENTS section below.
 
-.TP
-kill_prim_indexserver
-Kill primary indexserver
-.TP
-kill_prim_inst
-Kill primary instance
-.TP
-kill_prim_node
-Kill primary master node
-.TP
-kill_secn_indexserver
-Kill secondary indexserver
-.TP
-kill_secn_inst
-Kill secondary instance
-.TP
-kill_secn_node
-Kill secondary master node
-.TP
-maintenance_cluster_turn_hana
-
-.TP
-maintenance_with_standby_nodes
-standby+online secondary then standby+online primary
-.TP
-nop
-no operation - check, wait and check again (stability check)
-.TP
-restart_cluster_hana_running
-
-.TP
-restart_cluster
-
-.TP
-restart_cluster_turn_hana
-
-.TP
-split_brain_prio
-split brain with prio fencing to simulate fence of secondary
-.TP
-standby_primary_node
-standby primary node (and online again)
-.TP
-standby_secondary_node
-standby secondary node (and online again)
-.RE
-.PP
-b. Predefined functional tests for scale-out:
-.TP
-block_manual_takeover
-blocked manual takeover
-.TP
-free_log_area
-free log area on primary
-.TP
-kill_prim_indexserver
-Kill primary indexserver
-.TP
-kill_prim_inst
-Kill primary instance
-.TP
-kill_prim_node
-Kill primary master node
-.TP
-kill_prim_worker_indexserver
-Kill primary worker indexserver
-.TP
-kill_prim_worker_inst
-Kill primary worker instance
-.TP
-kill_prim_worker_node
-Kill primary worker node
-.TP
-kill_secn_indexserver
-Kill secondary indexserver
-.TP
-kill_secn_inst
-Kill secondary instance
-.TP
-kill_secn_node
-Kill secondary master node
-.TP
-kill_secn_worker_inst
-Kill secondary worker instance
-.TP
-kill_secn_worker_node
-Kill secondary worker node
-.TP
-maintenance_cluster_turn_hana
-
-.TP
-maintenance_with_standby_nodes
-standby+online secondary then standby+online primary
-.TP
-nop
-no operation - check, wait and check again (stability check)
-.TP
-restart_cluster
-
-.TP
-restart_cluster_hana_running
-
-.TP
-restart_cluster_turn_hana
-
-.TP
-standby_primary_node
-standby primary node (and online again)
-.TP
-standby_secondary_node
-standby secondary node (and online again)
-.RE
-.PP
-The predefined test cases can be used for creating custom test definitions. 
-In that tests, parameters for timing and expected attributes can be customised.
-.PP
 .B SAPHanaSR-tester is shipped as technology preview.
 .PP
-See also the REQUIREMENTS section below.
+.\"
+.SH SYNTAX
+.\"
+The test cases are defined in JSON files. Each test case is described in one
+file. It also can reference to defaults.json for common status definitions.
+.PP
+\fB*\fP Test step status
+.PP
+Each step contains an expectation for SAPHanaSR attributes, which need to
+match. The step status are:
+.TP
+globalUp
+both sites are up and in sync
+.TP
+globalDown
+not yet implemented
+.TP
+pHostUp
+host p (expected to be primary before the test starts) is up  
+.TP
+pSiteUp
+site p is up  
+.TP
+sSiteUp
+site s (expected to be secondary before the test starts) is up  
+.TP
+sHostUp
+host s is up  
+.TP
+pHostDown
+host p is down 
+.TP
+pSiteDown
+site p is down 
+.TP
+sSiteDown
+site s is down 
+.TP
+sHostDown
+host s is down 
+.PP
+Note: Prefixes "s" and "p" are statically indicating geographical sites, as
+seen at the beginning of a test. If a takeover happens during that test, the
+final secondary site might be prefixed "p".
+.PP
+Each test step status is described by one or more conditions. Each condition
+is described by one comparision. This conditions are combined by logical "AND".
+Each comparision consists of one CIB SAPHanaSR attribute name, one comparator
+and one value or regular expression. This comparator and expression could
+contain logical "OR". A status with two conditions looks like this:
+.PP
+"\fR<test_step_status>\fP": [
+.br
+               "\fR<parameter_name> <comparator> <value>" ,
+.br
+               "\fR<parameter_name> <comparator> <value>"
+.br
+           ]
+.PP
+A set of comparators is implemented. Some take integers, some take regular
+expression. In addition the "None" TODO. 
+.\" saphana_sr_test.py
+.\" re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+.TP
+==
+equal, integer
+.TP
+!=
+not equal, integer
+.TP
+>=
+greater or equal, integer
+.TP
+<=
+less or equal, interger
+.TP
+>
+greater, integer
+.TP
+<
+less
+.TP
+>~
+greater or like, first field integer and second field regular expression ( <integer>:<regular_expression> )
+.TP
+~
+like, regular expression
+.TP
+!~
+not like, regular expression
+.TP
+is
+TODO, the string "None"
+.PP
+\fB*\fP Test step actions
+.PP
+TODO
+.TP
+post
+action after step, [ bmt | cleanup | spn | ssn | osn | script <script> | kill_... ] 
+.RE
+See also the EXAMPLES section in manual pages SAPHanaSR-tests-angi-ScaleUp(7)
+and SAPHanaSR-tests-angi-ScaleOut(7).
+.PP
+\fB*\fP Test properties
+.PP
+TODO statical values, decribing the test system.
+
+See also example below.
 .PP
 .\"
 .SH EXAMPLES
-* Installing SAPHanaSR-tester.
+.\"
+\fB*\fR Installing SAPHanaSR-tester.
 .PP
-The software packages are installed on an node outside the Linux cluster.
+The SAPHanaSR-tester is installed on an node outside the Linux cluster.
 Password-less login for user root is prepared. The tester properties are
-adapted to the SAPHanaSR scale-up cluster.
+adapted to the SAPHanaSR scale-up cluster. Example scale-up cluster nodes are
+node1 and node2, SID is Q42, instance number is 85, database user key is
+TESTER.
 .PP
 .RS 2
 # zypper in SAPHanaSR-tester
@@ -205,12 +181,39 @@ adapted to the SAPHanaSR scale-up cluster.
 .br
     "clnResource": "cln_SAPHanaTop_Q42_HDB85"
 .br
+    "userKey": "TESTER"
+.br
 }
 .br
 :wq
 .RE
 .PP
-* Showing predefined functional test cases.
+\fB*\fR Creating an userkey for databse access.
+.PP
+A userkey for user <sid>admin is created to allow password-less login as user
+SYSTEM to the HANA database. This is needed for some test cases, e.g. 
+free_log_backup. The example user is q42admin, key is TESTER, instance number
+is 85, database user SYSTEM´s password is SuSE12345. Do this on both nodes.
+.br
+Refer to SAP HANA documentation for further information on database users,
+permissions and the user keystore.
+.PP
+# su - q42admin
+.br
+~> cd
+.br
+~> hdbuserstore SET TESTER localhost:38513 SYSTEM SuSE12345
+.br
+~> hdbuserstore LIST TESTER
+.br
+~> hdbsql -U TESTER "select * from dummy"
+.br
+~> exit
+.RE
+.PP
+Note: Do this only on test systems. Never do this on production systems.
+.PP
+\fB*\fR Showing predefined functional scale-up test cases.
 .PP
 .\" TODO
 # ls /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/*.json | \\
@@ -218,7 +221,7 @@ adapted to the SAPHanaSR scale-up cluster.
 while read; do echo $REPLY; grep "name" $REPLY | head -1; done
 .RE
 .PP
-* Running a very basic functional test.
+\fB*\fR Running a very basic functional test.
 .PP
 The functional test "nop" is performed on the Linux cluster defined above.
 A dedicated working directory and logfile for this test is used. 
@@ -228,11 +231,11 @@ A dedicated working directory and logfile for this test is used.
 .br
 # export TROOT=/usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
 .br
-# SAPHanaSR-testCluster-multiNode \\
+# SAPHanaSR-testCluster \\
 .br
 --testFile $TROOT/nop.json \\
 .br
---remoteNodes node01 node02 \\
+--remoteNodes node1 node2 \\
 .br
 --defaultsFile $TROOT/defaults.json \\
 .br
@@ -241,18 +244,15 @@ A dedicated working directory and logfile for this test is used.
 --logFile test.log
 .RE
 .PP
-* Showing failed tests from logfile.
+\fB*\fR Showing failed tests from logfile.
 .PP
-Failed step 10 are ignored. That step checks for pre-requisites. A failed step
-10 means the test can not be performed successfully. Logfile is test.log.
+Logfile is test.log, shown are time, test ID, test case.
 .PP
 .RS 2
-# grep "STATUS.*FAILED" test.log | \\
-.br
-grep -v step10 | awk '{print $3}' | sort -u
+# grep "TEST:.*FAILED" test.log | awk '{print $2,$3,$5}'
 .RE
 .PP
-* Showing details for a single test.
+\fB*\fR Showing details for a single test.
 .PP
 Test ID is 8585, logfile is test.log, debug output is omitted.
 .PP
@@ -262,7 +262,7 @@ Test ID is 8585, logfile is test.log, debug output is omitted.
 .PP
 .\"
 .SH FILES
-.TP
+.\"
 /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
 functional tests for SAPHanaSR-angi scale-up scenarios.
 .TP
@@ -286,37 +286,47 @@ auto-generated properties file for called shell scripts. No need to touch.
 .TP
 /usr/bin/
 TODO
-.RE
 .PP
 .\"
 .SH REQUIREMENTS
-.PP
+.\"
 For the current version of the SAPHanaSR-tester, the capabilities are limited
 to the following:
 .PP
-1. Resource agents and configuration of SAPHanaSR-angi.
+\fB*\fP Resource agents and configuration of SAPHanaSR-angi.
 .PP
-2. Scale-up setups with or without multi-target replication.
+\fB*\fP Scale-up setups with or without multi-target replication.
 No scale-up multi-SID (MCOS) setups.
 .PP
-3. Scale-out setups with or without multi-target replication.
+\fB*\fP Scale-out setups with or without multi-target replication.
 No HANA host auto-failover.
 .PP
-4. SAPHanaSR-tester is installed and used on an node outside the Linux cluster.
+\fB*\fP SAPHanaSR-tester is installed and used on an node outside the Linux
+cluster.
 .PP
-5. User root needs password-free access to the Linux cluster nodes and the node
-where SAPHanaSR-tester is installed.
+\fB*\fP User root needs password-less access to the Linux cluster nodes and the
+node where SAPHanaSR-tester is installed.
 .PP
-6. Package python3-paramiko is needed for the tester´s multi-node feature.
+\fB*\fP On the cluster nodes, user <sid>adm has a userkey for password-less
+login as database user SYSTEM into the HANA database. This is only needed for
+some test cases.
 .PP
-7. Strict time synchronization between the cluster nodes and the tester node,
-e.g. NTP. All nodes have configured the same timezone.
+\fB*\fP Package python3-paramiko is needed for the tester´s multi-node feature.
 .PP
-8. The services pacemaker und corosync need to be enabled for this tests. 
-If disk-based SBD is used, then SBD_STARTMODE=always is needed for this tests.
+\fB*\fP Strict time synchronization between the cluster nodes and the tester
+node, e.g. NTP. All nodes have configured the same timezone.
+.PP
+\fB*\fP The services pacemaker and corosync need to be enabled for this tests. 
+If disk-based SBD is used, then service sbd enabled and SBD_STARTMODE=always
+is needed for this tests. The stonith-action=reboot is needed in any case.
 This cluster basics might be different for production.
 .PP
-9. The tester must not be used for production systems.
+\fB*\fP Sufficient disk space, particularly for HANA transaction logs, e.g.
+/hana/log/. Depending on the backup implementation, also space for log backups
+might be needed, e.g. /hana/shared/<SID>/HDB<nr>/backup/. Strict housekeeping
+might help as well.
+.PP
+\fB*\fP The tester must not be used for production systems.
 Most tests are disruptive.
 .PP
 .\"
@@ -327,6 +337,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+\fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) ,
 \fBssh-keygen\fP(1) , \fBssh-copy-id\fP(1) ,
 .br
@@ -335,19 +347,17 @@ https://documentation.suse.com/sbp/sap/ ,
 https://documentation.suse.com/sles-sap/ ,
 .br
 https://www.suse.com/releasenotes/
-.\"
 .PP
+.\"
 .SH AUTHORS
-.br
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
 (c) 2023 SUSE Linux GmbH, Germany.
 .br
-The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html
 .\"
-
