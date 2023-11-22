@@ -1,9 +1,9 @@
 .\" Version: 1.001
 .\"
-.TH SAPHanaSR-tester 7 "11 Nov 2023" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-syntax 5 "20 Nov 2023" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
-SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
+SAPHanaSR-tests-syntax \- Syntax for SAPHanaSR test cases and properties.
 .PP
 .\"
 .SH DESCRIPTION
@@ -11,10 +11,7 @@ SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
 
-Predefined functional tests are shipped for scale-up and scale-out scenarios.
-This tests could be run out-of-the-box. The predefined tests also can be used
-for creating new test definitions. So parameters for timing and expected
-attributes can be customised.
+
 
 The test cases are defined in dedicated files. Each test is separated into
 steps.
@@ -28,10 +25,7 @@ scripts are executed remotely.
 .\" TODO state machine.
 
 See manual pages SAPHanaSR-tests-angi-ScaleUp(7) and
-SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases and further details.
-See also the REQUIREMENTS section below.
-
-.B SAPHanaSR-tester is shipped as technology preview.
+SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases.
 .PP
 .\"
 .SH SYNTAX
@@ -142,86 +136,15 @@ and SAPHanaSR-tests-angi-ScaleOut(7).
 TODO statical values, decribing the test system.
 
 See also example below.
+
+\fB*\fP Test results
+
+See manual page SAPHanaSR-testCluster(8) for TODO
 .PP
 .\"
 .SH EXAMPLES
 .\"
-\fB*\fR Installing SAPHanaSR-tester.
-.PP
-The SAPHanaSR-tester is installed on an node outside the Linux cluster.
-Password-less login for user root is prepared. The tester properties are
-adapted to the SAPHanaSR scale-up cluster. Example scale-up cluster nodes are
-node1 and node2, SID is Q42, instance number is 85, database user key is
-TESTER.
-.PP
-.RS 2
-# zypper in SAPHanaSR-tester
-.br
-# zypper in python3-paramiko
-.br
-# ssh-kegen -t rsa -b 4096
-.br
-# ssh-copy-id root@node1
-.br
-# ssh-copy-id root@node2
-.br
-# ssh-copy-id root@localhost
-.br
-# cp /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/properties.json ~/properties_q42.json
-.br
-# vi ~/properties_q42.json
-.br
-{
-.br
-    "sid": "Q42",
-.br
-    "instNo": "85",
-.br
-    "mstResource": "mst_SAPHanaCon_Q42_HDB85",
-.br
-    "clnResource": "cln_SAPHanaTop_Q42_HDB85"
-.br
-    "userKey": "TESTER"
-.br
-}
-.br
-:wq
-.RE
-.PP
-\fB*\fR Creating an userkey for database access.
-.PP
-A userkey for user <sid>admin is created to allow password-less login as user
-SYSTEM to the HANA database. This is needed for some test cases, e.g. 
-free_log_backup. The example user is q42admin, key is TESTER, instance number
-is 85, database user SYSTEM´s password is SuSE12345. Do this on both nodes.
-.br
-Refer to SAP HANA documentation for further information on database users,
-permissions and the user keystore.
-.PP
-# su - q42admin
-.br
-~> cd
-.br
-~> hdbuserstore set TESTER localhost:38513 SYSTEM SuSE12345
-.br
-~> hdbuserstore list TESTER
-.br
-~> hdbsql -U TESTER "select * from dummy"
-.br
-~> exit
-.RE
-.PP
-Note: Do this only on test systems. Never do this on production systems.
-.PP
-\fB*\fR Showing predefined functional scale-up test cases.
-.PP
-.\" TODO
-# ls /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/*.json | \\
-.br
-while read; do echo $REPLY; grep "name" $REPLY | head -1; done
-.RE
-.PP
-See manual page SAPHanaSR-testCluster(8) for how to run that tests.
+TODO
 .PP
 .\"
 .SH FILES
@@ -253,60 +176,19 @@ program to run a predefined testcase.
 .\"
 .SH REQUIREMENTS
 .\"
-For the current version of the SAPHanaSR-tester, the capabilities are limited
-to the following:
-.PP
-\fB*\fP Resource agents and configuration of SAPHanaSR-angi.
-.PP
-\fB*\fP Scale-up setups with or without multi-target replication.
-No scale-up multi-SID (MCOS) setups.
-.PP
-\fB*\fP Scale-out setups with or without multi-target replication.
-No HANA host auto-failover.
-.PP
-\fB*\fP SAPHanaSR-tester is installed and used on an node outside the Linux
-cluster.
-.PP
-\fB*\fP User root needs password-less access to the Linux cluster nodes and the
-node where SAPHanaSR-tester is installed.
-.PP
-\fB*\fP On the cluster nodes, user <sid>adm has a userkey for password-less
-login as database user SYSTEM into the HANA database. This is only needed for
-some test cases.
-.PP
-\fB*\fP Package python3-paramiko is needed for the tester´s multi-node feature.
-.PP
-\fB*\fP Strict time synchronization between the cluster nodes and the tester
-node, e.g. NTP. All nodes have configured the same timezone.
-.PP
-\fB*\fP The services pacemaker and corosync need to be enabled for this tests. 
-If disk-based SBD is used, then service sbd enabled and SBD_STARTMODE=always
-is needed for this tests. The stonith-action=reboot is needed in any case.
-This cluster basics might be different for production.
-.PP
-\fB*\fP Sufficient disk space, particularly for HANA transaction logs, e.g.
-/hana/log/. Depending on the backup implementation, also space for log backups
-might be needed, e.g. /hana/shared/<SID>/HDB<nr>/backup/. Strict housekeeping
-might help as well.
-.PP
-\fB*\fP The tester must not be used for production systems.
-Most tests are disruptive.
+See the REQUIREMENTS section in SAPHanaSR-tester(7).
 .PP
 .\"
 .SH BUGS
-The SAPHanaSR-tester is under development. Syntax and formats are subject to
-change.
-.br
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tester\fP(7) ,  \fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
-\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) ,
-\fBssh-keygen\fP(1) , \fBssh-copy-id\fP(1) ,
+\fBSAPHanaSR-showAttr\fP(8) ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
