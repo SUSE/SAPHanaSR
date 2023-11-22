@@ -118,11 +118,6 @@ install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 
-# wizard files for hawk2
-install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
-install -D -m 0644 wizard/hawk2/saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
-install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
-
 %files
 %defattr(-,root,root)
 %dir /usr/lib/ocf
@@ -142,14 +137,6 @@ install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/
 /usr/bin/SAPHanaSR-filter-legacy
 /usr/bin/SAPHanaSR-hookHelper
 /usr/bin/SAPHanaSR-manageProvider
-
-## HAWK2 wizard
-%dir %{crmscr_path}/saphanasr/
-%dir %{crmscr_path}/saphanasr-su-po/
-%dir %{crmscr_path}/saphanasr-su-co/
-%{crmscr_path}/saphanasr/main.yml
-%{crmscr_path}/saphanasr-su-po/main.yml
-%{crmscr_path}/saphanasr-su-co/main.yml
 
 %license LICENSE
 %dir %{_docdir}/%{name}
