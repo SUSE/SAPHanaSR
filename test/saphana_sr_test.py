@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.3.2"
+    version = "0.3.3"
 
     def message(self, msg, **kwargs):
         """
@@ -168,23 +168,29 @@ class SaphanasrTest:
         l_remotes = [self.config['remote_node']]
         if len(self.config['remote_nodes']) > 1:
             l_remotes.extend(self.config['remote_nodes'])
+        switched_remote = False
         for remote_node in l_remotes:
             # self.message(f"test now with host {remote_node}")
             if remote_node == "localhost":
                 local_sr = subprocess.run(cmd.split(), capture_output=True, check=False)
                 if local_sr.returncode != 20000:
-                    self.message("STATUS: get data from localhost")
-                    self.config['remote_node'] = remote_node
+                    if switched_remote:
+                        self.message("STATUS: get data from localhost")
+                        self.config['remote_node'] = remote_node
+                        switched_remote = False
                     sr_out = local_sr.stdout.decode()
                     break
             else:
                 result_sr = self.__do_ssh__(remote_node, "root", cmd)
                 if result_sr[2] != 20000:
-                    self.message(f"STATUS: get data from {remote_node}")
-                    self.config['remote_node'] = remote_node
+                    if switched_remote:
+                        self.message(f"STATUS: get data from {remote_node}")
+                        self.config['remote_node'] = remote_node
+                        switched_remote = False
                     sr_out = result_sr[0]
                     break
             self.message(f"STATUS: FAILED to get data from {remote_node}")
+            switched_remote = True
         for line in sr_out.splitlines():
             # match and split: <area>/<object>/<key-value>
             match_obj = re.search("(.*)/(.*)/(.*)", line)
@@ -317,7 +323,7 @@ class SaphanasrTest:
             ( _area, _obj ) = area_object
             _l_failed = f"{_area}={_obj}: "
         ( _key, _val, _reg, _comp ) = key_val_reg
-        _l_failed += f"{_key}={_val} {_comp} {_reg}; "
+        _l_failed += f'expect "{_key} {_comp} {_reg}", have "{_val}"; '
         self.run['failed'] = _l_failed
         self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
@@ -354,7 +360,7 @@ class SaphanasrTest:
             except (IndexError, AttributeError):
                 pass
             self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-            found = 0
+            found = False
             if area_name in l_sr:
                 l_area = l_sr[area_name]
                 c_err = 1
@@ -362,7 +368,7 @@ class SaphanasrTest:
                     l_obj = l_area[object_name]
                     if c_key in l_obj:
                         l_val = l_obj[c_key]
-                        found = 1
+                        found = True
                         # TODO '==' must be exact match, '~' is for regexp
                         if c_comp == "==":
                             if l_val == c_reg_exp:
@@ -402,7 +408,9 @@ class SaphanasrTest:
                             c_err = 0
                             check_result = max(check_result, 0)
                 if c_err == 1:
-                    self.__add_failed__((area_name, object_name), (c_key, None, c_reg_exp, c_comp))
+                    if not found: 
+                        l_val = None
+                    self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
                     check_result = max(check_result, 1)
                     self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
                 else:
