@@ -19,7 +19,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.4
+Version:        1.2.5
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -56,8 +56,9 @@ mkdir -p %{buildroot}/usr/bin
 #mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}
 mkdir -p %{buildroot}/usr/lib/%{name}
+mkdir -p %{buildroot}%{_mandir}/man5
 mkdir -p %{buildroot}%{_mandir}/man7
-#mkdir -p %{buildroot}%{_mandir}/man8
+mkdir -p %{buildroot}%{_mandir}/man8
 
 # test engine itself
 mkdir -p %{buildroot}/usr/lib/%{name}
@@ -76,8 +77,9 @@ ls test/json
 cp -va test/json %{buildroot}/usr/share/%{name}
 
 # manual pages
+install -m 0444 man-tester/*.5.gz %{buildroot}%{_mandir}/man5
 install -m 0444 man-tester/*.7.gz %{buildroot}%{_mandir}/man7
-#install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
+install -m 0444 man-tester/*.8.gz %{buildroot}%{_mandir}/man8
 
 %files
 %defattr(-,root,root)
@@ -90,6 +92,5 @@ install -m 0444 man-tester/*.7.gz %{buildroot}%{_mandir}/man7
 #%dir %{_docdir}/%{name}
 %doc README.md
 %doc %{_mandir}/man*/*
-#%doc %{_mandir}/man8/*
 
 %changelog
