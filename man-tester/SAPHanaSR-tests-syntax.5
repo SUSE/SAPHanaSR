@@ -1,6 +1,6 @@
 .\" Version: 1.001
 .\"
-.TH SAPHanaSR-tester 7 "20 Nov 2023" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tester 7 "11 Nov 2023" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
@@ -10,8 +10,6 @@ SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
 .\"
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
-
-.B SAPHanaSR-tester is shipped as technology preview.
 
 Predefined functional tests are shipped for scale-up and scale-out scenarios.
 This tests could be run out-of-the-box. The predefined tests also can be used
@@ -23,6 +21,7 @@ steps.
 For each step there is an expectation for SAPHanaSR attributes, which need to
 match. Additionally each step defines the 'next' step and an optional action
 to be triggered if the step status has been reached (all expectations match).
+See section SYNTAX below for comparators and other details.
 
 For tests involving complex actions on the cluster nodes, predefined shell
 scripts are executed remotely.
@@ -32,41 +31,117 @@ See manual pages SAPHanaSR-tests-angi-ScaleUp(7) and
 SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases and further details.
 See also the REQUIREMENTS section below.
 
-TODO Input - Processing - Output
-
-\fB*\fP Input: Test cases and test system properties
-
-a. Test cases are defined in JSON files. Each case is described in one file.
-It also can reference to defaults.json for common status definitions.
+.B SAPHanaSR-tester is shipped as technology preview.
+.PP
+.\"
+.SH SYNTAX
+.\"
+The test cases are defined in JSON files. Each test case is described in one
+file. It also can reference to defaults.json for common status definitions.
+.PP
+\fB*\fP Test step status
+.PP
 Each step contains an expectation for SAPHanaSR attributes, which need to
-match.
+match. The step status are:
+.TP
+globalUp
+both sites are up and in sync
+.TP
+globalDown
+not yet implemented
+.TP
+pHostUp
+host p (expected to be primary before the test starts) is up  
+.TP
+pSiteUp
+site p is up  
+.TP
+sSiteUp
+site s (expected to be secondary before the test starts) is up  
+.TP
+sHostUp
+host s is up  
+.TP
+pHostDown
+host p is down 
+.TP
+pSiteDown
+site p is down 
+.TP
+sSiteDown
+site s is down 
+.TP
+sHostDown
+host s is down 
+.PP
+Note: Prefixes "s" and "p" are statically indicating geographical sites, as
+seen at the beginning of a test. If a takeover happens during that test, the
+final secondary site might be prefixed "p".
+.PP
 Each test step status is described by one or more conditions. Each condition
-is described by one comparision.
-
-See manual page SAPHanaSR-tests-syntax(5) for details, see also the EXAMPLES
-section in SAPHanaSR-tests-angi-ScaleUp(7) and SAPHanaSR-tests-angi-ScaleOut(7).
-
-b. Test system properties are defined in JSON files.
+is described by one comparision. This conditions are combined by logical "AND".
+Each comparision consists of one CIB SAPHanaSR attribute name, one comparator
+and one value or regular expression. This comparator and expression could
+contain logical "OR". A status with two conditions looks like this:
+.PP
+"\fR<test_step_status>\fP": [
+.br
+               "\fR<parameter_name> <comparator> <value>" ,
+.br
+               "\fR<parameter_name> <comparator> <value>"
+.br
+           ]
+.PP
+A set of comparators is implemented. Some take integers, some take regular
+expression. In addition the "None" TODO. 
+.\" saphana_sr_test.py
+.\" re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+.TP
+==
+equal, integer
+.TP
+!=
+not equal, integer
+.TP
+>=
+greater or equal, integer
+.TP
+<=
+less or equal, interger
+.TP
+>
+greater, integer
+.TP
+<
+less
+.TP
+>~
+greater or like, first field integer and second field regular expression ( <integer>:<regular_expression> )
+.TP
+~
+like, regular expression
+.TP
+!~
+not like, regular expression
+.TP
+is
+TODO, the string "None"
+.PP
+\fB*\fP Test step actions
+.PP
+TODO
+.TP
+post
+action after step, [ bmt | cleanup | spn | ssn | osn | script <script> | kill_... ] 
+.RE
+See also the EXAMPLES section in manual pages SAPHanaSR-tests-angi-ScaleUp(7)
+and SAPHanaSR-tests-angi-ScaleOut(7).
+.PP
+\fB*\fP Test properties
+.PP
 TODO statical values, decribing the test system.
-This propertes are separated from the test cases, because they need to be
-adapted for each test system. The test cases on the other hand are mostly
-similar for all test systems. 
 
-See manual page SAPHanaSR-tests-syntax(5) for details, see also example below.
-
-\fB*\fP Processing:
-
-TODO SAPHanaSR-testCluster
-TODO  shell scripts shiped with SAPhanaSR-tester, e.g. test_
-TODO  custom scripts and test automation frameworks
-
-See also manual page SAPHanaSR-testCluster(8).
-
-\fB*\fP Output: Test results 
-
-TODO output of SAPHanaSR-testCluster
-
-See also manual page SAPHanaSR-testCluster(8).
+See also example below.
 .PP
 .\"
 .SH EXAMPLES
@@ -192,7 +267,8 @@ No HANA host auto-failover.
 \fB*\fP SAPHanaSR-tester is installed and used on an node outside the Linux
 cluster.
 .PP
-\fB*\fP User root needs password-less access to the Linux cluster nodes.
+\fB*\fP User root needs password-less access to the Linux cluster nodes and the
+node where SAPHanaSR-tester is installed.
 .PP
 \fB*\fP On the cluster nodes, user <sid>adm has a userkey for password-less
 login as database user SYSTEM into the HANA database. This is only needed for
@@ -227,7 +303,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBSAPHanaSR-testCluster\fP(8) , \fBSAPHanaSR-tests-syntax\fP(5) ,
+\fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) ,
 \fBssh-keygen\fP(1) , \fBssh-copy-id\fP(1) ,
