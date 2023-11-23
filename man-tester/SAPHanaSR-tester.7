@@ -126,6 +126,7 @@ permissions and the user keystore.
 .br
 Note: Never do this on production systems.
 .PP
+.RS 2
 # su - q42admin
 .br
 ~> cd
@@ -144,24 +145,22 @@ Note: Never do this on production systems.
 .\" TODO
 See manual page SAPHanaSR-testCluster(8) for how to run this tests.
 .PP
+.RS 2
 # ls /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/*.json | \\
 .br
 while read; do echo $REPLY; grep "name" $REPLY | head -1; done
 .RE
 .PP
-\fB*\fR Checking Linux cluster basic pieces.
+\fB*\fR Checking Linux cluster SBD basic setup.
 .PP
-For the basic Linux cluster components watchdog driver, sbd disks and service,
-corosync service as well as pacemaker service, it is checked if they are
-activated and running. Basic OS features time and name resolution are checked.
-Cluster nodes are "node1" and "node2".
-See manual page SAPHanaSR_basic_cluster(7), 
-SAPHanaSR-ScaleOut_basic_cluster(7), cs_show_sbd_devices(8) and crm_verify(8).
+For the basic Linux cluster components watchdog driver, SBD disks and service,
+it is checked if they are configured and running. 
+Do this on all Linux cluster nodes.
+See manual page SAPHanaSR_basic_cluster(7), SAPHanaSR-ScaleOut_basic_cluster(7),
+sbd(8), cs_show_sbd_devices(8) and REQUIREMENTS section below.
 .PP
 .RS 2
-# grep -e node1 -e node2 /etc/hosts
-.br
-# chronyc sources | grep "\\^\\*"
+# grep -v "#" /etc/sysconfig/sbd
 .br
 # lsmod | grep -e wdt -e dog
 .br
@@ -169,17 +168,54 @@ SAPHanaSR-ScaleOut_basic_cluster(7), cs_show_sbd_devices(8) and crm_verify(8).
 .br
 # cs_show_sbd_devices
 .br
-# systemctl status sbd corosync pacemaker | grep -e Loaded -e Active
+# systemctl status sbd | grep -e Loaded -e Active
+.RE
+.PP
+If the Linux cluster already has been configured, show the SBD resource.
+Resource name is rsc_stonith_sbd.
+.PP
+.RS 2
+# crm_mon -1r | grep stonith:external
+.br
+# crm configure show rsc_stonith_sbd
+.RE
+.PP
+\fB*\fR Checking Linux OS and cluster basics.
+.PP
+Basic OS features time and name resolution as well as HANA disk space are
+checked. Cluster nodes are "node1" and "node2", HANA SID is "HA1", instance
+number is "85". Do this on all Linux cluster nodes.
+For the basic Linux cluster services corosync and pacemaker, it is checked if
+they are activated and running. The registered STONITH device and CIB bootstarp
+options are shown. 
+See manual page SAPHanaSR_basic_cluster(7), SAPHanaSR-ScaleOut_basic_cluster(7),
+stonith_admin(8), crm_verify(8) and REQUIREMENTS section below.
+.PP
+.RS 2
+# grep -e node1 -e node2 /etc/hosts
+.br
+# chronyc sources | grep "\\^\\*"
+.br
+# df -h /hana/log/HA1 /hana/shared/HA1/HDB85/backup
+.br
+# systemctl status corosync pacemaker | grep -e Loaded -e Active
+.br
+# stonith_admin --list-registered
 .br
 # crm cluster status
+.br
+# crm configure show cib-bootstrap-options
+.br
+# crm_mon -1rA
 .RE
 .PP
 \fB*\fR Checking Linux cluster basic functionality.
 .PP
 For the basic Linux cluster components watchdog driver, sbd disks and service,
 corosync service as well as pacemaker service, it is checked if they are
-working. The cluster node "node2" will be fenced. Hopefully this is the other
-one. See manual page crm(8).
+working. The cluster node "node2" will be fenced and should re-join
+automatically. Hopefully this is the other one. Do this on all Linux cluster
+nodes. See manual page crm(8).
 .br
 Note: Never do this on production systems. 
 .PP
