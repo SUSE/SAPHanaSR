@@ -11,12 +11,18 @@ SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
 
-.B SAPHanaSR-tester is shipped as technology preview.
+.B SAPHanaSR-tester is shipped as technology preview. 
 
-Predefined functional tests are shipped for scale-up and scale-out scenarios.
-This tests could be run out-of-the-box. The predefined tests also can be used
-for creating new test definitions. So parameters for timing and expected
-attributes can be customised.
+The package is focussing on functional test cases for the SAPHanaSR resource
+agents, the related configuration of the Linux cluster and the SAP HANA database
+pair. In addition to the functional tests targeted by SAPHanaSR-tester, specific
+tests for the underlying infrastructure, Linux OS and cluster as well as the
+database need to be done.
+
+SAPHanaSR-tester provides predefined functional for scale-up and scale-out
+scenarios. This tests could be run out-of-the-box. The predefined tests also
+can be used for creating new test definitions. So parameters for timing and
+expected attributes can be customised.
 
 The test cases are defined in dedicated files. Each test is separated into
 steps.
@@ -143,6 +149,43 @@ while read; do echo $REPLY; grep "name" $REPLY | head -1; done
 .RE
 .PP
 See manual page SAPHanaSR-testCluster(8) for how to run that tests.
+.PP
+\fB*\fR Checking Linux cluster basic pieces.
+.PP
+For the basic Linux cluster components watchdog driver, sbd disks and service,
+corosync service as well as pacemaker service, it is checked if they are
+activated and running.
+See manual page SAPHanaSR_basic_cluster(7), 
+SAPHanaSR-ScaleOut_basic_cluster(7) and crm_verify(8).
+.PP
+.RS 2
+# lsmod | grep -e wdt -e dog
+.br
+# cs_show_sbd_devices
+.br
+# systemctl status sbd corosync pacemaker | grep -e Loaded -e Active
+.br
+# crm cluster status
+.RE
+.PP
+\fB*\fR Checking Linux cluster basic functionality.
+.PP
+For the basic Linux cluster components watchdog driver, sbd disks and service,
+corosync service as well as pacemaker service, it is checked if they are
+working. The cluster node "node2" will be fenced. Hopefully this is the other
+one. See manual page crm(8).
+.br
+Note: Never do this in production. 
+.PP
+.RS 2
+# crm cluster crash_test --kill-corosync
+.br
+# crm cluster crash_test --kill-pacemakerd
+.br
+# crm cluster crash_test --kill-sbd
+.br
+# crm cluster crash_test --fence-node node2
+.RE
 .PP
 .\"
 .SH FILES
