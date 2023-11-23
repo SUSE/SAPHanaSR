@@ -18,7 +18,7 @@ function run() {
     SAPHanaSR-testCluster-multiNode --testFile="$test_dir/${testID}.json" \
                             --repeat="$repeat" \
                             --dumpFailures \
-                            --defaultChecksFile="$test_dir/defaultChecks.json" \
+                            --defaultsFile="$test_dir/defaults.json" \
                             --properties="$test_dir/$test_prop.json" \
                             --remoteNodes $nodes \
                             --logFile "$local_dir/$logFile"
@@ -50,9 +50,25 @@ done
 
 test_dir="/usr/share/SAPHanaSR-tester/json/$test_scenario"
 
+# TODO: test sequence should come from a json test sequence file
 echo "nodes: $nodes, test_scenario=$test_scenario"
 while true; do  
+    run restart_cluster_turn_hana "$test_prop" 1 300
+    run kill_prim_inst "$test_prop" 3 300
     run free_log_area "$test_prop" 1 60
-    run kill_prim_inst  "$test_prop" 1 60
-    run bmt  "$test_prop" 1  60
+    run kill_prim_inst "$test_prop" 1 120
+    run free_log_area "$test_prop" 1 60
+    run standby_secn_node "$test_prop" 2 300
+    run kill_secn_inst "$test_prop" 3 300
+    run standby_prim_node "$test_prop" 2 300
+    run maintenance_with_standby_nodes "$test_prop" 1 300
+    run kill_prim_indexserver "$test_prop" 1 300
+    run nop "$test_prop" 1  10 
+    run kill_secn_indexserver "$test_prop" 1 300
+    run maintenance_cluster_turn_hana "$test_prop" 1 300
+    run restart_cluster "$test_prop" 1 300
+    run restart_cluster_hana_running "$test_prop" 1 300
+    run block_manual_takeover "$test_prop" 1  60
+    run kill_secn_node "$test_prop" 1 120
+    run kill_prim_node "$test_prop" 1 120
 done 
