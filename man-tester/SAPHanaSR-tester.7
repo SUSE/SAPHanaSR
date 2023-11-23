@@ -15,9 +15,8 @@ system replication HA clusters.
 
 The package is focussing on functional test cases for the SAPHanaSR resource
 agents, the related configuration of the Linux cluster and the SAP HANA database
-pair. In addition to the functional tests targeted by SAPHanaSR-tester, specific
-tests for the underlying infrastructure, Linux OS and cluster as well as the
-database need to be done.
+pair. In addition to this functional tests, specific tests for the underlying
+infrastructure, Linux OS and cluster as well as the database need to be done.
 
 SAPHanaSR-tester provides predefined functional for scale-up and scale-out
 scenarios. This tests could be run out-of-the-box. The predefined tests also
@@ -124,6 +123,8 @@ is 85, database user SYSTEM´s password is SuSE12345. Do this on both nodes.
 .br
 Refer to SAP HANA documentation for further information on database users,
 permissions and the user keystore.
+.br
+Note: Never do this on production systems.
 .PP
 # su - q42admin
 .br
@@ -138,17 +139,15 @@ permissions and the user keystore.
 ~> exit
 .RE
 .PP
-Note: Do this only on test systems. Never do this on production systems.
-.PP
 \fB*\fR Showing predefined functional scale-up test cases.
 .PP
 .\" TODO
+See manual page SAPHanaSR-testCluster(8) for how to run this tests.
+.PP
 # ls /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/*.json | \\
 .br
 while read; do echo $REPLY; grep "name" $REPLY | head -1; done
 .RE
-.PP
-See manual page SAPHanaSR-testCluster(8) for how to run that tests.
 .PP
 \fB*\fR Checking Linux cluster basic pieces.
 .PP
@@ -156,10 +155,12 @@ For the basic Linux cluster components watchdog driver, sbd disks and service,
 corosync service as well as pacemaker service, it is checked if they are
 activated and running.
 See manual page SAPHanaSR_basic_cluster(7), 
-SAPHanaSR-ScaleOut_basic_cluster(7) and crm_verify(8).
+SAPHanaSR-ScaleOut_basic_cluster(7), cs_show_sbd_devices(8) and crm_verify(8).
 .PP
 .RS 2
 # lsmod | grep -e wdt -e dog
+.br
+# lsof /dev/watchdog* | grep sbd
 .br
 # cs_show_sbd_devices
 .br
@@ -175,7 +176,7 @@ corosync service as well as pacemaker service, it is checked if they are
 working. The cluster node "node2" will be fenced. Hopefully this is the other
 one. See manual page crm(8).
 .br
-Note: Never do this in production. 
+Note: Never do this on production systems. 
 .PP
 .RS 2
 # crm cluster crash_test --kill-corosync
