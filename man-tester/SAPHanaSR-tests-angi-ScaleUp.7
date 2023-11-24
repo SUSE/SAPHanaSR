@@ -13,25 +13,25 @@ out-of-the-box. The test cases are defined in dedicated files.
 See manual page SAPHanaSR-tests-syntax(5) for syntax details.
 .\" TODO
 .PP
-Predefined functional tests for scale-up are:
+\fBPredefined functional tests for scale-up overview\fP
 .TP
 block_manual_takeover
 blocked manual takeover, for susTkOver.py
 .TP
 block_sr
-block sr and check SFAIL attribute; unblock to recover
+block HANA SR and check SFAIL attribute; unblock to recover
 .TP
 block_sr_and_freeze_prim_fs
-block sr and freeze sap hana fs on primary master node
+block HANA SR and freeze HANA FS on primary master node
 .TP
 flup
 like nop but very short sleep only - only for checking the test engine
 .TP
 free_log_area
-free log area on primary site
+free HANA log area on primary site
 .TP
 freeze_prim_fs
-freeze sap hana fs on primary master node
+freeze HANA FS on primary master node
 .TP
 kill_prim_indexserver
 Kill primary indexserver, for susChkService.py
@@ -52,7 +52,7 @@ kill_secn_node
 Kill secondary node
 .TP
 maintenance_cluster_turn_hana
-
+maintenance procedure, manually turning HANA sites
 .TP
 maintenance_with_standby_nodes
 standby+online secondary then standby+online primary
@@ -70,13 +70,290 @@ restart_cluster_turn_hana
 
 .TP
 split_brain_prio
-split brain with prio fencing to simulate fence of secondary
+split brain with priority fencing
 .TP
 standby_primary_node
 standby primary node (and online again)
 .TP
 standby_secondary_node
 standby secondary node (and online again)
+.PP
+.\"
+\fBPredefined functional tests for scale-up in detail\fP
+.PP
+\fBblock_manual_takeover\fP
+.RS 2
+Descr: blocked manual takeover, for susTkOver.py
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: 
+.br
+Expect:
+.RE
+.PP
+\fBblock_sr\fP
+.RS 2
+Descr: block HANA SR and check SFAIL attribute; unblock to recover
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect:
+.RE
+.PP
+\fBblock_sr_and_freeze_prim_fs\fP
+.RS 2
+Descr: block HANA SR and freeze HANA FS on primary master node
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect:
+.RE
+.PP
+\fBflup\fP
+.RS 2
+Descr: like nop but very short sleep only - only for checking the test engine
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Wait and see.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.RE
+.PP
+\fBfree_log_area\fP
+.RS 2
+Descr: free HANA log area on primary site
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Free up HANA transaction log space and log backups.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.RE
+.PP
+\fBfreeze_prim_fs\fP
+.RS 2
+Descr: freeze HANA FS on primary master node
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect:
+.RE
+.PP
+\fBkill_prim_indexserver\fP
+.RS 2
+Descr: Kill primary indexserver, for susChkService.py
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Primary node stays online.
+HANA primary stopped and finally started as secondary.
+SR SFAIL and finally SOK.
+One takeover. No fencing (for action_on_lost=kill).
+.RE
+.PP
+\fBkill_prim_inst\fP
+.RS 2
+Descr: Kill primary instance
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Primary node stays online.
+HANA primary stopped and finally started as secondary.
+SR SFAIL and finally SOK.
+One takeover. No fencing.
+.RE
+.PP
+\fBkill_prim_node\fP
+.RS 2
+Descr: Kill primary node
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Primary node stopped and finally started as secondary.
+HANA primary stopped and finally started as secondary.
+SR SFAIL and finally SOK.
+One takeover. One fencing.
+.RE
+.PP
+\fBkill_secn_indexserver\fP
+.RS 2
+Descr: Kill secondary indexserver
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: HANA secondary stopped and finally online.
+HANA primary stays online.
+SR SFAIL and finally SOK.
+No takeover. No fencing (for action_on_lost=kill).
+.RE
+.PP
+\fBkill_secn_inst\fP
+.RS 2
+Descr: Kill secondary instance
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: HANA secondary stopped and finally online.
+HANA primary stays online.
+SR SFAIL and finally SOK.
+No takeover. No fencing.
+.RE
+.PP
+\fBkill_secn_node\fP
+.RS 2
+Descr: Kill secondary node
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Secondary node fenced and finally online.
+HANA primary stays online.
+SR SFAIL and finally SOK.
+No takeover. One fencing.
+.RE
+.PP
+\fBmaintenance_cluster_turn_hana\fP
+.RS 2
+Descr: maintenance procedure, manually turning HANA sites
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Both nodes stay online.
+HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary by manual takeover.
+SR SFAIL and finally SOK. 
+One takeover. No fencing.
+.RE
+.PP
+\fBmaintenance_with_standby_nodes\fP
+.RS 2
+Descr: standby+online secondary then standby+online primary
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect:  Both nodes stay online.
+HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. No fencing.
+.RE
+.PP
+\fBnop\fP
+.RS 2
+Descr: no operation - check, wait and check again (stability check)
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Wait and see.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.RE
+.PP
+\fBrestart_cluster_hana_running\fP
+.RS 2
+Descr:
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: 
+.br
+Expect: Both nodes stay online.
+
+No takeover. No fencing.
+.RE
+.PP
+\fBrestart_cluster\fP
+.RS 2
+Descr:
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Both nodes stay online.
+
+No takeover. No fencing.
+.RE
+.PP
+\fBrestart_cluster_turn_hana\fP
+.RS 2
+Descr:
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Both nodes stay online.
+
+One takeover. No fencing.
+.RE
+.PP
+\fBsplit_brain_prio\fP
+.RS 2
+Descr: Network split-brain with priority fencing
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Secondary node fenced and finally online.
+Primary node stays online.
+HANA primary stays online.
+SR SFAIL and finally SOK.
+No takeover. One fencing.
+.RE
+.PP
+\fBstandby_primary_node\fP
+.RS 2
+Descr: Set primary node standby and online again
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Bothe nodes aty online.
+Primary node standby and finally back online.
+HANA primary stopped and finally started as secondary.
+HANA secondary finally primary by takeover.
+SR SFAIL and finally SOK.
+One takeover. No fencing.
+.RE
+.PP
+\fBstandby_secondary_node\fP
+.RS 2
+Descr: Set secondary node standby and online again
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: Secondary node standby and finally online.
+HANA primary stays online.
+HANA secondary stopped and finally started.
+SR SFAIL and finally SOK. No takeover. No fencing.
 .RE
 .PP
 .\"
@@ -85,16 +362,17 @@ standby secondary node (and online again)
 .\"
 .SH FILES
 .\"
+.TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
 functional tests for SAPHanaSR-angi scale-up scenarios.
 .TP
-$PWD/.test_properties
-auto-generated properties file for called shell scripts. No need to touch.
+/usr/bin/test_*
+shell scripts for un-easy tasks on the cluster nodes.
 .PP
 .\"
 .SH REQUIREMENTS
 .\"
-See the REQUIREMENTS section in SAPHanaSR-tester(7).
+See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
 .PP
 .\"
 .SH BUGS
