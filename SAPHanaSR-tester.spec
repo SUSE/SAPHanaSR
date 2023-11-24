@@ -19,7 +19,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.5
+Version:        1.2.7
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -70,11 +70,13 @@ install -m 0755 test/cs_* %{buildroot}/usr/bin
 install -m 0755 test/test_* %{buildroot}/usr/bin
 install -m 0755 test/callTest* %{buildroot}/usr/bin
 install -m 0755 test/loopTests* %{buildroot}/usr/bin
+install -m 0755 test/sct_* %{buildroot}/usr/bin
 
 # test definitions
 pwd
 ls test/json
 cp -va test/json %{buildroot}/usr/share/%{name}
+cp -va test/www %{buildroot}/usr/share/%{name}
 
 # manual pages
 install -m 0444 man-tester/*.5.gz %{buildroot}%{_mandir}/man5
