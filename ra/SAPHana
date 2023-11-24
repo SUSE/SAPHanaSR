@@ -32,6 +32,7 @@
 #   new instance parameter for the RA
 #   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
 #   OCF_RESKEY_SAPHanaFilter    (outdated, replaced by cluster property hana_${sid}_glob_filter)
+#   OCF_RESKEY_takeover_on_indexserver_failure  (optional, default is true)
 #
 # HANA must support the following commands:
 #     hdbnsutil -sr_stateConfiguration (unsure, if this means >= SPS110, SPS111 or SPS10x)
@@ -267,6 +268,11 @@ The resource agent uses the following four interfaces provided by SAP:
         <shortdesc lang="en">OUTDATED PARAMETER</shortdesc>
         <longdesc lang="en">OUTDATED PARAMETER</longdesc>
         <content type="string" default="" />
+    </parameter>
+    <parameter name="takeover_on_indexserver_failure" unique="0" required="0">
+        <shortdesc lang="en">Define, if a takeover should be initiated if the primary indexserver service is unhealthy.</shortdesc>
+        <longdesc lang="en">The parameter enables or disables the automatic takeover of the secondary instance, if the indexserver service on the primary instance is unhealthy, for instance due to a crash and automatic recovery. This is enabled by default and will only take effect when the related hook script is configured, which updates a node attribute with service state information provided by SAP HANA events.</longdesc>
+        <content type="boolean" default="true" />
     </parameter>
 </parameters>
 
@@ -847,6 +853,7 @@ function saphana_init() {
     PreferSiteTakeover="$OCF_RESKEY_PREFER_SITE_TAKEOVER"
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
     RemoveSAPSockets="${OCF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
+    IndexserverFailureTakeover="${OCF_RESKEY_takeover_on_indexserver_failure:-true}"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     LPA_ATTR=("lpa_${sid}_lpt" "forever")
     super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
@@ -856,6 +863,7 @@ function saphana_init() {
     ATTR_NAME_HANA_SYNC_STATUS=("hana_${sid}_sync_state" "reboot")  # SOK, SFAIL, UNKNOWN?
     ATTR_NAME_HANA_PRIMARY_AT=("hana_${sid}_primary_at"   "reboot") # Not used so far
     ATTR_NAME_HANA_CLONE_STATE=("hana_${sid}_clone_state" "reboot") # UKNOWN?, DEMOTED, PROMOTED
+    ATTR_NAME_HANA_INDEXSERVER=("hana_${sid}_indexserver" "reboot") # down, starting, running, stopping
     ATTR_NAME_HANA_REMOTEHOST=("hana_${sid}_remoteHost" "forever")
     ATTR_NAME_HANA_SITE=("hana_${sid}_site" "forever")
     ATTR_NAME_HANA_ROLES=("hana_${sid}_roles" "reboot")
@@ -2506,6 +2514,12 @@ function saphana_monitor_primary()
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"
                 scoring_crm_master "$my_role" "$my_sync"
             else
+
+                # indexserver: register sync state from node attribute at this moment
+                # (before the next steps will update it)
+                remote_sync_state=$(get_hana_attribute "${remoteNode}" "${ATTR_NAME_HANA_SYNC_STATUS[@]}")
+                super_ocf_log info "DEC: indexserver: remote sync state = $remote_sync_state"
+
                 LPTloc=$(date '+%s')
                 lpa_set_lpt $LPTloc "$NODENAME"
                 lpa_push_lpt $LPTloc
@@ -2562,6 +2576,55 @@ function saphana_monitor_primary()
                 fi
                 super_ocf_log info "DEC: saphana_monitor_primary: scoring_crm_master($my_role,$my_sync)"
                 scoring_crm_master "$my_role" "$my_sync"
+
+                # indexserver attribute evaluation and action
+                # only enter this check if the parameter is enabled and only act if PREFER_SITE_TAKEOVER is true
+                if ocf_is_true ${IndexserverFailureTakeover}; then
+                    indexserver_state_local=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_INDEXSERVER[@]}")
+
+                    if [ ! ${indexserver_state_local} = "" ]; then
+
+                        super_ocf_log info "DEC: indexserver: primary service state = ${indexserver_state_local}"
+
+                        if [[ ${indexserver_state_local} =~ starting|stopping|down ]]; then
+
+                            # query information about the remote node's health
+                            indexserver_state_remote=$(get_hana_attribute "${remoteNode}" "${ATTR_NAME_HANA_INDEXSERVER[@]}")
+                            remote_role=$(get_hana_attribute "${remoteNode}" "${ATTR_NAME_HANA_ROLES[@]}")
+
+                            # use the indexserver state from before the sync state was updated by above monitor steps
+                            super_ocf_log info "DEC: indexserver: remote sync = ${remote_sync_state}"
+                            super_ocf_log info "DEC: indexserver: remote role = ${remote_role}"
+                            super_ocf_log info "DEC: indexserver: remote indexserver state = ${indexserver_state_remote}"
+
+                            if [ "${remote_sync_state}" = "SOK" ]; then
+                                if [[ ${remote_role} =~ ^4:S:* ]] && [[ ${indexserver_state_remote} == "running" ]]; then
+                                    if ocf_is_true ${PreferSiteTakeover}; then
+                                        super_ocf_log info "DEC: indexserver: service unhealthy and remote node is ready to take over"
+                                        super_ocf_log info "DEC: indexserver: primary going down to trigger a takeover"
+
+                                        # end the monitor action immediately with the failure RC
+                                        rc=${OCF_FAILED_MASTER}
+                                    else
+                                    	# log why no failover will take place
+                                        super_ocf_log info "DEC: indexserver: service is unhealthy, but PREFER_SITE_TAKEOVER is '${PreferSiteTakeover}'"
+                                        super_ocf_log info "DEC: indexserver: leaving the primary to recover locally"
+                                    fi
+                                else
+                                    # log why no failover will take place
+                                    super_ocf_log info "DEC: indexserver: service state = '${indexserver_state_local}', but secondary is not healthy"
+                                    super_ocf_log info "DEC: indexserver: leaving the primary to recover locally"
+                                fi
+                            else
+                                # log why no failover will take place
+                                super_ocf_log info "DEC: indexserver: service state = '${indexserver_state_local}', but secondary is not healthy"
+                                super_ocf_log info "DEC: indexserver: leaving the primary to recover locally"
+                            fi
+                        fi
+                    fi
+                fi
+                # END of indexserver logic
+
             fi
             ;;
         * ) # UNDEFINED STATUS
@@ -2684,8 +2747,20 @@ function saphana_monitor_secondary()
                     scoring_crm_master "$my_role" "$my_sync"
                     ;;
                 "SFAIL" ) # This is currently NOT a possible node to promote
-                    super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
-                    set_crm_master -INFINITY
+
+                    # check if the remote node's (primary) indexserver is unhealthy
+                    # if it is the case, it explains the SFAIL state and should not block a failover
+                    indexserver_state_remote=$(get_hana_attribute "${remoteNode}" "${ATTR_NAME_HANA_INDEXSERVER[@]}")
+
+                    if ocf_is_true ${IndexserverFailureTakeover} && [[ ${indexserver_state_remote} =~ starting|stopping|down ]]; then
+                        super_ocf_log info "DEC: indexserver: replication sync state = ${sync_attr}"
+                        super_ocf_log info "DEC: indexserver: remote node indexserver state = ${indexserver_state_remote}"
+                        super_ocf_log info "DEC: indexserver: NOT excluding the node for failover due to primary indexserver service down"
+
+                    else  # any situation where the remote node indexserver has no attribute or is in 'running' state
+                        super_ocf_log info "DEC: secondary with sync status FAILED ==> EXCLUDE as possible takeover node"
+                        set_crm_master -INFINITY
+                    fi
                     ;;
                 * )     # Unknown sync status
                     super_ocf_log info "DEC: secondary has unexpected sync status $my_sync ==> RESCORE"
@@ -2804,38 +2879,45 @@ function saphana_promote_clone() {
             # promote on the replica side...
             #
             hana_sync=$(get_SRHOOK "$sr_name" "$NODENAME")
-            case "$hana_sync" in
-                SOK )
-                    super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
-                    LPTloc=$(date '+%s')
-                    # lpa_set_lpt 20 $remoteNode
-                    lpa_set_lpt $LPTloc "$NODENAME"
-                    lpa_push_lpt $LPTloc
-                    # TODO: Get rid of the su by using a new interface:
-                    # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_takeover ...
-                    # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
-                    # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
-                    # SAP_CALL
-                    set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
-                    set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-                    HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"
-                    set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-                    #
-                    # now gain check, if we are primary NOW
-                    #
-                    # TODO: PRIO3: check, if we need to destinguish between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-                    #
-                    if check_for_primary; then
-                        rc=$OCF_SUCCESS;
-                    else
-                        rc=$OCF_FAILED_MASTER
-                    fi
-                    ;;
-                * )
-                    super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
-                    rc=$OCF_ERR_GENERIC
-                    ;;
-            esac
+
+            if ocf_is_true ${IndexserverFailureTakeover}; then
+                indexserver_state_remote=$(get_hana_attribute "${remoteNode}" "${ATTR_NAME_HANA_INDEXSERVER[@]}")
+            else
+                indexserver_state_remote=''
+            fi
+
+            # Alow a takeover to be initiated when either the HSR sync state is SOK,
+            # or additionally when the primary indexserver status is available and unhealthy.
+            if [[ ${hana_sync} == "SOK" ]] || [[ ${indexserver_state_remote} =~ starting|stopping|down ]]; then
+                super_ocf_log info "ACT: !!!!!!! Promote REPLICA $SID-$InstanceName to be primary. !!!!!!"
+                LPTloc=$(date '+%s')
+                # lpa_set_lpt 20 $remoteNode
+                lpa_set_lpt $LPTloc "$NODENAME"
+                lpa_push_lpt $LPTloc
+                # TODO: Get rid of the su by using a new interface:
+                # SAPSYSTEMNAME=SLE /usr/sap/SLE/HDB00/HDBSettings.sh hdbnsutil -sr_takeover ...
+                # TODO: Check beginning from which SPS does SAP support HDBSettings.sh?
+                # TODO: Limit the runtime of hdbnsutil -sr_takeover ????
+                # SAP_CALL
+                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
+                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"
+                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+                #
+                # now gain check, if we are primary NOW
+                #
+                # TODO: PRIO3: check, if we need to destinguish between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
+                #
+                if check_for_primary; then
+                    rc=$OCF_SUCCESS;
+                else
+                    rc=$OCF_FAILED_MASTER
+                fi
+            else
+                super_ocf_log err "ACT: HANA SYNC STATUS IS NOT 'SOK' SO THIS HANA SITE COULD NOT BE PROMOTED"
+                rc=$OCF_ERR_GENERIC
+
+            fi
         else
             #
             # neither PRIMARY nor SECONDARY - This clone instance seems to be broken!!
