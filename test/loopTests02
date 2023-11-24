@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 function run() {
-    local testID="$1" test_prop="$2" repeat="$3" sleep="$4"
+    local testID="$1" repeat="$2" sleep="$3" rc=0
     logFile="testLog$(date +"%Y-%m-%d").txt"
     logLink="testLog.curr.txt"
     if [ ! -f "$logFile" ]; then
@@ -21,10 +21,10 @@ function run() {
                             --defaultsFile="$test_dir/defaults.json" \
                             --properties="$test_prop" \
                             --remoteNodes $nodes \
-                            --logFile "$local_dir/$logFile"
+                            --logFile "$local_dir/$logFile"; rc="$?"
     # ln -s -f testLog2023-03-31.txt testLog.curr.txt
     sleep "$sleep"; 
-    return 0
+    return "$rc"
 }
 
 test_scenario="angi-ScaleUp"
@@ -53,20 +53,20 @@ test_dir="/usr/share/SAPHanaSR-tester/json/$test_scenario"
 # TODO: test sequence should come from a json test sequence file
 echo "nodes: $nodes, test_scenario=$test_scenario"
 while true; do  
-    run kill_prim_inst  "$test_prop" 3 600
-    run free_log_area "$test_prop" 1 60
-    run kill_prim_inst "$test_prop" 1 120
-    run free_log_area "$test_prop" 1 60
-    run restart_cluster_turn_hana  "$test_prop" 1 300
-    run standby_secn_node  "$test_prop" 2 300
-    run kill_secn_inst  "$test_prop" 3 300
-    run standby_prim_node  "$test_prop" 2 300
-    run maintenance_with_standby_nodes  "$test_prop" 1 300
-    run kill_prim_indexserver  "$test_prop" 1 300
-    run nop  "$test_prop" 1  10 
-    run kill_secn_indexserver  "$test_prop" 1 300
-    run maintenance_cluster_turn_hana "$test_prop" 1 300
-    run restart_cluster "$test_prop" 1 300
-    run restart_cluster_hana_running "$test_prop" 1 300
-    run block_manual_takeover "$test_prop" 1  60
+    run kill_prim_inst  3 600
+    run free_log_area 1 60
+    run kill_prim_inst 1 120
+    run free_log_area 1 60
+    run restart_cluster_turn_hana  1 300
+    run standby_secn_node  2 300
+    run kill_secn_inst  3 300
+    run standby_prim_node  2 300
+    run maintenance_with_standby_nodes  1 300
+    run kill_prim_indexserver  1 300
+    run nop  1  10 
+    run kill_secn_indexserver  1 300
+    run maintenance_cluster_turn_hana 1 300
+    run restart_cluster 1 300
+    run restart_cluster_hana_running 1 300
+    run block_manual_takeover 1  60
 done 
