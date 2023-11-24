@@ -67,7 +67,6 @@ install -m 0644 test/saphana_sr_test.py %{buildroot}/usr/lib/%{name}
 
 # test help programs, test loops and test calls
 install -m 0755 test/cs_* %{buildroot}/usr/bin
-install -m 0755 test/test_* %{buildroot}/usr/bin
 install -m 0755 test/callTest* %{buildroot}/usr/bin
 install -m 0755 test/loopTests* %{buildroot}/usr/bin
 install -m 0755 test/sct_* %{buildroot}/usr/bin
