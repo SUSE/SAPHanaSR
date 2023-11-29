@@ -10,7 +10,7 @@ SAPHanaSR-tests-basic-cluster \- Checking SAPHanaSR clusters basics.
 .\"
 The Linux HA cluster relies on a sane OS setup and adequate infrastructure. For
 the SAP HANA database certain conditions have to match. The cluster nodes need
-to be checked for this pre-requisites before performing functional tests.
+to be checked for this prerequisites before performing functional tests.
 See manual page SAPHanaSR_basic_cluster(7), SAPHanaSR-ScaleOut_basic_cluster(7)
 and REQUIREMENTS section of SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
 In addition specific tests for the underlying infrastructure and the database
@@ -20,7 +20,8 @@ need to be done.
 .SH EXAMPLES
 .\"
 The checks outlined here are by no means complete.
-Neverteless, at least this checks should be performed.
+Neverteless, at least this checks should be performed before doing functional
+tests.
 .PP
 \fB*\fR Checking systemd integration and OS settings for SAP HANA.
 .PP
@@ -118,6 +119,33 @@ Note: Never do this on production systems.
 # crm cluster crash_test --fence-node node2
 .RE
 .PP
+\fB*\fR Checking HANA HA/DR hook script integration.
+.PP
+The Linux sudo rules are checked for needed permissions.
+The HANA global.ini is checked for SUSE HA/DR provider hook scripts. The HANA
+nameserver tracefiles are checked whether the hook scripts have been loaded.
+SID is HA1, instance number is 85. Do this on all Linux cluster nodes. See
+manual page susHanaSR.py(7), susTkOver.py(7) and susChkSrv.py(7).
+.PP
+.RS 2
+# sudo -U ha1adm -l | \\
+.br
+grep -e "NOPASSWD.*crm_attribute" -e "NOPASSWD.*SAPHanaSR-hookHelper"
+.br
+# su - ha1adm
+.br
+~> cdcoc
+.br
+~> grep -e "ha_dr_provider_sus" -e "provider.*sus" \\
+.br
+-e "path.*/SAPHanaSR-angi" global.ini
+.\" TODO SAPHanaSR-manageProvider
+.br
+~> cdtrace
+.br
+~> grep "HADR.*load.*sus" nameserver_*.38501.???.trc
+.RE
+.PP
 .\"
 .SH FILES
 .\"
@@ -137,8 +165,17 @@ Note: Never do this on production systems.
 /etc/corosync/corosync.conf
 
 .TP
+/etc/sudoers, /etc/sudoers.d/*
+the sudo permissions configuration
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+the on-disk representation of HANA global system configuration
+.TP
 /var/log/messages
-
+the Linux syslog messages
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace
+path to HANA tracefiles
 .PP
 .\"
 .SH REQUIREMENTS
@@ -155,6 +192,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-angi\fP(7) ,
 \fBSAPHanaSR_basic_cluster\fP(7) , \fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) ,
+\fBsusHanaSR.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
 \fBcrm\fP(8) , \fBcrm_verify\fP(8) , \fBstonith_admin\fP(8) ,
 \fBcs_show_error_patterns\fP(8) , \fBcs_sum_base_config\fP(8) ,
 \fBcs_show_sbd_devices\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(8) ,
