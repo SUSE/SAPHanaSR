@@ -29,7 +29,7 @@ saphana_common_lib_version="1.001.1"
 
 # TODO PRIO1: Set attribute version (if missing or old) during monitor action (not only probe)
 
-# global variables: OCF_*(r), CRM_NODE(w), NODENAME(w), CRM_PROMO(w), CRM_PROMO_PARAMS(w) SID(w) sidadm(w) InstanceName(w) 
+# global variables: OCF_*(r), CRM_NODE(w), NODENAME(w), CRM_PROMO(w), CRM_PROMO_PARAMS(w) SID(w) sidadm(w) InstanceName(w)
 # global variables: InstanceNr(w) SAPVIRHOST(w) DIR_EXECUTABLE(w) SAPSTARTSRV(w) SAPCONTROL(w) DIR_PROFILE(w) SAPSTARTPROFILE(w)
 # global variables: SAPHanaFilter(w) HANA_STATE_*(w) HANA_STD_ACTION_TIMEOUT(w) log_attributes(w)
 
@@ -78,11 +78,11 @@ function cluster_commands_init() {
     if [ $? -le 1 ]; then
         # shellcheck disable=SC2034
         CRM_PROMO="crm_attribute";
-        # shellcheck disable=SC2034 
+        # shellcheck disable=SC2034
         CRM_PROMO_PARAMS="--promotion"
     else
         # shellcheck disable=SC2034
-        CRM_PROMO="crm_master"; 
+        CRM_PROMO="crm_master";
         # shellcheck disable=SC2034
         CRM_PROMO_PARAMS="-l reboot"
     fi
@@ -187,7 +187,7 @@ function saphana_get_hana_version() {
 #           OBJECT could be a node name, a site name or global
 # globals:  -
 # output:   attribute value
-    # called by: TODO
+# called by: TODO
 #
 function get_hana_attribute() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
@@ -197,23 +197,37 @@ function get_hana_attribute() {
     local attr_store="${3:-reboot}" # DONE: PRIO5 get this (optional) from parameter
     local attr_default="$4"
     local dstr
+    local repeat=0
+    # TODO PRIO2: maybe use max_repeat + sleep_between as global settings amd maybe later as tunables
+    local max_repeat=2
+    local sleep_between=2
     dstr="$(date)"
-    case "$attr_store" in
-        reboot | forever )
-            if ocf_is_true "$log_attributes"; then
-                # TODO PRIO2: NG - report RA name instead of SAPHanaSR*
-                echo "$dstr: SAPHanaSR*: crm_attribute -N ${attr_obj} -G -n \"$attr_name\" -l $attr_store -q" >> "$log_attr_file"
-            fi
-            crm_attribute -N "${attr_obj}" -G -n "$attr_name" -l "$attr_store" -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
-            ;;
-        props )
-            if ocf_is_true "$log_attributes"; then
-                # TODO PRIO2: NG - report RA name instead of SAPHanaSR*
-                echo "$dstr: SAPHanaSR*: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> "$log_attr_file"
-            fi
-            crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
-            ;;
-    esac
+    while [[ "$repeat" -lt "$max_repeat" ]]; do
+        (( repeat++ ))
+        case "$attr_store" in
+            reboot | forever )
+                if ocf_is_true "$log_attributes"; then
+                    # TODO PRIO2: NG - report RA name instead of SAPHanaSR*
+                    echo "$dstr: SAPHanaSR*: crm_attribute -N ${attr_obj} -G -n \"$attr_name\" -l $attr_store -q" >> "$log_attr_file"
+                fi
+                crm_attribute -N "${attr_obj}" -G -n "$attr_name" -l "$attr_store" -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
+                ;;
+            props )
+                if ocf_is_true "$log_attributes"; then
+                    # TODO PRIO2: NG - report RA name instead of SAPHanaSR*
+                    echo "$dstr: SAPHanaSR*: crm_attribute -G -n \"$attr_name\" -t crm_config -q" >> "$log_attr_file"
+                fi
+                crm_attribute -G -n "$attr_name" -t crm_config -q -d "$attr_default" 2>>"$log_attr_file"; rc="$?"
+                ;;
+        esac
+        if [[ "$rc" == "0" ]]; then # cluster did answer
+            break
+        fi
+        sleep "$sleep_between"
+    done
+    if [[ "$rc" != "0" ]]; then
+        super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster does not answer on crm_attribute GET calls for $max_repeat retries last rc=$rc"
+    fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function get_hana_attribute
@@ -235,23 +249,36 @@ function set_hana_attribute() {
     local attr_old=""
     local dstr
     attr_old=$(get_hana_attribute "$attr_obj" "$attr_name" "$attr_store"); get_rc="$?"
+    # TODO PRIO2: maybe use max_repeat + sleep_between as global settings amd maybe later as tunables
+    local max_repeat=2
+    local sleep_between=2
     if [ "$attr_old" != "$attr_value" ]; then
-        super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_obj} to ${attr_value} former ($attr_old) get_rc=$get_rc "
-        dstr=$(date)
-        case "$attr_store" in
-            reboot | forever )
-                if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHanaSR*: crm_attribute -N $attr_obj -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> "$log_attr_file"
-                fi
-                crm_attribute -N "$attr_obj" -v "$attr_value" -n "$attr_name" -l "$attr_store" 2>>"$log_attr_file"; rc="$?"
-                ;;
-            props )
-                if ocf_is_true "$log_attributes"; then
-                    echo "$dstr: SAPHanaSR*: crm_attribute -v \"$attr_value\" -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> "$log_attr_file"
-                fi
-                crm_attribute -v "$attr_value" -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>"$log_attr_file"; rc="$?"
-                ;;
-        esac
+        while [[ "$repeat" -lt "$max_repeat" ]]; do
+            (( repeat++ ))
+            super_ocf_log debug "DBG: SET attribute $attr_name for node ${attr_obj} to ${attr_value} former ($attr_old) get_rc=$get_rc "
+            dstr=$(date)
+            case "$attr_store" in
+                reboot | forever )
+                    if ocf_is_true "$log_attributes"; then
+                        echo "$dstr: SAPHanaSR*: crm_attribute -N $attr_obj -v \"$attr_value\" -n \"$attr_name\" -l $attr_store" >> "$log_attr_file"
+                    fi
+                    crm_attribute -N "$attr_obj" -v "$attr_value" -n "$attr_name" -l "$attr_store" 2>>"$log_attr_file"; rc="$?"
+                    ;;
+                props )
+                    if ocf_is_true "$log_attributes"; then
+                        echo "$dstr: SAPHanaSR*: crm_attribute -v \"$attr_value\" -n \"$attr_name\" -t crm_config -s SAPHanaSR" >> "$log_attr_file"
+                    fi
+                    crm_attribute -v "$attr_value" -n "$attr_name" -t crm_config  -s SAPHanaSR 2>>"$log_attr_file"; rc="$?"
+                    ;;
+            esac
+            if [[ "$rc" == "0" ]]; then # cluster did answer
+                break
+            fi
+            sleep "$sleep_between"
+        done
+        if [[ "$rc" != "0" ]]; then
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster does not answer on crm_attribute SET calls for $max_repeat retries last rc=$rc"
+        fi
     else
         super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_obj} still be ${attr_value}"
         rc=0
@@ -559,7 +586,7 @@ function get_local_sr_config() {
             gP ) # call getParameter (gP)
                 local gpKeys=""
                 gpKeys=$(echo --key=global.ini/system_replication/{actual_mode,mode,site_name,site_id})
-                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1) 
+                hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python getParameter.py $gpKeys --sapcontrol=1" 2>&1)
                 [[ "$hdbANSWER" =~ "SAPCONTROL-OK: <begin>"(.*)"SAPCONTROL-OK: <end>" ]] && hdbANSWER="${BASH_REMATCH[1]}" || hdbANSWER=""
                 [[ "$hdbANSWER" =~ "/actual_mode"=([^$'\n']+) ]] && gSrMode=${BASH_REMATCH[1]}
                 # if 'actual_mode' is not available, fallback to 'mode'
