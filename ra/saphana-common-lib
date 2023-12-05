@@ -198,7 +198,7 @@ function get_hana_attribute() {
     local attr_default="$4"
     local dstr
     local repeat=0
-    # TODO PRIO2: maybe use max_repeat + sleep_between as global settings amd maybe later as tunables
+    # TODO PRIO2: maybe use max_repeat + sleep_between as global settings and maybe later as tunables
     local max_repeat=2
     local sleep_between=2
     dstr="$(date)"
@@ -222,11 +222,17 @@ function get_hana_attribute() {
         esac
         if [[ "$rc" == "0" ]]; then # cluster did answer
             break
+        else
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute GET call retry ($repeat/$max_repeat);  rc=$rc"
         fi
         sleep "$sleep_between"
     done
     if [[ "$rc" != "0" ]]; then
-        super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster does not answer on crm_attribute GET calls for $max_repeat retries last rc=$rc"
+        super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute GET calls for $max_repeat retries; last rc=$rc"
+    else
+        if [[ "$repeat" -gt 1 ]]; then
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did finally answer on crm_attribute GET call after ($repeat/$max_repeat) reties;  rc=$rc"
+        fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -249,7 +255,7 @@ function set_hana_attribute() {
     local attr_old=""
     local dstr
     attr_old=$(get_hana_attribute "$attr_obj" "$attr_name" "$attr_store"); get_rc="$?"
-    # TODO PRIO2: maybe use max_repeat + sleep_between as global settings amd maybe later as tunables
+    # TODO PRIO2: maybe use max_repeat + sleep_between as global settings and maybe later as tunables
     local max_repeat=2
     local sleep_between=2
     if [ "$attr_old" != "$attr_value" ]; then
@@ -277,7 +283,7 @@ function set_hana_attribute() {
             sleep "$sleep_between"
         done
         if [[ "$rc" != "0" ]]; then
-            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster does not answer on crm_attribute SET calls for $max_repeat retries last rc=$rc"
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute SET calls for $max_repeat retries; last rc=$rc"
         fi
     else
         super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_obj} still be ${attr_value}"
