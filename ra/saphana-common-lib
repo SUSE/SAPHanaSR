@@ -280,12 +280,16 @@ function set_hana_attribute() {
             if [[ "$rc" == "0" ]]; then # cluster did answer
                 break
             else
-                super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute SET call try ($repeat/$max_repeat);  rc=$rc"
+                super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute SET $attr_name call try ($repeat/$max_repeat);  rc=$rc"
             fi
             sleep "$sleep_between"
         done
         if [[ "$rc" != "0" ]]; then
-            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute SET calls for $max_repeat retries; last rc=$rc"
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute SET $attr_name calls for $max_repeat retries; last rc=$rc"
+        else
+            if [[ "$repeat" -gt 1 ]]; then
+                super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did finally answer on crm_attribute SET $attr_name call after ($repeat/$max_repeat) retries;  rc=$rc"
+            fi
         fi
     else
         super_ocf_log debug "DBG: LET attribute $attr_name for node ${attr_obj} still be ${attr_value}"
