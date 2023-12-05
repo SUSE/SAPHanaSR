@@ -200,7 +200,7 @@ function get_hana_attribute() {
     local repeat=0
     # TODO PRIO2: maybe use max_repeat + sleep_between as global settings and maybe later as tunables
     local max_repeat=2
-    local sleep_between=2
+    local sleep_between=5
     dstr="$(date)"
     while [[ "$repeat" -lt "$max_repeat" ]]; do
         (( repeat++ ))
@@ -223,15 +223,15 @@ function get_hana_attribute() {
         if [[ "$rc" == "0" ]]; then # cluster did answer
             break
         else
-            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute GET call try ($repeat/$max_repeat);  rc=$rc"
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute GET $attr_name call try ($repeat/$max_repeat);  rc=$rc"
         fi
         sleep "$sleep_between"
     done
     if [[ "$rc" != "0" ]]; then
-        super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute GET calls for $max_repeat retries; last rc=$rc"
+        super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute GET $attr_name calls for $max_repeat retries; last rc=$rc"
     else
         if [[ "$repeat" -gt 1 ]]; then
-            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did finally answer on crm_attribute GET call after ($repeat/$max_repeat) retries;  rc=$rc"
+            super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did finally answer on crm_attribute GET $attr_name call after ($repeat/$max_repeat) retries;  rc=$rc"
         fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
@@ -257,7 +257,7 @@ function set_hana_attribute() {
     attr_old=$(get_hana_attribute "$attr_obj" "$attr_name" "$attr_store"); get_rc="$?"
     # TODO PRIO2: maybe use max_repeat + sleep_between as global settings and maybe later as tunables
     local max_repeat=2
-    local sleep_between=2
+    local sleep_between=5
     if [ "$attr_old" != "$attr_value" ]; then
         while [[ "$repeat" -lt "$max_repeat" ]]; do
             (( repeat++ ))
@@ -279,6 +279,8 @@ function set_hana_attribute() {
             esac
             if [[ "$rc" == "0" ]]; then # cluster did answer
                 break
+            else
+                super_ocf_log warn "DEC ${FUNCNAME[0]}: cluster did not answer on crm_attribute SET call try ($repeat/$max_repeat);  rc=$rc"
             fi
             sleep "$sleep_between"
         done
