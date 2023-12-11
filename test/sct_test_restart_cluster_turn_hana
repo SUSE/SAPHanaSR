@@ -14,17 +14,33 @@
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f  "$src")
 dir_path=$(dirname "$full_path")
-source "$dir_path/test_properties"
 source .test_properties
 
 # shellcheck disable=SC2029
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
 currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
-currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
-echo "p=$currPrimary, s=$currSecondary"
+#
+#########################################
+# VHOSTS
+# get vhosts fom node names
+# SAPHanaSR-showAttr --format=tester | grep pizbuin02.*vhost
+#
+#########################################
+
+vhostPrim="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
+vhostSecn="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
+if [[ -z "$vhostPrim ]]; then
+    vhostPrim="$currPrimary"
+fi
+if [[ -z "$vhostSecn ]]; then
+    vhostPrim="$currSecondary"
+fi
+
+
+echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
 
 sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
 sitePrimary="${sitePrimary//\"/}"
@@ -50,7 +66,7 @@ ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforSt
 ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
 
 while true; do
-    ssh "$currPrimary" 'su - '"$sidadm"' -c "cdpy; python3 systemReplicationStatus.py 1>/dev/null"'; rc=$?
+    ssh "$currPrimary" 'su - '"$sidadm"' -c "python3 exe/python_support/systemReplicationStatus.py 1>/dev/null"'; rc=$?
     if [[ "$rc" != 15 ]]; then
         sleep 60
     else
@@ -61,7 +77,7 @@ done
 echo "==== SAP HANA DBs started ===="
 
 ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
-ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$currSecondary"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
+ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
 
 ssh "$node01" 'crm cluster run "crm cluster start"'
 
