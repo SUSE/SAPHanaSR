@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# test_restart_cluster_turn_hana -
+# sct_test_restart_cluster_turn_hana -
 #
 # - cleanup mst-resource
 # - stop cluster (including SAP HANA)
@@ -17,6 +17,7 @@ dir_path=$(dirname "$full_path")
 source .test_properties
 
 # shellcheck disable=SC2029
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resource"
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
 currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
@@ -39,28 +40,26 @@ if [[ -z "$vhostSecn ]]; then
     vhostPrim="$currSecondary"
 fi
 
-
-echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
 
 sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
 sitePrimary="${sitePrimary//\"/}"
 
-echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary"
 currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
-echo "p=$currPrimary, s=$currSecondary"
 
 sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
 sitePrimary="${sitePrimary//\"/}"
 
-echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
-
-
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Stop Cluster"
 ssh "${node02}" 'crm cluster run "crm cluster stop"'
 
 echo "==== SUSE Cluster Stopped ===="
 
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $node01"
 ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function StartSystem"'
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $node02"
 ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function StartSystem"'
 ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
 ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
@@ -74,11 +73,14 @@ while true; do
     fi
 done
 
-echo "==== SAP HANA DBs started ===="
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "SAP HANA DBs started"
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currSecondary: sr_takeover suspendPrimary"
 
 ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
 ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
 
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 ssh "$node01" 'crm cluster run "crm cluster start"'
 
 echo "==== SUSE Cluster Started ===="
