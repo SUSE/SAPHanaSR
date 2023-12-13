@@ -1,37 +1,43 @@
 .\" Version: 1.001
 .\"
-.TH ocf_suse_SAPHanaController 7 "04 Oct 2023" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "13 Dec 2023" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication.
 .PP
 .\"
 .SH SYNOPSIS
-\fBSAPHanaController\fP [start | stop | status | monitor | promote | demote | notify | meta\-data | validate\-all | methods | usage ]
+\fBSAPHanaController\fP [start | stop | status | monitor | promote | demote | meta\-data | validate\-all | methods | usage ]
 .PP
 .\"
 .SH DESCRIPTION
 
-\fBSAPHanaController\fP is a resource agent for SAP HANA databases in scale-up and scale-out setups.
-It manages takeover for a SAP HANA database with system replication in an OCF multi-state configuration.
+\fBSAPHanaController\fP is a resource agent (RA) for SAP HANA databases in scale-up and scale-out setups.
+It manages takeover for a SAP HANA database with system replication in an OCF promotable clone configuration.
 .PP
 System replication will help to replicate the database data from one site to another site in order to compensate for database failures.
 With this mode of operation, internal SAP HANA high-availability (HA) mechanisms and the Linux cluster have to work together.
 .PP
 An HANA scale-out setup already is, to some degree, an HA cluster on its own.
-The HANA is able to replace failing nodes with standby nodes or to restart certain sub-systems on other nodes.
-As long as the HANA landscape status is not "ERROR" the Linux cluster will not act.
-The main purpose of the Linux cluster is to handle the takeover to the other site.
-Only if the HANA landscape status indicates that HANA can not recover from the failure and the replication is in sync, then Linux will act. 
-As an exception, the Linux cluster will react if HANA moves the master nameserver role to another candidate. 
-SAPHanaController is also able to restart former failed worker nodes as standby. In addition to the SAPHanaTopology RA, the SAPHanaSR solution uses a "HA/DR provider" API provided by HANA to get informed about the current state of the system replication.
+The HANA is able to replace failing nodes with standby nodes or to restart
+certain sub-systems on other nodes. As long as the HANA landscape status is not
+"ERROR" the Linux cluster will not act. The main purpose of the Linux cluster is
+to handle the takeover to the other site. Only if the HANA landscape status
+indicates that HANA can not recover from the failure and the replication is in
+sync, then Linux will act. As an exception, the Linux cluster will react if HANA
+moves the master nameserver role to another candidate. SAPHanaController is also
+able to restart former failed worker nodes as standby. In addition to the
+SAPHanaController and SAPHanaTopology RAs, the SAPHanaSR solution uses an 
+"HA/DR provider" API provided by HANA to get informed about the current state of
+the system replication.
 .PP
 On initial cluster start, the cluster needs to detect a valid HANA system replication setup, including system replication status (SOK) and last primary timestamp (LPT). This is neccessary to ensure data integrity.
 .PP
-The SAPHanaController resource agent (RA) performs the actual check of the SAP HANA database instances and is configured as a multi-state resource.
-The Linux cluster resource's master status will follow the HANA's active master name server role. Resources (e.g. IP address) that need to run on the same node with that HANA role should be co-located with the master target.
-.PP
-Managing the two SAP HANA instances in scale-up or scale-out setup means that the resource agent controls the start/stop of the instances. 
+The SAPHanaController RA performs the actual check of the SAP HANA database instances
+and is configured as promoatble clone resource.
+The Linux cluster resources' promoted status will follow the HANA's active master name server role. Resources (e.g. IP address) that need to run on the same node with that HANA role should be co-located with the promoted target.
+Managing the two SAP HANA instances in scale-up or scale-out setup means that
+the resource agent controls the start/stop of the instances. 
 In addition the resource agent is able to monitor the SAP HANA databases on landscape host configuration level. For this monitoring the resource agent relies on interfaces provided by SAP.
 A third task of the resource agent is to also check the synchronisation status of the two SAP HANA databases. If the synchronisation is not "SOK", then the cluster avoids to takeover to the secondary side, if the primary fails. This is to improve the data consistency.
 .PP
@@ -48,8 +54,8 @@ a start of HANA standby nodes.
 .PP
 2. \fBlandscapeHostConfiguration\fP
 .br
-The interface is used to monitor an entire HANA system. The python script is named
-landscapeHostConfiguration.py.
+The interface is used to monitor an entire HANA system. The python script is
+named landscapeHostConfiguration.py.
 landscapeHostConfiguration.py has some detailed output about HANA system status
 and node roles. For our monitor the overall status is relevant. This overall
 status is reported by the return code of the script:
@@ -86,12 +92,12 @@ This resource agent supports the following parameters:
 .PP
 \fBSID\fR
 .RS 4
-SAP System Identifier. Has to be same on both instances. Example "SID=SLE".
+SAP System Identifier. Has to be same on both instances. Required. Example "SID=SLE".
 .RE
 .PP
 \fBInstanceNumber\fR
 .RS 4
-Number of the SAP HANA database. Has to be same on both instances. For system replication also Instance Number+1 is blocked. Example "InstanceNumber=00".
+Number of the SAP HANA database. Has to be same on both instances. For system replication also Instance Number+1 is blocked. Required. Example "InstanceNumber=00".
 .RE
 .PP
 \fBDIR_EXECUTABLE\fR
@@ -116,7 +122,7 @@ Optional, well known directories will be searched by default.
 .RS 4
 Define timeout how long a call to HANA to receive information can take. This could be e.g. landscapeHostConfiguration.py. There are some specific calls to HANA which have their own timeout values. For example the sr_takeover command does not timeout (inf). If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts of your Linux cluster resources.
 .br
-Optional, experimental. Default value: 120.
+Optional. Default value: 120.
 .RE
 .PP
 \fBINSTANCE_PROFILE\fR
@@ -150,6 +156,15 @@ Defines whether a former primary database should be registered as secondary auto
 Example: "AUTOMATED_REGISTER=true".
 .br
 Optional. Default value: false\&.
+.RE
+.PP
+\fBREMOVE_SAP_SOCKETS\fR
+.RS 4
+Should the RA remove the unix domain sockets related to sapstartsrv before
+starting sapstartsrv? If set to false, the RA does not remove the sockets, but
+runs chown/chgrp to adapte the ownerwhip of the existing sockets.
+.br
+Optional. Default value: true\&.
 .RE
 .PP
 .\"
@@ -205,7 +220,9 @@ Starts the HANA instance or bring the "clone instance" to a WAITING status. The 
 .PP
 \fBstop\fR
 .RS 4
-Stops the HANA instance. Suggested minimum timeout: 3600\&.
+Stops the HANA instance.
+.\" TODO Hint on tuning low timeout, e.g. 120. Needs HANA internal stop timeouts to be tuned. 
+Suggested minimum timeout: 3600\&.
 .RE
 .PP
 \fBpromote\fR
@@ -218,11 +235,6 @@ Either runs a takeover for a secondary or a just-nothing for a primary. The corr
 Nearly does nothing and just marks the instance as demoted. Suggested minimum timeout: 320\&.
 .RE
 .PP
-\fBnotify\fR
-.RS 4
-Always returns SUCCESS. Suggested minimum timeout: 10\&.
-.RE
-.PP
 \fBstatus\fR
 .RS 4
 Reports whether the HANA instance is running. Suggested minimum timeout: 60\&.
@@ -230,12 +242,12 @@ Reports whether the HANA instance is running. Suggested minimum timeout: 60\&.
 .PP
 \fBmonitor (Promoted role)\fR
 .RS 4
-Reports whether the HANA database seems to be working in multi-state mode. It also needs to check the system replication status. Suggested minimum timeout: 700\&. Suggested interval: 60\&.
+Reports whether the HANA database seems to be working in replication primary mode. It also needs to check the system replication status. Suggested minimum timeout: 700\&. Suggested interval: 60\&.
 .RE
 .PP
 \fBmonitor (demoted role)\fR
 .RS 4
-Reports whether the HANA database seems to be working in multi-state mode. It also needs to check the system replication status. The secondary role's monitor interval has to be different from the primary (promoted) role. Suggested minimum timeout: 700\&. Suggested interval: 61\&.
+Reports whether the HANA database seems to be working in replication secondary mode. It also needs to check the system replication status. The secondary role's monitor interval has to be different from the primary (promoted) role. Suggested minimum timeout: 700\&. Suggested interval: 61\&.
 .RE
 .PP
 \fBvalidate\-all\fR
