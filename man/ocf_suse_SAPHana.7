@@ -1,13 +1,13 @@
 .\" Version: 0.160.1
 .\"
-.TH ocf_suse_SAPHana 7 "04 Oct 2023" "" "OCF resource agents"
+.TH ocf_suse_SAPHana 7 "13 Dec 2023" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHana \- Manages takeover between two SAP HANA databases with system replication.
 .PP
 .\"
 .SH SYNOPSIS
-\fBSAPHana\fP [start | stop | status | monitor | promote | demote | notify | meta\-data | validate\-all | methods | usage ]
+\fBSAPHana\fP [ start | stop | status | monitor | promote | demote | reload | meta\-data | validate\-all | methods | usage ]
 .PP
 .\"
 .SH DESCRIPTION
@@ -198,14 +198,17 @@ This resource agent supports the following actions (operations):
 .PP
 \fBstart\fR
 .RS 4
-Starts the HANA instance or bring the "clone instance" to a WAITING status.
+Starts the HANA instance or brings the "clone instance" to a WAITING status. The correct timeout depends on factors like database size and storage performance. Large databases might require higher start timeouts, use of persistent memory might reduce the timeout needed.
 Suggested minimum timeout: 3600\&.
 .RE
 .PP
 \fBstop\fR
 .RS 4
-Stops the HANA instance. 
-Suggested minimum timeout: 3600\&.
+Stops the HANA instance.
+The correct timeout depends on factors like database size.
+If HANA database internal timeouts have been tuned for fast shutdown, the RA timeout might be reduced.
+.\" TODO point to HANA parameters
+Suggested minimum timeout: 600\&.
 .RE
 .PP
 \fBpromote\fR
@@ -218,12 +221,6 @@ Suggested minimum timeout: 320\&.
 .RS 4
 Nearly does nothing and just mark the instance as demoted.
 Suggested minimum timeout: 320\&.
-.RE
-.PP
-\fBnotify\fR
-.RS 4
-Always returns SUCCESS.
-Suggested minimum timeout: 10\&.
 .RE
 .PP
 \fBstatus\fR
@@ -256,7 +253,13 @@ Suggested minimum timeout: 5\&.
 .PP
 \fBmethods\fR
 .RS 4
+Reports which methods (operations) the resource agent supports.
 Suggested minimum timeout: 5\&.
+.RE
+.PP
+\fBreload\fR
+.RS 4
+Changes parameters without forcing a recover of the resource. Suggested minimum timeout: 5.
 .RE
 .PP
 .\"
