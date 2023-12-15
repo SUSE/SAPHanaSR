@@ -41,7 +41,12 @@ parser.add_argument("--logFile", help="log file to write the messages")
 parser.add_argument("--printTestProperties", help="print test properties and exit",
                     action="store_true")
 parser.add_argument("--debug", help="output and log debug messages", action="store_true")
+parser.add_argument("--version", help="output version and exit", action="store_true")
 args = parser.parse_args()
+if args.version:
+    print(f"SAPHanaSR-tester {test01.version}")
+    exit(0)
+test01.message(f"INIT: {test01.version}")
 if args.testFile:
     test01.message("PARAM: testFile: {}".format(args.testFile))
     test01.config['test_file'] = args.testFile
@@ -100,14 +105,22 @@ while test01.run['count'] <= test01.config['repeat']:
     l_top.update({'sSite': test01.get_area_object_by_key_val('Site', {'srr': 'S'})})
     # first try to use site-msn attribute to get the master name server
     # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
-    l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
-    l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
+    if l_top['pSite']:
+        l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
+    if l_top['sSite']:
+        l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
 
     # get first non master-nameserver worker node for primary and secondary site
     # TODO: check, if l_top pSite/sSite are already set correctly
     # TODO: check for roles must be sloppy, check for site must be strict - maybe sloppy=['roles'] ??
-    l_top.update({'pWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)})
-    l_top.update({'sWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)})
+    if l_top['pSite']:
+        l_top.update({'pWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)})
+    else:
+        l_top.update({'pWorker': None})
+    if l_top['sSite']:
+        l_top.update({'sWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)})
+    else:
+        l_top.update({'sWorker': None})
 
     if l_top['pHost'] is None:
         # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
@@ -150,14 +163,13 @@ while test01.run['count'] <= test01.config['repeat']:
     test01.write_test_properties(l_top)
 
     my_test_id = test01.run['test_id']
-    if test01.config['repeat'] != 1:
-        test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
+    test01.message("TEST: {} testNr={} CALLED ######".format(my_test_id, test01.run['count']))
     test01.run['test_rc'] = test01.process_test()
-    MSG_TEMPL = "TEST: {} testNr={} testRc={} {} successfully :) ######"
+    MSG_TEMPL = "TEST: {} testNr={} testRc={} {} successfully {} ######"
     if test01.run['test_rc'] == 0:
-        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'PASSED'))
+        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'PASSED',':)'))
     else:
-        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'FAILED'))
+        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'FAILED',';)'))
     test01.run['count'] += 1
 if  test01.run['log_file_handle']:
     test01.run['log_file_handle'].close()

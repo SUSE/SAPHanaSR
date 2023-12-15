@@ -1,0 +1,222 @@
+.\" Version: 1.001
+.\"
+.TH SAPHanaSR-tests-basic-cluster 7 "20 Nov 2023" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+SAPHanaSR-tests-basic-cluster \- Checking SAPHanaSR clusters basics.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+The Linux HA cluster relies on a sane OS setup and adequate infrastructure. For
+the SAP HANA database certain conditions have to match. The cluster nodes need
+to be checked for this prerequisites before performing functional tests.
+See manual page SAPHanaSR_basic_cluster(7), SAPHanaSR-ScaleOut_basic_cluster(7)
+and REQUIREMENTS section of SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
+In addition specific tests for the underlying infrastructure and the database
+need to be done.
+.PP
+.\"
+.SH EXAMPLES
+.\"
+The checks outlined here are by no means complete.
+Neverteless, at least this checks should be performed before doing functional
+tests.
+.PP
+\fB*\fR Checking systemd integration and OS settings for SAP HANA.
+.PP
+Basic OS features time and name resolution as well as HANA disk space are
+checked. Integration of SAP hostagent and SAP HANA database with systemd are
+checked. OS settings for HANA are checked.
+Cluster nodes are "node1" and "node2", HANA SID is "HA1", instance
+number is "85". Do this on all Linux cluster nodes.
+See manual page chronyc(8) and saptune(8).
+.PP
+.RS 2
+# chronyc sources | grep "\\^\\*"
+. br
+# grep -e node1 -e node2 /etc/hosts
+.br
+# df -h /hana/log/HA1 /hana/shared/HA1/HDB85/backup
+.br
+# systemd-cgls -u SAP.slice
+.br
+# saptune solution verify HANA
+.RE
+.PP
+\fB*\fR Checking for errors in the system logs.
+.PP
+Known error patterns are looked up in the system log.
+See manual page cs_show_error_patterns(8).
+.PP
+.RS 2
+# cs_show_error_patterns | grep -v "=.0"
+.RE
+.PP
+\fB*\fR Checking Linux cluster SBD basic setup.
+.PP
+For the basic Linux cluster components watchdog driver, SBD disks and service,
+it is checked if they are configured and running. Do this on all Linux cluster
+nodes. See manual page sbd(8) and stonith_sbd(7).
+.PP
+.RS 2
+# grep -v "#" /etc/sysconfig/sbd
+.br
+# lsmod | grep -e wdt -e dog
+.br
+# lsof /dev/watchdog* | grep sbd
+.br
+# cs_show_sbd_devices
+.br
+# systemctl status sbd | grep -e Loaded -e Active
+.RE
+.PP
+If the Linux cluster already has been configured, show the SBD resource.
+Resource name is rsc_stonith_sbd.
+.PP
+.RS 2
+# crm_mon -1r | grep stonith:external
+.br
+# crm configure show rsc_stonith_sbd
+.RE
+.PP
+\fB*\fR Checking Linux cluster basic components.
+.PP
+For the basic Linux cluster services corosync and pacemaker, it is checked if
+they are activated and running. The registered STONITH device and CIB bootstrap
+options are shown. See manual page systemctl(8) and stonith_admin(8).
+.PP
+.RS 2
+# systemctl status corosync pacemaker | grep -e Loaded -e Active
+.br
+# stonith_admin --list-registered
+.br
+# crm cluster status
+.br
+# crm configure show cib-bootstrap-options
+.br
+# crm_mon -1rA
+.RE
+.PP
+\fB*\fR Checking Linux cluster basic functionality.
+.PP
+For the basic Linux cluster components watchdog driver, SBD disks and service,
+corosync service as well as pacemaker service, it is checked if they are
+working. The cluster node "node2" will be fenced and should re-join
+automatically. Hopefully this is the other one. Do this on all Linux cluster
+nodes. See manual page crm(8).
+.br
+Note: Never do this on production systems. 
+.PP
+.\" TODO one line short description per test
+.RS 2
+# crm cluster crash_test --kill-corosync
+.br
+# crm cluster crash_test --kill-pacemakerd
+.br
+# crm cluster crash_test --kill-sbd
+.br
+# crm cluster crash_test --fence-node node2
+.RE
+.PP
+\fB*\fR Checking HANA HA/DR hook script integration.
+.PP
+The Linux sudo rules are checked for needed permissions.
+The HANA global.ini is checked for SUSE HA/DR provider hook scripts. The HANA
+nameserver tracefiles are checked whether the hook scripts have been loaded.
+SID is HA1, instance number is 85. Do this on all Linux cluster nodes. See
+manual page susHanaSR.py(7), susTkOver.py(7) and susChkSrv.py(7).
+.PP
+.RS 2
+# sudo -U ha1adm -l | \\
+.br
+grep -e "NOPASSWD.*crm_attribute" -e "NOPASSWD.*SAPHanaSR-hookHelper"
+.br
+# su - ha1adm
+.br
+~> cdcoc
+.br
+~> grep -e "ha_dr_provider_sus" -e "provider.*sus" \\
+.br
+-e "path.*/SAPHanaSR-angi" global.ini
+.\" TODO SAPHanaSR-manageProvider
+.br
+~> cdtrace
+.br
+~> grep "HADR.*load.*sus" nameserver_*.38501.???.trc
+.RE
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/etc/hosts
+
+.TP
+/etc/chrony.d/*
+
+.TP
+/etc/modprobe.d/*
+
+.TP
+/etc/sysconfig/sbd
+
+.TP
+/etc/corosync/corosync.conf
+
+.TP
+/etc/sudoers, /etc/sudoers.d/*
+the sudo permissions configuration
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+the on-disk representation of HANA global system configuration
+.TP
+/var/log/messages
+the Linux syslog messages
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace
+path to HANA tracefiles
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
+.PP
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-angi\fP(7) ,
+\fBSAPHanaSR_basic_cluster\fP(7) , \fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) ,
+\fBsusHanaSR.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
+\fBcrm\fP(8) , \fBcrm_verify\fP(8) , \fBstonith_admin\fP(8) ,
+\fBcs_show_error_patterns\fP(8) , \fBcs_sum_base_config\fP(8) ,
+\fBcs_show_sbd_devices\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(8) ,
+\fBsaptune\fP(8) , \fBchronyc\fP(8) , \fBsystemctl\fP(8) , \fBhosts\fP(5) ,
+\fBsystemctl\fP(8) ,
+.br
+https://documentation.suse.com/sbp/sap/ ,
+.br
+https://documentation.suse.com/sles-sap/ ,
+.br
+https://documentation.suse.com/sle-ha/ ,
+.br
+https://www.suse.com/releasenotes/
+.PP
+.\"
+.SH AUTHORS
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2023 SUSE Linux GmbH, Germany.
+.br
+The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

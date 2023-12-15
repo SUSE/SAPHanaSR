@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# test_freeze_prim_nfs - freeze nfs on primary master
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPrimWorker="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
+
+echo "==== Freeze SAP HANA NFS ===="
+
+ssh "$currPrimary" 'iptables -I OUTPUT -p tcp -m multiport --ports 2049 -j DROP &'
+sleep 60
+#

@@ -1,0 +1,86 @@
+#!/bin/bash
+#
+# sct_test_restart_cluster_turn_hana -
+#
+# - cleanup mst-resource
+# - stop cluster (including SAP HANA)
+# - start both SAP HANA sites
+# - takeover on secondary with suspend primary (gets the new primary)
+# - register on primary in online mode (gets the new secondary)
+# - start cluster
+#
+# expected outcome: cluster running, SAP HANA instances running, SR roles are exchanged
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+# shellcheck disable=SC2029
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resource"
+ssh "${node01}" "crm resource cleanup  $mstResource"
+
+currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+#
+#########################################
+# VHOSTS
+# get vhosts fom node names
+# SAPHanaSR-showAttr --format=tester | grep pizbuin02.*vhost
+#
+#########################################
+
+vhostPrim="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
+vhostSecn="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
+if [[ -z "$vhostPrim ]]; then
+    vhostPrim="$currPrimary"
+fi
+if [[ -z "$vhostSecn ]]; then
+    vhostPrim="$currSecondary"
+fi
+
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
+
+sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary="${sitePrimary//\"/}"
+
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary"
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+
+sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary="${sitePrimary//\"/}"
+
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Stop Cluster"
+ssh "${node02}" 'crm cluster run "crm cluster stop"'
+
+echo "==== SUSE Cluster Stopped ===="
+
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $node01"
+ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function StartSystem"'
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $node02"
+ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function StartSystem"'
+ssh "$node01" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
+ssh "$node02" 'su - '"$sidadm"' -c "sapcontrol -nr '$instNr' -function WaitforStarted 300 10"'
+
+while true; do
+    ssh "$currPrimary" 'su - '"$sidadm"' -c "python3 exe/python_support/systemReplicationStatus.py 1>/dev/null"'; rc=$?
+    if [[ "$rc" != 15 ]]; then
+        sleep 60
+    else
+        break
+    fi
+done
+
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "SAP HANA DBs started"
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currSecondary: sr_takeover suspendPrimary"
+
+ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
+ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
+
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
+ssh "$node01" 'crm cluster run "crm cluster start"'
+
+echo "==== SUSE Cluster Started ===="

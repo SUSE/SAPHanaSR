@@ -1,26 +1,26 @@
 .\" Version: 0.160.1
 .\"
-.TH ocf_suse_SAPHana 7 "03 Oct 2022" "" "OCF resource agents"
+.TH ocf_suse_SAPHana 7 "13 Dec 2023" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHana \- Manages takeover between two SAP HANA databases with system replication.
 .PP
 .\"
 .SH SYNOPSIS
-\fBSAPHana\fP [start | stop | status | monitor | promote | demote | notify | meta\-data | validate\-all | methods | usage ]
+\fBSAPHana\fP [start | stop | status | monitor | promote | demote | meta\-data | validate\-all | methods | usage ]
 .PP
 .\"
 .SH DESCRIPTION
 
 \fBSAPHana\fP is a resource agent for SAP HANA databases in scale-up setups.
-It manages takeover for a SAP HANA database with system replication in an OCF multi-state configuration.
+It manages takeover for a SAP HANA database with system replication in an OCF promotable clone configuration.
 .PP
 System replication will help to replicate the database data from one computer
 to another computer in order to compensate for database failures.
 With this mode of operation, internal SAP HANA high-availability (HA) mechanisms
 and the resource agent must work together.
 The SAPHana resource agent (RA) performs the actual check of the SAP HANA
-database instances and is configured as a multi-state resource.
+database instances and is configured as promotable clone resource.
 Managing the two SAP HANA instances means that the resource agent controls
 the start/stop of the instances. In addition the resource agent is able to monitor
 the SAP HANA databases on landscape host configuration level.
@@ -204,8 +204,12 @@ Suggested minimum timeout: 3600\&.
 .PP
 \fBstop\fR
 .RS 4
-Stops the HANA instance. 
-Suggested minimum timeout: 3600\&.
+Stops the HANA instance.
+The correct value depends on factors like database size.
+If HANA database internal timeouts have been tuned for fast shutdown, the RA timeout
+might be reduced.
+.\" TODO point to HANA parameters
+Suggested minimum timeout: 600\&.
 .RE
 .PP
 \fBpromote\fR
@@ -220,26 +224,20 @@ Nearly does nothing and just mark the instance as demoted.
 Suggested minimum timeout: 320\&.
 .RE
 .PP
-\fBnotify\fR
-.RS 4
-Always returns SUCCESS.
-Suggested minimum timeout: 10\&.
-.RE
-.PP
 \fBstatus\fR
 .RS 4
 Reports whether the HANA instance is running.
 Suggested minimum timeout: 60\&.
 .RE
 .PP
-\fBmonitor (Master role)\fR
+\fBmonitor (promoted role)\fR
 .RS 4
-Reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status. Suggested minimum timeout: 700\&. Suggested interval: 60\&.
+Reports whether the HANA instance seems to be working in replication primary mode. It also checks the system replication status. Suggested minimum timeout: 700\&. Suggested interval: 60\&.
 .RE
 .PP
 \fBmonitor (demoted role)\fR
 .RS 4
-Reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status. The slave role's monitor interval has to be different from the master role. Suggested minimum timeout: 700\&. Suggested interval: 61\&.
+Reports whether the HANA instance seems to be working inreplication secondary mode. It also checks the system replication status. The slave role's monitor interval has to be different from the promoted role. Suggested minimum timeout: 700\&. Suggested interval: 61\&.
 .RE
 .PP
 \fBvalidate\-all\fR
