@@ -80,6 +80,15 @@ ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrima
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
 ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
 
+while true; do
+    ssh "$currSecondary" 'su - '"$sidadm"' -c "python3 exe/python_support/systemReplicationStatus.py 1>/dev/null"'; rc=$?
+    if [[ "$rc" != 15 ]]; then
+        sleep 60
+    else
+        break
+    fi
+done
+
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 ssh "$node01" 'crm cluster run "crm cluster start"'
 
