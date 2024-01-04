@@ -114,7 +114,7 @@ try:
                         my_msg = f"ERROR: Permission denied for file {fallback_stage_file_name}"
                         self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                     except FileNotFoundError:
-                        my_msg = f"ERROR: File not found error occured during - creating file {fallback_stage_file_name}"
+                        my_msg = f"ERROR: File not found error occured during creating file {fallback_stage_file_name}"
                         self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                     except OSError as oerr:
                         my_msg = f"ERROR: OS error occured during creating file {fallback_stage_file_name}: {oerr}"
@@ -126,10 +126,10 @@ try:
                     try:
                         os.rename(fallback_stage_file_name, fallback_file_name)
                     except PermissionError:
-                        my_msg = "ERROR: Permission denied to move file {fallback_stage_file_name} to {fallback_file_name}"
+                        my_msg = f"ERROR: Permission denied to move file {fallback_stage_file_name} to {fallback_file_name}"
                         self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                     except FileNotFoundError:
-                        my_msg = "ERROR: File not found error occured during moving file {fallback_stage_file_name} to {fallback_file_name}"
+                        my_msg = f"ERROR: File not found error occured during moving file {fallback_stage_file_name} to {fallback_file_name}"
                         self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                     except OSError as oerr:
                         my_msg = f"ERROR: OS error occured during moving file {fallback_stage_file_name} to {fallback_file_name}: {oerr}"
