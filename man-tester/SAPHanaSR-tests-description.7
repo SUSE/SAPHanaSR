@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-tests-description 7 "20 Dec 2023" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-description 7 "04 Jan 2024" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tests-description \- Functional tests for SAPHanaSR.
@@ -28,6 +28,8 @@ Predefined functional tests:
 .RS 2
 Descr: Blocked manual takeover, for susTkOver.py.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See susTkOver.py(7).
@@ -43,11 +45,13 @@ No takeover. No fencing.
 .RS 2
 Descr: Block HANA SR and check SFAIL attribute; unblock to recover.
 .br
+Topology: ScaleUp, ScaleOut (not yet implemented).
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See susHanaSR.py.(7).
 .br
-Expect: Both nodes stay online.
+Expect: All nodes stay online.
 Both HANA stay online.
 SR SFAIL and finally SOK.
 No takeover. No fencing.
@@ -55,7 +59,9 @@ No takeover. No fencing.
 .PP
 \fBblock_sr_and_freeze_prim_fs\fP
 .RS 2
-Descr: Block HANA SR and freeze HANA FS on primary master node.
+Descr: Block HANA SR and freeze HANA FS on primary node.
+.br
+Topology: ScaleUp.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -69,13 +75,16 @@ No takeover. No fencing.
 .PP
 \fBblock_sr_and_freeze_prim_master_nfs\fP
 .RS 2
-Descr: Block HANA SR and freeze HANA NFS on primary master node.
+Descr: Block HANA SR and freeze HANA NFS on primary master node
+(not yet implemented).
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See ocf_suse_SAPHanaFilesystem(7), susHanaSR.py.(7).
 .br
-Expect: Both nodes stay online.
+Expect: All nodes stay online.
 HANA primary is stopped and finally back online.
 SR SFAIL and finally SOK.
 No takeover. No fencing.
@@ -83,13 +92,16 @@ No takeover. No fencing.
 .PP
 \fBblock_sr_and_freeze_prim_site_nfs\fP
 .RS 2
-Descr: Block HANA SR and freeze HANA NFS on primary site.
+Descr: Block HANA SR and freeze HANA NFS on primary site
+(not yet implemented).
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See ocf_suse_SAPHanaFilesystem(7), susHanaSR.py.(7).
 .br
-Expect: Both nodes stay online.
+Expect: All nodes stay online.
 HANA primary is stopped and finally back online.
 SR SFAIL and finally SOK.
 No takeover. No fencing.
@@ -98,6 +110,8 @@ No takeover. No fencing.
 \fBflup\fP
 .RS 2
 Descr: Like nop but very short sleep, just checking the test engine.
+.br
+Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -110,6 +124,8 @@ Expect: Cluster and HANA are up and running, all good.
 .RS 2
 Descr: Free HANA log area on primary site.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: Free up HANA transaction log space and log backups.
@@ -119,7 +135,9 @@ Expect: Cluster and HANA are up and running, all good.
 .PP
 \fBfreeze_prim_fs\fP
 .RS 2
-Descr: Freeze HANA FS on primary master node.
+Descr: Freeze HANA FS on primary node.
+.br
+Topology: ScaleUp.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -134,30 +152,44 @@ One takeover. One fence.
 .PP
 \fBfreeze_prim_master_nfs\fP
 .RS 2
-Descr: Freeze HANA NFS on primary master node, scale-out.
+Descr: Freeze HANA NFS on primary master node.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: See ocf_suse_SAPHanaFilesystem(7).
 .br
-Expect:
+Expect: Primary master node fenced, primary worker instance stopped.
+HANA finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fence. 
 .RE
 .PP
 \fBfreeze_prim_site_nfs\fP
 .RS 2
-Descr: Freeze HANA NFS on primary site, scale-out.
+Descr: Freeze HANA NFS on primary site.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: See ocf_suse_SAPHanaFilesystem(7).
 .br
-Expect:
+Expect: Primary master an worker node fenced.
+HANA finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fence. 
 .RE
 .PP
 \fBkill_prim_indexserver\fP
 .RS 2
 Descr: Kill primary indexserver, for susChkSrv.py.
 On scale-out, kill primary master indexserver.
+.br
+Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -175,6 +207,8 @@ One takeover. No fencing (for action_on_lost=kill).
 Descr: Kill primary instance.
 On scale-out, kill primary master instance.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: HDB kill
@@ -191,6 +225,8 @@ One takeover. No fencing.
 Descr: Kill primary node.
 On scale-out, kill primary master node.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: systemctl reboot --force
@@ -204,41 +240,59 @@ One takeover. One fencing.
 .PP
 \fBkill_prim_worker_indexserver\fP
 .RS 2
-Descr: Kill primary worker indexserver, scale-out, for susChkSrv.py.
+Descr: Kill primary worker indexserver, for susChkSrv.py.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: See susChkSrv.py(7).
 .br
-Expect:
+Expect: HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. No fencing (for action_on_lost=kill).
 .RE
 .PP
 \fBkill_prim_worker_inst\fP
 .RS 2
-Descr: Kill primary worker instance, scale-out.
+Descr: Kill primary worker instance.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: HDB kill
 .br
-Expect:
+Expect: HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. No fencing.
 .RE
 .PP
 \fBkill_prim_worker_node\fP
 .RS 2
-Descr: Kill primary worker node, scale-out.
+Descr: Kill primary worker node.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: systemctl reboot --force
 .br
-Expect:
+Expect: Primary worker node fenced. 
+HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fencing.
 .RE
 .PP
 \fBkill_secn_indexserver\fP
 .RS 2
 Descr: Kill secondary indexserver, for susChkSrv.py.
 On scale-out, kill secondary master indexserver.
+.br
+Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -255,6 +309,8 @@ No takeover. No fencing (for action_on_lost=kill).
 Descr: Kill secondary instance.
 On scale-out, kill secondary master instance.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: HDB kill
@@ -270,6 +326,8 @@ No takeover. No fencing.
 Descr: Kill secondary node.
 On scale-out, kill secondary master node.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: systemctl reboot --force
@@ -282,7 +340,9 @@ No takeover. One fencing.
 .PP
 \fBkill_secn_worker_inst\fP
 .RS 2
-Descr: Kill secondary worker instance, scale-out.
+Descr: Kill secondary worker instance.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -297,7 +357,9 @@ No takeover. No fencing.
 .PP
 \fBkill_secn_worker_node\fP
 .RS 2
-Descr: Kill secondary worker node, scale-out.
+Descr: Kill secondary worker node.
+.br
+Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -313,26 +375,30 @@ No takeover. One fencing.
 .RS 2
 Descr: Maintenance procedure, manually turning HANA sites.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See SAPHanaSR_maintenance_examples(7), https://www.suse.com/c/sap-hana-maintenance-suse-clusters/ .
 .br
-Expect: Both nodes stay online.
+Expect: All nodes stay online.
 HANA primary stopped and finally started as secondary.
 HANA secondary becomes finally primary by manual takeover.
 SR SFAIL and finally SOK. 
-One takeover. No fencing.
+One takeover. No takeover by cluster. No fencing.
 .RE
 .PP
 \fBmaintenance_with_standby_nodes\fP
 .RS 2
 Descr: standby+online secondary then standby+online primary
 .br
+Topology: ScaleUp.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See SAPHanaSR_maintenance_examples(7).
 .br
-Expect:  Both nodes stay online.
+Expect: All nodes stay online.
 HANA primary stopped and finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
@@ -343,6 +409,8 @@ One takeover. No fencing.
 .RS 2
 Descr: No operation - check, wait and check again (stability check).
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: Wait and see.
@@ -350,16 +418,37 @@ Test: Wait and see.
 Expect: Cluster and HANA are up and running, all good.
 .RE
 .PP
+\fBregister_prim_cold_hana\fP
+.RS 2
+Descr: Stop cluster, do manual takeover, leave former primary down and unregistered, start cluster.
+.br
+Topology: ScaleUp, ScaleOut (not yet implemented).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test:
+.br
+Expect: All nodes stay online.
+HANA primary stopped and finally started as secondary.
+HANA secondary stopped and finally started as primary.
+SR SFAIL and finally SOK.
+One takeover. No takeover by cluster. No fencing.
+.RE
+.PP
 \fBrestart_cluster_hana_running\fP
 .RS 2
 Descr: Stop and restart cluster, keep HANA running.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: 
+Test:
 .br
-Expect: Both nodes stay online.
-
+Expect: All nodes stay online.
+Cluster stopped and restarted.
+Both HANA keep running.
+SR stays SOK.
 No takeover. No fencing.
 .RE
 .PP
@@ -367,12 +456,16 @@ No takeover. No fencing.
 .RS 2
 Descr: Stop and restart cluster and HANA.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test:
 .br
-Expect: Both nodes stay online.
-
+Expect: All nodes stay online.
+Cluster stopped and restarted.
+Both HANA stopped and restarted.
+SR SFAIL and finally SOK.
 No takeover. No fencing.
 .RE
 .PP
@@ -380,25 +473,29 @@ No takeover. No fencing.
 .RS 2
 Descr: Stop cluster and HANA, manually start and takeover HANA, start cluster.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test:
 .br
-Expect: Both nodes stay online.
+Expect: All nodes stay online.
 Both HANA stopped.
 HANA primary finally started as secondary.
 HANA secondary becomes finally primary by manual takeover.
 SR SFAIL and finally SOK. 
-One takeover. No fencing.
+One takeover. No takeover by cluster. No fencing.
 .RE
 .PP
 \fBsplit_brain_prio\fP
 .RS 2
 Descr: Network split-brain with priority fencing.
 .br
+Topology: ScaleUp.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: iptables -I INPUT -s <node> -j DROP
 .br
 Expect: Secondary node fenced and finally online.
 Primary node stays online.
@@ -411,6 +508,8 @@ No takeover. One fencing.
 .RS 2
 Descr: Set primary node standby and online again.
 On scale-out, standby primary master node and online again.
+.br
+Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -429,6 +528,8 @@ One takeover. No fencing.
 Descr: Set secondary node standby and online again.
 On scale-out, standby secondary master node and online again.
 .br
+Topology: ScaleUp, ScaleOut.
+.br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: crm node standby <node>; crm node online <node>
@@ -445,7 +546,7 @@ SR SFAIL and finally SOK. No takeover. No fencing.
 * List all shipped tests
 .PP
 .RS 2
-# find /usr/share/SAPHanaSR-tester/json/ -name "*.json" -exec basename {} \; | sort -u
+# find /usr/share/SAPHanaSR-tester/json/ -name "*.json" -exec basename {} \\; | sort -u
 .RE
 .PP
 .\"
@@ -487,7 +588,7 @@ F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2023 SUSE Linux GmbH, Germany.
+(c) 2023-2024 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
 .br
