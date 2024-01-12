@@ -287,16 +287,25 @@ class SaphanasrTest:
         if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
-            with open(self.config['test_file'], encoding="utf-8") as tf_fh:
-                #print(f"read test file {self.config['test_file']}")
-                self.test_data.update(json.load(tf_fh))
+            try:
+                with open(self.config['test_file'], encoding="utf-8") as tf_fh:
+                    #print(f"read test file {self.config['test_file']}")
+                    self.test_data.update(json.load(tf_fh))
+            except FileNotFoundError as e_file:
+                self.message(f"ERROR: File error: {e_file}")
+                return 1
         if self.config['properties_file']:
             #print(f"read properties file {self.config['properties_file']}")
-            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
-                self.test_data.update(json.load(prop_fh))
+            try:
+                with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
+                    self.test_data.update(json.load(prop_fh))
+            except FileNotFoundError as e_file:
+                self.message(f"ERROR: File error: {e_file}")
+                return 1
         self.run['test_id'] = self.test_data['test']
         self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
+        return 0
 
     def write_test_properties(self, topology):
         """
@@ -412,7 +421,7 @@ class SaphanasrTest:
                             c_err = 0
                             check_result = max(check_result, 0)
                 if c_err == 1:
-                    if not found: 
+                    if not found:
                         l_val = None
                     self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
                     check_result = max(check_result, 1)
