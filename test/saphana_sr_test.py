@@ -607,6 +607,10 @@ class SaphanasrTest:
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif action_name == "opn":
             cmd = "crm node online {}".format(self.topolo['pHost'])
+        elif action_name == "standby_secn_worker_node":
+            cmd = "crm node standby {}".format(self.topolo['sWorker'])
+        elif action_name == "online_secn_worker_node":
+            cmd = "crm node online {}".format(self.topolo['sWorker'])
         elif action_name == "cleanup":
             cmd = "crm resource cleanup {}".format(resource)
         elif action_name == "kill_secn_worker_node":
