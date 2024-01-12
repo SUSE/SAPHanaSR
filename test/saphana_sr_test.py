@@ -347,6 +347,10 @@ class SaphanasrTest:
             # match <key> <comp> <regExp>
             # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
             match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+            if match_obj is None:
+                self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
+                check_result = 2
+                break
             c_key = match_obj.group(1)
             c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
