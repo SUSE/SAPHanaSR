@@ -442,7 +442,12 @@ function check_sapstartsrv() {
         local systemd_unit_name="SAP${SID}_${InstanceNr}.service"
 
         if "$SYSTEMCTL" is-active --quiet "$systemd_unit_name"; then
-            super_ocf_log info "ACT: systemd service $systemd_unit_name is active"
+            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
+            then
+                super_ocf_log info "ACT: systemd service $systemd_unit_name is active and Unix Domain Socket authentication is working."
+            else
+                super_ocf_log info "ACT: systemd service $systemd_unit_name is active but Unix Domain Socket authentication is NOT working."
+            fi
         else
             super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
             # use start, because restart does also stop sap instance
@@ -455,29 +460,24 @@ function check_sapstartsrv() {
         fi
     else
         # no SAP systemd unit available, continue with old code...
-        if [ ! -S "/tmp/.sapstream5${InstanceNr}13" ]; then
-            super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName (no UDS), it will be started now"
-            restart=1
-        else
-            if output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
+        if output=$("$SAPCONTROL" -nr "$InstanceNr" -function ParameterValue INSTANCE_NAME -format script)
+        then
+            runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
+            if [ "$runninginst" != "$InstanceName" ]
             then
-                runninginst=$(echo "$output" | grep '^0 : ' | cut -d' ' -f3)
-                if [ "$runninginst" != "$InstanceName" ]
-                then
-                    super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
-                    restart=1
-                else
-                    if ! output=$("$SAPCONTROL" -nr "$InstanceNr" -function AccessCheck Start)
-                    then
-                        super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 "/tmp/.sapstream5${InstanceNr}13"))"
-                        super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
-                        restart=1
-                    fi
-                fi
-            else
-                super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+                super_ocf_log warn "ACT: sapstartsrv is running for instance $runninginst, that service will be killed"
                 restart=1
+            else
+                if ! output=$("$SAPCONTROL" -nr "$InstanceNr" -function AccessCheck Start)
+                then
+                    super_ocf_log warn "ACT: FAILED - sapcontrol -nr $InstanceNr -function AccessCheck Start ($(ls -ld1 "/tmp/.sapstream5${InstanceNr}13"))"
+                    super_ocf_log warn "ACT: sapstartsrv will be restarted to try to solve this situation, otherwise please check sapstsartsrv setup (SAP Note 927637)"
+                    restart=1
+                fi
             fi
+        else
+            super_ocf_log warn "ACT: sapstartsrv is not running for instance $SID-$InstanceName, it will be started now"
+            restart=1
         fi
         if [ -z "$runninginst" ]; then runninginst="$InstanceName"; fi
         if [[ "$restart" == 1 ]]
