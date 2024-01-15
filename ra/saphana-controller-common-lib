@@ -418,43 +418,12 @@ function handle_unix_domain_sockets() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]}"
 
-    if ocf_is_true "$RemoveSAPSockets"; then
-        # previous and new default handling
-        # removing the unix domain socket files as they might have
-        # wrong permissions or ownership
-        # they will be recreated by sapstartsrv during next start
-        rm -f /tmp/.sapstream5"${InstanceNr}"13
-        rm -f /tmp/.sapstream5"${InstanceNr}"14
-    else
-        # try to change permission and ownership of the unix domain socket files
-        for sockFile in /tmp/.sapstream5"${InstanceNr}"13 /tmp/.sapstream5"${InstanceNr}"14; do
-            sockError=false
-            if [ -S "$sockFile" ]; then
-                if ! chown "${sid}"adm "$sockFile" > /dev/null 2>&1; then
-                    sockError=true
-                fi
-                if ! chgrp sapsys "$sockFile" > /dev/null 2>&1; then
-                    sockError=true
-                fi
-                if chmod 700 "$sockFile" > /dev/null 2>&1; then
-                    sockError=true
-                fi
-            else
-                if [ -f "$sockFile" ]; then
-                    super_ocf_log error "RA: file '$sockFile' still exists, but is NO longer a socket."
-                    super_ocf_log info "DEC: remove file '$sockFile' to give sapstartsrv a chance to create it the right way during next start"
-                    sockError=true
-                else
-                    super_ocf_log info "RA: file '$sockFile' not found. Nothing to do, let sapstartsrv create a new one during start"
-                fi
-            fi
-            if ocf_is_true "$sockError"; then
-                # fallback - if there are Errors, remove unix domain socket as
-                # last resort
-                rm -f "$sockFile"
-            fi
-        done
-    fi
+    # previous and new default handling
+    # removing the unix domain socket files as they might have
+    # wrong permissions or ownership
+    # they will be recreated by sapstartsrv during next start
+    rm -f /tmp/.sapstream5"${InstanceNr}"13
+    rm -f /tmp/.sapstream5"${InstanceNr}"14
 } # end function handle_unix_domain_sockets
 
 #
