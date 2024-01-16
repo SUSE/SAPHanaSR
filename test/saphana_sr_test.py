@@ -494,7 +494,10 @@ class SaphanasrTest:
                                   self.process_topology_object(step, 'pSite', 'Site'),
                                   self.process_topology_object(step, 'sSite', 'Site'),
                                   self.process_topology_object(step, 'pHost', 'Host'),
-                                  self.process_topology_object(step, 'sHost', 'Host'))
+                                  self.process_topology_object(step, 'sHost', 'Host'),
+                                  self.process_topology_object(step, 'pWorker', 'Host'),
+                                  self.process_topology_object(step, 'sWorker', 'Host'),
+                                 )
             if process_result == 0:
                 break
             time.sleep(wait)
@@ -678,7 +681,7 @@ class SaphanasrTest:
         elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver",
                                    "kill_prim_worker_indexserver", "kill_secn_worker_indexserver" , "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
