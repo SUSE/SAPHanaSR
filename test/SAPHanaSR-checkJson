@@ -1,0 +1,52 @@
+#!/usr/bin/python3
+# pylint: disable=consider-using-f-string
+# pylint: disable=fixme
+# TODO: check which imports could be removed in the future (time, re, json)?
+# TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
+"""
+ SAPHanaSR-checkJson
+ Author:       Fabian Herschel, Jan 2024
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2024 SUSE LLC
+"""
+
+# pylint: disable=unused-import
+import json
+import argparse
+#sys.path.insert(1, '/usr/lib/SAPHanaSR-tester')
+#from saphana_sr_test import SaphanasrTest
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--file", help="specify the json file")
+parser.add_argument("--quiet", help="do not output json data on success", action="store_true")
+args = parser.parse_args()
+json_file = None
+quiet = False
+
+if args.file:
+    json_file = args.file
+if args.quiet:
+    quiet = True
+
+if json_file is None:
+    print(f"file not specified")
+    exit(1)
+
+try:
+    with open(json_file, encoding="utf-8") as json_fh:
+        try:
+            json_data = (json.load(json_fh))
+        except json.decoder.JSONDecodeError as e_jerr:
+            print(f"json error n file {json_file}: ({e_jerr})")
+            exit(1)
+except FileNotFoundError as e_ferr:
+    print(f"file not found ({e_ferr})")
+    exit(1)
+except PermissionError as e_ferr:
+    print(f"permisson error ({e_ferr})")
+    exit(1)
+
+if not(quiet):
+    print(json_data)
+    
+
