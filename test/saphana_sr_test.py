@@ -294,6 +294,9 @@ class SaphanasrTest:
             except FileNotFoundError as e_file:
                 self.message(f"ERROR: File error: {e_file}")
                 return 1
+            except (PermissionError, Exception) as e_generic:
+                self.message(f"ERROR: File error: {e_generic}")
+                return 1
         if self.config['properties_file']:
             #print(f"read properties file {self.config['properties_file']}")
             try:
@@ -301,6 +304,9 @@ class SaphanasrTest:
                     self.test_data.update(json.load(prop_fh))
             except FileNotFoundError as e_file:
                 self.message(f"ERROR: File error: {e_file}")
+                return 1
+            except (PermissionError, Exception) as e_generic:
+                self.message(f"ERROR: File error: {e_generic}")
                 return 1
         self.run['test_id'] = self.test_data['test']
         self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
