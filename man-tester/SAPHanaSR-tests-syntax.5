@@ -29,11 +29,76 @@ SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases.
 .\"
 Test cases are defined in JSON files. Each test case is described in one file.
 It also can reference to defaults.json for common status definitions.
+
+TODO on first level
+[ test | name | start | comment | steps ]
+.\" TODO comment or remark?
+
+.TP
+\fBtest\fP
+test identifier, unique
+.TP
+\fBname\fP
+test description
+.TP
+\fBstart\fP
+name of step to start the test with
+.TP
+\fBcomment\fP
+comment, just a string
+.TP
+\fBsteps\fP
+test steps, see below
 .PP
-\fB*\fP Test step status
+\fBsteps\fP
+
+TODO
+[ step | name | next | loop | wait | post | comment | <status> ]
+
+.TP
+\fBstep\fP
+step identifier, unique
+.TP
+\fBname\fP
+step description
+.TP
+\fBnext\fP
+name of step to do next
+.TP
+\fBloop\fP
+maximum number of loops to wait and check for status
+.TP
+\fBwait\fP
+how many seconds to wait for each loop TODO
+.TP
+\fBcomment\fP
+comment, just a string
+.TP
+\fBstatus\fP
+status definition, see below
+
 .PP
-Each step contains an expectation for SAPHanaSR attributes, which need to
-match. The step status are:
+\fB*\fP Test step status <status>
+.PP
+Each step contains an expectation for SAPHanaSR attributes, which need to match.
+The attributes are arranged along the CIB and SAPHanaSR-showAttr sections. 
+The 
+
+[ pHost | sHost | pWorker | sWorker | pSite | sSite | pGlobal | sGlobal ]
+
+.TP
+pHost, sHost, pWorker, sWorker
+node attributes
+.TP
+pSite, sSite
+site attributes
+.TP
+pGlobal, sGlobal
+global attributes, not yet implmented
+.PP
+See manual page SAPHanaSR-showAttr(8) for details on that attributes.
+.PP
+Some common status are predefind as defaults:
 .TP
 globalUp
 both sites are up and in sync
@@ -42,19 +107,29 @@ globalDown
 not yet implemented
 .TP
 pHostUp
-host p (expected to be primary before the test starts) is up  
+host p (expected to be primary before the test starts) is up (scale-out: expected primary master node)
+.TP
+pWorkerUp
+worker node p is up (scale-out)
 .TP
 pSiteUp
-site p is up  
+site p is up
 .TP
 sSiteUp
 site s (expected to be secondary before the test starts) is up  
 .TP
 sHostUp
-host s is up  
+host s is up (scale-out: master node)
+.TP
+sWorkerUp
+worker node s is up (scale-out)
 .TP
 pHostDown
-host p is down 
+host p is down (scale-out: master node)
+.TP
+pWorkerDown
+worker node p is down (scale-out)
+not yet implemented
 .TP
 pSiteDown
 site p is down 
@@ -63,7 +138,11 @@ sSiteDown
 site s is down 
 .TP
 sHostDown
-host s is down 
+host s is down (scale-out: master node)
+.TP
+sWorkerDown
+worker node s is down (scale-out)
+not yet implemented
 .PP
 Note: Prefixes "s" and "p" are statically indicating geographical sites, as
 seen at the beginning of a test. If a takeover happens during that test, the
@@ -119,15 +198,87 @@ not like, regular expression
 is
 TODO, the string "None"
 .PP
-\fB*\fP Test step actions
+\fB*\fP Test step action "post"
 .PP
 TODO
+.PP
+action on cluster after step, one of:
 .TP
-post
-action after step, [ bmt | cleanup | spn | ssn | osn | script <script> | kill_... ] 
+bmt
+block manual takeover
+.TP
+cleanup
+cleanup Linux cluster resource failure
+.TP
+kill_prim_worker_node
+kill pirmary worker node (scale-out)
+.TP
+kill_prim_node
+kill pirmary node (scale-out: primary master node)
+.TP
+kill_secn_worker_node
+kill secondary worker node (scale-out)
+.TP
+kill_secn_node
+kill secondary node (scale-out: secondary master node)
+.TP
+kill_prim_inst
+kill pirmary instance (scale-out: primary master instance)
+.TP
+kill_prim_worker_inst
+kill worker pirmary instance (scale-out)
+.TP
+kill_secn_inst
+kill secondary instance (scale-out: secondary master instance)
+.TP
+kill_secn_worker_inst
+kill worker secondary instance (scale-out)
+.TP
+kill_prim_indexserver
+kill primary indexserver (scale-out: primary master indexserver)
+.TP
+kill_secn_indexserver
+kill secondary indexserver (scale-out: secondary master indexserver)
+.TP
+kill_prim_worker_indexserver
+kill primary worker indexserver (scale-out)
+.TP
+kill_secn_worker_indexserver
+kill secondary worker indexserver (scale-out)
+.TP
+simulate_split_brain
+break corosync communcation
+.TP
+spn
+standby primary node (scale-out: primary master)
+.TP
+ssn
+standby secondary node (scale-out: secondary master)
+.TP
+standby_secn_worker_node
+standby secondary worker node (scale-out)
+.TP
+opn
+online primary node (scale-out: primary master)
+.TP
+osn
+online seconary node (scale-out: secondary master)
+.TP
+online_secn_worker_node
+online secondary worker node (scale-out)
+.TP
+script <script>
+execure predefined script
+.TP
+shell <command>
+execute command
+.TP
+sleep <seconds>
+sleep some seconds
 .RE
-See also the EXAMPLES section in manual pages SAPHanaSR-tests-angi-ScaleUp(7)
-and SAPHanaSR-tests-angi-ScaleOut(7).
+.PP
+See also manual pages SAPHanaSR-tests-angi-ScaleUp(7), 
+SAPHanaSR-tests-angi-ScaleOut(7) and SAPHanaSR-tests-description(7).
 .PP
 \fB*\fP Test system properties
 .PP
@@ -152,7 +303,7 @@ TODO
 .br
 }
 
-See also EXAMPLE section in manual page SAPHanaSR-tester(7).
+See also EXAMPLES section in manual page SAPHanaSR-tester(7).
 
 \fB*\fP Test results
 
@@ -166,6 +317,7 @@ TODO
 .\"
 .SH FILES
 .\"
+.TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
 functional tests for SAPHanaSR-angi scale-up scenarios.
 .TP
@@ -205,7 +357,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR-tester\fP(7) ,  \fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
-\fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR-tests-definition\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
