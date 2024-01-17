@@ -447,6 +447,11 @@ function check_sapstartsrv() {
                 super_ocf_log info "ACT: systemd service $systemd_unit_name is active and Unix Domain Socket authentication is working."
             else
                 super_ocf_log info "ACT: systemd service $systemd_unit_name is active but Unix Domain Socket authentication is NOT working."
+                "$SYSTEMCTL" kill --kill-who=main --signal=9 "$systemd_unit_name"
+                "$SYSTEMCTL" is-active --quiet "$systemd_unit_name"; src=$?
+                if [[ "$src" -ne 0 ]]; then
+                    "$SYSTEMCTL" start "$systemd_unit_name" >/dev/null 2>&1; src=$?
+                fi
             fi
         else
             super_ocf_log warn "ACT: systemd service $systemd_unit_name is not active, it will be started using systemd"
