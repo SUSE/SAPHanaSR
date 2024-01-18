@@ -91,7 +91,15 @@ try:
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                 fallback_file_name = f"../.crm_attribute.{my_site}"
                 fallback_stage_file_name = f"../.crm_attribute.stage.{my_site}"
-                if ret_code != 0:
+                if ret_code == 0:
+                    # 
+                    # cluster attribute set was successfull - delete pending fallback file, if existing
+                    try:
+                        os.remove(fallback_file_name)
+                        self.tracer.info("new event - pending fallback file {0} deleted".format(fallback_file_name))
+                    except FileNotFoundError:
+                        pass
+                else:
                     #
                     # FALLBACK
                     # sending attribute to the cluster failed - using fallback method and write
