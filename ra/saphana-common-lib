@@ -723,8 +723,12 @@ function check_for_primary() {
               state="$HANA_STATE_STANDALONE";;
         * )
               # TODO PRIO3: NG - Should we set SFAIL?
-              dump=$( echo "$gSrMode" | hexdump -C );
-              super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
+              dump=$( echo -n "$gSrMode" | hexdump -C );
+              if [[ -n "$gSrMode" ]]; then
+                  super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
+              else
+                  super_ocf_log err "ACT: check_for_primary:  we didn't expect empty result for srmode."
+              fi
               # NG - keep last value from cluster, if we did not get a valid answer at this moment
               state="$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")"
               if [[ -z "$state" ]]; then
