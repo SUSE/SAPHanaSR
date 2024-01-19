@@ -7,6 +7,7 @@
 # - start both SAP HANA sites
 # - takeover on secondary with suspend primary (gets the new primary)
 # - register on primary in online mode (gets the new secondary)
+# - check hook cache file
 # - start cluster
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles are exchanged
@@ -88,6 +89,11 @@ while true; do
         break
     fi
 done
+
+# TODO /hana/shared/HXE/HDB90/.crm_attribute.<curr_secn_site>
+cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.*"
+srHookCache=$( ssh "$currPrimary" 'cat '"$cacheFile"'' )
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 ssh "$node01" 'crm cluster run "crm cluster start"'
