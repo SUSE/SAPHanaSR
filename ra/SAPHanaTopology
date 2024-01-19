@@ -14,7 +14,7 @@
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
 #               (c) 2015-2018 SUSE Linux GmbH
-#               (c) 2019-2021 SUSE LLC
+#               (c) 2019-2024 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -27,7 +27,7 @@
 #
 #######################################################################
 # DONE PRIO 1: AFTER(!) SAP HANA SPS12 is available we could use hdbnsutil --sr_stateConfiguration
-SAPHanaTopologyVersion="0.162.2"
+SAPHanaTopologyVersion="0.162.3"
 #
 # Initialization:
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
@@ -688,10 +688,14 @@ function check_for_primary() {
               super_ocf_log info "FLOW ${FUNCNAME[0]} rc=HANA_STATE_STANDALONE"
               rc=$HANA_STATE_STANDALONE;;
        * )
-          dump=$( echo $srmode | hexdump -C );
-          super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
+          super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: <$srmode>"
+          if [ -n "$srmode" ]; then
+              dump=$( echo -n $srmode | hexdump -C );
+              super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
+          fi
           rc=$HANA_STATE_DEFECT
-   esac;
+          ;;
+   esac
    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
    return $rc
 }
