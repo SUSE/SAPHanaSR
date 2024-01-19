@@ -511,7 +511,12 @@ Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: crm maintenance on;
+crm cluster run "crm cluster stop";
+crm cluster run "crm cluster start";
+crm resource refresh <cln_topology>;
+crm resource refresh <msl_controller>;
+crm resource maintenance off;
 .br
 Expect: All nodes stay online.
 Cluster stopped and restarted.
@@ -530,11 +535,14 @@ Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: crm cluster run "crm cluster stop";
+sapcontrol ... StartSystem;
+sapcontrol ... StartSystem;
+crm cluster run "crm cluster start";
 .br
 Expect: All nodes stay online.
 Cluster stopped and restarted.
-Both HANA stopped and restarted.
+Both HANA stopped and manually restarted.
 SR SFAIL and finally SOK.
 No takeover. No fencing.
 .br
@@ -549,7 +557,8 @@ Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test:
+Test: Stop cluster and HANA, manually start HANA and do takeover, restart cluster.
+No resource maintenance, no resource refresh.
 .br
 Expect: All nodes stay online.
 Both HANA stopped.
@@ -558,7 +567,7 @@ HANA secondary becomes finally primary by manual takeover.
 SR SFAIL and finally SOK. 
 One takeover. No takeover by cluster. No fencing.
 .br
-Comment: Sub-optimal admin procedure.
+Comment: Sub-optimal admin procedure, challenge for susHanaSR.py.
 .RE
 .PP
 \fBsplit_brain_prio\fP
