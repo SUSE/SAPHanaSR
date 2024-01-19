@@ -24,7 +24,6 @@ ssh "${node01}" "crm resource cleanup  $mstResource"
 currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
-#
 #########################################
 # VHOSTS
 # get vhosts fom node names
@@ -45,13 +44,11 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary, s=$currS
 
 sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
 sitePrimary="${sitePrimary//\"/}"
+siteSecondary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currSecondary")
+siteSecondary="${siteSecondary//\"/}"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary"
 currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
-
-
-sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
-sitePrimary="${sitePrimary//\"/}"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Stop Cluster"
 ssh "${node02}" 'crm cluster run "crm cluster stop"'
@@ -90,8 +87,7 @@ while true; do
     fi
 done
 
-# TODO /hana/shared/HXE/HDB90/.crm_attribute.<curr_secn_site>
-cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.*"
+cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( ssh "$currPrimary" 'cat '"$cacheFile"'' )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
 
