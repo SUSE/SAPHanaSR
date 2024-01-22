@@ -230,7 +230,7 @@ try:
                 eventKnown = True
             if (isIndexserver and serviceStopping and daemonActive and databaseStop):
                 msg = "STOP: indexserver event looks like graceful tenant stop"
-                logTimestamp(sethod, episode, msg)
+                logTimestamp(method, episode, msg)
                 self.tracer.info(msg)
                 eventKnown = True
             if (isIndexserver and serviceDown and daemonActive and databaseStop):
