@@ -55,7 +55,15 @@ ssh "${node02}" "crm resource maintenance $mstResource on"
 ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
 ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
 
-sleep 30
+while true; do
+    ssh "$currSecondary" 'su - '"$sidadm"' -c "python3 exe/python_support/systemReplicationStatus.py 1>/dev/null"'; rc=$?
+    if [[ "$rc" != 15 ]]; then
+        sleep 60
+    else
+        break
+    fi
+done
+
 ssh "${node02}" 'cs_wait_for_idle -s 2'
 # shellcheck disable=SC2029
 ssh "${node02}" "crm resource refresh $mstResource"

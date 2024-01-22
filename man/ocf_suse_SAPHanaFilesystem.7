@@ -7,7 +7,7 @@ SAPHanaFilesystem \- Monitors mounted SAP HANA filesystems.
 .PP
 .\"
 .SH SYNOPSIS
-\fBSAPHanaFilesystem\fP [start | stop | status | monitor | meta\-data | validate\-all | reload | methods | usage ]
+\fBSAPHanaFilesystem\fP [ start | stop | status | monitor | meta\-data | validate\-all | reload | methods | usage ]
 .PP
 .\"
 .SH DESCRIPTION
@@ -48,14 +48,14 @@ In case of NFS failure, HANA might stop working but the Linux cluster might not
 take action in reasonable time.
 Due to obligatory NFS for the directory /hana/shared/$SID/, scale-out systems
 are affected more often than scale-up systems.
-The SAPHanaFilsystem RA can be used on local filesystems as well. This migth be
+The SAPHanaFilsystem RA can be used on local filesystems as well. This might be
 useful for scale-up systems.
 Even if SAPHanaFilesystem improves Linux cluster reaction on failed filesystems,
 reliable filesystems are cornerstones for SAP HANA database availability.  
 .PP
-SAPHanaFilesystem relies on cluster attributes set by SAPHanaTopology,
-particularly hana_$SID_site_srHook_$SITE. See manual pages
-ocf_suse_SAPHanaTopology(7) and SAPHanaSR-showAttr(8).
+SAPHanaFilesystem relies on cluster attributes set by SAPHanaTopology and
+susHanaSR.py, particularly hana_$SID_site_srHook_$SITE. See manual pages
+ocf_suse_SAPHanaTopology(7), susHanaSR.py(7) and SAPHanaSR-showAttr(8).
 .PP
 Please see also the REQUIREMENTS section below.
 .PP
@@ -90,7 +90,7 @@ Optional. Default: "DIRECTORY=/hana/shared/$SID/".
 .PP
 \fBON_FAIL_ACTION\fR
 .RS 4
-Internal RA decision in case of monitor failure. Values: [ ignore | fence].
+Internal RA decision in case of monitor failure. Values: [ ignore | fence ].
 .br
 - ignore: do nothing, just report failure into logs.
 .br
@@ -295,13 +295,16 @@ The constraints´ names are starting with "SAPHanaFil".
 # grep "Stop.of.failed.*is.fenced" /var/log/messages
 .RE
 .PP
-* Show failcount for resource agent.
+* Show and delete failcount for resource.
 .PP
-SID is SLE, instance number is 00.
+Resource is rsc_SAPHanaFil_HA1_HDB00, node is node22. Useful after a failure
+has been fixed and for testing.
 See also cluster properties migration-threshold and failure-timeout.
 .PP
 .RS 4
-# cibadmin -Ql | grep rsc_SAPHanaFil_SLE_HDB00.*fail-count
+# crm resource failcount rsc_SAPHanaFil_HA1_HDB00 show node22
+.br
+# crm resource failcount rsc_SAPHanaFil_HA1_HDB00 delete node22
 .RE
 .PP
 * Example for static NFS mount.

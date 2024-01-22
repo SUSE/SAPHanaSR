@@ -581,12 +581,16 @@ function saphana_init_attribute_definitions() {
 # get system replication mode and local site name
 #
 # globals: gSrMode(w), gSite(w), gSrr(w)
+#          gSrSuspended
 #
 function get_local_sr_config() {
     # called by: TODO
     # * get sr_mode (primary|sync|synmem|async|none)
     # * get local site name (MAINZ, KOELN, DUESSELDORF, AACHEN)
     # TODO PRIO3: NG - move SAP commands to command-init function
+    # TODO: PRIO2: Check for suspended primary and set grSrSuspended either to false, empty(init), unknown(gP does not cntain this info) or true
+    #grSrSuspended=""
+    # TODO: PRIO2: for suspended primary detection (lss 3 or 4) we would need hdbnsutil -sr_state)
     hdbState="hdbnsutil -sr_stateConfiguration"
     # hdbMap="hdbnsutil -sr_stateHostMapping"
     #### SAP-CALL
@@ -605,6 +609,7 @@ function get_local_sr_config() {
                 # if 'actual_mode' is not available, fallback to 'mode'
                 if [ -z "$gSrMode" ]; then
                     [[ "$hdbANSWER" =~ "/mode="([^$'\n']+) ]] && gSrMode=${BASH_REMATCH[1]}
+                    #grSrSuspended="unknown"
                 fi
                 super_ocf_log info "ACT: hdbnsutil not answering - using global.ini as fallback - srmode=$gSrMode"
                 ;;
@@ -688,6 +693,9 @@ function get_local_virtual_name() {
 # output:   state like P,S,N,D
 # rc:       0, if P, S, N
 #           1, if D
+# TODO PRIO2: suspended primary handling:
+#           hdbnsutil -sr_state --sapcontrol=1 includes the following output, if the primary is suspended:
+#           isPrimarySuspended=true
 #
 function check_for_primary() {
     # called by: TODO
@@ -715,8 +723,12 @@ function check_for_primary() {
               state="$HANA_STATE_STANDALONE";;
         * )
               # TODO PRIO3: NG - Should we set SFAIL?
-              dump=$( echo "$gSrMode" | hexdump -C );
-              super_ocf_log err "ACT: check_for_primary:  we didn't expect srmode to be: DUMP: <$dump>"
+              if [[ -n "$gSrMode" ]]; then
+                  dump=$( echo -n "$gSrMode" | hexdump -C );
+                  super_ocf_log err "ACT: check_for_primary: we didn't expect srmode to be: DUMP: <$dump>"
+              else
+                  super_ocf_log err "ACT: check_for_primary: we didn't expect empty result for srmode."
+              fi
               # NG - keep last value from cluster, if we did not get a valid answer at this moment
               state="$(get_hana_site_attribute "$gSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")"
               if [[ -z "$state" ]]; then
@@ -986,7 +998,11 @@ function node_role_walk() {
     fi
     case "$raType" in
         saphana* )  # SAPHanaController to set the MNS attribute
-                    set_hana_site_attribute "$gSite" "$gTheMaster" "${ATTR_NAME_HANA_SITE_MNS[@]}"
+                    if [[ -n "$gSite" && -n "$gTheMaster" ]]; then
+                        set_hana_site_attribute "$gSite" "$gTheMaster" "${ATTR_NAME_HANA_SITE_MNS[@]}"
+                    else
+                        super_ocf_log warn "DEC: either gSite or gTheMaster are not set. Do not set MNS"
+                    fi
                     ;;
         sht*     )  # Currently skip that on SAPHanaTopology (to be checked)
                     ;;

@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# test_freeze_secn_nfs - freeze nfs on secondary site
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+currSecnWorker="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
+
+echo "==== Freeze SAP HANA NFS ===="
+
+ssh "$currSecondary" 'iptables -I OUTPUT -p tcp -m multiport --ports 2049 -j DROP &'
+ssh "$currSecnWorker" 'iptables -I OUTPUT -p tcp -m multiport --ports 2049 -j DROP'
+sleep 60
+#

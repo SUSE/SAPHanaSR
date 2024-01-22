@@ -23,7 +23,6 @@
 #   OCF_RESKEY_INSTANCE_PROFILE (optional, well known directories will be searched by default)
 #   OCF_RESKEY_PREFER_SITE_TAKEOVER (optional, default is no)
 #   OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT (optional, time difference needed between two last-primary-tiemstampe (lpt))
-#   OCF_RESKEY_REMOVE_SAP_SOCKETS (optional, default is true)
 #
 # HANA must support the following commands:
 #     hdbnsutil -sr_stateConfiguration (unsure, if this means >= SPS110, SPS111 or SPS10x)
@@ -140,14 +139,6 @@ function saphana_print_parameters() {
         </longdesc>
         <shortdesc lang="en">Local or site recover preferred?</shortdesc>
         <content type="string" default="true" />
-    </parameter>
-    <parameter name="REMOVE_SAP_SOCKETS" unique="0" required="0">
-        <longdesc lang="en">Should the RA remove the unix domain sockets related to sapstartsrv before (re-)starting sapstartsrv ? Default="true"
-        no: Do not remove the sockets, try chown/chgrp instead
-        yes: Do remove the sockets
-        </longdesc>
-        <shortdesc lang="en">Remove unix domain sockets related to sapstartsrv?</shortdesc>
-        <content type="boolean" default="true" />
     </parameter>
     <parameter name="AUTOMATED_REGISTER"  unique="0" required="0">
         <shortdesc lang="en">Define, if a former primary should automatically be registered.</shortdesc>
@@ -392,7 +383,6 @@ function saphana_init_get_ocf_parameters() {
     sidadm="${sid}adm"
     PreferSiteTakeover="${OCF_RESKEY_PREFER_SITE_TAKEOVER^^}" # upper case
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
-    RemoveSAPSockets="${OCF_RESKEY_REMOVE_SAP_SOCKETS:-true}"
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
     super_ocf_log debug "DBG: OCF: $ocf_env"
@@ -411,7 +401,7 @@ function saphana_init() {
     local rc="$OCF_SUCCESS" clN
     SYSTEMCTL="/usr/bin/systemctl"
     NODENAME=$(crm_node -n)
-    saphana_init_get_ocf_parameters # set SID, sid, sidadm, InstanceNr, InstanceName HANA_CALL_TIMEOUT, PreferSiteTakeover, AUTOMATED_REGISTER, RemoveSAPSockets
+    saphana_init_get_ocf_parameters # set SID, sid, sidadm, InstanceNr, InstanceName HANA_CALL_TIMEOUT, PreferSiteTakeover, AUTOMATED_REGISTER
     #
     # create directory for HANA_CALL command sdtout and stderr tracking
     #
@@ -1664,6 +1654,10 @@ function saphana_monitor_secondary() {
                 promoted=1;
                 ;;
             DEMOTED )  # This is the status we expect
+                if ocf_is_probe; then
+                    super_ocf_log info "ACT: saphana_monitor_secondary: set global_sec to $gSite"
+                    set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_SEC[@]}"
+                fi
                 promoted=0;
                 ;;
             WAITING4PRIM ) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
@@ -1917,6 +1911,16 @@ function saphana_monitor_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function saphana_monitor_clone
+
+function saphana_monitor() {
+    # this function should never be called currently. it is intended for future releases which might support un-cloned resources
+    if ! ocf_is_clone; then
+        super_ocf_log error "RA: resource is not defined as clone. This is not supported (OCF_ERR_UNIMPLEMENTED)"
+        return "$OCF_ERR_UNIMPLEMENTED"
+    else
+        return "$OCF_SUCCESS"
+    fi 
+} # end function saphana_monitor
 
 function saphana_promote_clone() {
     # function: saphana_promote_clone - promote a hana clone

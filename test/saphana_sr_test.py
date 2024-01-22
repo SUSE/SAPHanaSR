@@ -287,16 +287,31 @@ class SaphanasrTest:
         if self.config['test_file'] == "-":
             self.test_data.update(json.load(sys.stdin))
         else:
-            with open(self.config['test_file'], encoding="utf-8") as tf_fh:
-                #print(f"read test file {self.config['test_file']}")
-                self.test_data.update(json.load(tf_fh))
+            try:
+                with open(self.config['test_file'], encoding="utf-8") as tf_fh:
+                    #print(f"read test file {self.config['test_file']}")
+                    self.test_data.update(json.load(tf_fh))
+            except FileNotFoundError as e_file:
+                self.message(f"ERROR: File error: {e_file}")
+                return 1
+            except (PermissionError, Exception) as e_generic:
+                self.message(f"ERROR: File error: {e_generic}")
+                return 1
         if self.config['properties_file']:
             #print(f"read properties file {self.config['properties_file']}")
-            with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
-                self.test_data.update(json.load(prop_fh))
+            try:
+                with open(self.config['properties_file'], encoding="utf-8") as prop_fh:
+                    self.test_data.update(json.load(prop_fh))
+            except FileNotFoundError as e_file:
+                self.message(f"ERROR: File error: {e_file}")
+                return 1
+            except (PermissionError, Exception) as e_generic:
+                self.message(f"ERROR: File error: {e_generic}")
+                return 1
         self.run['test_id'] = self.test_data['test']
         self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
+        return 0
 
     def write_test_properties(self, topology):
         """
@@ -347,6 +362,10 @@ class SaphanasrTest:
             # match <key> <comp> <regExp>
             # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
             match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+            if match_obj is None:
+                self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
+                check_result = 2
+                break
             c_key = match_obj.group(1)
             c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
@@ -408,7 +427,7 @@ class SaphanasrTest:
                             c_err = 0
                             check_result = max(check_result, 0)
                 if c_err == 1:
-                    if not found: 
+                    if not found:
                         l_val = None
                     self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
                     check_result = max(check_result, 1)
@@ -475,7 +494,10 @@ class SaphanasrTest:
                                   self.process_topology_object(step, 'pSite', 'Site'),
                                   self.process_topology_object(step, 'sSite', 'Site'),
                                   self.process_topology_object(step, 'pHost', 'Host'),
-                                  self.process_topology_object(step, 'sHost', 'Host'))
+                                  self.process_topology_object(step, 'sHost', 'Host'),
+                                  self.process_topology_object(step, 'pWorker', 'Host'),
+                                  self.process_topology_object(step, 'sWorker', 'Host'),
+                                 )
             if process_result == 0:
                 break
             time.sleep(wait)
@@ -607,6 +629,10 @@ class SaphanasrTest:
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif action_name == "opn":
             cmd = "crm node online {}".format(self.topolo['pHost'])
+        elif action_name == "standby_secn_worker_node":
+            cmd = "crm node standby {}".format(self.topolo['sWorker'])
+        elif action_name == "online_secn_worker_node":
+            cmd = "crm node online {}".format(self.topolo['sWorker'])
         elif action_name == "cleanup":
             cmd = "crm resource cleanup {}".format(resource)
         elif action_name == "kill_secn_worker_node":
@@ -655,7 +681,7 @@ class SaphanasrTest:
         elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver",
                                    "kill_prim_worker_indexserver", "kill_secn_worker_indexserver" , "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)

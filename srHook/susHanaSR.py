@@ -91,7 +91,15 @@ try:
                 self.tracer.info(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                 fallback_file_name = f"../.crm_attribute.{my_site}"
                 fallback_stage_file_name = f"../.crm_attribute.stage.{my_site}"
-                if ret_code != 0:
+                if ret_code == 0:
+                    # 
+                    # cluster attribute set was successfull - delete pending fallback file, if existing
+                    try:
+                        os.remove(fallback_file_name)
+                        self.tracer.info("new event - pending fallback file {0} deleted".format(fallback_file_name))
+                    except FileNotFoundError:
+                        pass
+                else:
                     #
                     # FALLBACK
                     # sending attribute to the cluster failed - using fallback method and write
@@ -107,13 +115,33 @@ try:
                     # SAP HANA swarm nodes
                     #
                     attribute_name = f"hana_{mysid_lower}_site_srHook_{my_site}"
-                    with open(fallback_stage_file_name, "w", encoding="UTF-8") as fallback_file_obj:
-                        fallback_file_obj.write(f"{attribute_name} = {my_srs}")
+                    try:
+                        with open(fallback_stage_file_name, "w", encoding="UTF-8") as fallback_file_obj:
+                            fallback_file_obj.write(f"{attribute_name} = {my_srs}")
+                    except PermissionError:
+                        my_msg = f"ERROR: Permission denied for file {fallback_stage_file_name}"
+                        self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
+                    except FileNotFoundError:
+                        my_msg = f"ERROR: File not found error occured during creating file {fallback_stage_file_name}"
+                        self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
+                    except OSError as oerr:
+                        my_msg = f"ERROR: OS error occured during creating file {fallback_stage_file_name}: {oerr}"
+                        self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
                     #
                     # release the stage file to the original name (move is used to be atomic)
                     #      .crm_attribute.stage.<site> is renamed to .crm_attribute.<site>
                     #
-                    os.rename(fallback_stage_file_name, fallback_file_name)
+                    try:
+                        os.rename(fallback_stage_file_name, fallback_file_name)
+                    except PermissionError:
+                        my_msg = f"ERROR: Permission denied to move file {fallback_stage_file_name} to {fallback_file_name}"
+                        self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
+                    except FileNotFoundError:
+                        my_msg = f"ERROR: File not found error occured during moving file {fallback_stage_file_name} to {fallback_file_name}"
+                        self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
+                    except OSError as oerr:
+                        my_msg = f"ERROR: OS error occured during moving file {fallback_stage_file_name} to {fallback_file_name}: {oerr}"
+                        self.tracer.error(f"{self.__class__.__name__}.{method}() {my_msg}\n")
             return 0
 except NameError as e:
     print(f"Could not find base class ({e})")
