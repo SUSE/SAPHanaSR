@@ -187,7 +187,7 @@ function shfs_init() {
     HANA_CALL_TIMEOUT="${OCF_RESKEY_HANA_CALL_TIMEOUT:-90}"
     ON_FAIL_ACTION="${OCF_RESKEY_ON_FAIL_ACTION:-fail}"
     td_hana_shared="$fs_hana_shared/.suse_SAPHanaFilesystem/${NODENAME}"
-    pp_hana_shared="/dev/shm/poison_pill_${SID}"
+    pp_hana_shared="/run/SAPHanaFileSystem_poison_pill_${SID}"
     sid="${SID,,}"
     export sidadm="${sid}adm"
     #
@@ -235,12 +235,12 @@ function shfs_stop() {
     local ha_ps_rc
     ha_pseudo_resource "$OCF_RESOURCE_INSTANCE" stop; ha_ps_rc="$?"
     if [ -e "$pp_hana_shared" ]; then
-	rm "$pp_hana_shared"
+        rm "$pp_hana_shared"
         super_ocf_log info "RA poison pill detected - reporting stop error - sleep 10s"
 	sleep 10
         rc="$OCF_ERR_GENERIC"
     else
-	rc="$ha_ps_rc"
+        rc="$ha_ps_rc"
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -249,7 +249,7 @@ function shfs_stop() {
 function shfs_reset_poison_pill() {
     if [ -e "$pp_hana_shared" ]; then
         super_ocf_log info "reset old RA poison pill"
-	rm "$pp_hana_shared"
+        rm "$pp_hana_shared"
     fi
 }
 
