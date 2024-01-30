@@ -397,11 +397,17 @@ function saphana_init() {
     # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
     # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w), NODENAME(w), vNAME(w), hdbver(w),
     # called by: RA
+    SAPHanaFilter="all"
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    super_ocf_log info "RUNTIME: init00"
     local rc="$OCF_SUCCESS" clN
     SYSTEMCTL="/usr/bin/systemctl"
+    super_ocf_log info "RUNTIME: init00-1"
     NODENAME=$(crm_node -n)
+    super_ocf_log info "RUNTIME: init00-2"
     saphana_init_get_ocf_parameters # set SID, sid, sidadm, InstanceNr, InstanceName HANA_CALL_TIMEOUT, PreferSiteTakeover, AUTOMATED_REGISTER
+    super_ocf_log info "RUNTIME: init00-3"
+    super_ocf_log info "RUNTIME: init01"
     #
     # create directory for HANA_CALL command sdtout and stderr tracking
     #
@@ -413,11 +419,14 @@ function saphana_init() {
     # get sap virtual host name
     #
     get_local_virtual_name; SAPVIRHOST=${gVirtName}
+    super_ocf_log info "RUNTIME: init02"
     LPA_DIRECTORY=/var/lib/SAPHanaRA
     #
     # init attribute definitions
     #
     saphana_init_attribute_definitions
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
+    super_ocf_log info "RUNTIME: init03"
     super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
     #
     # init scoring tables
@@ -430,7 +439,10 @@ function saphana_init() {
     else
         preferRecover="local"
     fi
+    super_ocf_log info "RUNTIME: init04"
     saphana_init_scoring_tables
+    super_ocf_log info "RUNTIME: init05"
+    super_ocf_log info "RUNTIME: set scoring table for scenario ${topology}_${preferRecover}"
     super_ocf_log info "RA: set scoring table for scenario ${topology}_${preferRecover}"
     case "${topology}_${preferRecover}" in
         ScaleUp_remote      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;
@@ -474,7 +486,6 @@ function saphana_init() {
     gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
     gSrHook=$(get_SRHOOK "$gSite")
     super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
-    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     #
     # get HANA version
     #
