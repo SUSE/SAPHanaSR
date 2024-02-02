@@ -507,7 +507,7 @@ function HANA_CALL() {
                   #fi
                  ;;
     esac
-    super_ocf_log info "RUNTIME HANA_CALL '$cmd' rc=$rc"
+    super_ocf_log info "RUNTIME HANA_CALL '$cmd' stack:${FUNCNAME[*]}rc=$rc"
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
     return "$rc";
@@ -717,9 +717,15 @@ function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local state="$HANA_STATE_DEFECT"
     local rc=0
+    local mode=""
+    if [[ "$#" == "1" ]]; then
+        mode="$1"
+    fi
     case "$raType" in
         saphana* ) # SAPHanaController
-            get_local_sr_config >/dev/null # sets global variables gSrMode and gSite
+            if [[ -z "$gSrMode" || "$mode" == "live" ]]; then
+                get_local_sr_config >/dev/null # sets global variables gSrMode and gSite
+            fi
             ;;
         sht* )     # SAPHanaTopology - did that already in sht_init() - maybe we can align that later
             ;;
@@ -854,7 +860,7 @@ function check_saphostagent() {
 
 #
 # params: virt-name [--timeout timeout] [--set_gTopology]
-# globals: -
+# globals: g_cache_lss(w)
 # output: either single value (default); or multi line key=value (--multiValue)
 # rc:     lss or timeout (124)
 function get_role_by_landscape(){
@@ -872,6 +878,7 @@ function get_role_by_landscape(){
     # TODO PRIO2: query lss to be moved into a function
     # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
     hanaAnswer=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
+    g_cache_lss="$lssRc"
     super_ocf_log info "DEC: lssRc=$lssRc"
     nodeRole=$(echo "${hanaAnswer//[[:blank:]]/}" | \
             awk -F= '
@@ -913,7 +920,7 @@ function get_role_by_cluster_or_landscape() {
     #super_ocf_log info "DEC: WILLI-BIENE nodeRole=$nodeRole"
     # TODO PRIO2: Should ":::" be defined as global Variable for SAPHanaController and SAPHanaTopology
     if [[ -z "$nodeRole" ||  "$nodeRole" = ":::" ]]; then
-        nodeRole="$(get_role_by_landscape "${virtName}")"
+        nodeRole="$(get_role_by_landscape "${virtName}")"; g_cache_lss="$?"
         #super_ocf_log info "DEC: HUGO-WILLI-BIENE nodeRole=$nodeRole"
     fi
     echo "$nodeRole"
