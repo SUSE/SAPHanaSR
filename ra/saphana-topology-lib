@@ -433,7 +433,7 @@ function sht_stop_clone() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0  tout=0 nRole nNsConf
-    hanaPrim="$(check_for_primary)";
+    hanaPrim="$(check_for_primary "live")";
     # TODO: should we simplify the calculation of timeout (see saphana-silesystem-lib)?
     # shellcheck disable=SC2154
     local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout" stdTimeOut=300 actTimeOutPercent=50
@@ -501,7 +501,7 @@ function sht_monitor_clone() {
         #
         # First check, if we are PRIMARY or SECONDARY
         #
-        hanaPrim="$(check_for_primary)";
+        hanaPrim="$(check_for_primary "cache")";
         sht_monitor; rc="$?"
         # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
         # We rely on the following format: SID is word#4, SYSNR is word#6, vHost is word#8
@@ -517,6 +517,7 @@ function sht_monitor_clone() {
                 retn=* ) hanalrc="${splitResultLine#*=}";;
             esac
         done
+        g_cache_lss="$hanalrc"
         super_ocf_log info "DEC: gNodeRole=$gNodeRole gTopology=$gTopology hanalrc=$hanalrc"
         if [[ "$hanalrc" != "124" ]]; then
             # normal exit, use gNodeRole
