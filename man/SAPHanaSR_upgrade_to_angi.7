@@ -1,0 +1,228 @@
+.\" Version: 1.001 
+.\"
+.TH SAPHanaSR_upgrade_to_angi 7 "14 Feb 2024" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR_upgrade_to_angi \- how to upgrade from SAPHanaSR to SAPHanaSR-angi.
+.PP
+.\"
+.SH DESCRIPTION
+.PP
+SAPHanaSR-angi can be used to replace SAPHanaSR and SAPHanaSR-ScaleOut.
+SAPHanaSR-angi is quite similar to SAPHanaSR and SAPHanaSR-ScaleOut, but not
+fully backward compatible. Upgrading existing clusters is possible by following
+a defined procedure.
+.PP
+.RS 2
+* check for sane state of cluster, HANA and system replication
+.br
+* collect information, needed for upgrade
+.br
+* make backup of CIB, sudoers and global.ini
+.br
+* set SAPHana or SAPHanaController resource to maintenance
+.br
+* remove SAPHanaSR.py or SAPHanaSrMultiTarget.py from global.ini, HANA and sudoers
+.br
+* remove SAPHana or SAPHanaController resource config from CIB
+.br
+* remove SAPHanaSR property attributes from CIB
+.br
+* remove SAPHanaSR node attributes from CIB
+.br
+* remove SAPHanaSR or SAPHanaSR-ScaleOut RPM
+.br
+* install SAPHanaSR-angi RPM
+.br
+* add susHanaSR.py to sudoers, global.ini, HANA
+.br
+* add angi SAPHanaController resource config to CIB
+.br
+* refresh SAPHanaController resource and set it out of maintenance
+.br
+* check for sane state of cluster, HANA and system replication
+.br
+* test RA on secondary and trigger susHanaSR.py
+.RE
+See REQUIREMENTS manual pages SAPHanaSR(7) or SAPHanaSR-ScaelOut(7) for 
+.PP
+.\"
+.SH EXAMPLES
+.PP
+* Example for checking for sane state of cluster, HANA and system replication.
+.PP
+This steps should be performed before doing anything with the cluster, and after
+something has been done. See also SAPHanaSR_maintenance_examples(7),
+cs_show_saphanasr_status(8) and section REQUIREMENTS below.
+.PP
+.RS 2
+# cs_clusterstate -i
+.br
+# crm_mon -1r
+.br
+# crm configure show | grep cli-
+.br
+# SAPHanaSR-showAttr
+.br
+# cs_clusterstate -i
+.RE
+.PP
+* Example for collecting information on SAP HANA.
+.PP
+The installed SAP HANA instance is shown (should be only one) with its SID and
+instance number. For systemd-enabled HANA the same info can be fetched from
+systemd. See also manual page SAPHanaSR_basic_cluster(7).
+.PP
+.RS 2
+# /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
+.br
+# systemd-cgls -u SAP.slice
+.RE
+.PP
+* Example for collecting information on SAPHana resource config.
+.PP
+The names for SAPHana primitive and multi-state resource are determined, as
+well as for related oder and (co-)location constraints. The SAPHana primitive
+configuration is shown. Might be useful to see if there is anything special.
+.PP
+.RS 2
+# crm_mon -1r
+.br
+# crm configure show | grep -e "[primitive|master|order|location].*SAPHana_"
+.br
+# crm configure show rsc_SAPHana_HA1_HDB00
+.RE
+.PP
+* Example for removing SAPHana resource config from CIB.
+.PP
+First the cluster is told to not stop orphaned resources and the SAPHana
+multi-state resource is set into maintenance. Next the order and colocation
+constraints are removed, the SAPHana multi-state resource is removed and the
+orphaned primitive is refreshed. Then the cluster is told to stop orphaned
+resources. Finally the resulting cluster state is shown.
+SID is HA1, Instance Number is 00.
+The resource names have been determined as shown in the example above.
+.br
+Of course the CIB should be checked to see if the removal was successful. See
+example above.
+.PP
+.RS 2
+# echo "property cib-bootstrap-options: stop-orphan-resources=false" |\\
+  crm configure load update -
+.br
+# crm resource maintenance msl_SAPHana_HA1_HDB00 on
+.br
+# cibadmin --delete --xpath "//rsc_order[@id='ord_SAPHana_HA1_HDB00']"
+.br
+# cibadmin --delete --xpath "//rsc_colocation[@id='col_saphana_ip_HA1_HDB00']"
+.br
+# cibadmin --delete --xpath "//master[@id='msl_SAPHana_HA1_HDB00']"
+.br
+# crm resource refresh rsc_SAPHana_HA1_HDB00
+.br
+# echo "property cib-bootstrap-options: stop-orphan-resources=true" |\\
+  crm configure load update -
+.br
+# crm_mon -1r
+.RE
+.PP
+* Example for removing SAPHanaSR property attributes from CIB.
+.PP
+.RS 2
+# crm configure show SAPHanaSR
+.br
+# crm configure show SAPHanaSR |\\
+.br
+awk -F"=" '$1~/hana_/ {print $1}' |\\
+.br
+while read; do crm_attribute --delete --type crm_config --name $REPLY; done
+.RE
+.PP
+* Example for removing SAPHana node attributes from CIB.
+.PP
+* Example for removing the SAPHanaSR.py hook script from global.ini and HANA.
+.PP
+TODO
+See manual page SAPHanaSR.py(7) for details on checking the hook script
+integration.
+.PP
+.RS 2
+~> su - $sidadm
+.br
+~> cdcoc
+.br
+~> cp '$GLBINI' '$GLBINI'.angi-bak
+.br
+~> /usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini
+.br
+~> hdbnsutil -reloadHADRProviders
+.RE
+.PP
+* Example for removing the SAPHanaSR.py hook script from sudoers. 
+.PP
+See manual page SAPHanaSR.py(7) for details on checking the hook script
+integration.
+.PP
+.RS 2
+# cp $SUDOER "$SUDOER".angi-bak
+.br
+# grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak >$SUDOER
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/etc/sudoers/SAPHanaSR
+recommended place for sudo permissions of HADR provider hook scripts
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+on-disk representation of HANA global system configuration
+.TP
+/usr/share/SAPHanaSR/samples/global.ini
+template for classical SAPHanaSR.py entry in global.ini
+.TP
+/usr/share/SAPHanaSR-angi/samples/global.ini_susHanaSR
+template for susHanaSR.py entry in global.ini
+.PP
+.\"
+.SH REQUIREMENTS
+.PP
+* Cluster, HANA and system replication are in sane state before the upgrade.
+.br
+* The whole procedure is tested carefully and documented in detail before being applied on production.
+.br
+* Cluster, HANA and system replication are checked and in sane state before set back into production.
+.PP
+.\"
+.SH BUGS
+.br
+In case of any problem, please use your favourite SAP support process to open a request for the component BC-OP-LNX-SUSE. Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.br
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) ,
+\fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBSAPHanaSR.py\fP(7) , \fBsusHanaSR.py\fP(7) ,
+\fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBcrm\fP(8) , \fBcrm_mon\fP(8) , \fBcibadmin\fP(8) ,
+.br
+https://documentation.suse.com/sbp/sap/ ,
+.br
+https://www.suse.com/c/tag/towardszerodowntime/
+.PP
+.\"
+.SH AUTHORS
+.br
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.br
+(c) 2024 SUSE LLC
+.br
+This maintenance examples are coming with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
