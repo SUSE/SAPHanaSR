@@ -1,13 +1,15 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-replay-archive 8 "13 Apr 2023" "" "SAPHanaSR"
+.TH SAPHanaSR-replay-archive 8 "09 Feb 2024" "" "SAPHanaSR"
 .\"
 .SH SYNOPSIS
 \fBSAPHanaSR-replay-archive\fR [ --help | --version ]
 .br
-\fBSAPHanaSR-replay-archive\fR [--sid=LIST_OF_SIDS] CRM_REPORT_ARCHIVE
+\fBSAPHanaSR-replay-archive\fR --sid \fISID\fR --cib \fICIB\fR [\fICIB\fR [...]] 
+[--format \fIFORMAT\fR] [--select \fICOLUMN\fR] [--sort \fISORT\fR]
+[--properties \fIPROPERTIES\fR] [--from \fIFROM\fR] [--to \fITO\fR]
 .br
-\fBSAPHanaSR-replay-archive\fR [--sid=LIST_OF_SIDS] --pengine=PATH_TO_PENGINE_FILES
+
 .\"
 .SH DESCRIPTION
 SAPHanaSR-replay-archive can be used to re-play SAPHanaSR status changes info
@@ -18,18 +20,36 @@ files and shows status information in historical order. Basically SAPHanaSR-show
 is called for each pe-input file.
 .\"
 .SH OPTIONS
-.HP
-\fB --help\fR
-	show help.
-.HP
-\fB --version\fR
-	show version.
-.HP
-\fB --sid=\fRLIST_OF_SIDS
-    Option to specify a list of SIDs
-.HP
-\fB --format=\fRFORMAT
-    Output format (tables, book or script).
+.TP
+\fB--help\fR
+show help
+.TP
+\fB--version\fR
+show version
+.TP
+\fB--sid\fR \fISID\fR
+specify the SID to check for
+.TP
+\fB--cib\fR [ \fICIB\fR [\fICIB\fR [...]] | ./pengine/* ] 
+specify the path to CIB file(s)
+.TP
+\fB--format\fR [ table | path | script | json ]
+output format, default is table.
+.TP
+\fB--from\fR "\fIYYYY-MM-DD HH:MM:SS\fR"
+from which point in time to show
+.TP
+\fB--to\fR "\fIYYYY-MM-DD HH:MM:SS\fR"
+to which point in time to show
+.TP
+\fB--sort\fR \fICOLUMN\fR
+specify the column name to sort by
+.TP
+\fB--select\fR [ default | test | minimal | sr | all ]
+selecton of attributes to be printed, default is default
+.TP
+\fB--properties\fR \fIPROPERTIES\fR
+ specify the properties file
 .\"
 .SH RETURN CODES
 .B 0
@@ -39,25 +59,25 @@ Successful program execution.
 Usage, syntax or execution errors.
 .\"
 .SH EXAMPLES
-.TP
-* Replay SAPHanaSR-showAttr data from all pe-input files in hb_report-06-06-2019.tar.bz2 .
-# SAPHanaSR-replay-archive hb_report-06-06-2019.tar.bz2
-.TP
-* Show system replication status history from an HANA scale-out cluster.
-# SAPHanaSR-replay-archive hb_report-06-06-2019.tar.bz2 | grep ^global
-.\".TP
-.\"* Show system replication status history from an HANA scale-up cluster.
-.\"# SAPHanaSR-replay-archive hb_report-08-05-2019.tar.bz2 | grep -A13 ^global SAPHanaSR-replay-archive.txt | awk '$1=="global"{print "@",$0}; $11=="SOK"||$11=="SFAIL"||$11=="SWAIT"||$11=="WAIT4PRIM"{print $11}' | tr -d "\\n" | tr "@" "\\n"
-.\".TP
-.\"* Show system replication primary from an HANA scale-up cluster.
-.\"# SAPHanaSR-showAttr hb_report-08-05-2019.tar.bz2 | grep -A13 ^global SAPHanaSR-replay-archive.txt | awk '$1=="global"{print "@",$0}; $2=="PROMOTED"{print $1,$2}' | tr -d "\\n" | tr "@" "\\n"
-.TP
-* Filter replay of SAPHanaSR actions from hb_report for a specific host.
-# SAPHanaSR-replay-archive --format=script hb_suse.tar.bz2 |\\
-        SAPHanaSR-filter --search='Hosts/lv9054/role' --filterDouble
-.TP
-* Replay SAPHanaSR-showAttr data from all pe-input files in local directory /var/lib/pacemaker/pengine/.
-# SAPHanaSR-replay-archive --pengine=/var/lib/pacemaker/pengine/
+.PP
+* Replay SAPHanaSR-showAttr data from crm_report.
+.PP
+Report has been extracted into directory crm_report-08-05-2024, SID is EVA,
+DC node is node01.
+.PP
+.RS 2
+# SAPHanaSR-replay-archive --sid EVA --cib crm_report-08-05-2024/node1/pengine/*
+.RE
+.PP
+* Replay SAPHanaSR-showAttr data from crm_report, use parseable output format.
+.PP
+Report has been extracted into directory crm_report-08-05-2024, SID is EVA,
+DC node is node01, output format is "script".
+.PP
+.RS 2
+# SAPHanaSR-replay-archive --sid EVA --cib crm_report-08-05-2024/node1/pengine/* --format script
+.RE
+.PP
 .\"
 .SH FILES
 .TP
@@ -70,26 +90,23 @@ the working horse.
 /var/lib/pacemaker/pengine/
 usual local pengine log directory.
 .TP
-<CRM_REPORT_ARCHIVE>-tmp/
-per call created working directory.
-.TP
-<CRM_REPORT_ARCHIVE>-tmp/hb_report_log/<NODE>/pengine/pe-input-<NUM>.bz2
+<CRM_REPORT_DIR>/<DC_NODE>/pengine/pe-input-<NUM>.bz2
 extracted pe-input files.
 .TP
-<CRM_REPORT_ARCHIVE>-tmp/hb_report_log/<NODE>/cib.xml
+<CRM_REPORT_DIR><DC_NODE>/cib.xml
 extracted CIB file.
 .\"
 .SH BUGS
 Feedback is welcome, please mail to feedback@suse.com.
 .SH SEE ALSO
- \fBSAPHanaSR\fP(7), \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
-\fBSAPHanaSR-filter\fP(8) , \fBcrm_report\fP(8) , \fBcrm_simulate\fP(8)
+\fBSAPHanaSR-angi\fP(7), \fBSAPHanaSR-showAttr\fP(8) ,
+\fBcrm_report\fP(8) , \fBcrm_simulate\fP(8)
 .\"
 .SH AUTHORS
 A.Briel, F.Herschel, L.Pinne.
 .\"
 .SH COPYRIGHT
-(c) 2019-2023 SUSE LLC
+(c) 2019-2024 SUSE LLC
 .br
 SAPHanaSR-replay-archive comes with ABSOLUTELY NO WARRANTY.
 .br
