@@ -69,7 +69,7 @@ cs_show_saphanasr_status(8) and section REQUIREMENTS below.
 # cs_clusterstate -i
 .RE
 .PP
-* Example for collecting information on SAP HANA.
+* Example for showing SID and instance number of SAP HANA.
 .PP
 The installed SAP HANA instance is shown (should be only one) with its SID and
 instance number. For systemd-enabled HANA the same info can be fetched from
@@ -99,7 +99,8 @@ grep -e "[primitive|master|order|location].*SAPHana_"
 .PP
 * Example for removing SAPHana resource config from CIB.
 .PP
-First the cluster is told to not stop orphaned resources and the SAPHana
+First the CIB is written to file for backup.
+Next the cluster is told to not stop orphaned resources and the SAPHana
 multi-state resource is set into maintenance. Next the order and colocation
 constraints are removed, the SAPHana multi-state resource is removed and the
 orphaned primitive is refreshed. Then the cluster is told to stop orphaned
@@ -111,6 +112,8 @@ Of course the CIB should be checked to see if the removal was successful. See
 example above.
 .PP
 .RS 2
+# crm configure show >cib.SAPHanaSR-backup
+.br
 # echo "property cib-bootstrap-options: stop-orphan-resources=false" |\\
   crm configure load update -
 .br
@@ -159,7 +162,7 @@ script integration.
 .br
 ~> cdcoc
 .br
-~> cp global.ini global.ini.angi-bak
+~> cp global.ini global.ini.SAPHanaSR-backup
 .br
 ~> grep -i ha_dr_provider_saphanasr global.ini
 .br
@@ -184,6 +187,73 @@ integration.
 # grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak >$SUDOER
 .RE
 .PP
+* Example for removing the SAPHanaSR package.
+.PP
+The package SAPHanaSR is removed from all cluster nodes. Related packages
+defined by patterns and dependencies are not touched.
+.PP
+.RS 2
+# crm cluster run "rpm -E --force SAPHanaSR"
+.RE
+.PP
+* Example for installing the SAPHanaSR-angi package.
+.PP
+The package SAPHanaSR is installed on all cluster nodes. All nodes are checked
+for the package.
+.PP
+.RS 2
+# crm cluster run "zypper --non-interactive in -l -f -y SAPHanaSR-angi"
+.br
+# crm cluster run "hostname; rpm -q SAPHanaSR-angi --queryformat %{NAME}"
+.RE
+.PP
+* Example for adding susHanaSR.py to sudoers.
+.PP
+See manual page susHanaSR.py(7) and SAPHanaSR-hookHelper(8).
+.PP
+* Example for adding susHanaSR.py to global.ini and HANA.
+.PP
+See manual page susHanaSR.py(7) and SAPHanaSR-manageProvider(8).
+.PP
+* Example for adding angi SAPHanaController resource config to CIB.
+.PP
+See manual page ocf_suse_SAPHanaController(7), SAPHanaSR_basic_cluster(7) and
+SUSE setup guides.
+.PP
+* Example for setting SAPHanaController resource out of maintenance.
+.PP
+First the SAPHanaController multi-state resource is refreshed, then it is set
+out of maintenance. Name of the resource is mst_SAPHanaController_HA1_HDB00.
+Of course status of cluster, HANA and system replication needs to be checked
+before and after this action, see example above.
+See also manual page SAPHanaSR_maintenance_examples(7).
+.br
+Note: The srHook status for HANA secondary site migh be empty.
+.PP
+.RS 2
+# crm resource refresh mst_SAPHanaController_HA1_HDB00
+.br
+# crm resource maintenance mst_SAPHanaController_HA1_HDB00 off
+.RE
+.PP
+* Example for testing RA on secondary site and trigger susHanaSR.py.
+.PP
+This step is optional.
+The secondary node is determined from SAPHanaSR-showAttr. On that node, the
+hdbnameserver is killed. The cluster will recover the secondary HANA and set
+the CIB attribute srHook.
+Of course status of cluster, HANA and system replication needs to be checked.
+.PP
+.RS 2
+# SECNOD=$(SAPHanaSR-showAttr --format script |\\
+.br
+awk -F"/" '$1=="0 Host"&&$3=="score=\"100\"" {print $2}')
+.br
+# echo $SECNODE
+.br
+# ssh root@$SECNOD "hostname; killall -9 hdbnameserver"
+.RE
+.PP
 .\"
 .SH FILES
 .TP
@@ -202,7 +272,7 @@ template for susHanaSR.py entry in global.ini
 .\"
 .SH REQUIREMENTS
 .PP
-* Cluster, HANA and system replication are in sane state before the upgrade.
+* Cluster, HANA and system replication are in sane state before the upgrade. All cluster nodes are online.
 .br
 * The whole procedure is tested carefully and documented in detail before being applied on production.
 .br
