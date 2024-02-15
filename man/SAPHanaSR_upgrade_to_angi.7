@@ -8,7 +8,7 @@ SAPHanaSR_upgrade_to_angi \- How to upgrade from SAPHanaSR or SAPHanaSR-ScaleOut
 .\"
 .SH DESCRIPTION
 .PP
-* What is the upgrade about?
+\fB*\fR What is the upgrade about?
 .PP
 SAPHanaSR-angi can be used to replace SAPHanaSR and SAPHanaSR-ScaleOut.
 SAPHanaSR-angi is quite similar to SAPHanaSR and SAPHanaSR-ScaleOut, but not
@@ -19,16 +19,18 @@ The upgrade procedure depends on an initial setup as decribed in setup guides
 and manual pages. See REQUIREMENTS below and in manual pages SAPHanaSR(7) or
 SAPHanaSR-ScaleOut(7).
 .PP
-* What will be changed for SAP HANA scale-up scenarios?
+\fB*\fR What will be changed for SAP HANA scale-up scenarios?
 .PP
 .RS 2
 a. The SAPHana RA and its multi-state config will be replaced by the new
-SAPHanaController and its clone promotable config
+SAPHanaController and its clone promotable config.
 .br
 b. The SAPHanaSR.py HADR provider hook script will be replaced by the new
-susHanaSR.py
+susHanaSR.py.
 .br
-c. Node attributes will be removed
+c. Tools are placed in /usr/bin/.
+.br
+d. Node attributes will be removed.
 .br
 hana_<sid>_vhost
 hana_<sid>_site
@@ -39,11 +41,11 @@ hana_<sid>_srmode
 hana_<sid>_sync_state
 TODO
 .br
-d. Site and global attributes will be removed from property SAPHanaSR
+e. Site and global attributes will be removed from property SAPHanaSR.
 .br
 TODO
 .br
-e. Site and global attributes will be added to property SAPHanaSR
+f. Site and global attributes will be added to property SAPHanaSR.
 .br
 hana_<sid>_glob_topology
 hana_<sid>_glob_prim
@@ -59,21 +61,23 @@ hana_<sid>_site_srPoll_<site>
 TODO
 .RE
 .PP
-* What will be changed for SAP HANA scale-out scenarios?
+\fB*\fR What will be changed for SAP HANA scale-out scenarios?
 .PP
 .RS 2
 a. The SAPHanaController RA and its multi-state config will be replaced by the
-new SAPHanaController and its clone promotable config
+new SAPHanaController and its clone promotable config.
 .br
 b. The SAPHanaSrMultiTarget.py HADR provider hook script will be replaced by
-the new susHanaSR.py
+the new susHanaSR.py.
 .br
-c. Node attributes will be removed
+c. Tools are placed in /usr/bin/.
+.br
+d. Node attributes will be removed.
 .br
 gra
 gsh
 .br
-d. Site and global attributes will be removed from property SAPHanaSR
+e. Site and global attributes will be removed from property SAPHanaSR.
 .br
 mts
 upd
@@ -81,7 +85,7 @@ hana_<sid>_glob_sync_state
 hana_<sid>_glob_srHook (in case of obsolete scale-out SAPHanaSR.py)
 TODO
 .br
-e. Site and global attributes will be added to property SAPHanaSR
+f. Site and global attributes will be added to property SAPHanaSR.
 .br
 hana_<sid>_glob_topology
 hana_<sid>_site_lpt_<site>
@@ -93,7 +97,7 @@ hana_<sid>_site_srPoll_<site>
 TODO
 .RE
 .PP
-* How does the  procedure look like at a glance?
+\fB*\fR How does the  procedure look like at a glance?
 .PP
 .RS 2
 1.1 Check for sane state of cluster, HANA and system replication
@@ -130,7 +134,7 @@ TODO
 4.2 Test RA on secondary and trigger susHanaSR.py (optional)
 .RE
 .PP
-* What needs to be prepared upfront?
+\fB*\fR What needs to be prepared upfront?
 .PP
 First make yourself familiar with concepts, components and configuration of
 SAPHanaSR-angi. Refresh your knowledge of SAPHanaSR or SAPHanaSR-ScaleOut. 
@@ -174,7 +178,7 @@ Ideally also the needed commands are prepared in detail.
 .\"
 .SH EXAMPLES
 .PP
-* Example for checking sane state of cluster, HANA and system replication.
+\fB*\fR Example for checking sane state of cluster, HANA and system replication.
 .PP
 This steps should be performed before doing anything with the cluster, and after
 something has been done. Usually is done per Linux cluster. See also manual
@@ -194,7 +198,7 @@ helpful as well.
 # cs_clusterstate -i
 .RE
 .PP
-* Example for showing SID and instance number of SAP HANA.
+\fB*\fR Example for showing SID and instance number of SAP HANA.
 .PP
 The installed SAP HANA instance is shown (should be only one) with its SID and
 instance number. For systemd-enabled HANA the same info can be fetched from
@@ -207,7 +211,7 @@ SAPHanaSR_basic_cluster(7).
 # systemd-cgls -u SAP.slice
 .RE
 .PP
-* Example for collecting information on SAPHana resource config.
+\fB*\fR Example for collecting information on SAPHana resource config.
 .PP
 The names for SAPHana primitive and multi-state resource are determined, as
 well as for related oder and (co-)location constraints. The SAPHana primitive
@@ -219,12 +223,12 @@ Needs to be done once per Linux cluster.
 .br
 # crm configure show |\\
 .br
-grep -e "[primitive|master|order|location].*SAPHana_"
+  grep -e "[primitive|master|order|location].*SAPHana_"
 .br
 # crm configure show rsc_SAPHana_HA1_HDB00
 .RE
 .PP
-* Example for removing SAPHana resource config from CIB.
+\fB*\fR Example for removing SAPHana resource config from CIB.
 .PP
 First the CIB is written to file for backup.
 Next the cluster is told to not stop orphaned resources and the SAPHana
@@ -240,26 +244,32 @@ example above.
 .RS 2
 # crm configure show > cib.SAPHanaSR-backup
 .br
-# echo "property cib-bootstrap-options: stop-orphan-resources=false" |\\
+# echo "property cib-bootstrap-options: stop-orphan-resources=false"|\\
   crm configure load update -
 .br
 # crm resource maintenance msl_SAPHana_HA1_HDB00 on
 .br
-# cibadmin --delete --xpath "//rsc_order[@id='ord_SAPHana_HA1_HDB00']"
+# cibadmin --delete --xpath \\
 .br
-# cibadmin --delete --xpath "//rsc_colocation[@id='col_saphana_ip_HA1_HDB00']"
+  "//rsc_order[@id='ord_SAPHana_HA1_HDB00']"
 .br
-# cibadmin --delete --xpath "//master[@id='msl_SAPHana_HA1_HDB00']"
+# cibadmin --delete --xpath \\
+.br
+  "//rsc_colocation[@id='col_saphana_ip_HA1_HDB00']"
+.br
+# cibadmin --delete --xpath \\
+.br
+  "//master[@id='msl_SAPHana_HA1_HDB00']"
 .br
 # crm resource refresh rsc_SAPHana_HA1_HDB00
 .br
-# echo "property cib-bootstrap-options: stop-orphan-resources=true" |\\
+# echo "property cib-bootstrap-options: stop-orphan-resources=true"|\\
   crm configure load update -
 .br
 # crm_mon -1r
 .RE
 .PP
-* Example for removing all reboot-safe node attributes from CIB.
+\fB*\fR Example for removing all reboot-safe node attributes from CIB.
 .PP
 All reboot-safe node attributes will be removed. Needed attributes are expected 
 to be re-added by the RAs later.
@@ -273,12 +283,14 @@ See also crm_attribute(8).
 .br
 # crm configure show node1 | tr " " "\\n" |\\
 .br
-tail -n +6 | awk -F "=" '{print $1}' |\\
+  tail -n +6 | awk -F "=" '{print $1}' |\\
 .br
-while read; do crm_attribute --node node1 --name $REPLY --delete; done
+while read; do \\
+.br
+  crm_attribute --node node1 --name $REPLY --delete; done
 .RE
 .PP
-* Example for removing non-reboot-safe node attribute from CIB.
+\fB*\fR Example for removing non-reboot-safe node attribute from CIB.
 .PP
 The attribute hana_<sid>_sync_state will be removed.
 Of course the CIB should be checked to see if the removal was successful.
@@ -289,14 +301,14 @@ See also crm_attribute(8).
 .RS 2
 # crm_attribute --node node1 --name hana_ha1_sync_state \\
 .br
---lifetime reboot --query
+  --lifetime reboot --query
 .br
 # crm_attribute --node node1 --name hana_ha1_sync_state \\
 .br
---lifetime reboot --delete
+  --lifetime reboot --delete
 .RE
 .PP
-* Example for removing all SAPHanaSR property attributes from CIB.
+\fB*\fR Example for removing all SAPHanaSR property attributes from CIB.
 .PP
 All attributes of porperty SAPHanaSR will be removed. Needed attributes are
 expected to be re-added by the RAs later. The attribute for srHook will be
@@ -312,12 +324,14 @@ respectively.
 .br
 # crm configure show SAPHanaSR |\\
 .br
-awk -F"=" '$1~/hana_/ {print $1}' |\\
+  awk -F"=" '$1~/hana_/ {print $1}' |\\
 .br
-while read; do crm_attribute --delete --type crm_config --name $REPLY; done
+while read; do \\
+.br
+  crm_attribute --delete --type crm_config --name $REPLY; done
 .RE
 .PP
-* Example for removing the SAPHanaSR.py hook script from global.ini and HANA.
+\fB*\fR Example for removing the SAPHanaSR.py hook script from global.ini and HANA.
 .PP
 The global.ini is copied for backup. Next the exact name (upper/lower case) of
 the section is determined from global.ini. Then the currenct HADR provider
@@ -337,16 +351,18 @@ script integration.
 .br
 ~> grep -i ha_dr_provider_saphanasr global.ini
 .br
-~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --show --provider=SAPHanaSR
+~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --show \\
+.br
+  --provider=SAPHanaSR
 .br
 ~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --reconfigure \\
 .br
---remove /usr/share/SAPHanaSR/samples/global.ini
+  --remove /usr/share/SAPHanaSR/samples/global.ini
 .br
 ~> hdbnsutil -reloadHADRProviders
 .RE
 .PP
-* Example for removing the SAPHanaSR.py hook script from sudoers. 
+\fB*\fR Example for removing the SAPHanaSR.py hook script from sudoers. 
 .PP
 Needs to be done on each node.
 See manual page SAPHanaSR.py(7) for details on checking the hook script
@@ -355,10 +371,12 @@ integration.
 .RS 2
 # cp $SUDOER "$SUDOER".angi-bak
 .br
-# grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak >$SUDOER
+# grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" \\
+.br
+  "$SUDOER".angi-bak >$SUDOER
 .RE
 .PP
-* Example for removing the SAPHanaSR package.
+\fB*\fR Example for removing the SAPHanaSR package.
 .PP
 The package SAPHanaSR is removed from all cluster nodes. Related packages
 defined by patterns and dependencies are not touched. Needs to be done once per
@@ -368,34 +386,38 @@ Linux cluster.
 # crm cluster run "rpm -E --force SAPHanaSR"
 .RE
 .PP
-* Example for installing the SAPHanaSR-angi package.
+\fB*\fR Example for installing the SAPHanaSR-angi package.
 .PP
 The package SAPHanaSR is installed on all cluster nodes. All nodes are checked
 for the package. Needs to be done once per Linux cluster.
 .PP
 .RS 2
-# crm cluster run "zypper --non-interactive in -l -f -y SAPHanaSR-angi"
+# crm cluster run \\
 .br
-# crm cluster run "hostname; rpm -q SAPHanaSR-angi --queryformat %{NAME}"
+  "zypper --non-interactive in -l -f -y SAPHanaSR-angi"
+.br
+# crm cluster run \\
+.br
+  "hostname; rpm -q SAPHanaSR-angi --queryformat %{NAME}"
 .RE
 .PP
-* Example for adding susHanaSR.py to sudoers.
+\fB*\fR Example for adding susHanaSR.py to sudoers.
 .PP
 Needs to be done on each node.
 See manual page susHanaSR.py(7) and SAPHanaSR-hookHelper(8).
 .PP
-* Example for adding susHanaSR.py to global.ini and HANA.
+\fB*\fR Example for adding susHanaSR.py to global.ini and HANA.
 .PP
 Needs to be done for each HANA site.
 See manual page susHanaSR.py(7) and SAPHanaSR-manageProvider(8).
 .PP
-* Example for adding angi SAPHanaController resource config to CIB.
+\fB*\fR Example for adding angi SAPHanaController resource config to CIB.
 .PP
 Needs to be done once per Linux cluster.
 See manual page ocf_suse_SAPHanaController(7), SAPHanaSR_basic_cluster(7) and
 SUSE setup guides.
 .PP
-* Example for setting SAPHanaController resource out of maintenance.
+\fB*\fR Example for setting SAPHanaController resource out of maintenance.
 .PP
 First the SAPHanaController multi-state resource is refreshed, then it is set
 out of maintenance. Name of the resource is mst_SAPHanaController_HA1_HDB00.
@@ -411,7 +433,7 @@ Note: The srHook status for HANA secondary site migh be empty.
 # crm resource maintenance mst_SAPHanaController_HA1_HDB00 off
 .RE
 .PP
-* Example for testing RA on secondary site and trigger susHanaSR.py.
+\fB*\fR Example for testing RA on secondary site and trigger susHanaSR.py.
 .PP
 This step is optional.
 The secondary node is determined from SAPHanaSR-showAttr. On that node, the
@@ -422,7 +444,7 @@ Of course status of cluster, HANA and system replication needs to be checked.
 .RS 2
 # SECNOD=$(SAPHanaSR-showAttr --format script |\\
 .br
-awk -F"/" '$1=="0 Host"&&$3=="score=\"100\"" {print $2}')
+  awk -F"/" '$1=="0 Host"&&$3=="score=\\"100\\"" {print $2}')
 .br
 # echo $SECNOD
 .br
@@ -434,6 +456,9 @@ awk -F"/" '$1=="0 Host"&&$3=="score=\"100\"" {print $2}')
 .TP
 /etc/sudoers.d/SAPHanaSR
 recommended place for sudo permissions of HADR provider hook scripts
+.TP
+/usr/bin/
+path to tools
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 on-disk representation of HANA global system configuration
@@ -463,9 +488,10 @@ In case of any problem, please use your favourite SAP support process to open a 
 .\"
 .SH SEE ALSO
 .br
-\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 \fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
-\fBSAPHanaSR.py\fP(7) , \fBsusHanaSR.py\fP(7) ,
+\fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
+\fBsusHanaSR.py\fP(7) ,
 \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBcrm\fP(8) , \fBcrm_mon\fP(8) , \fBcrm_attribute\fP(8) , \fBcibadmin\fP(8) , 
 .br
