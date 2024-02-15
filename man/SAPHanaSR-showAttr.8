@@ -1,14 +1,15 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-showAttr 8 "20 Nov 2023" "" "SAPHanaSR"
+.TH SAPHanaSR-showAttr 8 "24 Jan 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replication.
 .\"
 .SH SYNOPSIS
-\fBSAPHanaSR-showAttr\fR [ --help | --version | --path2table ]
+\fBSAPHanaSR-showAttr\fR [ --help | --version ]
 .br
-\fBSAPHanaSR-showAttr\fR [ --sid=SID[:INO] ] [ --select=SELECTION ] [ --sort=FIELD ] [ --format=FORMAT ] [ --cib=OFFLINE_CIB_FILE ]
+\fBSAPHanaSR-showAttr\fR [ --sid \fISID\fR ] [ --select \fISELECT\fR ]
+[ --sort \fISORT\fR ] [ --format \fIFORMAT\fR ] [ --cib \fIOFFLINE_CIB_FILE\fR ]
 .\"
 .SH DESCRIPTION
 SAPHanaSR-showAttr shows Linux cluster attributes for SAP HANA system replication automation.
@@ -55,7 +56,7 @@ maintenance status of Linux cluster resources (\fBmaintenance\fP)
 .br
 promotability of Linux cluster clone resources (\fBpromotable\fP)
 .br
-target role of the Linux cluster promotable clone resources (\fBtarget-role\fP)
+target role of the Linux cluster resources (\fBtarget-role\fP)
 .TP
 Sites section
 HANA site name (\fBSites\fP)
@@ -68,7 +69,7 @@ HANA current master nameserver for that site (\fBmns\fP)
 .br
 HANA replication operation mode (\fBopMode\fP)
 .br
-HANA system replication status from HA/DR provider hook (\fBsrHook\fP)
+HANA system replication status from srConnectionChanged() (\fBsrHook\fP)
 .br
 HANA system replication mode (\fBsrMode\fP)
 .br
@@ -96,9 +97,9 @@ HANA site where the host sits (\fBsite\fP)
 .br
 maintenance state of Linux cluster node (\fBstandby\fP)
 .br
-HANA system replication takeover action, indicated by preTakeover() (\fBsra\fP)
+HANA system replication takeover action from preTakeover() (\fBsra\fP)
 .br
-HANA system replication takeover action history, (\fBsrah\fP)
+HANA system replication takeover action history (\fBsrah\fP)
 .br
 Linux cluster node fence status (\fBterminate\fP)
 .br
@@ -255,7 +256,9 @@ also ocf_suse_SAPHanaController(7).
 
 Value: [ started | disabled ]
 
-Should the resource be started or stopped (disableld) by the Linux cluster.
+Should the resource be started or stopped (disabled) by the Linux cluster.
+The attribute is shown after it has been changed from the default.
+The field might appear or disappear, depending on cluster maintenance tasks.
 .PP
 .B filter
 - SAPHanaController filter for logging
@@ -527,24 +530,21 @@ show help.
 \fB --version\fR
 show version.
 .TP 4
-\fB --path2table\fR
-convert script-style input pipe back into normal output.
-.TP 4
-\fB --select=\fISELECTION\fR
+\fB --select\fR \fISELECT\fR
 .\" TODO explain meaning of values
 show selected information only. Allowed values: [ all | default | minimal | sr | cluster | cluster2 | cluster3 ]. Default is default.
 .TP 4
-\fB --sid=\fISID\fR[:\fIINO\fR]
+\fB --sid\fR \fISID\fR
 use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
-Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
+\." Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
 .TP 4
-\fB --sort=\fIFIELD\fR
+\fB --sort\fR \fIFIELD\fR
 sort Hosts section table by field. Allowed values: [ roles | site ]. Default is sort by hostnames.
 .TP 4
-\fB --format=\fIFORMAT\fR
+\fB --format\fR \fIFORMAT\fR
 output format. Allowed values: [ script | tables | json | tester ]. Default is tables.
 .TP 4
-\fB --cib=\fIOFFLINE_CIB_FILE\fR
+\fB --cib\fR \fIOFFLINE_CIB_FILE\fR
 read data from given offline CIB file.
 .\"
 .SH RETURN CODES
@@ -561,16 +561,16 @@ show all SAPHanaSR attributes and relevant cluster maintenance states.
 .br
 If the roles sub-fields are :::: landscapeHostConfiguration.py has not been able to detect the HANA roles during last recent RA monitor operation. Likely HANA was down or sudo <sid>adm failed.
 .TP 4
-# SAPHanaSR-showAttr --sort=roles
+# SAPHanaSR-showAttr --sort roles
 show all SAPHanaSR attributes in the cluster and sort host table output by roles.
 .TP 4
-# SAPHanaSR-showAttr --sid=HA1:10 --cib=./hb_report-17-07-2019/grauenstein01/cib.xml
+# SAPHanaSR-showAttr --sid HA1 --cib ./hb_report-17-07-2019/grauenstein01/cib.xml
 show all SAPHanaSR attributes for SAP System ID HA1 and instance number 10 from given CIB file.
 .TP 4
 # SAPHanaSR-showAttr | grep -e master: -e worker: -e slave:
 show SAPHanaSR promotion scores on running nodes.
 .TP 4 
-# SAPHanaSR-showAttr --format=script | egrep -v '/(version|op_mode|vhost|remoteHost|node_state|site)=' | SAPHanaSR-showAttr --path2table
+# SAPHanaSR-showAttr --format script | egrep -v '/(version|op_mode|vhost|remoteHost|node_state|site)=' | SAPHanaSR-showAttr --path2table
 reduce output to selected fields.
 .TP 4
 # watch -n9 "crm_mon -1r --include=none,nodes,resources,failures;echo; \\
@@ -584,8 +584,8 @@ display comprehensive overview on Linux cluster and HANA resources, update every
 /usr/bin/SAPHanaSR-showAttr
 the program itself.
 .TP
-/usr/lib/SAPHanaSR-angi/SAPHanaSRTools.pm
-needed functions.
+/usr/lib/SAPHanaSR-angi/
+needed libraries.
 .TP
 /usr/sap/hostctrl/exe/saphostctrl
 the SAP host control command.
@@ -626,7 +626,7 @@ A.Briel, F.Herschel, L.Pinne.
 .br
 (c) 2015-2017 SUSE Linux GmbH, Germany.
 .br
-(c) 2018-2023 SUSE LLC
+(c) 2018-2024 SUSE LLC
 .br
 SAPHanaSR-showAttr comes with ABSOLUTELY NO WARRANTY.
 .br

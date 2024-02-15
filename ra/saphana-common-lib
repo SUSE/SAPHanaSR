@@ -33,6 +33,13 @@ saphana_common_lib_version="1.001.1"
 # global variables: InstanceNr(w) SAPVIRHOST(w) DIR_EXECUTABLE(w) SAPSTARTSRV(w) SAPCONTROL(w) DIR_PROFILE(w) SAPSTARTPROFILE(w)
 # global variables: SAPHanaFilter(w) HANA_STATE_*(w) HANA_STD_ACTION_TIMEOUT(w) log_attributes(w)
 
+function set_g_times() {
+    f_times="/run/${raType}.$$.times"
+    times > "$f_times"
+    { read -r g_time_proc; read -r g_time_chld; } < "$f_times"
+    rm  "$f_times"
+}
+
 function super_ocf_log() {
     # called by: TODO
     # function: super_ocf_log - wrapper function for ocf log in order catch usual logging into super log
@@ -43,6 +50,8 @@ function super_ocf_log() {
     local -u shf="${SAPHanaFilter:-ALLBUTFLOW}"
     # message levels: (dbg)|info|warn|err|error
     # message types:  (ACT|RA|FLOW|DBG|LPA|DEC|DBG2...
+    mtype=${message%% *}
+    mtype=${mtype%:}
     case "$level" in
         debug | dbg | warn | err | error ) skip=0
         ;;
@@ -55,18 +64,21 @@ function super_ocf_log() {
                 skip=1
                 ;;
             ALLBUTFLOW )
-                mtype=${message%% *}
-                mtype=${mtype%:}
                 [[ "FLOW" == *${mtype}* ]] && skip=1 || skip=0
                 ;;
-            * ) mtype=${message%% *}
-                mtype=${mtype%:}
+            * )
                 [[ ${shf} == *${mtype}* ]] && skip=0 || skip=1
                 ;;
         esac
         ;;
     esac
     if [[ "$skip" == 0 ]]; then
+        if [[ "RUNTIME" == *${mtype}* ]]; then
+            set_g_times
+            message="##-1-## $message times=$g_time_proc $g_time_chld"
+        else
+            message="##-2-## $message"
+        fi
         ocf_log "$level" "$message"
     fi
 } # end function super_ocf_log
@@ -88,6 +100,7 @@ function cluster_commands_init() {
     fi
     # TODO PRIO3: NG - check, if NODENAME set here is not a duplicate
     NODENAME="$("$CRM_NODE" -n)"
+    super_ocf_log info "RUNTIME ${FUNCNAME[0]} rc=$rc"
 } # end function cluster_commands_init
 
 function core_init() {
@@ -432,6 +445,7 @@ function HANA_CALL() {
         esac
         shift
     done
+    #super_ocf_log info "RUNTIME HANA_CALL START '$cmd'"
 
     if [ "$use_su" == "1" ]; then
         pre_cmd_type="su"
@@ -493,6 +507,7 @@ function HANA_CALL() {
                   #fi
                  ;;
     esac
+    super_ocf_log info "RUNTIME HANA_CALL '$cmd' stack:${FUNCNAME[*]}rc=$rc"
     super_ocf_log debug "DBG: HANA_CALL '$cmd' rc=$rc output=$output"
     echo "$output"
     return "$rc";
@@ -702,9 +717,15 @@ function check_for_primary() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local state="$HANA_STATE_DEFECT"
     local rc=0
+    local mode=""
+    if [[ "$#" == "1" ]]; then
+        mode="$1"
+    fi
     case "$raType" in
         saphana* ) # SAPHanaController
-            get_local_sr_config >/dev/null # sets global variables gSrMode and gSite
+            if [[ -z "$gSrMode" || "$mode" == "live" ]]; then
+                get_local_sr_config >/dev/null # sets global variables gSrMode and gSite
+            fi
             ;;
         sht* )     # SAPHanaTopology - did that already in sht_init() - maybe we can align that later
             ;;
@@ -839,7 +860,7 @@ function check_saphostagent() {
 
 #
 # params: virt-name [--timeout timeout] [--set_gTopology]
-# globals: -
+# globals: g_cache_lss(w)
 # output: either single value (default); or multi line key=value (--multiValue)
 # rc:     lss or timeout (124)
 function get_role_by_landscape(){
@@ -857,6 +878,7 @@ function get_role_by_landscape(){
     # TODO PRIO2: query lss to be moved into a function
     # TODO PRIO1: NG - parse for SAPCONTROL-OK: <begin> and SAPCONTROL-OK: <end> to validate the completeness of the output
     hanaAnswer=$(HANA_CALL --timeout "$timeout" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); lssRc="$?"
+    g_cache_lss="$lssRc"
     super_ocf_log info "DEC: lssRc=$lssRc"
     nodeRole=$(echo "${hanaAnswer//[[:blank:]]/}" | \
             awk -F= '
@@ -898,7 +920,7 @@ function get_role_by_cluster_or_landscape() {
     #super_ocf_log info "DEC: WILLI-BIENE nodeRole=$nodeRole"
     # TODO PRIO2: Should ":::" be defined as global Variable for SAPHanaController and SAPHanaTopology
     if [[ -z "$nodeRole" ||  "$nodeRole" = ":::" ]]; then
-        nodeRole="$(get_role_by_landscape "${virtName}")"
+        nodeRole="$(get_role_by_landscape "${virtName}")"; g_cache_lss="$?"
         #super_ocf_log info "DEC: HUGO-WILLI-BIENE nodeRole=$nodeRole"
     fi
     echo "$nodeRole"

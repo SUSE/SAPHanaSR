@@ -397,6 +397,7 @@ function saphana_init() {
     # globals:  DIR_EXECUTABLE(w), SAPSTARTSRV(w), SAPCONTROL(w), DIR_PROFILE(w), SAPSTARTPROFILE(w), LD_LIBRARY_PATH(w), PATH(w)
     # globals:  LPA_DIRECTORY(w), SIDInstanceName(w), remoteNode(w), hdbSrQueryTimeout(w), NODENAME(w), vNAME(w), hdbver(w),
     # called by: RA
+    SAPHanaFilter="all"
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_SUCCESS" clN
     SYSTEMCTL="/usr/bin/systemctl"
@@ -418,6 +419,7 @@ function saphana_init() {
     # init attribute definitions
     #
     saphana_init_attribute_definitions
+    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     super_ocf_log debug "DBG: SID=$SID, sid=$sid, SIDInstanceName=$SIDInstanceName, InstanceName=$InstanceName, InstanceNr=$InstanceNr, SAPVIRHOST=$SAPVIRHOST"
     #
     # init scoring tables
@@ -431,6 +433,7 @@ function saphana_init() {
         preferRecover="local"
     fi
     saphana_init_scoring_tables
+    super_ocf_log info "RUNTIME: set scoring table for scenario ${topology}_${preferRecover}"
     super_ocf_log info "RA: set scoring table for scenario ${topology}_${preferRecover}"
     case "${topology}_${preferRecover}" in
         ScaleUp_remote      ) SCORING_TABLE=( "${SCORING_TABLE_PREFERRED_SITE_TAKEOVER_SU[@]}");;
@@ -469,12 +472,12 @@ function saphana_init() {
             #topo=* ) gTopology="${splitResultLine#*=}";;
         esac
     done
+    g_cache_lss="$gLss"
     gFullRole="${gLss}:${gSrr}:${gRole}"
     super_ocf_log info "DEC: init(): gFullRole=$gFullRole"
     gSrPoll=$(get_hana_site_attribute "${gSite}" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}")
     gSrHook=$(get_SRHOOK "$gSite")
     super_ocf_log info "DEC: sr_name=$gSite, gRemSite=$gRemSite, sr_mode=$gSrMode"
-    SAPHanaFilter=$(get_hana_attribute "X" "${ATTR_NAME_HANA_FILTER[@]}")
     #
     # get HANA version
     #
@@ -535,7 +538,7 @@ function analyze_hana_sync_statusSRS() {
        fi
     elif [ "$srRc" -le 11 ]; then # 11 and 10
        # if systemReplicationStatus is ERROR and landscapeHostConfiguration is down then do NOT set SFAIL
-       get_hana_landscape_status; lss=$?
+       get_hana_landscape_status ""; lss=$?
        if [ "$lss" -lt 2 ]; then
           # keep everything like it was
           rc=2
@@ -892,7 +895,7 @@ function saphana_start_primary_handle_register_advice() {
             done
             if wait_for_primary_master 1; then
                 register_hana_secondary
-                primary_status="$(check_for_primary)";
+                primary_status="$(check_for_primary "live")";
                 if [[ "$primary_status" == "$HANA_STATE_SECONDARY" ]]; then
                     super_ocf_log info "ACT: Register successful"
                     lpa_push_lpt 10
@@ -938,7 +941,7 @@ function saphana_start_primary_handle_start_advice() {
     esac
     super_ocf_log info "DEC: saphana_start_primary_handle_start_advice: scoring_crm_promote($gFullRole,$my_sync)"
     # after starting SAP HANA we need to get the lss status life and not via SAPHanaTopology and get updaptes roles from SAPHanaTopology
-    get_hana_landscape_status; lLss="$?"
+    get_hana_landscape_status ""; lLss="$?"
     gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
     gLss="$lLss"
     gFullRole="${lLss}:${gSrr}:${gRole}"
@@ -1174,9 +1177,9 @@ function saphana_start_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     # TODO PRIO2: scale-up is normally always the_master_nameserver and we do not need to count workers
     if is_the_master_nameserver; then
-        primary_status="$(check_for_primary)";
+        primary_status="$(check_for_primary "live")";
         # gNrSiteNode vs. landscape-workers?
-        get_hana_landscape_status; lss=$?
+        get_hana_landscape_status ""; lss=$?
         lss_worker=$(echo "$hana_LSS_Out" | awk '/indexServerConfigRole=worker/ { w++; } END { print w; }')
         #
         # Only start HANA, if there are enough nodes in the cluster to fulfill the landscape:
@@ -1208,7 +1211,7 @@ function saphana_start_clone() {
             super_ocf_log info "ACT: Local SAP HANA instance already up and running"
         else
             # IF LS>=2 AND ROLE STANDBY "RESTART" INSTANCE
-            get_hana_landscape_status; lss=$?
+            get_hana_landscape_status ""; lss=$?
             if [ "$lss" -gt 2 ]; then
                 #
                 # only restart standby instances
@@ -1237,7 +1240,7 @@ function saphana_stop_clone() {
     local primary_status="x"
     set_hana_attribute "${NODENAME}" "UNDEFINED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
     super_ocf_log debug "DBG: SET UNDEFINED"
-    primary_status="$(check_for_primary)";
+    primary_status="$(check_for_primary "live")";
     if [ "$primary_status" == "$HANA_STATE_SECONDARY" ]; then
         super_ocf_log debug "DBG: 008 * lpa_set_lpt 10 $gSite"
         lpa_set_lpt  10 "$gSite"
@@ -1290,7 +1293,7 @@ function saphana_check_waiting_primary() {
     # called by: saphana_monitor_primary
     # TODO PRIO1: NG - check which params /  globals are used/set ...
     local lss lparc LPTloc
-    get_hana_landscape_status; lss="$?"
+    get_hana_landscape_status ""; lss="$?"
     if [ "$lss" -ge 2 ]; then
         # seems admin already decided that for us? -> we are running - set DEMOTED
         # TODO PRIO2: set "DEMOTED" attribute as described
@@ -1537,7 +1540,7 @@ function saphana_monitor_primary() {
             promoted=0;
             ;;
     esac
-    get_hana_landscape_status; lss=$?
+    get_hana_landscape_status "cache"; lss=$?
     gLss="$lss"
     gFullRole="${gLss}:${gSrr}:${gRole}"
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss gLss=$gLss"
@@ -1695,7 +1698,7 @@ function saphana_monitor_secondary() {
         esac
     fi
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_SECONDARY"
-    get_hana_landscape_status; lss=$?
+    get_hana_landscape_status "cache"; lss=$?
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss"
     case "$lss" in
         0 ) # FATAL
@@ -1726,7 +1729,7 @@ function saphana_monitor_clone_not_msn() {
         # local instance is not THE master nameserver and is currently stopped
         #
         # IF LS>=2 AND ROLE STANDBY "RESTART" INSTANCE
-        get_hana_landscape_status; lss=$?
+        get_hana_landscape_status ""; lss=$?
         if [ "$lss" -gt 2 ]; then
             super_ocf_log info "DEC: local instance is down landscape is up (lss=$lss)"
             rc="$OCF_NOT_RUNNING"
@@ -1765,7 +1768,7 @@ function saphana_monitor_clone_not_msn() {
                 # missing ALL master nameserver candidates, but local instance still running -> we need to trigger the cluster to take us down
                 #
                 super_ocf_log info "DEC: left-over instance ???"
-                get_hana_landscape_status; lss=$?
+                get_hana_landscape_status "cache"; lss=$?
                 if [ "$lss" -le 1 ]; then
                     #
                     # landscape already reports down / error but local instance is up and running
@@ -1857,7 +1860,7 @@ function saphana_monitor_clone() {
         #
         # First check, if we are PRIMARY or SECONDARY
         #
-        primary_status="$(check_for_primary)";
+        primary_status="$(check_for_primary "cache")";
         if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
             # FIX: bsc#919925 Leaving Node Maintenance stops HANA Resource Agent
             # TODO PRIO1: NG - Maybe we need a lpa-check here to
@@ -1931,7 +1934,7 @@ function saphana_promote_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     # Differ SAP HANA primary and secondary
     set_hana_attribute "${NODENAME}" "PROMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
-    primary_status="$(check_for_primary)";
+    primary_status="$(check_for_primary "live")";
     if [ "$primary_status" == "$HANA_STATE_PRIMARY" ]; then
         # SAP HANA is already configured as PRIMARY,  only mark the clone as PROMOTED
         super_ocf_log info "ACT: Promoted $SID-$InstanceName as master (no hdbnsutil action needed)."
@@ -1987,7 +1990,7 @@ function saphana_promote_clone() {
                         fi
                         # check: SAP HANA is now PRIMARY? 
                         # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
-                        primary_status="$(check_for_primary)"
+                        primary_status="$(check_for_primary "live")"
                         if [[ "$primary_status" == "P" ]]; then
                             rc="$OCF_SUCCESS";
                             # DONE: PRIO0: !!!
