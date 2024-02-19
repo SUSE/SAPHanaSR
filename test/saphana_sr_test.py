@@ -159,7 +159,7 @@ class SaphanasrTest:
         structure representing the data
         """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
-        cmd = "SAPHanaSR-showAttr --format=tester"
+        cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
@@ -367,6 +367,15 @@ class SaphanasrTest:
                 check_result = 2
                 break
             c_key = match_obj.group(1)
+            #
+            # rewrite key, if it contains a string @@sid@@ this is needed e.g. to match lpa_<sid>_lpt
+            #
+            #print(f"c_key={c_key}")
+            match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
+            if match_obj_key is not None:
+                #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
+                c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
+                #print(f"rewrite c_key={c_key}")
             c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
             c_reg_exp_a = ""
