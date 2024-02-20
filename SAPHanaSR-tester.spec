@@ -1,7 +1,8 @@
 #
 # spec file for package SAPHanaSR
 #
-# Copyright (c) 2023 SUSE LLC.
+# Author: Fabian Herschel
+# Copyright (c) 2023-2024 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -19,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.9
+Version:        1.2.10
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
