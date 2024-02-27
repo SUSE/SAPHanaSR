@@ -59,6 +59,7 @@ tar xf %{S:0}
 
 %build
 gzip man-tester/*
+gzip man-tester-client/*
 
 %install
 mkdir -p %{buildroot}/usr/bin
