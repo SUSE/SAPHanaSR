@@ -1,5 +1,5 @@
 #
-# spec file for package SAPHanaSR
+# spec file for package SAPHanaSR-tester
 #
 # Author: Fabian Herschel
 # Copyright (c) 2023-2024 SUSE LLC.
@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.10
+Version:        1.2.11
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -31,6 +31,11 @@ Source0:        %{name}-%{version}.tgz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
 Requires:       python3
+
+%package client
+Group:          Productivity/Clustering/HA
+Summary:        Test suite for SAPHanaSR clusters - SAPHanaSR-tester-client is to be installed on all SAPHanaSR classic nodes
+Conflicts:      SAPHanaSR-angi
 
 %description
 SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focussed test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
@@ -44,6 +49,9 @@ https://www.suse.com/c/tag/towardszerodowntime/
 Authors:
 --------
     Fabian Herschel
+
+%description client
+SAPHanaSR-tester-client is to be installed on all SAPHanaSR classic nodes to allow SAPHanaSR-tester to check the cluster attributes with the same method.
 
 %prep
 tar xf %{S:0}
@@ -72,6 +80,11 @@ install -m 0755 test/callTest* %{buildroot}/usr/bin
 install -m 0755 test/loopTests* %{buildroot}/usr/bin
 install -m 0755 test/sct_* %{buildroot}/usr/bin
 
+# client files
+install -m 0755 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
+mkdir -p %{buildroot}/usr/lib/SAPHanaSR-angi
+install -m 0755 tools/saphana_sr_tools.py %{buildroot}/usr/lib/SAPHanaSR-angi
+
 # test definitions
 pwd
 ls test/json
@@ -83,16 +96,28 @@ install -m 0444 man-tester/*.5.gz %{buildroot}%{_mandir}/man5
 install -m 0444 man-tester/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man-tester/*.8.gz %{buildroot}%{_mandir}/man8
 
+# man pages for client package
+install -m 0444 man-tester-client/*.7.gz %{buildroot}%{_mandir}/man7
+
 %files
 %defattr(-,root,root)
 /usr/share/%{name}
 %dir /usr/lib/%{name}
 /usr/lib/%{name}/saphana_sr_*.py
-/usr/bin/*
-
+/usr/bin/SAPHanaSR-testCluster
+/usr/bin/SAPHanaSR-checkJson
+/usr/bin/sct_*
+/usr/bin/callTest*
+/usr/bin/loopTests*
+/usr/bin/cs_ssh
+/usr/bin/SAPHanaSR-testCluster-html
+/usr/bin/SAPHanaSR-showAttr.fake.tester
 %license LICENSE
-#%dir %{_docdir}/%{name}
 %doc README.md
 %doc %{_mandir}/man*/*
+
+%files client
+/usr/bin/SAPHanaSR-showAttr
+/usr/lib/SAPHanaSR-angi
 
 %changelog
