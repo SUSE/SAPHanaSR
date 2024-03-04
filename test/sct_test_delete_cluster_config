@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# sct_test_delete_cluster_config  - delete the complete cluster config
+#
+# - set cluster to maintenance
+# - erase the cluster config
+#
+# expected outcome: cluster running, SAP HANA instanes running, SR roles exchanged
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+
+#
+# set cluster to maintenance, erase the cluster configuration and again set cluster to maintenance 
+#
+ssh "${node01}" "crm maintenance on"
+ssh "${node01}" "crm configure erase"
+ssh "${node01}" "crm maintenance on"
+
+#
+# restart the cluster - this deletes transient attributes from the cluster
+#
+ssh "${node01}" "crm cluster stop --all"
+sleep 5
+ssh "${node01}" "crm cluster start --all"
+ssh "${node01}" "cs_wait_for_idle -s 5"
+
+#
+#  node all attributes
+#
+ssh "${node01}" <<EOF
+crm configure show type:node | awk -F'\' '/^node / { print $1 } ' | crm configure load update -
+EOF
+
+ssh "${node01}" "cs_wait_for_idle -s 5"
+
+#
+# take cluster out of maintenance
+#
+ssh "${node01}" "crm maintenance off"
+ssh "${node01}" "cs_wait_for_idle -s 5"
