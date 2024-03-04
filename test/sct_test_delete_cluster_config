@@ -15,32 +15,34 @@ source .test_properties
 #
 # set cluster to maintenance, erase the cluster configuration (CIB) and again set cluster to maintenance 
 #
-ssh "${node01}" "crm maintenance on"
-ssh "${node01}" "crm configure erase"
-ssh "${node01}" "crm maintenance on"
+echo "== set maintenance mode and erase config =="
+ssh -T "${node01}" "crm maintenance on" 1>/dev/null 2>/dev/null 
+ssh -T "${node01}" "crm configure erase" 1>/dev/null 2>/dev/null
+ssh -T "${node01}" "crm maintenance on" 1>/dev/null 2>/dev/null
 
 #
 # restart the cluster - this deletes transient attributes from the cluster
 #
-ssh "${node01}" "crm cluster stop --all"
-ssh "${node01}" "cs_wait_for_idle -s 5"
-ssh "${node01}" "crm cluster start --all"
-ssh "${node01}" "cs_wait_for_idle -s 5"
+ssh -T "${node01}" "crm cluster stop --all" 1>/dev/null 2>/dev/null
+sleep 5
+ssh -T "${node01}" "crm cluster start --all" 1>/dev/null 2>/dev/null
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 1>/dev/null 2>/dev/null
 
 #
 # delete persistent node attributes
 #
-ssh "${node01}" <<EOF
+ssh -T "${node01}" <<EOF
 crm configure show type:node | awk -F'\' '/^node / { print \$1 } ' >/root/crm.txt
 crm configure load update /root/crm.txt
 rm /root/crm.txt
 EOF
 
-ssh "${node01}" "cs_wait_for_idle -s 5"
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 1>/dev/null 2>/dev/null
 
 #
 # take cluster out of maintenance
 #
-ssh "${node01}" "crm maintenance off"
-ssh "${node01}" "cs_wait_for_idle -s 5"
+echo "== end of the cluster wide maintenance =="
+ssh -T "${node01}" "crm maintenance off" 1>/dev/null 2>/dev/null
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 1>/dev/null 2>/dev/null
 #
