@@ -23,14 +23,17 @@ ssh "${node01}" "crm maintenance on"
 # restart the cluster - this deletes transient attributes from the cluster
 #
 ssh "${node01}" "crm cluster stop --all"
-sleep 60
+sleep 5
 ssh "${node01}" "crm cluster start --all"
 ssh "${node01}" "cs_wait_for_idle -s 5"
 
 #
 #  node all attributes
 #
-ssh "${node01}" "crm configure show type:node | awk -F'\' '/^node / { print $1 } ' | crm configure load update -"
+ssh "${node01}" <<EOF
+crm configure show type:node | awk -F'\' '/^node / { print $1 } ' | crm configure load update -
+EOF
+
 ssh "${node01}" "cs_wait_for_idle -s 5"
 
 #
