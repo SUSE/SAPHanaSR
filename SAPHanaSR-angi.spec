@@ -1,9 +1,9 @@
 #
-# spec file for package SAPHanaSR
+# spec file for package SAPHanaSR-angi
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2023 SUSE LLC.
+# Copyright (c) 2017-2024 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
