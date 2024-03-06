@@ -1,0 +1,497 @@
+#!/bin/bash
+# SAPHanaSR_upgrade_to_angi
+#
+# (c) 2024 SUSE LLC
+# Author: L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+
+#
+# define parameters and functions 
+#
+
+VERSION="2024-03-05 0.1"
+
+EXE=$(basename $0)
+
+DRYRUN=yes
+
+CIB_MSLTMP_ANG="#
+primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaCon \
+  op start interval="0" timeout="3600" \
+  op stop interval="0" timeout="3600" \
+  op promote interval="0" timeout="900" \
+  op demote interval="0" timeout="320" \
+  op monitor interval="60" role="Promoted" timeout="700" \
+  op monitor interval="61" role="Unpromoted" timeout="700" \
+     params SID="@@sid@@" InstanceNumber="@@ino@@" PREFER_SITE_TAKEOVER="true" \
+     DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="true" \
+  meta maintenance="true"
+#
+clone @@mslnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
+  meta clone-node-max="1" promotable="true" interleave="true" maintenance="true"
+#
+colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: rsc_ip_@@sid@@_HDB@@ino@@:Started @@mslnew@@:Promoted
+#"
+
+CIB_CLNTMP_ANG="#
+primitive rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaTopology \
+  op start interval="0" timeout="600" \
+  op stop interval="0" timeout="600" \
+  op monitor interval="50" timeout="600" \
+     params SID="@@sid@@" InstanceNumber="@@ino@@"
+#
+clone @@clntop@@ rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ \
+  meta clone-node-max="1" interleave="true"
+#
+order ord_SAPHanaTop_first Optional: @@clntop@@ @@mslnew@@
+#"
+
+CIB_CLNTMP_FIL="
+#
+primitive rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaFilesystem \
+  op start interval="0" timeout="10" \
+  op stop interval="0" timeout="20" on-fail="fence" \
+  op monitor interval="120" timeout="120" \
+  params SID="@@sid@@" InstanceNumber="@@ino@@"
+#
+clone cln_SAPHanaFil_@@sid@@_HDB@@ino@@ rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ \
+  meta clone-node-max="1" interleave="true"
+#"
+
+function echo-funa() {
+	echo
+	echo "######## $1 $2 #########"
+	echo
+}
+
+function wait-idle() {
+	echo "cs_wait_for_idle -s 4 >/dev/null"
+	cs_wait_for_idle -s 4 >/dev/null
+}
+
+function init-variables() {
+	SCRIPT=$0
+	TIMEST=$(date +%s)
+	BAKDIR=${EXE}.$TIMEST
+	RPMOLD="SAPHanaSR"
+	RPMNEW="SAPHanaSR-angi"
+	RPMHAV=$(rpm -q $RPMOLD --queryformat %{NAME} )
+	SID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
+		awk '{print $4}')
+	INO=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
+		awk '{print $6}')
+	sid=${SID,,}
+	sidadm=${sid}adm
+	MSLOLD=$(SAPHanaSR-showAttr --format script |\
+	       	awk -F"/" '$1~/Resource/ && $2~/ms.*'$SID'/ && $3~/maintenance=/ {print $2}')
+	RSCCON=$(crm configure show |\
+	       	awk '$1=="clone" && $2=="'$MSLOLD'" {print $3}')
+	MSLNEW=mst_SAPHanaCon_${SID}_HDB${INO}
+	CLNTOP=$(crm configure show |\
+	       	awk '$1=="order" && $5=="'$MSLOLD'" {print $4}')
+	RSCTOP=$(crm configure show |\
+	       	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
+	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
+	RSCFIL=$(crm configure show |\
+	       	awk '$1=="primitive" && $3~/SAPHanaFilesystem/ {print $2}')
+        CLNFIL=$(crm configure show |\
+	       	awk '$1=="clone" && $3=="rsc_SAPHanaFil_'$SID'_HDB'$INO'" {print $2}')
+		[ -z $CLNFIL ] && CLNFIL="cln_SAPHanaFil_${SID}_HDB${INO}"
+	# TODO RSCIPA IPaddr2
+	PRINOD=$(SAPHanaSR-showAttr --format script |\
+	       	awk -F"/" '$1~/Host/&&$3=="score=\"150\"" {print $2}')
+	SECNOD=$(SAPHanaSR-showAttr --format script |\
+	       	awk -F"/" '$1~/Host/&&$3=="score=\"100\"" {print $2}')
+	GLBINI="/hana/shared/$SID/global/hdb/custom/config/global.ini"
+	SUDOER=$(grep "${sidadm}.ALL.*NOPASSWD.*crm_attribute" \
+		/etc/sudoers /etc/sudoers.d/* | awk -F":" '{print $1}' | sort -u)
+	scp $SCRIPT root@${SECNOD}:~/$EXE >/dev/null
+}
+
+function show-variables() {
+	echo "RPMHAV: $RPMHAV"
+	echo "SID:    $SID"
+	echo "INO:    $INO"
+	echo "sidadm: $sidadm"
+	echo "MSLOLD: $MSLOLD"
+	echo "MSLNEW: $MSLNEW"
+	echo "CLNTOP: $CLNTOP"
+	echo "CLNFIL: $CLNFIL"
+	echo "PRINOD: $PRINOD"
+	echo "SECNOD: $SECNOD"
+	echo "GLBINI: $GLBINI"
+	echo "SUDOER: $SUDOER"
+	echo
+	echo "BAKDIR: $BAKDIR"
+	echo "DRYRUN: $DRYRUN"
+	echo
+}
+
+function make-backup-local() {
+	echo "mkdir ~/$BAKDIR"
+	mkdir ~/$BAKDIR || exit 9
+	echo "cp -a \"$GLBINI\" ~/${BAKDIR}/"
+	cp -a "$GLBINI" ~/${BAKDIR}/
+	echo "cp -a \"$SUDOER\" ~/${BAKDIR}/$(basename $SUDOER).sudo"
+	cp -a "$SUDOER" ~/${BAKDIR}/$(basename "$SUDOER").sudo
+	echo "cp -a \"$SCRIPT\" ~/${BAKDIR}/"
+	cp -a "$SCRIPT" ~/${BAKDIR}/
+	echo "configure show >~/${BAKDIR}/crm_configure.txt"
+	crm configure show >~/${BAKDIR}/crm_configure.txt
+
+	hostname; ls -l ~/${EXE}.$TIMEST/*
+}
+
+function f_make-backup() {
+	echo-funa run $FUNCNAME 
+	crm cluster run "~/'$EXE' --run make-backup-local"
+	echo-funa end $FUNCNAME
+}
+
+function f_show-state() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	crm_mon -1r --include=failcounts,fencing-pending
+	echo
+	SAPHanaSR-showAttr
+	cs_clusterstate -i | grep -v "#"
+	echo-funa end $FUNCNAME
+}
+
+function f_old-maintenance-on() {
+	echo-funa run $FUNCNAME
+	old-maintenance on
+	echo-funa end $FUNCNAME
+}
+
+function f_new-maintenance-off() {
+	echo-funa run $FUNCNAME
+	new-maintenance off
+	echo-funa end $FUNCNAME
+}
+
+function old-maintenance() {
+	wait-idle
+	echo "crm resource refresh $CLNTOP"
+	[ $DRYRUN = no ] && crm resource refresh $CLNTOP
+	wait-idle
+	echo "crm resource maintenance $CLNTOP $1"
+	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP $1
+	wait-idle
+	echo "crm resource refresh $MSLOLD"
+	[ $DRYRUN = no ] && crm resource refresh $MSLOLD
+	wait-idle
+	echo "crm resource maintenance $MSLOLD $1"
+	[ $DRYRUN = no ] && crm resource maintenance $MSLOLD $1
+	wait-idle
+}
+
+function new-maintenance() {
+	wait-idle
+	echo "crm resource refresh $CLNTOP"
+	[ $DRYRUN = no ] && crm resource refresh $CLNTOP $1
+	wait-idle
+	echo "crm resource maintenance $CLNTOP $1"
+	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP $1
+	wait-idle
+	echo "crm resource refresh $MSLNEW"
+	[ $DRYRUN = no ] && crm resource refresh $MSLNEW
+	wait-idle
+	echo "crm resource maintenance $MSLNEW $1"
+	[ $DRYRUN = no ] && crm resource maintenance $MSLNEW $1
+	wait-idle
+	echo "crm resource maintenance $CLNFIL $1"
+	[ $DRYRUN = no ] && crm resource maintenance $CLNFIL $1
+	wait-idle
+}
+
+function del-srhook-local() {
+	su - $sidadm -c "cp '$GLBINI' '$GLBINI'.classic-bak"
+	echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
+	[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
+	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
+	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
+
+	cp $SUDOER /tmp/sudoers.classic-bak
+	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" \"$SUDOER\".angi-bak > $SUDOER"
+	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak > $SUDOER
+	rm /tmp/sudoers.classic-bak
+	#hostname; sudo -l -U $sidadm | grep crm_attribute
+}
+
+function f_remove-srhook-classic() {
+	echo-funa run $FUNCNAME
+	crm cluster run "~/'$EXE' --run del-srhook-local"
+	echo-funa end $FUNCNAME
+}
+
+function add-srhook-local() {
+	su - $sidadm -c "'$GLBINI' '$GLBINI'.none-bak"
+	echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_susHanaSR\""
+	[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_susHanaSR"
+	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
+	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
+	hostname; su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
+
+	cp $SUDOER /tmp/sudoers.none-bak
+	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*\" >> $SUDOER"
+	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*" >> $SUDOER
+	rm /tmp/sudoers.none-bak
+	hostname; sudo -l -U $sidadm | grep crm_attribute
+}
+
+function f_add-srhook-angi() {
+        echo-funa run $FUNCNAME
+        crm cluster run "~/'$EXE' --run add-srhook-local"
+        echo-funa end $FUNCNAME
+}
+
+function f_remove-property() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	crm configure show SAPHanaSR | awk -F"=" '$1~/hana_/ {print $1}' |\
+	while read; do
+		echo "crm_attribute --delete --type crm_config --name $REPLY"
+		[ $DRYRUN = no ] && crm_attribute --delete --type crm_config --name $REPLY
+	done
+	echo-funa end $FUNCNAME
+}
+
+function f_remove-node-attribute() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	for N in $PRINOD $SECNOD; do
+		crm configure show $N | tr " " "\n" | awk -F "=" 'NR>5 {print $1}' |\
+		while read; do
+			echo "crm_attribute --node $N --name $REPLY --delete"
+			[ $DRYRUN = no ] && crm_attribute --node $N --name $REPLY --delete
+		done
+	done
+	echo-funa end $FUNCNAME
+}
+
+function f_remove-saphanacon-classic() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
+		crm configure load update -
+	# TODO detect names of rules	
+	for N in "//rsc_order[@id='ord_SAPHana_${SID}_HDB${INO}']" \
+		"//rsc_colocation[@id='col_saphana_ip_${SID}_HDB${INO}']" \
+		"//master[@id='$MSLOLD']" \
+		; do
+			echo "cibadmin --delete --xpath ${N}"
+			[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
+		done
+	echo-funa end $FUNCNAME
+}
+
+function f_add-saphanacon-angi() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	echo -n "echo \""
+	echo -n $CIB_MSLTMP_ANG |\
+		sed -e s/@@sid@@/${SID}/g \
+		-e s/@@ino@@/${INO}/g \
+		-e s/@@mslnew@@/${MSLNEW}/g \
+		-e s/'#'/\\n'#'\\n/g
+	echo "\" | crm configure load update -"
+	[ $DRYRUN = no ] && echo $CIB_MSLTMP_ANG |\
+		sed -e s/@@sid@@/${SID}/g \
+		-e s/@@ino@@/${INO}/g \
+		-e s/@@mslnew@@/${MSLNEW}/g \
+		-e s/'#'/\\n'#'\\n/g |\
+			crm configure load update -
+	echo-funa end $FUNCNAME
+}
+
+function f_add-sapfilesystem() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	echo -n "echo \""
+	echo -n $CIB_CLNTMP_FIL |\
+		sed -e s/@@sid@@/${SID}/g \
+		-e s/@@ino@@/${INO}/g \
+		-e s/'#'/\\n'#'\\n/g
+	echo "\" | crm configure load update -"
+	[ $DRYRUN = no ] && echo $CIB_CLNTMP_FIL |\
+		sed -e s/@@sid@@/${SID}/g \
+		-e s/@@ino@@/${INO}/g \
+		-e s/'#'/\\n'#'\\n/g |\
+			crm configure load update -
+	echo-funa end $FUNCNAME
+}
+
+function f_update-rpm() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	echo "crm cluster run \"rpm -E --force '${RPMOLD}'\""
+	[ $DRYRUN = no ] && crm cluster run "rpm -E --force '${RPMOLD}'"
+	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
+	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
+	echo "crm cluster run \"hostname; rpm -q '${RPMNEW}' --queryformat %{NAME}\""
+	[ $DRYRUN = no ] && crm cluster run "hostname; rpm -q '${RPMNEW}' --queryformat %{NAME}"
+	echo-funa end $FUNCNAME
+}
+
+function f_check-prereqs() {
+	echo-funa run $FUNCNAME
+	pre_rc=0
+	hana_up=$(SAPHanaSR-showAttr --format=script |\
+		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; END{print "p="p"_d="d}')
+	if [ $hana_up != "p=1_d=1" ]; then
+	        echo "ERROR: Can not find running ${MSLOLD}."
+	        pre_rc=9
+	fi
+	if [ ! -r $SUDOER ]; then
+	        echo "ERROR: Can not access ${SUDOER}."
+	        pre_rc=9
+	fi
+	NRSID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
+		wc -l)
+	if [ $NRSID != 1 ]; then
+        	echo "ERROR: Not exactly one SAP instance found."
+        	pre_rc=9
+	fi
+	crm configure show cib-bootstrap-options >/dev/null; my_rc=$?
+	if [ $my_rc != 0 ]; then
+        	echo "ERROR: Can not access CIB."
+        	pre_rc=9
+	fi	
+	scp $SCRIPT root@${SECNOD}:~/$EXE >/dev/null; my_rc=$?
+	if [ $my_rc != 0 ]; then
+        	echo "ERROR: Can not access ${SECNOD}."
+        	pre_rc=9
+	fi
+	# TODO crm resource status cln_SAPHanaFil_HXE_HDB91 2>&1 | grep "no found"
+	if [ $pre_rc != 0 ]; then
+		echo "ERROR: RC=$pre_rc"
+		exit $pre_rc
+	fi
+	show-variables
+	echo "RC=$pre_rc"
+	echo-funa end $FUNCNAME
+}
+
+function f_test-secondary() {
+	echo-funa run $FUNCNAME
+	# TODO echo "i will do this ..."
+	# TODO read y|n
+	wait-idle
+	ssh root@$SECNOD "hostname; killall -9 hdbnameserver"
+	echo-funa end $FUNCNAME
+}
+
+function show-help() {
+	echo
+	echo "$EXE [ OPTION ]"
+	echo "$EXE --run <FUNCTION> [ <FUNCTION> [...] ]"
+	echo
+	echo "OPTION:"
+	echo " --help"
+	echo " --version"
+	echo " --list-functions"
+	echo " --show-variables"
+	echo " --check-prereqs"
+	echo " --Upgrade"
+	echo
+}
+
+function upgrade-to-angi() {
+	# prepare environment for script
+	f_check-prereqs
+	# check for sane state
+	f_show-state
+	# make backup of some config
+	f_make-backup
+	# set HANA classic resources to maintenance
+	f_old-maintenance-on
+	# remove SAPHanaSR.py from global.ini, HANA, and sudoer
+	f_remove-srhook-classic
+	# remove HANA classic resource config from CIB
+	f_remove-saphanacon-classic
+	# remove SAPHanaSR property and node attributes from CIB
+	f_remove-property
+	f_remove-node-attribute
+	# remove HANA classic RPM, install SAPHanaSR-angi
+	f_update-rpm
+	# add SAPHanaSR.py to global.ini, HANA, and sudoers
+	f_add-srhook-angi
+	# add HANA angi resource config
+	f_add-saphanacon-angi
+	f_add-sapfilesystem
+	# set HANA angi resource out of maintenance
+	f_new-maintenance-off
+	# check for sane state
+	f_check-state
+	# test RA on secondary and trigger susHanaSR.py
+	f_test-secondary
+}
+
+function test(){
+	f_check-prereqs
+	f_show-state
+	f_make-backup
+	f_old-maintenance-on
+	f_remove-srhook-classic
+	f_remove-saphanacon-classic
+	f_remove-property
+	f_remove-node-attribute
+	f_update-rpm
+	f_add-saphanacon-angi
+	f_add-sapfilesystem
+	f_add-srhook-angi
+	f_new-maintenance-off
+	#f_show-state
+}
+
+#
+######################
+# main()
+#
+case $1 in
+	-v | --version)
+		echo
+		echo "$EXE $VERSION"
+		echo
+		exit
+	;;
+	-l | --list-fun*)
+		echo
+		grep "^function.f_.*{" $0 | colrm 1 8 | tr -d "(){"
+		exit
+	;;
+	-s | --show-var*)
+		init-variables
+		show-variables
+		exit
+	;;
+	-c | --check-pre*)
+		init-variables
+		f_check-prereqs
+		exit
+	;;
+	-U | --Upgrade)
+		init-variables
+		show-variables
+		# upgrade-to-angi
+		echo "nop"
+		exit
+	;;
+	-r | --run | --run-fun*)
+		init-variables
+		while [ $# -gt 1 ]; do
+			shift
+			$1
+		done
+		exit
+	;;
+	*)
+		show-help
+		exit
+	;;
+esac
+exit
+#
