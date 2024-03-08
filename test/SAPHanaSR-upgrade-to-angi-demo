@@ -1,5 +1,6 @@
 #!/bin/bash
-# SAPHanaSR_upgrade_to_angi
+#
+# SAPHanaSR-upgrade-to-angi-demo
 #
 # (c) 2024 SUSE LLC
 # Author: L.Pinne.
@@ -11,12 +12,13 @@
 # define parameters and functions 
 #
 
-VERSION="2024-03-05 0.1"
+VERSION="2024-03-08 0.1"
 
 EXE=$(basename $0)
 
 DRYRUN=yes
 
+# TODO how to use templates from package SAPHanaSR-angi? 
 CIB_MSLTMP_ANG="#
 primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaCon \
   op start interval="0" timeout="3600" \
@@ -67,8 +69,8 @@ function echo-funa() {
 }
 
 function wait-idle() {
-	echo "cs_wait_for_idle -s 4 >/dev/null"
-	cs_wait_for_idle -s 4 >/dev/null
+	echo "cs_wait_for_idle -s 3 >/dev/null"
+	cs_wait_for_idle -s 3 >/dev/null
 }
 
 function init-variables() {
@@ -160,51 +162,40 @@ function f_show-state() {
 	echo-funa end $FUNCNAME
 }
 
-function f_old-maintenance-on() {
+
+function old-maintenance-on() {
 	echo-funa run $FUNCNAME
-	old-maintenance on
-	echo-funa end $FUNCNAME
+	wait-idle
+	echo "crm resource maintenance $MSLOLD on"
+	[ $DRYRUN = no ] && crm resource maintenance $MSLOD on
+	echo "crm resource maintenance $CLNTOP on"
+	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP on
+	wait-idle
+	echo-funa run $FUNCNAME
 }
 
-function f_new-maintenance-off() {
+function new-maintenance-off() {
 	echo-funa run $FUNCNAME
-	new-maintenance off
-	echo-funa end $FUNCNAME
-}
-
-function old-maintenance() {
 	wait-idle
 	echo "crm resource refresh $CLNTOP"
 	[ $DRYRUN = no ] && crm resource refresh $CLNTOP
 	wait-idle
-	echo "crm resource maintenance $CLNTOP $1"
-	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP $1
-	wait-idle
-	echo "crm resource refresh $MSLOLD"
-	[ $DRYRUN = no ] && crm resource refresh $MSLOLD
-	wait-idle
-	echo "crm resource maintenance $MSLOLD $1"
-	[ $DRYRUN = no ] && crm resource maintenance $MSLOLD $1
-	wait-idle
-}
-
-function new-maintenance() {
-	wait-idle
-	echo "crm resource refresh $CLNTOP"
-	[ $DRYRUN = no ] && crm resource refresh $CLNTOP $1
-	wait-idle
-	echo "crm resource maintenance $CLNTOP $1"
-	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP $1
+	echo "crm resource maintenance $CLNTOP off"
+	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP off
 	wait-idle
 	echo "crm resource refresh $MSLNEW"
 	[ $DRYRUN = no ] && crm resource refresh $MSLNEW
 	wait-idle
-	echo "crm resource maintenance $MSLNEW $1"
-	[ $DRYRUN = no ] && crm resource maintenance $MSLNEW $1
+	echo "crm resource maintenance $MSLNEW off"
+	[ $DRYRUN = no ] && crm resource maintenance $MSLNEW off
 	wait-idle
-	echo "crm resource maintenance $CLNFIL $1"
-	[ $DRYRUN = no ] && crm resource maintenance $CLNFIL $1
+	echo "crm resource refresh $CLNFIL"
+	[ $DRYRUN = no ] && crm resource refresh $CLNFIL
 	wait-idle
+	echo "crm resource maintenance $CLNFIL off"
+	[ $DRYRUN = no ] && crm resource maintenance $CLNFIL off
+	wait-idle
+	echo-funa run $FUNCNAME
 }
 
 function del-srhook-local() {
@@ -339,12 +330,6 @@ function f_update-rpm() {
 function f_check-prereqs() {
 	echo-funa run $FUNCNAME
 	pre_rc=0
-	hana_up=$(SAPHanaSR-showAttr --format=script |\
-		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; END{print "p="p"_d="d}')
-	if [ $hana_up != "p=1_d=1" ]; then
-	        echo "ERROR: Can not find running ${MSLOLD}."
-	        pre_rc=9
-	fi
 	if [ ! -r $SUDOER ]; then
 	        echo "ERROR: Can not access ${SUDOER}."
 	        pre_rc=9
@@ -355,17 +340,32 @@ function f_check-prereqs() {
         	echo "ERROR: Not exactly one SAP instance found."
         	pre_rc=9
 	fi
-	crm configure show cib-bootstrap-options >/dev/null; my_rc=$?
-	if [ $my_rc != 0 ]; then
-        	echo "ERROR: Can not access CIB."
-        	pre_rc=9
-	fi	
 	scp $SCRIPT root@${SECNOD}:~/$EXE >/dev/null; my_rc=$?
 	if [ $my_rc != 0 ]; then
         	echo "ERROR: Can not access ${SECNOD}."
         	pre_rc=9
 	fi
-	# TODO crm resource status cln_SAPHanaFil_HXE_HDB91 2>&1 | grep "no found"
+	crm configure show cib-bootstrap-options >/dev/null; my_rc=$?
+	if [ $my_rc != 0 ]; then
+        	echo "ERROR: Can not access CIB."
+        	pre_rc=9
+	fi	
+	hana_up=$(SAPHanaSR-showAttr --format=script |\
+		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; END{print "p="p"_d="d}')
+	if [ $hana_up != "p=1_d=1" ]; then
+	        echo "ERROR: Can not find running ${MSLOLD}."
+	        pre_rc=9
+	fi
+	n_cnstr=$(crm configure show type:colocation | grep -c colocation)
+	if [ $n_cnstr != 1 ]; then
+		echo "ERROR: Not exactly one colocation constraint found."
+		pre_rc=9
+	fi
+	n_cnstr=$(crm configure show type:order | grep -c order)
+	if [ $n_cnstr != 1 ]; then
+		echo "ERROR: Not exactly one order constraint found."
+		pre_rc=9
+	fi
 	if [ $pre_rc != 0 ]; then
 		echo "ERROR: RC=$pre_rc"
 		exit $pre_rc
