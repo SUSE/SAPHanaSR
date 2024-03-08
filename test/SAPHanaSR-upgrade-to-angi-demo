@@ -76,7 +76,7 @@ function wait-idle() {
 function init-variables() {
 	mkdir -p -m 700 $TMP || exit 1
 	cibadmin -Ql > $TPM/cibtmp || exit 1
-	SCRIPT=$0
+	SCRIPT=/usr/bin/$EXE
 	TIMEST=$(date +%s)
 	BAKDIR=${EXE}.$TIMEST
 	RPMOLD="SAPHanaSR"
@@ -105,16 +105,13 @@ function init-variables() {
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
 	# xmllint -xpath "string(///constraints//*[@then='msl_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
 	MSLORD=$(crm configure show type:order |\
-		awk '$1=="order" && $4=="'CLNTOP'" && $5=="'$MSLOLD'" {print $2}')
+		awk '$1=="order" && $4=="'$CLNTOP'" && $5=="'$MSLOLD'" {print $2}')
 	# xmllint -xpath "string(///constraints//*[@with-rsc='msl_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
 	MSLCOL=$(crm configure show type:colocation |\
-		awk '$1=="colocation" && {print $2}')
-	RSCFIL=$(crm configure show type:primitive |\
-	       	awk '$1=="primitive" && $3~/SAPHanaFilesystem/ {print $2}')
-        CLNFIL=$(crm configure show type:clone |\
-	       	awk '$1=="clone" && $3=="rsc_SAPHanaFil_'$SID'_HDB'$INO'" {print $2}')
-		[ -z $CLNFIL ] && CLNFIL="cln_SAPHanaFil_${SID}_HDB${INO}"
-	# TODO RSCIPA IPaddr2
+		awk '$1=="colocation" && $5=="'$MSLOLD':Master" {print $2}')
+	# xmllint -xpath "string(///constraints//*[@with-rsc='msl_SAPHana_HXE_HDB90']/@rsc)" $TMP/cibtmp
+	RSCIPA=$(crm configure show type:colocation |\
+		awk '$1=="colocation" && $5=="'$MSLOLD':Master" {print $4}' | awk -F: '{print $1}')
 	PRINOD=$(SAPHanaSR-showAttr --format script |\
 	       	awk -F"/" '$1~/Host/&&$3=="score=\"150\"" {print $2}')
 	SECNOD=$(SAPHanaSR-showAttr --format script |\
@@ -122,10 +119,11 @@ function init-variables() {
 	GLBINI="/hana/shared/$SID/global/hdb/custom/config/global.ini"
 	SUDOER=$(grep "${sidadm}.ALL.*NOPASSWD.*crm_attribute" \
 		/etc/sudoers /etc/sudoers.d/* | awk -F":" '{print $1}' | sort -u)
-	scp $SCRIPT root@${SECNOD}:~/$EXE >/dev/null
+	scp $SCRIPT root@${SECNOD}:$SCRIPT >/dev/null
 }
 
 function show-variables() {
+	echo
 	echo "RPMHAV: $RPMHAV"
 	echo "SID:    $SID"
 	echo "INO:    $INO"
@@ -133,13 +131,16 @@ function show-variables() {
 	echo "MSLOLD: $MSLOLD"
 	echo "MSLNEW: $MSLNEW"
 	echo "CLNTOP: $CLNTOP"
-	echo "CLNFIL: $CLNFIL"
+	echo "RSCIPA: $RSCIPA"
+	echo "MSLORD: $MSLORD"
+	echo "MSLCOL: $MSLCOL"
 	echo "PRINOD: $PRINOD"
 	echo "SECNOD: $SECNOD"
 	echo "GLBINI: $GLBINI"
 	echo "SUDOER: $SUDOER"
 	echo
 	echo "BAKDIR: $BAKDIR"
+	echo "SCRIPT: $SCRIPT"
 	echo "DRYRUN: $DRYRUN"
 	echo
 }
@@ -152,16 +153,15 @@ function make-backup-local() {
 	echo "cp -a \"$SUDOER\" ~/${BAKDIR}/$(basename $SUDOER).sudo"
 	cp -a "$SUDOER" ~/${BAKDIR}/$(basename "$SUDOER").sudo
 	echo "cp -a \"$SCRIPT\" ~/${BAKDIR}/"
-	cp -a "$SCRIPT" ~/${BAKDIR}/
+	cp -a "$SCRIPT" ~/${BAKDIR}/$(basename $SCRIPT)
 	echo "configure show >~/${BAKDIR}/crm_configure.txt"
 	crm configure show >~/${BAKDIR}/crm_configure.txt
-
-	hostname; ls -l ~/${EXE}.$TIMEST/*
+	hostname; ls -l ~/$BACKDIR/*
 }
 
 function f_make-backup() {
 	echo-funa run $FUNCNAME 
-	crm cluster run "~/'$EXE' --run make-backup-local"
+	crm cluster run "'$SCRIPT' --run make-backup-local"
 	echo-funa end $FUNCNAME
 }
 
@@ -181,6 +181,7 @@ function old-maintenance-on() {
 	echo "crm resource maintenance $MSLOLD on"
 	[ $DRYRUN = no ] && crm resource maintenance $MSLOD on
 	echo "crm resource maintenance $CLNTOP on"
+	wait-idle
 	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP on
 	wait-idle
 	echo-funa run $FUNCNAME
@@ -226,7 +227,7 @@ function del-srhook-local() {
 
 function f_remove-srhook-classic() {
 	echo-funa run $FUNCNAME
-	crm cluster run "~/'$EXE' --run del-srhook-local"
+	crm cluster run "/usr/bin/'$EXE' --run del-srhook-local"
 	echo-funa end $FUNCNAME
 }
 
@@ -247,7 +248,7 @@ function add-srhook-local() {
 
 function f_add-srhook-angi() {
         echo-funa run $FUNCNAME
-        crm cluster run "~/'$EXE' --run add-srhook-local"
+        crm cluster run "/usr/bin/'$EXE' --run add-srhook-local"
         echo-funa end $FUNCNAME
 }
 
@@ -280,9 +281,8 @@ function f_remove-saphanacon-classic() {
 	wait-idle
 	echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
 		crm configure load update -
-	# TODO detect names of rules	
-	for N in "//rsc_order[@id='ord_SAPHana_${SID}_HDB${INO}']" \
-		"//rsc_colocation[@id='col_saphana_ip_${SID}_HDB${INO}']" \
+	for N in "//rsc_order[@id='$MSLORD']" \
+		"//rsc_colocation[@id='$MSLCOL']" \
 		"//master[@id='$MSLOLD']" \
 		; do
 			echo "cibadmin --delete --xpath ${N}"
@@ -342,31 +342,38 @@ function f_update-rpm() {
 function f_check-prereqs() {
 	echo-funa run $FUNCNAME
 	pre_rc=0
-	# TODO "ERROR: Not running on primary node."
-	if [ -z $SECNOD ]; then
-	        echo "ERROR: Can not find secondary node."
+	if [ -z $PRINOD ]; then
+	        echo "ERROR: Can not determine primary node."
 	        pre_rc=9
+	fi
+	if [ -z $SECNOD ]; then
+	        echo "ERROR: Can not determine secondary node."
+	        pre_rc=9
+	fi
+	if [ $HOSTNAME != $PRINOD ]; then
+	        echo "ERROR: Not running on primary node."
+	        pre_rc=9
+	fi
+	my_vers=$($SCRIPT -v)
+	ssh root@${SECNOD} "'$SCRIPT' -v" | grep "$my_vers" >/dev/null; my_rc=$?
+	if [ $my_rc != 0 ]; then
+        	echo "ERROR: Can not access ${SECNOD}."
+        	pre_rc=9
 	fi
 	if [ ! -r $SUDOER ]; then
 	        echo "ERROR: Can not access ${SUDOER}."
 	        pre_rc=9
 	fi
-	NRSID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
-		wc -l)
-	if [ $NRSID != 1 ]; then
+	n_sid=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances | wc -l)
+	if [ $n_sid != 1 ]; then
         	echo "ERROR: Not exactly one SAP instance found."
-        	pre_rc=9
-	fi
-	scp $SCRIPT root@${SECNOD}:~/$EXE >/dev/null; my_rc=$?
-	if [ $my_rc != 0 ]; then
-        	echo "ERROR: Can not access ${SECNOD}."
         	pre_rc=9
 	fi
 	crm configure show cib-bootstrap-options >/dev/null; my_rc=$?
 	if [ $my_rc != 0 ]; then
         	echo "ERROR: Can not access CIB."
         	pre_rc=9
-	fi	
+	fi
 	hana_up=$(SAPHanaSR-showAttr --format=script |\
 		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; END{print "p="p"_d="d}')
 	if [ $hana_up != "p=1_d=1" ]; then
@@ -410,7 +417,6 @@ function show-help() {
 	echo " --help"
 	echo " --version"
 	echo " --list-functions"
-	echo " --show-variables"
 	echo " --check-prereqs"
 	echo " --upgrade"
 	echo
@@ -477,10 +483,7 @@ case $1 in
 	-l | --list-fun*)
 		echo
 		grep "^function.f_.*{" $0 | colrm 1 8 | tr -d "(){"
-	;;
-	-s | --show-var*)
-		init-variables
-		show-variables
+		echo
 	;;
 	-c | --check-pre*)
 		init-variables
@@ -503,7 +506,6 @@ case $1 in
 		show-help
 	;;
 esac
-rm $TMP/*
-rmdir $TMP
+rm $TMP/* 2>/dev/null; rmdir $TMP 2>/dev/null
 exit
 #
