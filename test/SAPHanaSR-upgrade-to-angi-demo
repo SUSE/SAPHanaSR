@@ -14,9 +14,9 @@
 
 VERSION="2024-03-08 0.1"
 
-EXE=$(basename $0)
-
 DRYRUN=yes
+EXE=$(basename $0)
+TMP=/run/$EXE.$RANDOM
 
 # TODO how to use templates from package SAPHanaSR-angi? 
 CIB_MSLTMP_ANG="#
@@ -74,6 +74,8 @@ function wait-idle() {
 }
 
 function init-variables() {
+	mkdir -p -m 700 $TMP || exit 1
+	cibadmin -Ql > $TPM/cibtmp || exit 1
 	SCRIPT=$0
 	TIMEST=$(date +%s)
 	BAKDIR=${EXE}.$TIMEST
@@ -86,16 +88,27 @@ function init-variables() {
 		awk '{print $6}')
 	sid=${SID,,}
 	sidadm=${sid}adm
+	# xmllint -xpath "string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $TMP/cibtmp
 	MSLOLD=$(SAPHanaSR-showAttr --format script |\
 	       	awk -F"/" '$1~/Resource/ && $2~/ms.*'$SID'/ && $3~/maintenance=/ {print $2}')
+	# xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" $TMP/cibtmp
 	RSCCON=$(crm configure show type:clone |\
 	       	awk '$1=="clone" && $2=="'$MSLOLD'" {print $3}')
 	MSLNEW=mst_SAPHanaCon_${SID}_HDB${INO}
 	CLNTOP=$(crm configure show type:order |\
 	       	awk '$1=="order" && $5=="'$MSLOLD'" {print $4}')
+	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/@id)" $TMP/cibtmp
 	RSCTOP=$(crm configure show type:clone |\
 	       	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
+	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $cibtmp
+	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/../@id)" $TMP/cibtmp
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
+	# xmllint -xpath "string(///constraints//*[@then='msl_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
+	MSLORD=$(crm configure show type:order |\
+		awk '$1=="order" && $4=="'CLNTOP'" && $5=="'$MSLOLD'" {print $2}')
+	# xmllint -xpath "string(///constraints//*[@with-rsc='msl_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
+	MSLCOL=$(crm configure show type:colocation |\
+		awk '$1=="colocation" && {print $2}')
 	RSCFIL=$(crm configure show type:primitive |\
 	       	awk '$1=="primitive" && $3~/SAPHanaFilesystem/ {print $2}')
         CLNFIL=$(crm configure show type:clone |\
@@ -204,10 +217,10 @@ function del-srhook-local() {
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
 
-	cp $SUDOER /tmp/sudoers.classic-bak
+	cp $SUDOER $TMP/sudoers.classic-bak
 	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" \"$SUDOER\".angi-bak > $SUDOER"
 	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak > $SUDOER
-	rm /tmp/sudoers.classic-bak
+	rm $TMP/sudoers.classic-bak
 	#hostname; sudo -l -U $sidadm | grep crm_attribute
 }
 
@@ -225,10 +238,10 @@ function add-srhook-local() {
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
 	hostname; su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
 
-	cp $SUDOER /tmp/sudoers.none-bak
+	cp $SUDOER $TMP/sudoers.none-bak
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*" >> $SUDOER
-	rm /tmp/sudoers.none-bak
+	rm $TMP/sudoers.none-bak
 	hostname; sudo -l -U $sidadm | grep crm_attribute
 }
 
@@ -399,7 +412,7 @@ function show-help() {
 	echo " --list-functions"
 	echo " --show-variables"
 	echo " --check-prereqs"
-	echo " --Upgrade"
+	echo " --upgrade"
 	echo
 }
 
@@ -460,29 +473,24 @@ case $1 in
 		echo
 		echo "$EXE $VERSION"
 		echo
-		exit
 	;;
 	-l | --list-fun*)
 		echo
 		grep "^function.f_.*{" $0 | colrm 1 8 | tr -d "(){"
-		exit
 	;;
 	-s | --show-var*)
 		init-variables
 		show-variables
-		exit
 	;;
 	-c | --check-pre*)
 		init-variables
 		f_check-prereqs
-		exit
 	;;
-	-U | --Upgrade)
+	-u | --upgrade)
 		init-variables
 		show-variables
 		# upgrade-to-angi
 		echo "nop"
-		exit
 	;;
 	-r | --run | --run-fun*)
 		init-variables
@@ -490,12 +498,12 @@ case $1 in
 			shift
 			$1
 		done
-		exit
 	;;
 	*)
 		show-help
-		exit
 	;;
 esac
+rm $TMP/*
+rmdir $TMP
 exit
 #
