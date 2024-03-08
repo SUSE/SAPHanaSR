@@ -19,7 +19,7 @@ EXE=$(basename $0)
 TMP=/run/$EXE.$RANDOM
 
 # TODO how to use templates from package SAPHanaSR-angi? 
-CIB_MSLTMP_ANG="#
+CIB_MSTTMP_ANG="#
 primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaCon \
   op start interval="0" timeout="3600" \
   op stop interval="0" timeout="3600" \
@@ -31,10 +31,10 @@ primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaCon \
      DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="true" \
   meta maintenance="true"
 #
-clone @@mslnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
+clone @@mstnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
   meta clone-node-max="1" promotable="true" interleave="true" maintenance="true"
 #
-colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: rsc_ip_@@sid@@_HDB@@ino@@:Started @@mslnew@@:Promoted
+colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: rsc_ip_@@sid@@_HDB@@ino@@:Started @@mstnew@@:Promoted
 #"
 
 CIB_CLNTMP_ANG="#
@@ -47,7 +47,7 @@ primitive rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaTopology \
 clone @@clntop@@ rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ \
   meta clone-node-max="1" interleave="true"
 #
-order ord_SAPHanaTop_first Optional: @@clntop@@ @@mslnew@@
+order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #"
 
 CIB_CLNTMP_FIL="
@@ -78,7 +78,7 @@ function init-variables() {
 	cibadmin -Ql > $TPM/cibtmp || exit 1
 	SCRIPT=/usr/bin/$EXE
 	TIMEST=$(date +%s)
-	BAKDIR=${EXE}.$TIMEST
+	BAKDIR=/root/${EXE}.$TIMEST
 	RPMOLD="SAPHanaSR"
 	RPMNEW="SAPHanaSR-angi"
 	RPMHAV=$(rpm -q $RPMOLD --queryformat %{NAME} )
@@ -89,29 +89,29 @@ function init-variables() {
 	sid=${SID,,}
 	sidadm=${sid}adm
 	# xmllint -xpath "string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $TMP/cibtmp
-	MSLOLD=$(SAPHanaSR-showAttr --format script |\
+	MSTOLD=$(SAPHanaSR-showAttr --format script |\
 	       	awk -F"/" '$1~/Resource/ && $2~/ms.*'$SID'/ && $3~/maintenance=/ {print $2}')
 	# xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" $TMP/cibtmp
 	RSCCON=$(crm configure show type:clone |\
-	       	awk '$1=="clone" && $2=="'$MSLOLD'" {print $3}')
-	MSLNEW=mst_SAPHanaCon_${SID}_HDB${INO}
+	       	awk '$1=="clone" && $2=="'$MSTOLD'" {print $3}')
+	MSTNEW=mst_SAPHanaCon_${SID}_HDB${INO}
 	CLNTOP=$(crm configure show type:order |\
-	       	awk '$1=="order" && $5=="'$MSLOLD'" {print $4}')
+	       	awk '$1=="order" && $5=="'$MSTOLD'" {print $4}')
 	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/@id)" $TMP/cibtmp
 	RSCTOP=$(crm configure show type:clone |\
 	       	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
 	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $cibtmp
 	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/../@id)" $TMP/cibtmp
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
-	# xmllint -xpath "string(///constraints//*[@then='msl_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
-	MSLORD=$(crm configure show type:order |\
-		awk '$1=="order" && $4=="'$CLNTOP'" && $5=="'$MSLOLD'" {print $2}')
-	# xmllint -xpath "string(///constraints//*[@with-rsc='msl_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
-	MSLCOL=$(crm configure show type:colocation |\
-		awk '$1=="colocation" && $5=="'$MSLOLD':Master" {print $2}')
-	# xmllint -xpath "string(///constraints//*[@with-rsc='msl_SAPHana_HXE_HDB90']/@rsc)" $TMP/cibtmp
+	# xmllint -xpath "string(///constraints//*[@then='mst_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
+	MSTORD=$(crm configure show type:order |\
+		awk '$1=="order" && $4=="'$CLNTOP'" && $5=="'$MSTOLD'" {print $2}')
+	# xmllint -xpath "string(///constraints//*[@with-rsc='mst_SAPHana_HA1_HDB00']/@id)" $TMP/cibtmp
+	MSTCOL=$(crm configure show type:colocation |\
+		awk '$1=="colocation" && $5=="'$MSTOLD':Master" {print $2}')
+	# xmllint -xpath "string(///constraints//*[@with-rsc='mst_SAPHana_HXE_HDB90']/@rsc)" $TMP/cibtmp
 	RSCIPA=$(crm configure show type:colocation |\
-		awk '$1=="colocation" && $5=="'$MSLOLD':Master" {print $4}' | awk -F: '{print $1}')
+		awk '$1=="colocation" && $5=="'$MSTOLD':Master" {print $4}' | awk -F: '{print $1}')
 	PRINOD=$(SAPHanaSR-showAttr --format script |\
 	       	awk -F"/" '$1~/Host/&&$3=="score=\"150\"" {print $2}')
 	SECNOD=$(SAPHanaSR-showAttr --format script |\
@@ -128,12 +128,12 @@ function show-variables() {
 	echo "SID:    $SID"
 	echo "INO:    $INO"
 	echo "sidadm: $sidadm"
-	echo "MSLOLD: $MSLOLD"
-	echo "MSLNEW: $MSLNEW"
+	echo "MSTOLD: $MSTOLD"
+	echo "MSTNEW: $MSTNEW"
 	echo "CLNTOP: $CLNTOP"
 	echo "RSCIPA: $RSCIPA"
-	echo "MSLORD: $MSLORD"
-	echo "MSLCOL: $MSLCOL"
+	echo "MSTORD: $MSTORD"
+	echo "MSTCOL: $MSTCOL"
 	echo "PRINOD: $PRINOD"
 	echo "SECNOD: $SECNOD"
 	echo "GLBINI: $GLBINI"
@@ -146,17 +146,18 @@ function show-variables() {
 }
 
 function make-backup-local() {
-	echo "mkdir ~/$BAKDIR"
-	mkdir ~/$BAKDIR || exit 9
-	echo "cp -a \"$GLBINI\" ~/${BAKDIR}/"
-	cp -a "$GLBINI" ~/${BAKDIR}/
-	echo "cp -a \"$SUDOER\" ~/${BAKDIR}/$(basename $SUDOER).sudo"
-	cp -a "$SUDOER" ~/${BAKDIR}/$(basename "$SUDOER").sudo
-	echo "cp -a \"$SCRIPT\" ~/${BAKDIR}/"
-	cp -a "$SCRIPT" ~/${BAKDIR}/$(basename $SCRIPT)
-	echo "configure show >~/${BAKDIR}/crm_configure.txt"
-	crm configure show >~/${BAKDIR}/crm_configure.txt
-	hostname; ls -l ~/$BACKDIR/*
+	echo "mkdir $BAKDIR"
+	mkdir $BAKDIR || exit 9
+	echo "cp -a \"$GLBINI\" ${BAKDIR}/"
+	cp -a "$GLBINI" ${BAKDIR}/
+	echo "cp -a \"$SUDOER\" ${BAKDIR}/$(basename $SUDOER).sudo"
+	cp -a "$SUDOER" ${BAKDIR}/$(basename "$SUDOER").sudo
+	echo "cp -a \"$SCRIPT\" ${BAKDIR}/"
+	cp -a "$SCRIPT" ${BAKDIR}/$(basename $SCRIPT)
+	echo "crm configure show > ${BAKDIR}/crm_configure.txt"
+	crm configure show > ${BAKDIR}/crm_configure.txt
+	echo
+	ls -l ${BAKDIR}/*
 }
 
 function f_make-backup() {
@@ -175,11 +176,11 @@ function f_show-state() {
 	echo-funa end $FUNCNAME
 }
 
-function old-maintenance-on() {
+function f_old-maintenance-on() {
 	echo-funa run $FUNCNAME
 	wait-idle
-	echo "crm resource maintenance $MSLOLD on"
-	[ $DRYRUN = no ] && crm resource maintenance $MSLOD on
+	echo "crm resource maintenance $MSTOLD on"
+	[ $DRYRUN = no ] && crm resource maintenance $MSTOD on
 	echo "crm resource maintenance $CLNTOP on"
 	wait-idle
 	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP on
@@ -187,7 +188,7 @@ function old-maintenance-on() {
 	echo-funa run $FUNCNAME
 }
 
-function new-maintenance-off() {
+function f_new-maintenance-off() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	echo "crm resource refresh $CLNTOP"
@@ -196,11 +197,11 @@ function new-maintenance-off() {
 	echo "crm resource maintenance $CLNTOP off"
 	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP off
 	wait-idle
-	echo "crm resource refresh $MSLNEW"
-	[ $DRYRUN = no ] && crm resource refresh $MSLNEW
+	echo "crm resource refresh $MSTNEW"
+	[ $DRYRUN = no ] && crm resource refresh $MSTNEW
 	wait-idle
-	echo "crm resource maintenance $MSLNEW off"
-	[ $DRYRUN = no ] && crm resource maintenance $MSLNEW off
+	echo "crm resource maintenance $MSTNEW off"
+	[ $DRYRUN = no ] && crm resource maintenance $MSTNEW off
 	wait-idle
 	echo "crm resource refresh $CLNFIL"
 	[ $DRYRUN = no ] && crm resource refresh $CLNFIL
@@ -281,9 +282,9 @@ function f_remove-saphanacon-classic() {
 	wait-idle
 	echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
 		crm configure load update -
-	for N in "//rsc_order[@id='$MSLORD']" \
-		"//rsc_colocation[@id='$MSLCOL']" \
-		"//master[@id='$MSLOLD']" \
+	for N in "//rsc_order[@id='$MSTORD']" \
+		"//rsc_colocation[@id='$MSTCOL']" \
+		"//master[@id='$MSTOLD']" \
 		; do
 			echo "cibadmin --delete --xpath ${N}"
 			[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
@@ -295,16 +296,16 @@ function f_add-saphanacon-angi() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	echo -n "echo \""
-	echo -n $CIB_MSLTMP_ANG |\
+	echo -n $CIB_MSTTMP_ANG |\
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
-		-e s/@@mslnew@@/${MSLNEW}/g \
+		-e s/@@mstnew@@/${MSTNEW}/g \
 		-e s/'#'/\\n'#'\\n/g
 	echo "\" | crm configure load update -"
-	[ $DRYRUN = no ] && echo $CIB_MSLTMP_ANG |\
+	[ $DRYRUN = no ] && echo $CIB_MSTTMP_ANG |\
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
-		-e s/@@mslnew@@/${MSLNEW}/g \
+		-e s/@@mstnew@@/${MSTNEW}/g \
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	echo-funa end $FUNCNAME
@@ -377,7 +378,7 @@ function f_check-prereqs() {
 	hana_up=$(SAPHanaSR-showAttr --format=script |\
 		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; END{print "p="p"_d="d}')
 	if [ $hana_up != "p=1_d=1" ]; then
-	        echo "ERROR: Can not find running ${MSLOLD}."
+	        echo "ERROR: Can not find running ${MSTOLD}."
 	        pre_rc=9
 	fi
 	n_cnstr=$(crm configure show type:colocation | grep -c colocation)
