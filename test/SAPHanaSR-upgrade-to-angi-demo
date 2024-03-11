@@ -19,7 +19,7 @@ ALL_RC=0
 
 # TODO how to use templates from package SAPHanaSR-angi? 
 CIB_MSTTMP_ANG="#
-primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaCon \
+primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaController \
   op start interval="0" timeout="3600" \
   op stop interval="0" timeout="3600" \
   op promote interval="0" timeout="900" \
@@ -33,7 +33,7 @@ primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaCon \
 clone @@mstnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
   meta clone-node-max="1" promotable="true" interleave="true" maintenance="true"
 #
-colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: rsc_ip_@@sid@@_HDB@@ino@@:Started @@mstnew@@:Promoted
+colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: @@rscipa@@:Started @@mstnew@@:Promoted
 #"
 
 CIB_CLNTMP_ANG="#
@@ -49,8 +49,7 @@ clone @@clntop@@ rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ \
 order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #"
 
-CIB_CLNTMP_FIL="
-#
+CIB_CLNTMP_FIL="#
 primitive rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaFilesystem \
   op start interval="0" timeout="10" \
   op stop interval="0" timeout="20" on-fail="fence" \
@@ -112,6 +111,7 @@ function init-variables() {
 		"string(///constraints//*[@with-rsc='$MSTOLD']/@id)" $TMP/cibtmp)
 	# MSTCOL=$(crm configure show type:colocation |\
 	#	awk '$1=="colocation" && $5=="'$MSTOLD':Master" {print $2}')
+	CLNFIL=cln_SAPHanaFil_${SID}_HDB${INO}
 	# TODO RSCIPA=$(xmllint ...)
 	RSCIPA=$(crm configure show type:colocation |\
 		awk '$1=="colocation" && $5=="'$MSTOLD':Master" {print $4}' |\
@@ -135,6 +135,7 @@ function show-variables() {
 	echo "MSTOLD: $MSTOLD"
 	echo "MSTNEW: $MSTNEW"
 	echo "CLNTOP: $CLNTOP"
+	echo "CLNFIL: $CLNFIL"
 	echo "RSCIPA: $RSCIPA"
 	echo "MSTORD: $MSTORD"
 	echo "MSTCOL: $MSTCOL"
@@ -180,19 +181,19 @@ function f_show-state() {
 	echo-funa end $FUNCNAME
 }
 
-function f_maintenance-on-angi() {
+function f_maintenance-on-classic() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	echo "crm resource maintenance $MSTOLD on"
-	[ $DRYRUN = no ] && crm resource maintenance $MSTOD on
-	echo "crm resource maintenance $CLNTOP on"
+	[ $DRYRUN = no ] && crm resource maintenance $MSTOLD on
 	wait-idle
+	echo "crm resource maintenance $CLNTOP on"
 	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP on
 	wait-idle
 	echo-funa run $FUNCNAME
 }
 
-function f_maintenance-off-classic() {
+function f_maintenance-off-angi() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	echo "crm resource refresh $CLNTOP"
@@ -216,44 +217,60 @@ function f_maintenance-off-classic() {
 	echo-funa run $FUNCNAME
 }
 
-function del-srhook-local() {
+function del-srhook-local-classic() {
 	su - $sidadm -c "cp '$GLBINI' '$GLBINI'.classic-bak"
-	echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
-	[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
+	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
+	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
+	# TODO susChkSrv susTkOver
+
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
+	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR\""
+	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
+	echo "grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini"
+	#grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini
 
 	cp $SUDOER $TMP/sudoers.classic-bak
 	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" \"$SUDOER\".angi-bak > $SUDOER"
 	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak > $SUDOER
 	rm $TMP/sudoers.classic-bak
-	#hostname; sudo -l -U $sidadm | grep crm_attribute
+	#sudo -l -U $sidadm | grep crm_attribute
 }
 
 function f_remove-srhook-classic() {
 	echo-funa run $FUNCNAME
-	crm cluster run "'$SCRIPT' --run del-srhook-local"
+	crm cluster run "'$SCRIPT' --run del-srhook-local-classic"
 	echo-funa end $FUNCNAME
 }
 
-function add-srhook-local() {
+function add-srhook-local-angi() {
 	su - $sidadm -c "'$GLBINI' '$GLBINI'.none-bak"
-	echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_susHanaSR\""
-	[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_susHanaSR"
+
+	for P in susHanaSR susTkOver susChkSrv; do
+		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}\""
+		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}"
+done
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
-	hostname; su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
 
-	cp $SUDOER $TMP/sudoers.none-bak
+	for P in susHanaSR susTkOver susChkSrv; do
+		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}\""
+		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}"
+	done
+
+	echo "grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini"
+	grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini
+
+	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *\" >> $SUDOER"
+	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *" >> $SUDOER
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*" >> $SUDOER
-	rm $TMP/sudoers.none-bak
-	hostname; sudo -l -U $sidadm | grep crm_attribute
+	sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper
 }
 
 function f_add-srhook-angi() {
         echo-funa run $FUNCNAME
-        crm cluster run "'$SCRIPT' --run add-srhook-local"
+        crm cluster run "'$SCRIPT' --run add-srhook-local-angi"
         echo-funa end $FUNCNAME
 }
 
@@ -293,6 +310,9 @@ function f_remove-saphanacon-classic() {
 			echo "cibadmin --delete --xpath ${N}"
 			[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
 		done
+	wait-idle
+	echo "crm resource refresh $RSCCON"
+	[ $DRYRUN = no ] && crm resource refresh $RSCCON
 	echo-funa end $FUNCNAME
 }
 
@@ -304,14 +324,18 @@ function f_add-saphanacon-angi() {
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
 		-e s/@@mstnew@@/${MSTNEW}/g \
+		-e s/@@rscipa@@/${RSCIPA}/g \
 		-e s/'#'/\\n'#'\\n/g
 	echo "\" | crm configure load update -"
+	echo "crm configure show $MSTNEW"
 	[ $DRYRUN = no ] && echo $CIB_MSTTMP_ANG |\
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
 		-e s/@@mstnew@@/${MSTNEW}/g \
+		-e s/@@rscipa@@/${RSCIPA}/g \
 		-e s/'#'/\\n'#'\\n/g |\
-			crm configure load update -
+			crm configure load update - ;\
+			crm configure show $MSTNEW
 	echo-funa end $FUNCNAME
 }
 
@@ -324,23 +348,26 @@ function f_add-sapfilesystem() {
 		-e s/@@ino@@/${INO}/g \
 		-e s/'#'/\\n'#'\\n/g
 	echo "\" | crm configure load update -"
+	echo "crm configure show $CLNFIL"
 	[ $DRYRUN = no ] && echo $CIB_CLNTMP_FIL |\
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
 		-e s/'#'/\\n'#'\\n/g |\
-			crm configure load update -
+			crm configure load update - ;\
+			crm configure show $CLNFIL
 	echo-funa end $FUNCNAME
 }
 
 function f_update-rpm() {
 	echo-funa run $FUNCNAME
 	wait-idle
-	echo "crm cluster run \"rpm -E --force '${RPMOLD}'\""
-	[ $DRYRUN = no ] && crm cluster run "rpm -E --force '${RPMOLD}'"
+	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
+	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
-	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
-	echo "crm cluster run \"hostname; rpm -q '${RPMNEW}' --queryformat %{NAME}\""
-	[ $DRYRUN = no ] && crm cluster run "hostname; rpm -q '${RPMNEW}' --queryformat %{NAME}"
+	#[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
+	[ $DRYRUN = no ] &&  crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
+	echo "crm cluster run \"rpm -q '${RPMNEW}' --queryformat %{NAME}\""
+	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
 	echo-funa end $FUNCNAME
 }
 
@@ -395,6 +422,11 @@ function f_check-prereqs() {
 		echo "ERROR: Not exactly one order constraint found."
 		pre_rc=9
 	fi
+	tstr=$(rpm -qa | grep -c SAPHanaSR-tester-client)
+	if [ $tstr != 0 ]; then
+		echo "ERROR: Package SAPHanaSR-tester-client installed."
+		pre_rc=9
+	fi
 	if [ $pre_rc != 0 ]; then
 		echo "ERROR: RC=$pre_rc"
 		exit $pre_rc
@@ -405,12 +437,23 @@ function f_check-prereqs() {
 	echo-funa end $FUNCNAME
 }
 
+function f_check-final-state() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	# TODO call official check tool, e.g. SAPHanaSR-manageAttr
+	echo "TODO call SAPHanaSR-manageAttr"
+	[ $DRYRUN = no ] && SAPHanaSR-manageAttr --version
+	echo-funa end $FUNCNAME
+}
+
 function f_test-secondary() {
 	echo-funa run $FUNCNAME
-	# TODO echo "i will do this ..."
-	# TODO read y|n
 	wait-idle
-	ssh root@$SECNOD "hostname; killall -9 hdbnameserver"
+	echo "root@$SECNOD \"hostname; killall -9 hdbnameserver\""
+	[ $DRYRUN = no ] && ssh root@$SECNOD "hostname; killall -9 hdbnameserver"
+	wait-idle
+	echo "crm resource cleanup $CLNTOP"
+	 [ $DRYRUN = no ] && crm resource cleanup $CLNTOP
 	echo-funa end $FUNCNAME
 }
 
@@ -456,9 +499,13 @@ function upgrade-to-angi() {
 	# set HANA angi resource out of maintenance
 	f_maintenance-off-angi
 	# check for sane state
-	f_check-state
+	f_show-state
+	# call official check tool
+	f_check-final-state
 	# test RA on secondary and trigger susHanaSR.py
 	f_test-secondary
+	# check for sane state
+	f_show-state
 }
 
 function test(){
@@ -471,11 +518,14 @@ function test(){
 	f_remove-property
 	f_remove-node-attribute
 	f_update-rpm
+	f_add-srhook-angi
 	f_add-saphanacon-angi
 	f_add-sapfilesystem
-	f_add-srhook-angi
 	f_maintenance-off-angi
-	#f_show-state
+	f_show-state
+	f_check-final-state
+	f_test-secondary
+	f_show-state
 }
 
 #
@@ -512,6 +562,6 @@ case $1 in
 		show-help
 	;;
 esac
-rm -f $TMP/*; rmdir $TMP
+rm -f $TMP/*; rmdir $TMP 2>/dev/null
 exit $ALL_RC
 #
