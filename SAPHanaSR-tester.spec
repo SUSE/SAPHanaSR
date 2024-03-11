@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.12
+Version:        1.2.13
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -65,7 +65,7 @@ gzip man-tester-client/*
 mkdir -p %{buildroot}/usr/bin
 #mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}
-mkdir -p %{buildroot}/usr/share/%{name}/crm_config_angi-ScaleUp
+mkdir -p %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}%{_mandir}/man5
 mkdir -p %{buildroot}%{_mandir}/man7
@@ -90,9 +90,9 @@ install -m 0755 tools/saphana_sr_tools.py %{buildroot}/usr/lib/SAPHanaSR-angi
 # test definitions
 pwd
 ls test/json
-cp -va test/json %{buildroot}/usr/share/%{name}
-cp -va test/www %{buildroot}/usr/share/%{name}
-install -m 0644 test/crm_config_angi-ScaleUp/??_crm_config_angi-ScaleUp %{buildroot}/usr/share/%{name}/crm_config_angi-ScaleUp
+cp -a test/json %{buildroot}/usr/share/%{name}
+cp -a test/www %{buildroot}/usr/share/%{name}
+install -m 0644 crm_cfg/angi-ScaleUp/[0-9]*_* %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 
 # manual pages
 install -m 0444 man-tester/*.5.gz %{buildroot}%{_mandir}/man5
@@ -114,7 +114,6 @@ install -m 0444 man-tester-client/*.7.gz %{buildroot}%{_mandir}/man7
 /usr/bin/loopTests*
 /usr/bin/cs_ssh
 /usr/bin/SAPHanaSR-testCluster-html
-/usr/bin/SAPHanaSR-showAttr.fake.tester
 %license LICENSE
 %doc README.md
 %doc %{_mandir}/man*/*
