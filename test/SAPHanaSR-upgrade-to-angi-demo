@@ -14,7 +14,8 @@
 VERSION="2024-03-08 0.2"
 DRYRUN=yes
 EXE=$(basename $0)
-TMP=$EXE.$RANDOM
+TMP=/run/$EXE.$RANDOM
+TIMEST=$(date +%s)
 ALL_RC=0
 
 # TODO how to use templates from package SAPHanaSR-angi? 
@@ -72,9 +73,8 @@ function wait-idle() {
 }
 
 function init-variables() {
-	TIMEST=$(date +%s)
 	BAKDIR=/root/${EXE}.$TIMEST
-	mkdir $BAKDIR
+	mkdir -p $BAKDIR
 	cibadmin -Ql > $BAKDIR/cib.xml || exit 1
 	SCRIPT=/usr/bin/$EXE
 	RPMOLD="SAPHanaSR"
@@ -150,6 +150,7 @@ function init-variables() {
 		echo "TIMEST=$TIMEST"
 		echo "DRYRUN=$DRYRUN" 
 		echo "TMP=$TMP" ) > /run/$EXE.variables
+	cat /run/$EXE.variables
 	scp /run/$EXE.variables root@${SECNOD}:/run/$EXE.variables >/dev/null
 }
 
@@ -197,8 +198,11 @@ function make-backup-local() {
 }
 
 function f_make-backup() {
-	echo-funa run $FUNCNAME 
-	crm cluster run "'$SCRIPT' --run make-backup-local"
+	echo-funa run $FUNCNAME
+	# TODO avoid double calling
+	# crm cluster run "'$SCRIPT' --run make-backup-local"
+	make-backup-local
+	ssh root@$SECNOD "'$SCRIPT' --run make-backup-local"
 	echo-funa end $FUNCNAME
 }
 
@@ -253,7 +257,9 @@ function del-srhook-local-classic() {
 	source /run/$EXE.variables
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
-	# TODO susChkSrv susTkOver
+	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_TakeoverBlocker\""
+	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_TakeoverBlocker"
+	# TODO susChkSrv
 
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
@@ -271,7 +277,10 @@ function del-srhook-local-classic() {
 
 function f_remove-srhook-classic() {
 	echo-funa run $FUNCNAME
-	crm cluster run "'$SCRIPT' --run del-srhook-local-classic"
+	# TODO avoid double calling on primary
+	# crm cluster run "'$SCRIPT' --run del-srhook-local-classic"
+	del-srhook-local-classic
+	ssh root@$SECNOD "'$SCRIPT' --run del-srhook-local-classic"
 	echo-funa end $FUNCNAME
 }
 
@@ -296,12 +305,16 @@ done
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *" >> $SUDOER
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*" >> $SUDOER
-	sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper
+	echo "sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper"
+	[ $DRYRUN = no ] && sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper
 }
 
 function f_add-srhook-angi() {
         echo-funa run $FUNCNAME
-        crm cluster run "'$SCRIPT' --run add-srhook-local-angi"
+       	# TODO avoid double calling on primary
+	# crm cluster run "'$SCRIPT' --run add-srhook-local-angi"
+	add-srhook-local-angi
+	ssh root@$SECNOD "'$SCRIPT' --run add-srhook-local-angi"
         echo-funa end $FUNCNAME
 }
 
@@ -365,8 +378,8 @@ function f_add-saphanacon-angi() {
 		-e s/@@mstnew@@/${MSTNEW}/g \
 		-e s/@@rscipa@@/${RSCIPA}/g \
 		-e s/'#'/\\n'#'\\n/g |\
-			crm configure load update - ;\
-			crm configure show $MSTNEW
+			crm configure load update -
+	[ $DRYRUN = no ] && crm configure show $MSTNEW
 	echo-funa end $FUNCNAME
 }
 
@@ -384,8 +397,8 @@ function f_add-sapfilesystem() {
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
 		-e s/'#'/\\n'#'\\n/g |\
-			crm configure load update - ;\
-			crm configure show $CLNFIL
+			crm configure load update -
+	[ $DRYRUN = no ] && crm configure show $CLNFIL
 	echo-funa end $FUNCNAME
 }
 
@@ -395,10 +408,12 @@ function f_update-rpm() {
 	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
-	# TODO enable [ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
+	# TODO [ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
 	[ $DRYRUN = no ] &&  crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
 	echo "crm cluster run \"rpm -q '${RPMNEW}' --queryformat %{NAME}\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
+	echo "rehash"
+	[ $DRYRUN = no ] && rehash
 	echo-funa end $FUNCNAME
 }
 
@@ -418,7 +433,7 @@ function f_check-prereqs() {
 	        pre_rc=9
 	fi
 	my_vers=$($SCRIPT -v)
-	ssh root@${SECNOD} "'$SCRIPT' -v" | grep "$my_vers" >/dev/null; my_rc=$?
+	ssh root@$SECNOD "'$SCRIPT' -v" | grep "$my_vers" >/dev/null; my_rc=$?
 	if [ $my_rc != 0 ]; then
         	echo "ERROR: Can not call $SCRIPT on  ${SECNOD}."
         	pre_rc=9
@@ -461,7 +476,7 @@ function f_check-prereqs() {
 	rmt=$(zypper se $RPMNEW 2>/dev/null | grep -c $RPMNEW)
 	if [ $rmt != 1 ]; then
 		echo "ERROR: Can not find $RPMNEW in software channels."
-		# TODO enable pre_rc=9
+		# TODO pre_rc=9
 	fi
 
 	if [ $pre_rc != 0 ]; then
@@ -599,6 +614,6 @@ case $1 in
 		show-help
 	;;
 esac
-crm cluster run "rm /run/SAPHanaSR-update-to-angi-demo.variables"
+crm cluster run "rm -f /run/$EXE.variables >/dev/null 2>&1"
 exit $ALL_RC
 #
