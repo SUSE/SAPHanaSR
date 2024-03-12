@@ -150,33 +150,12 @@ function init-variables() {
 		echo "TIMEST=$TIMEST"
 		echo "DRYRUN=$DRYRUN" 
 		echo "TMP=$TMP" ) > /run/$EXE.variables
-	cat /run/$EXE.variables
 	scp /run/$EXE.variables root@${SECNOD}:/run/$EXE.variables >/dev/null
 }
 
 function show-variables() {
-	# TODO cat /run/$EXE.variables
-	echo "RPMOLD: $RPMOLD"
-	echo "RPMNEW: $RPMNEW"
-	echo "SID:    $SID"
-	echo "INO:    $INO"
-	echo "sidadm: $sidadm"
-	echo "MSTOLD: $MSTOLD"
-	echo "MSTNEW: $MSTNEW"
-	echo "CLNTOP: $CLNTOP"
-	echo "CLNFIL: $CLNFIL"
-	echo "RSCIPA: $RSCIPA"
-	echo "MSTORD: $MSTORD"
-	echo "MSTCOL: $MSTCOL"
-	echo "PRINOD: $PRINOD"
-	echo "SECNOD: $SECNOD"
-	echo "GLBINI: $GLBINI"
-	echo "SUDOER: $SUDOER"
 	echo
-	echo "BAKDIR: $BAKDIR"
-	echo "SCRIPT: $SCRIPT"
-	echo "TIMEST: $TIMEST"
-	echo "DRYRUN: $DRYRUN"
+	cat /run/$EXE.variables
 	echo
 }
 
@@ -265,8 +244,8 @@ function del-srhook-local-classic() {
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
-	echo "grep ha_dr_provider $GLBINI"
-	[ $DRYRUN = no ] && grep ha_dr_provider $GLBINI 
+	echo "grep ^\[ha_dr_provider_ $GLBINI"
+	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI 
 
 	echo "cp $SUDOER $TMP.sudoers.classic"
 	cp $SUDOER $TMP.sudoers.classic
@@ -298,8 +277,8 @@ done
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}"
 	done
-	echo "grep ha_dr_provider $GLBINI" 
-	grep ha_dr_provider $GLBINI 
+	echo "grep ^\[ha_dr_provider_ $GLBINI" 
+	grep grep "^\[ha_dr_provider_" $GLBINI 
 
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *" >> $SUDOER
@@ -432,10 +411,9 @@ function f_check-prereqs() {
 	        echo "ERROR: Looks not like primary node."
 	        pre_rc=9
 	fi
-	my_vers=$($SCRIPT -v)
-	ssh root@$SECNOD "'$SCRIPT' -v" | grep "$my_vers" >/dev/null; my_rc=$?
+	ssh root@$SECNOD "'$SCRIPT' -v" | grep "$VERSION" >/dev/null; my_rc=$?
 	if [ $my_rc != 0 ]; then
-        	echo "ERROR: Can not call $SCRIPT on  ${SECNOD}."
+        	echo "ERROR: Can not call $SCRIPT on ${SECNOD}."
         	pre_rc=9
 	fi
 	if [ ! -r $SUDOER ]; then
@@ -560,6 +538,10 @@ function upgrade-to-angi() {
 	f_show-state
 }
 
+function cleanup() {
+	crm cluster run "rm -f /run/$EXE.variables >/dev/null 2>&1"
+}
+
 function test(){
 	f_check-prereqs
 	f_show-state
@@ -589,19 +571,23 @@ case $1 in
 		echo
 		echo "$EXE $VERSION"
 		echo
+		exit
 	;;
 	-l | --list-fun*)
 		echo
 		grep "^function.f_.*{" $0 | colrm 1 8 | tr -d "(){"
 		echo
+		exit
 	;;
 	-c | --check-pre*)
 		init-variables
 		f_check-prereqs
+		cleanup
 	;;
 	-u | --upgrade)
 		init-variables
 		upgrade-to-angi
+		cleanup	
 	;;
 	-r | --run | --run-fun*)
 		init-variables
@@ -609,11 +595,11 @@ case $1 in
 			shift
 			$1
 		done
+		cleanup
 	;;
 	*)
 		show-help
 	;;
 esac
-crm cluster run "rm -f /run/$EXE.variables >/dev/null 2>&1"
 exit $ALL_RC
 #
