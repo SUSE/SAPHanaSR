@@ -14,6 +14,7 @@
 VERSION="2024-03-08 0.2"
 DRYRUN=yes
 EXE=$(basename $0)
+TMP=$EXE.$RANDOM
 ALL_RC=0
 
 # TODO how to use templates from package SAPHanaSR-angi? 
@@ -123,9 +124,37 @@ function init-variables() {
 	SUDOER=$(grep "${sidadm}.ALL.*NOPASSWD.*crm_attribute" \
 		/etc/sudoers /etc/sudoers.d/* | awk -F":" '{print $1}' | sort -u)
 	scp $SCRIPT root@${SECNOD}:$SCRIPT >/dev/null
+	# TODO
+	(	echo "SID=$SID"
+		echo "INO=$INO"
+		echo "RPMOLD=$RPMOLD"
+		echo "RPMNEW=$RPMNEW"
+		echo "sidadm=$sidadm"
+		echo "MSTOLD=$MSTOLD"
+		echo "MSTCOL=$MSTCOL"
+		echo "MSTORD=$MSTORD"
+		echo "MSTNEW=$MSTNEW"
+		echo "RSCCON=$RSCCON"
+		echo "CLNTOP=$CLNTOP"
+		echo "RCSTOP=$RSCTOP"
+		echo "CLNFIL=$CLNFIL"
+		echo "RSCIPA=$RSCIPA"
+		echo "MSTORD=$MSTORD"
+		echo "MSTCOL=$MSTCOL"
+		echo "PRINOD=$PRINOD"
+		echo "SECNOD=$SECNOD"
+		echo "GLBINI=$GLBINI"
+		echo "SUDOER=$SUDOER"
+		echo "BAKDIR=$BAKDIR"
+		echo "SCRIPT=$SCRIPT"
+		echo "TIMEST=$TIMEST"
+		echo "DRYRUN=$DRYRUN" 
+		echo "TMP=$TMP" ) > /run/$EXE.variables
+	scp /run/$EXE.variables root@${SECNOD}:/run/$EXE.variables >/dev/null
 }
 
 function show-variables() {
+	# TODO cat /run/$EXE.variables
 	echo "RPMOLD: $RPMOLD"
 	echo "RPMNEW: $RPMNEW"
 	echo "SID:    $SID"
@@ -145,11 +174,14 @@ function show-variables() {
 	echo
 	echo "BAKDIR: $BAKDIR"
 	echo "SCRIPT: $SCRIPT"
+	echo "TIMEST: $TIMEST"
 	echo "DRYRUN: $DRYRUN"
 	echo
 }
 
 function make-backup-local() {
+	EXE=$(basename $0)
+	source /run/$EXE.variables
 	echo "mkdir $BAKDIR"
 	mkdir -p $BAKDIR || exit 9
 	echo "cp -a \"$GLBINI\" ${BAKDIR}/"
@@ -217,6 +249,8 @@ function f_maintenance-off-angi() {
 }
 
 function del-srhook-local-classic() {
+	EXE=$(basename $0)
+	source /run/$EXE.variables
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
 	# TODO susChkSrv susTkOver
@@ -225,14 +259,14 @@ function del-srhook-local-classic() {
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
-	echo "grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini"
-	#grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini
+	echo "grep ha_dr_provider $GLBINI"
+	[ $DRYRUN = no ] && grep ha_dr_provider $GLBINI 
 
-	echo "cp $SUDOER /run/sudoers.classic-bak"
-	cp $SUDOER /run/sudoers.classic-bak
-	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" /run/sudoers.classic-bak > $SUDOER"
-	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" /run/${SUDOER}.classic-bak > $SUDOER
-	rm /run/sudoers.classic-bak
+	echo "cp $SUDOER $TMP.sudoers.classic"
+	cp $SUDOER $TMP.sudoers.classic
+	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
+	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
+	rm $TMP.sudoers.classic
 }
 
 function f_remove-srhook-classic() {
@@ -242,8 +276,8 @@ function f_remove-srhook-classic() {
 }
 
 function add-srhook-local-angi() {
-	su - $sidadm -c "'$GLBINI' '$GLBINI'.none-bak"
-
+	EXE=$(basename $0)
+	source /run/$EXE.variables
 	for P in susHanaSR susTkOver susChkSrv; do
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}"
@@ -255,9 +289,8 @@ done
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}"
 	done
-
-	echo "grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini"
-	grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini
+	echo "grep ha_dr_provider $GLBINI" 
+	grep ha_dr_provider $GLBINI 
 
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *" >> $SUDOER
@@ -362,7 +395,7 @@ function f_update-rpm() {
 	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
-	#[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
+	# TODO enable [ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
 	[ $DRYRUN = no ] &&  crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
 	echo "crm cluster run \"rpm -q '${RPMNEW}' --queryformat %{NAME}\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
@@ -425,6 +458,12 @@ function f_check-prereqs() {
 		echo "ERROR: Package SAPHanaSR-tester-client installed."
 		pre_rc=9
 	fi
+	rmt=$(zypper se $RPMNEW 2>/dev/null | grep -c $RPMNEW)
+	if [ $rmt != 1 ]; then
+		echo "ERROR: Can not find $RPMNEW in software channels."
+		# TODO enable pre_rc=9
+	fi
+
 	if [ $pre_rc != 0 ]; then
 		echo "ERROR: RC=$pre_rc"
 		exit $pre_rc
@@ -560,5 +599,6 @@ case $1 in
 		show-help
 	;;
 esac
+crm cluster run "rm /run/SAPHanaSR-update-to-angi-demo.variables"
 exit $ALL_RC
 #
