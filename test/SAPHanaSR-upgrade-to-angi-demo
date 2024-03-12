@@ -11,10 +11,9 @@
 #
 # define parameters and functions 
 #
-VERSION="2024-03-08 0.1"
+VERSION="2024-03-08 0.2"
 DRYRUN=yes
 EXE=$(basename $0)
-TMP=/run/$EXE.$RANDOM
 ALL_RC=0
 
 # TODO how to use templates from package SAPHanaSR-angi? 
@@ -72,11 +71,11 @@ function wait-idle() {
 }
 
 function init-variables() {
-	mkdir -p -m 700 $TMP || exit 1
-	cibadmin -Ql > $TMP/cibtmp || exit 1
-	SCRIPT=/usr/bin/$EXE
 	TIMEST=$(date +%s)
 	BAKDIR=/root/${EXE}.$TIMEST
+	mkdir $BAKDIR
+	cibadmin -Ql > $BAKDIR/cib.xml || exit 1
+	SCRIPT=/usr/bin/$EXE
 	RPMOLD="SAPHanaSR"
 	RPMNEW="SAPHanaSR-angi"
 	SID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
@@ -86,29 +85,29 @@ function init-variables() {
 	sid=${SID,,}
 	sidadm=${sid}adm
 	MSTOLD=$(xmllint -xpath \
-		"string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $TMP/cibtmp)
+		"string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $BAKDIR/cib.xml)
 	# MSTOLD=$(SAPHanaSR-showAttr --format script |\
 	#      	awk -F"/" '$1~/Resource/ && $2~/ms.*'$SID'/ && $3~/maintenance=/ {print $2}')
-	RSCCON=$(xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" $TMP/cibtmp)
+	RSCCON=$(xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" $BAKDIR/cib.xml)
 	# RSCCON=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$MSTOLD'" {print $3}')
 	MSTNEW=mst_SAPHanaCon_${SID}_HDB${INO}
 	CLNTOP=$(xmllint -xpath \
-		"string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $TMP/cibtmp)
+		"string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $BAKDIR/cib.xml)
 	# CLNTOP=$(crm configure show type:order |\
 	#      	awk '$1=="order" && $5=="'$MSTOLD'" {print $4}')
 	RSCTOP=$(xmllint -xpath "\
-		string(///resources//*[@type='SAPHanaTopology']/@id)" $TMP/cibtmp)
+		string(///resources//*[@type='SAPHanaTopology']/@id)" $BAKDIR/cib.xml)
 	# RSCTOP=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
-	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $cibtmp
+	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $BAKDIR/cib.xml
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
 	MSTORD=$(xmllint -xpath \
-		"string(///constraints//*[@then='$MSTOLD']/@id)" $TMP/cibtmp)
+		"string(///constraints//*[@then='$MSTOLD']/@id)" $BAKDIR/cib.xml)
 	# MSTORD=$(crm configure show type:order |\
 	#	awk '$1=="order" && $4=="'$CLNTOP'" && $5=="'$MSTOLD'" {print $2}')
 	MSTCOL=$(xmllint -xpath \
-		"string(///constraints//*[@with-rsc='$MSTOLD']/@id)" $TMP/cibtmp)
+		"string(///constraints//*[@with-rsc='$MSTOLD']/@id)" $BAKDIR/cib.xml)
 	# MSTCOL=$(crm configure show type:colocation |\
 	#	awk '$1=="colocation" && $5=="'$MSTOLD':Master" {print $2}')
 	CLNFIL=cln_SAPHanaFil_${SID}_HDB${INO}
@@ -152,7 +151,7 @@ function show-variables() {
 
 function make-backup-local() {
 	echo "mkdir $BAKDIR"
-	mkdir $BAKDIR || exit 9
+	mkdir -p $BAKDIR || exit 9
 	echo "cp -a \"$GLBINI\" ${BAKDIR}/"
 	cp -a "$GLBINI" ${BAKDIR}/
 	echo "cp -a \"$SUDOER\" ${BAKDIR}/$(basename $SUDOER).sudo"
@@ -218,7 +217,6 @@ function f_maintenance-off-angi() {
 }
 
 function del-srhook-local-classic() {
-	su - $sidadm -c "cp '$GLBINI' '$GLBINI'.classic-bak"
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
 	# TODO susChkSrv susTkOver
@@ -230,11 +228,11 @@ function del-srhook-local-classic() {
 	echo "grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini"
 	#grep ha_dr_provider /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini
 
-	cp $SUDOER $TMP/sudoers.classic-bak
-	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" \"$SUDOER\".angi-bak > $SUDOER"
-	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" "$SUDOER".angi-bak > $SUDOER
-	rm $TMP/sudoers.classic-bak
-	#sudo -l -U $sidadm | grep crm_attribute
+	echo "cp $SUDOER /run/sudoers.classic-bak"
+	cp $SUDOER /run/sudoers.classic-bak
+	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" /run/sudoers.classic-bak > $SUDOER"
+	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" /run/${SUDOER}.classic-bak > $SUDOER
+	rm /run/sudoers.classic-bak
 }
 
 function f_remove-srhook-classic() {
@@ -562,6 +560,5 @@ case $1 in
 		show-help
 	;;
 esac
-rm -f $TMP/*; rmdir $TMP 2>/dev/null
 exit $ALL_RC
 #
