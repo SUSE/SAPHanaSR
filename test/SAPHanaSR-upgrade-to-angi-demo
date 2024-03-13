@@ -172,6 +172,7 @@ function make-backup-local() {
 	echo "crm configure show > ${BAKDIR}/crm_configure.txt"
 	crm configure show > ${BAKDIR}/crm_configure.txt
 	echo
+	echo "ls -l ${BAKDIR}/*"
 	ls -l ${BAKDIR}/*
 }
 
@@ -388,7 +389,8 @@ function f_update-rpm() {
 	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
-	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in -l -f -y '${RPMNEW}'"
+	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
+		-l -f -y '${RPMNEW}'"
 	# TODO [ $DRYRUN = no ] && crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
 	echo "crm cluster run \"rpm -q '${RPMNEW}' --queryformat %{NAME}\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
@@ -432,7 +434,8 @@ function f_check-prereqs() {
         	pre_rc=9
 	fi
 	hana_up=$(SAPHanaSR-showAttr --format=script |\
-		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; END{print "p="p"_d="d}')
+		awk -F/ 'BEGIN{p=0;d=0}; $3~/PROMOTED/{p++}; $3~/DEMOTED/{d++}; \
+			END{print "p="p"_d="d}')
 	if [ $hana_up != "p=1_d=1" ]; then
 	        echo "ERROR: Can not find running ${MSTOLD}."
 	        pre_rc=9
