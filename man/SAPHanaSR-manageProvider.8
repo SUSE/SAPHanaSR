@@ -1,6 +1,6 @@
-.\" Version: 0.160.1
+.\" Version: 0.162.3
 .\"
-.TH SAPHanaSR-manageProvider 8 "22 Nov 2022" "" "SAPHanaSR"
+.TH SAPHanaSR-manageProvider 8 "13 Mar 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-manageProvider \- adds, updates, removes or shows HADR provider sections for SAP HANA
@@ -39,7 +39,7 @@ add the section given in the template file to configuration.
 remove the section given in the template file from configuration.
 .TP 4
 \fB --reconfigure\fR
-not implemented yet, use 'hdbnsutil -reloadHADRProviders' instead.
+apply change to running HANA, like 'hdbnsutil -reloadHADRProviders'.
 .TP 4
 \fB --show --provider\fR=<provider>
 show the section for given provider from configuration.
@@ -56,6 +56,14 @@ Successful program execution.
 Usage, syntax or execution errors.
 .\"
 .SH EXAMPLES
+\fB*\fR Show names of all HA/DR provider sections in global.ini.
+
+Might be useful to see whether sections are named lower/upper/camel-case.
+SID is HA1.
+.PP
+.RS 2
+# su - ha1adm -c "cdcoc; grep ^\\[ha_dr_provider_\ global.ini"  
+.RE
 .PP
 \fB*\fR Show the global.ini section ha_dr_provider_suschksrv, if available.
 
@@ -70,15 +78,11 @@ page susChkSrv.py(7).
 
 Example SID is HA1, the HADR provider hook script is SAPHanaSR.py. See also
 manual page SAPHanaSR.py(7).
-.br
-Note: 'hdbnsutil -reloadHADRProviders' loads everything from global.ini.
 .PP
 .RS 2
 # cat /usr/share/SAPHanaSR/globa.ini
 .br
-# su - ha1adm -c "/usr/sbin/SAPHanaSR-manageProvider --add /usr/share/SAPHanaSR/globa.ini"
-.br
-# su - ha1adm -c "hdbnsutil -reloadHADRProviders; echo rc=$?"
+# su - ha1adm -c "/usr/sbin/SAPHanaSR-manageProvider --reconfigure --add /usr/share/SAPHanaSR/globa.ini"
 .br
 # su - ha1adm -c "cdtrace; grep SAPHanaSR.init nameserver_*.trc" 
 .RE
@@ -112,6 +116,8 @@ susTkOver.py(7).
 ~> hdbnsutil -reloadHADRProviders
 .br
 ~> cdtrace; grep susTkOver.init namerserver_*.trc
+.RE
+.PP
 .\"
 .SH FILES
 .TP 4
@@ -156,7 +162,7 @@ https://www.susecon.com/archive-2021.html
 F.Herschel, L.Pinne.
 .\"
 .SH COPYRIGHT
-(c) 2022 SUSE LLC
+(c) 2022-2024 SUSE LLC
 .br
 SAPHanaSR-manageProvider comes with ABSOLUTELY NO WARRANTY.
 .br
