@@ -3,7 +3,7 @@
 # SAPHanaSR-upgrade-to-angi-demo
 #
 # (c) 2024 SUSE LLC
-# Author: L.Pinne.
+# Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
@@ -124,7 +124,6 @@ function init-variables() {
 	SUDOER=$(grep "${sidadm}.ALL.*NOPASSWD.*crm_attribute" \
 		/etc/sudoers /etc/sudoers.d/* | awk -F":" '{print $1}' | sort -u)
 	scp $SCRIPT root@${SECNOD}:$SCRIPT >/dev/null
-	# TODO
 	(	echo "SID=$SID"
 		echo "INO=$INO"
 		echo "RPMOLD=$RPMOLD"
@@ -235,10 +234,12 @@ function del-srhook-local-classic() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
+	# TODO su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_SAPHanaSR"
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_TakeoverBlocker\""
+	# TODO echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susTkOver\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_TakeoverBlocker"
-	# TODO susChkSrv
+	# TODO echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susChkSrv\""
 
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
@@ -272,7 +273,6 @@ function add-srhook-local-angi() {
 done
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
-
 	for P in susHanaSR susTkOver susChkSrv; do
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}"
@@ -285,7 +285,8 @@ done
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*" >> $SUDOER
 	echo "sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper"
-	[ $DRYRUN = no ] && sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper
+	[ $DRYRUN = no ] && sudo -l -U $sidadm |\
+		grep -e crm_attribute -e SAPHanaSR-hookHelper
 }
 
 function f_add-srhook-angi() {
