@@ -11,7 +11,7 @@
 #
 # define parameters and functions 
 #
-VERSION="2024-03-08 0.2"
+VERSION="2024-03-13 0.2"
 DRYRUN=yes
 EXE=$(basename $0)
 TMP=/run/$EXE.$RANDOM
@@ -178,10 +178,10 @@ function make-backup-local() {
 
 function f_make-backup() {
 	echo-funa run $FUNCNAME
-	# TODO avoid double calling
-	# crm cluster run "'$SCRIPT' --run make-backup-local"
-	make-backup-local
-	ssh root@$SECNOD "'$SCRIPT' --run make-backup-local"
+	# TODO avoid double calling, but support scale-out?
+	crm cluster run "'$SCRIPT' -x make-backup-local"
+	#make-backup-local
+	#ssh root@$SECNOD "'$SCRIPT' -x make-backup-local"
 	echo-funa end $FUNCNAME
 }
 
@@ -259,10 +259,10 @@ function del-srhook-local-classic() {
 
 function f_remove-srhook-classic() {
 	echo-funa run $FUNCNAME
-	# TODO avoid double calling on primary
-	# crm cluster run "'$SCRIPT' --run del-srhook-local-classic"
-	del-srhook-local-classic
-	ssh root@$SECNOD "'$SCRIPT' --run del-srhook-local-classic"
+	# TODO avoid double calling on primary, but support scale-ou?
+	crm cluster run "'$SCRIPT' -x del-srhook-local-classic"
+	#del-srhook-local-classic
+	#ssh root@$SECNOD "'$SCRIPT' -x del-srhook-local-classic"
 	echo-funa end $FUNCNAME
 }
 
@@ -294,10 +294,10 @@ done
 
 function f_add-srhook-angi() {
         echo-funa run $FUNCNAME
-       	# TODO avoid double calling on primary
-	# crm cluster run "'$SCRIPT' --run add-srhook-local-angi"
-	add-srhook-local-angi
-	ssh root@$SECNOD "'$SCRIPT' --run add-srhook-local-angi"
+       	# TODO avoid double calling on primary, but support scale-out?
+	crm cluster run "'$SCRIPT' -x add-srhook-local-angi"
+	#add-srhook-local-angi
+	#ssh root@$SECNOD "'$SCRIPT' -x add-srhook-local-angi"
         echo-funa end $FUNCNAME
 }
 
@@ -601,6 +601,14 @@ case $1 in
 			$1
 		done
 		cleanup
+	;;
+	-x)
+		# init-variables have been done on every node
+		while [ $# -gt 1 ]; do
+			shift
+			$1
+		done
+		# cleanup will be done on every node
 	;;
 	*)
 		show-help
