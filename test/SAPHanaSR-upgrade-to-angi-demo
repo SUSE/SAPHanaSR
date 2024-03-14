@@ -418,7 +418,7 @@ function f_check-prereqs() {
 	fi
 	os_vers=$(grep "PRETTY_NAME=\"SUSE Linux Enterprise Server 15 SP[4-7]\"" /etc/os-release \
 		>/dev/null 2>&1; echo $?)
-	if [ ! $os_vers != 0 ]; then
+	if [ $os_vers != 0 ]; then
 	        echo "ERROR: Local OS version is not supported."
 	        pre_rc=9
 	fi
@@ -430,7 +430,7 @@ function f_check-prereqs() {
 
 	hana_py=$(su - $sidadm -c "python --version" | grep "Python 3\.[7-9]" \
 		>/dev/null 2>&1; echo $?)
-	if [ ! $hana_py != 0 ]; then
+	if [ $hana_py != 0 ]; then
 	        echo "ERROR: Local HANA python looks like not supported."
 	        pre_rc=9
 	fi
@@ -470,6 +470,21 @@ function f_check-prereqs() {
 		echo "ERROR: Not exactly one order constraint found."
 		pre_rc=9
 	fi
+	n_old=$(rpm -qa | grep -c "${RPMOLD}-0\.16[2-9]\.")
+	if [ $n_old != 1 ]; then
+		echo "ERROR: Package $RPMOLD in correct version not installed."
+		pre_rc=9
+	fi
+	xmlt=$(rpm -qa | grep -c libxml2-tools)
+	if [ $xmlt != 1 ]; then
+		echo "ERROR: Package libxml2-tools not installed."
+		pre_rc=9
+	fi
+	n_new=$(rpm -qa | grep -c "${RPMNEW}-[1-9]\.[1-9]")
+	if [ $n_new != 0 ]; then
+		echo "ERROR: Package $RPMNEW installed."
+		pre_rc=9
+	fi
 	tstr=$(rpm -qa | grep -c SAPHanaSR-tester-client)
 	if [ $tstr != 0 ]; then
 		echo "ERROR: Package SAPHanaSR-tester-client installed."
@@ -479,10 +494,6 @@ function f_check-prereqs() {
 	if [ $rmt != 1 ]; then
 		echo "ERROR: Can not find $RPMNEW in software channels."
 		pre_rc=9
-	fi
-	if [ $pre_rc != 0 ]; then
-		echo "ERROR: RC=$pre_rc"
-		exit $pre_rc
 	fi
 	show-variables
 	ALL_RC=$pre_rc
@@ -585,7 +596,8 @@ case $1 in
 	-c | --check-pre*)
 		init-variables
 		f_check-prereqs
-		cleanup
+		cleanup >/dev/null 2>&1
+		exit $ALL_RC
 	;;
 	-u | --upgrade)
 		init-variables
