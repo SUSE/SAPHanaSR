@@ -234,6 +234,7 @@ function f_maintenance-off-angi() {
 function del-srhook-local-classic() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
+	
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
 	# TODO su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_SAPHanaSR"
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
@@ -242,25 +243,24 @@ function del-srhook-local-classic() {
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_TakeoverBlocker"
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susChkSrv\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susChkSrv"
-
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
 	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR\""
 	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=SAPHanaSR"
-	echo "grep ^\[ha_dr_provider_ $GLBINI"
+	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
 	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI 
 	echo
 
 	echo "cp $SUDOER $TMP.sudoers.classic"
 	cp $SUDOER $TMP.sudoers.classic
-	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
-	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
+	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*${sid}\" $TMP.sudoers.classic > $SUDOER"
+	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*${sid}" $TMP.sudoers.classic > $SUDOER
 	rm $TMP.sudoers.classic
 }
 
 function f_remove-srhook-classic() {
 	echo-funa run $FUNCNAME
-	# TODO avoid double calling on primary, but support scale-ou?
+	# TODO avoid double calling on primary, but support scale-out?
 	crm cluster run "'$SCRIPT' -x del-srhook-local-classic"
 	#del-srhook-local-classic
 	#ssh root@$SECNOD "'$SCRIPT' -x del-srhook-local-classic"
@@ -280,14 +280,14 @@ done
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid='$SID' --show --provider=${P}"
 	done
-	echo "grep ^\[ha_dr_provider_ $GLBINI" 
-	grep grep "^\[ha_dr_provider_" $GLBINI 
+	echo "grep \"^\[ha_dr_provider_\" $GLBINI" 
+	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
 	echo
 
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *\" >> $SUDOER"
 	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *" >> $SUDOER
-	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*\" >> $SUDOER"
-	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_site_srHook_*" >> $SUDOER
+	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_*\" >> $SUDOER"
+	[ $DRYRUN = no ] && echo "$sidadm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_${sid}_*" >> $SUDOER
 	echo "sudo -l -U $sidadm | grep -e crm_attribute -e SAPHanaSR-hookHelper"
 	[ $DRYRUN = no ] && sudo -l -U $sidadm |\
 		grep -e crm_attribute -e SAPHanaSR-hookHelper
