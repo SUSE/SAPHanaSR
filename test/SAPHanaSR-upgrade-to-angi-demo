@@ -232,32 +232,59 @@ function f_maintenance-off-angi() {
 	echo-funa run $FUNCNAME
 }
 
+function del-srhook-local-orig-classic() {
+	EXE=$(basename $0)
+	source /run/$EXE.variables
+	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
+	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
+	echo
+	for P in SAPHanaSR susChkSrv susTkOver; do
+		F=/usr/share/SAPHanaSR/samples/global.ini_$P
+		echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $F\""
+		[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $F"
+		echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
+	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
+	done
+	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
+	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
+	echo
+
+	echo "cp $SUDOER $TMP.sudoers.classic"
+	[ $DRYRUN = no ] && cp $SUDOER $TMP.sudoers.classic
+	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
+	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
+	echo "rm $TMP.sudoers.classic"
+	[ $DRYRUN = no ] && rm $TMP.sudoers.classic
+}
+
 function del-srhook-local-classic() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
 	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
 	echo
-	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini\""
-	# TODO su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_SAPHanaSR"
-	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini"
-	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susTkOver\""
-	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susTkOver"
-	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susChkSrv\""
-	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove /usr/share/SAPHanaSR/samples/global.ini_susChkSrv"
+	grep "^\[ha_dr_provider_" /usr/sap/$SID/SYS/global/hdb/custom/config/global.ini | tr -d "\[\]" |\
+	while read; do
+		P=${REPLY:15}
+		echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --show --provider=$P\" > $TMP.global.ini.$P"
+		[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --show --provider=$P" > $TMP.global.ini.$P
+		echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $TMP.global.ini.$P\""
+		[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $TMP.global.ini.$P"
+ 		echo "rm $TMP.global.ini.$P"
+		[ $DRYRUN = no ] && rm $TMP.global.ini.$P
+	done
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
-	echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --show --provider=SAPHanaSR\""
-	[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --show --provider=SAPHanaSR"
 	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
 	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
 	echo
 
 	echo "cp $SUDOER $TMP.sudoers.classic"
-	cp $SUDOER $TMP.sudoers.classic
+	[ $DRYRUN = no ] && cp $SUDOER $TMP.sudoers.classic
 	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
 	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
-	rm $TMP.sudoers.classic
+	echo "rm $TMP.sudoers.classic"
+	[ $DRYRUN = no ] && rm $TMP.sudoers.classic
 }
 
 function f_remove-srhook-classic() {

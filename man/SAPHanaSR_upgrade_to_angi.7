@@ -408,14 +408,15 @@ Needs to be done for each HANA site.
 .PP
 \fB*\fR Example for removing the SAPHanaSR.py hook script from global.ini and HANA.
 .PP
-The global.ini is copied for backup. Next the exact name (upper/lower case) of
+The global.ini is copied for backup. Next the case-sensitive exact name of
 the section is determined from global.ini. Then the currenct HADR provider
-section is shown. If the section is identical with the shipped template, it can
-be removed easily from the configuration. Finally the HADR provider hook script 
-is removed from running HANA. Needs to be done for each HANA site.
-SID is HA1, case sensitive HADR provider name is SAPHanaSR. The example is given
-for scale-up SAPHanaSR.py, for scale-out SAPHanaSrMultiTarget.py might be
-removed instead. See manual page SAPHanaSR.py(7) or SAPHanaSrMultiTarget.py(7)
+section is shown. If the section name is identical with the shipped template, it
+can be removed easily from the configuration. Finally the HADR provider hook script 
+is removed from running HANA. The HADR provider hook scripts need to be removed
+before the SAPHanaSR RPM is going to be de-installed. Needs to be done for each
+HANA site. SID is HA1, case sensitive HADR provider name is SAPHanaSR. The example
+is given for scale-up SAPHanaSR.py, for scale-out SAPHanaSrMultiTarget.py might
+be removed instead. See manual page SAPHanaSR.py(7) or SAPHanaSrMultiTarget.py(7)
 for details on checking the hook script integration.
 .PP
 .RS 2
@@ -425,9 +426,13 @@ for details on checking the hook script integration.
 .br
 ~> cp global.ini global.ini.SAPHanaSR-backup
 .br
+~> grep "^\\[ha_dr_provider_" global.ini | tr -d "\\[\\]"
+.br
 ~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --show \\
 .br
   --provider=SAPHanaSR
+.br
+~> grep ha_dr_provider_SAPHanaSR /usr/share/SAPHanaSR/samples/global.ini*
 .br
 ~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --reconfigure \\
 .br
@@ -454,9 +459,11 @@ integration.
 \fB*\fR Example for removing the SAPHanaSR package.
 .PP
 The package SAPHanaSR is removed from all cluster nodes. Related packages
-defined by patterns and dependencies are not touched. Needs to be done once per
-Linux cluster. The example is given for scale-up SAPHanaSR, for scale-out
-SAPHanaSR-ScaleOut might be removed instead.
+defined by patterns and dependencies are not touched. Make sure the HADR
+provider hook scripts have been removed from HANA before de-installing the
+SAPHanaSR package. Needs to be done once per Linux cluster. The example is
+given for scale-up SAPHanaSR, for scale-out SAPHanaSR-ScaleOut might be
+removed instead.
 .PP
 .RS 2
 # crm cluster run "rpm -e --nodeps SAPHanaSR"
