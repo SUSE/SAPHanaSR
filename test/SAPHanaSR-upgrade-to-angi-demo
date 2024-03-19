@@ -11,7 +11,7 @@
 #
 # define parameters and functions 
 #
-VERSION="2024-03-14 0.2"
+VERSION="2024-03-18 0.2"
 DRYRUN=yes
 EXE=$(basename $0)
 TMP=/run/$EXE.$RANDOM
@@ -179,10 +179,7 @@ function make-backup-local() {
 
 function f_make-backup() {
 	echo-funa run $FUNCNAME
-	# TODO avoid double calling, but support scale-out?
 	crm cluster run "'$SCRIPT' -x make-backup-local"
-	#make-backup-local
-	#ssh root@$SECNOD "'$SCRIPT' -x make-backup-local"
 	echo-funa end $FUNCNAME
 }
 
@@ -232,31 +229,6 @@ function f_maintenance-off-angi() {
 	echo-funa run $FUNCNAME
 }
 
-function del-srhook-local-orig-classic() {
-	EXE=$(basename $0)
-	source /run/$EXE.variables
-	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
-	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
-	echo
-	for P in SAPHanaSR susChkSrv susTkOver; do
-		F=/usr/share/SAPHanaSR/samples/global.ini_$P
-		echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $F\""
-		[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $F"
-		echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
-	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
-	done
-	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
-	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
-	echo
-
-	echo "cp $SUDOER $TMP.sudoers.classic"
-	[ $DRYRUN = no ] && cp $SUDOER $TMP.sudoers.classic
-	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
-	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
-	echo "rm $TMP.sudoers.classic"
-	[ $DRYRUN = no ] && rm $TMP.sudoers.classic
-}
-
 function del-srhook-local-classic() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
@@ -290,18 +262,12 @@ function del-srhook-local-classic() {
 
 function f_remove-srhook-classic() {
 	echo-funa run $FUNCNAME
-	# TODO avoid double calling on primary, but support scale-out?
 	crm cluster run "'$SCRIPT' -x del-srhook-local-classic"
-	#del-srhook-local-classic
-	#ssh root@$SECNOD "'$SCRIPT' -x del-srhook-local-classic"
 	echo-funa end $FUNCNAME
 }
 
 function add-srhook-local-angi() {
 	EXE=$(basename $0)
-	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
-	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
-	echo
 	source /run/$EXE.variables
 	for P in susHanaSR susTkOver susChkSrv; do
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}\""
@@ -309,12 +275,16 @@ function add-srhook-local-angi() {
 	done
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
 	[ $DRYRUN = no ] && su - $sidadm -c "hdbnsutil -reloadHADRProviders"
-	for P in susHanaSR susTkOver susChkSrv; do
+	echo "grep -A2 \"^\[ha_dr_provider_\" $GLBINI"
+	[ $DRYRUN = no ] && grep -A2 "^\[ha_dr_provider_" $GLBINI
+	echo
+	grep "^\[ha_dr_provider_" $GLBINI |
+	grep -i -e susChkSrv -e susTkOver -e SAPHanaSR -e susCostOpt | tr -d "\[\]" |\
+	while read; do
+		P=${REPLY:15}
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid=$SID --show --provider=${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid=$SID --show --provider=${P}"
 	done
-	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
-	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
 	echo
 
 	echo "echo \"$sidadm ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=$SID *\" >> $SUDOER"
@@ -328,10 +298,7 @@ function add-srhook-local-angi() {
 
 function f_add-srhook-angi() {
         echo-funa run $FUNCNAME
-       	# TODO avoid double calling on primary, but support scale-out?
 	crm cluster run "'$SCRIPT' -x add-srhook-local-angi"
-	#add-srhook-local-angi
-	#ssh root@$SECNOD "'$SCRIPT' -x add-srhook-local-angi"
         echo-funa end $FUNCNAME
 }
 
@@ -550,8 +517,8 @@ function f_check-final-state() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	# TODO call official check tool, e.g. SAPHanaSR-manageAttr
-	echo "TODO call SAPHanaSR-manageAttr"
-	[ $DRYRUN = no ] && SAPHanaSR-manageAttr --version
+	echo "TODO call /usr/bin/SAPHanaSR-manageAttr"
+	[ $DRYRUN = no ] && /usr/bin/SAPHanaSR-manageAttr --version
 	echo-funa end $FUNCNAME
 }
 
@@ -622,7 +589,6 @@ function cleanup() {
 }
 
 #
-######################
 # main()
 #
 case $1 in
