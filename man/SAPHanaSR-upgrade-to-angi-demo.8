@@ -7,7 +7,7 @@ SAPHanaSR-upgrade-to-angi-demo \- How to upgrade from SAPHanaSR to SAPHanaSR-ang
 .PP
 .\"
 .SH SYNOPSIS
-\fBSAPHanaSR-upgrade-to-angi-demo\fR [ --help | --version | --list | --check | --upgrade ]
+\fBSAPHanaSR-upgrade-to-angi-demo\fR [ --help | --version | --list | --check | --erase | --upgrade ]
 .br
 \fBSAPHanaSR-upgrade-to-angi-demo\fR --run \fIFUNCTION\fP [ \fIFUNCTION\fP [ ...  ]] 
 .\"
@@ -15,7 +15,8 @@ SAPHanaSR-upgrade-to-angi-demo \- How to upgrade from SAPHanaSR to SAPHanaSR-ang
 .PP
 SAPHanaSR-upgrade-to-angi-demo demonstrates how to upgrade from SAPHanaSR to
 SAPHanaSR-angi. The script collects information from an Linux HA cluster with
-SAPHanaSR. Based on that data it suggests step by step the commands to upgrade the cluster. The running configuration is not changed. See also manual page
+SAPHanaSR. Based on that data it suggests step by step the commands to upgrade
+the cluster. The running configuration is not changed. See also manual page
 SAPHanaSR_upgrade_to_angi(7).
 .PP
 .B SAPHanaSR-upgrade-to-angi-demo is shipped as technology preview.
@@ -32,6 +33,9 @@ show version.
 \fB --check\fP
 do some basic checks on configuration and status of Linux cluster.
 .TP 4
+\fB --erase\fP
+show demo for removing SAPHanaSR.
+.TP 4
 \fB --list\fP
 list SAPHanaSR-upgrade-to-angi-demo functions.
 .TP 4
@@ -39,7 +43,7 @@ list SAPHanaSR-upgrade-to-angi-demo functions.
 run given function(s). Not all functions will work, once CIB attributes have been deleted. 
 .TP 4
 \fB --upgrade\fP
-show demo for upgrade from SAPHanaSR to SAPHanaSR-angi.
+show demo for upgrading from SAPHanaSR to SAPHanaSR-angi.
 .\"
 .PP
 .SH RETURN CODES
@@ -52,7 +56,7 @@ Usage, syntax or execution errors.
 .\"
 .SH EXAMPLES
 .PP
-\fB*\fP Example for copying the script to outside the package.
+\fB*\fP Copying the script to outside the package.
 .PP
 The script needs to be still available on both cluster nodes after the SAPHanaSR
 RPM has been removed. Needs to be done on all cluster nodes.
@@ -75,7 +79,7 @@ RPM has been removed. Needs to be done on all cluster nodes.
 # crm_mon -1r | grep "* Masters: \\["
 .RE
 .PP
-\fB*\fP Example for checking sane state of cluster.
+\fB*\fP Checking sane state of cluster.
 .PP
 This steps should be performed before doing anything with the cluster, and after
 something has been done.
@@ -91,7 +95,7 @@ See also SAPHanaSR_upgrade_to_angi(7) and SAPHanaSR_maintenance_examples(7).
 # SAPHanaSR-showAttr
 .RE
 .PP
-\fB*\fP Example for checking pre-requisites for the upgrade.
+\fB*\fP Checking pre-requisites for the upgrade.
 .PP
 The scripts should be run on the HANA primary node before the upgrade. It also
 could be run on the HANA secondary. Any error message should be investigated.
@@ -105,7 +109,7 @@ cs_show_error_patterns(8) and cs_show_cluster_patterns(8).
 # SAPHanaSR-upgrade-to-angi-demo --check
 .RE
 .PP
-\fB*\fP Example for demonstrating an upgrade.
+\fB*\fP Demonstrating an upgrade.
 .PP
 HANA´s SID and instance number will be detected, as well as the names of both
 cluster nodes. The names of cluster resources and constraints will be derived
@@ -140,30 +144,67 @@ performing an upgrade:
 .br
 - Setting HANA resource back to managed.
 .PP
-The script should be used on the HANA primary node.
-Before doing this, you should check and prepare pre-requisites, see example
-above. The proposed commands need to be checked. Sometimes adaptions are
-neccessary.
+The script needs to be copied to all cluster nodes upfront. It should be called
+on the HANA primary node. Before doing this, you should check and prepare
+pre-requisites, see example above. The proposed commands need to be checked.
+Sometimes adaptions are neccessary.
 See also SAPHanaSR_upgrade_to_angi(7).
 .PP
 .RS 2
 # SAPHanaSR-upgrade-to-angi-demo --upgrade
 .RE
 .PP
-\fB*\fP Example for drafting a runbook for the manual upgrade.
+\fB*\fP Drafting a runbook for the manual upgrade.
 .PP
 The script should be used on the HANA primary node.
 Before doing this, you should check and prepare pre-requisites, see example
 above. The runbook draft is stored as file "SAPHanaSR-upgrade-draft.txt".
 This draft can be used for preparing details for the upgrade procedure. 
 The proposed commands need to be checked. Sometimes adaptions are
-neccessary.
+neccessary. Of course the result needs to be checked finally as well.
 See also SAPHanaSR_upgrade_to_angi(7) and tee(1).
 .PP
 .RS 2
 # SAPHanaSR-upgrade-to-angi-demo --upgrade | tee SAPHanaSR-upgrade-draft.txt
 .br
 # less SAPHanaSR-upgrade-draft.txt
+.RE
+.PP
+\fB*\fP Demonstrating removal of package SAPHanaSR and its configuration.
+.PP
+Removing the old SAPHanaSR without performing the complete upgrade manually
+might be useful, if installation and configuration of the new SAPHanaSR-angi
+should be done by deploymant automation tools.
+.PP
+HANA´s SID and instance number will be detected, as well as the names of both
+cluster nodes. The names of cluster resources and constraints will be derived
+from the CIB. Based on that information, command sequences will be proposed for
+performing the removal of SAPHanaSR:
+.br
+- Collecting needed data.
+.br
+- Backing up old CIB, sudoers file and global.ini.
+.br
+- Setting HANA resource into maintenance mode.
+.br
+- Removing old rules from sudoers file on both nodes.
+.br
+- Removing old hook scripts from global.ini on both nodes.
+.br
+- Removing old cluster resources and constraints from CIB.
+.br
+- Removing old node attributes and SAPHanaSR properties from CIB.
+.br
+- Removing old SAPHanaSR package.
+.PP
+The script needs to be copied to all cluster nodes beforehand. It should be
+called on the HANA primary node. Before doing this, you should check and prepare
+pre-requisites, see example above. The proposed commands need to be checked.
+Sometimes adaptions are neccessary. Of course the result needs to be checked
+finally as well. See also SAPHanaSR_upgrade_to_angi(7).
+.PP
+.RS 2
+# SAPHanaSR-upgrade-to-angi-demo --erase 
 .RE
 .PP
 .\"
@@ -198,8 +239,7 @@ on both cluster nodes.
 .br
 * SAPHanaSR-upgrade-to-angi-demo is executed on the HANA primary node.
 .br
-* SAPHanaSR-upgrade-to-angi-demo could be run on test systems. It should not be
-run on production systems.
+* SAPHanaSR-upgrade-to-angi-demo should be run on test systems.
 .br
 * A backup has been made for the cluster nodes.
 .br
