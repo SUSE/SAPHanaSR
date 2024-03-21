@@ -13,6 +13,7 @@
 #
 VERSION="2024-03-20 0.2"
 DRYRUN=yes
+# TODO DRYRUN=no
 EXE=$(basename $0)
 TMP=/run/$EXE.$RANDOM
 TIMEST=$(date +%s)
@@ -125,7 +126,6 @@ function init-variables() {
 		/etc/sudoers /etc/sudoers.d/* | awk -F":" '{print $1}' | sort -u)
 	scp $SCRIPT root@${SECNOD}:$SCRIPT >/dev/null
 	(	echo "SID=$SID"
-		echo "sid=$sid"
 		echo "sidadm=$sidadm"
 		echo "INO=$INO"
 		echo "RPMOLD=$RPMOLD"
@@ -236,7 +236,7 @@ function del-srhook-local-classic() {
 	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
 	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
 	echo
-	grep "^\[ha_dr_provider_" $GLBINI |\
+	grep "^\[ha_dr_provider_" $GLBINI |
 	grep -i -e susChkSrv -e susTkOver -e SAPHanaSR -e susCostOpt | tr -d "\[\]" |\
 	while read; do
 		P=${REPLY:15}
@@ -244,7 +244,7 @@ function del-srhook-local-classic() {
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --show --provider=$P" > $TMP.global.ini.$P
 		echo "su - $sidadm -c \"/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $TMP.global.ini.$P\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/sbin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --remove $TMP.global.ini.$P"
- 		echo "rm $TMP.global.ini.$P"
+		echo "rm $TMP.global.ini.$P"
 		[ $DRYRUN = no ] && rm $TMP.global.ini.$P
 	done
 	echo "su - $sidadm -c \"hdbnsutil -reloadHADRProviders\""
@@ -255,7 +255,6 @@ function del-srhook-local-classic() {
 
 	echo "cp $SUDOER $TMP.sudoers.classic"
 	[ $DRYRUN = no ] && cp $SUDOER $TMP.sudoers.classic
-	# TODO remove SAPHanaSR-hookHelper, or adapt by sed
 	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
 	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
 	echo "rm $TMP.sudoers.classic"
@@ -327,7 +326,7 @@ function f_remove-node-attribute() {
 		echo "crm_attribute --node $N --name hana_${sid}_sync_state --lifetime reboot --delete"
 		[ $DRYRUN = no ] && crm_attribute --node $N --name  hana_${sid}_sync_state --lifetime reboot --delete
 		echo "crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete"
-		[ $DRYRUN = no ] && crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete
+		[ $DRYRUN = no ] && crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete		
 	done
 	echo-funa end $FUNCNAME
 }
@@ -340,6 +339,7 @@ function f_remove-saphanacon-classic() {
 	for N in "//rsc_order[@id='$MSTORD']" \
 		"//rsc_colocation[@id='$MSTCOL']" \
 		"//master[@id='$MSTOLD']" \
+		"//clone[@id='$CLNTOP']" \
 		; do
 			echo "cibadmin --delete --xpath ${N}"
 			[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
@@ -392,15 +392,13 @@ function f_add-sapfilesystem() {
 	echo-funa end $FUNCNAME
 }
 
-function f_update-rpm() {
+function f_install-rpm-angi() {
 	echo-funa run $FUNCNAME
 	wait-idle
-	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
-	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
-	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
-		-l -f -y '${RPMNEW}'"
-	# TODO [ $DRYRUN = no ] && crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
+	# TODO [ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
+	#	-l -f -y '${RPMNEW}'"
+	[ $DRYRUN = no ] && crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
 	echo "crm cluster run \"rpm -q '${RPMNEW}' --queryformat %{NAME}\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
 	echo "hash -r"
@@ -408,7 +406,15 @@ function f_update-rpm() {
 	echo-funa end $FUNCNAME
 }
 
-function f_check-prereqs() {
+function f_remove-rpm-classic() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
+	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
+	echo-funa end $FUNCNAME
+}
+
+function f_check-prereq() {
 	echo-funa run $FUNCNAME
 	# TODO meaningful return codes
 	pre_rc=0
@@ -435,7 +441,6 @@ function f_check-prereqs() {
 	        echo "ERROR: Local HANA revision looks like not supported."
 	        pre_rc=9
 	fi
-
 	hana_py=$(su - $sidadm -c "python --version" | grep "Python 3\.[7-9]" \
 		>/dev/null 2>&1; echo $?)
 	if [ $hana_py != 0 ]; then
@@ -538,6 +543,34 @@ function f_test-secondary() {
 	echo-funa end $FUNCNAME
 }
 
+function cleanup() {
+	crm cluster run "rm -f /run/$EXE.variables"
+}
+
+function erase-classic() {
+	f_show-state
+	f_make-backup
+	f_maintenance-on-classic
+	f_remove-srhook-classic
+	f_remove-saphanacon-classic
+	f_remove-property
+	f_remove-node-attribute
+	f_remove-rpm-classic
+}
+
+function upgrade-to-angi() {
+	erase-classic
+	f_install-rpm-angi
+	f_add-srhook-angi
+	f_add-saphanacon-angi
+	f_add-sapfilesystem
+	f_maintenance-off-angi
+	f_show-state
+	f_check-final-state
+	f_test-secondary
+	f_show-state
+}
+
 function show-help() {
 	echo
 	echo "$EXE [ OPTION ]"
@@ -547,50 +580,12 @@ function show-help() {
 	echo " --help"
 	echo " --version"
 	echo " --list-functions"
-	echo " --check-prereqs"
+	echo " --check-prereq"
+	echo " --erase"
 	echo " --upgrade"
 	echo
 	echo "SAPHanaSR-upgrade-to-angi-demo is shipped as technology preview."
 	echo
-}
-
-function upgrade-to-angi() {
-	# TODO prepare environment for script?
-	#f_check-prereqs
-	# check for sane state
-	f_show-state
-	# make backup of some config
-	f_make-backup
-	# set HANA classic resources to maintenance
-	f_maintenance-on-classic
-	# remove SAPHanaSR.py from global.ini, HANA, and sudoer
-	f_remove-srhook-classic
-	# remove HANA classic resource config from CIB
-	f_remove-saphanacon-classic
-	# remove SAPHanaSR property and node attributes from CIB
-	f_remove-property
-	f_remove-node-attribute
-	# remove HANA classic RPM, install SAPHanaSR-angi
-	f_update-rpm
-	# add SAPHanaSR.py to global.ini, HANA, and sudoers
-	f_add-srhook-angi
-	# add HANA angi resource config
-	f_add-saphanacon-angi
-	f_add-sapfilesystem
-	# set HANA angi resource out of maintenance
-	f_maintenance-off-angi
-	# check for sane state
-	f_show-state
-	# call official check tool
-	f_check-final-state
-	# test RA on secondary and trigger susHanaSR.py
-	f_test-secondary
-	# check for sane state
-	f_show-state
-}
-
-function cleanup() {
-	crm cluster run "rm -f /run/$EXE.variables"
 }
 
 #
@@ -603,17 +598,22 @@ case $1 in
 		echo
 		exit
 	;;
-	-l | --list-fun*)
+	-l | --list*)
 		echo
 		grep "^function.f_.*{" $0 | colrm 1 8 | tr -d "(){"
 		echo
 		exit
 	;;
-	-c | --check-pre*)
+	-c | --check*)
 		init-variables
-		f_check-prereqs
+		f_check-prereq
 		cleanup >/dev/null 2>&1
 		exit $ALL_RC
+	;;
+	-e | --erase)
+		init-variables
+		erase-classic	
+		cleanup	>/dev/null 2>&1
 	;;
 	-u | --upgrade)
 		init-variables
