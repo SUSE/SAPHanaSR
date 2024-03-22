@@ -126,6 +126,7 @@ function init-variables() {
 	[ -z $SUDOER ] && SUDOER="/etc/sudoers.d/SAPHanaSR"
 	scp $SCRIPT root@${SECNOD}:$SCRIPT >/dev/null
 	(	echo "SID=$SID"
+		echo "sid=$sid"
 		echo "sidadm=$sidadm"
 		echo "INO=$INO"
 		echo "RPMOLD=$RPMOLD"
@@ -239,6 +240,7 @@ function f_maintenance-off-angi() {
 function del-srhook-local-classic() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
+	[ -z $sid ] && sid=${SID,,}
 	echo "grep \"^\[ha_dr_provider_\" $GLBINI"
 	[ $DRYRUN = no ] && grep "^\[ha_dr_provider_" $GLBINI
 	echo
@@ -280,6 +282,7 @@ function f_remove-srhook-classic() {
 function add-srhook-local-angi() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
+	[ -z $sid ] && sid=${SID,,}
 	for P in susHanaSR susTkOver susChkSrv; do
 		echo "su - $sidadm -c \"/usr/bin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}\""
 		[ $DRYRUN = no ] && su - $sidadm -c "/usr/bin/SAPHanaSR-manageProvider --sid=$SID --reconfigure --add /usr/share/SAPHanaSR-angi/samples/global.ini_${P}"
@@ -369,19 +372,22 @@ function f_remove-saphanacon-classic() {
 
 function f_add-saphanatop-angi() {
 	echo-funa run $FUNCNAME
+	EXE=$(basename $0)
+	source /run/$EXE.variables
+	[ -z $sid ] && sid=${SID,,}
 	wait-idle
 	echo -n "echo \""
 	echo -n $CIB_CLNTMP_ANG |\
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
-		-e s/@@mstnew@@/${CLNTOP}/g \
+		-e s/@@clntop@@/${CLNTOP}/g \
 		-e s/'#'/\\n'#'\\n/g
 	echo "\" | crm configure load update -"
 	echo "crm configure show $CLNTOP"
 	[ $DRYRUN = no ] && echo $CIB_CLNTMP_ANG |\
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
-		-e s/@@mstnew@@/${CLNTOP}/g \
+		-e s/@@clntop@@/${CLNTOP}/g \
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $CLNTOP
@@ -390,6 +396,9 @@ function f_add-saphanatop-angi() {
 
 function f_add-saphanacon-angi() {
 	echo-funa run $FUNCNAME
+	EXE=$(basename $0)
+	source /run/$EXE.variables
+	[ -z $sid ] && sid=${SID,,}
 	wait-idle
 	echo -n "echo \""
 	echo -n $CIB_MSTTMP_ANG |\
@@ -434,9 +443,9 @@ function f_install-rpm-angi() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
-	# TODO [ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
-	#	-l -f -y '${RPMNEW}'"
-	[ $DRYRUN = no ] && crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
+	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
+		-l -f -y '${RPMNEW}'"
+	# TODO [ $DRYRUN = no ] && crm cluster run "rpm -i ~/SAPHanaSR-angi-1.2.5-150600.3.11.1.noarch.rpm"
 	echo "crm cluster run \"rpm -q '${RPMNEW}' --queryformat %{NAME}\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
 	echo "hash -r"
