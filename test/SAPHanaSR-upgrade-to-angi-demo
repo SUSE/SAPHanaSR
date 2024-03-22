@@ -35,6 +35,8 @@ primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaController \
 clone @@mstnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
   meta clone-node-max="1" promotable="true" interleave="true" maintenance="true"
 #
+order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
+#
 colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: @@rscipa@@:Started @@mstnew@@:Promoted
 #"
 
@@ -381,6 +383,7 @@ function f_add-saphanatop-angi() {
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
 		-e s/@@clntop@@/${CLNTOP}/g \
+		-e s/@@mstnew@@/${MSTNEW}/g \
 		-e s/'#'/\\n'#'\\n/g
 	echo "\" | crm configure load update -"
 	echo "crm configure show $CLNTOP"
@@ -388,6 +391,7 @@ function f_add-saphanatop-angi() {
 		sed -e s/@@sid@@/${SID}/g \
 		-e s/@@ino@@/${INO}/g \
 		-e s/@@clntop@@/${CLNTOP}/g \
+		-e s/@@mstnew@@/${MSTNEW}/g \
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $CLNTOP
