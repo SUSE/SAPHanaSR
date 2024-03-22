@@ -123,6 +123,7 @@ function init-variables() {
 	GLBINI="/hana/shared/$SID/global/hdb/custom/config/global.ini"
 	SUDOER=$(grep "${sidadm}.ALL.*NOPASSWD.*crm_attribute" \
 		/etc/sudoers /etc/sudoers.d/* | awk -F":" '{print $1}' | sort -u)
+	[ -z $SUDOER ] && SUDOER="/etc/sudoers.d/SAPHanaSR"
 	scp $SCRIPT root@${SECNOD}:$SCRIPT >/dev/null
 	(	echo "SID=$SID"
 		echo "sidadm=$sidadm"
@@ -262,6 +263,10 @@ function del-srhook-local-classic() {
 	[ $DRYRUN = no ] && cp $SUDOER $TMP.sudoers.classic
 	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid\" $TMP.sudoers.classic > $SUDOER"
 	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*crm_attribute.*$sid" $TMP.sudoers.classic > $SUDOER
+	echo "cp $SUDOER $TMP.sudoers.classic"
+	[ $DRYRUN = no ] && cp $SUDOER $TMP.sudoers.classic
+	echo "grep -v \"$sidadm.*ALL..NOPASSWD.*SAPHanaSR-hookHelper.*sid=$SID\" $TMP.sudoers.classic > $SUDOER"
+	[ $DRYRUN = no ] && grep -v "$sidadm.*ALL..NOPASSWD.*SAPHanaSR-hookHelper.*sid=$SID" $TMP.sudoers.classic > $SUDOER
 	echo "rm $TMP.sudoers.classic"
 	[ $DRYRUN = no ] && rm $TMP.sudoers.classic
 }
