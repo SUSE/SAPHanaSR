@@ -11,7 +11,7 @@
 #
 # define parameters and functions 
 #
-VERSION="2024-03-20 0.2"
+VERSION="2024-03-20 0.3"
 DRYRUN=yes
 # TODO DRYRUN=no
 EXE=$(basename $0)
@@ -102,7 +102,6 @@ function init-variables() {
 		string(///resources//*[@type='SAPHanaTopology']/@id)" $BAKDIR/cib.xml)
 	# RSCTOP=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
-	# xmllint -xpath "string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='HA1']/../../../@id)" $BAKDIR/cib.xml
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
 	MSTORD=$(xmllint -xpath \
 		"string(///constraints//*[@then='$MSTOLD']/@id)" $BAKDIR/cib.xml)
@@ -203,6 +202,9 @@ function f_maintenance-on-classic() {
 	echo "crm resource maintenance $CLNTOP on"
 	[ $DRYRUN = no ] && crm resource maintenance $CLNTOP on
 	wait-idle
+	echo "echo \"property cib-bootstrap-options: stop-orphan-resources=false\" | crm configure load update -"
+	[ $DRYRUN = no ] && echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
+		crm configure load update -
 	echo-funa run $FUNCNAME
 }
 
@@ -227,6 +229,9 @@ function f_maintenance-off-angi() {
 	echo "crm resource maintenance $CLNFIL off"
 	[ $DRYRUN = no ] && crm resource maintenance $CLNFIL off
 	wait-idle
+	echo "echo \"property cib-bootstrap-options: stop-orphan-resources=true\" | crm configure load update -"
+	[ $DRYRUN = no ] && echo "property cib-bootstrap-options: stop-orphan-resources=true" |\
+		crm configure load update -
 	echo-funa run $FUNCNAME
 }
 
@@ -331,22 +336,50 @@ function f_remove-node-attribute() {
 	echo-funa end $FUNCNAME
 }
 
+function f_remove-saphanatop-classic() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	for N in "//rsc_order[@id='$MSTORD']" "//clone[@id='$CLNTOP']"; do
+		echo "cibadmin --delete --xpath \"${N}\""
+		[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
+	done
+	wait-idle
+	echo "crm resource refresh $RSCTOP"
+	[ $DRYRUN = no ] && crm resource refresh $RSCTOP
+	echo-funa end $FUNCNAME
+}
+
 function f_remove-saphanacon-classic() {
 	echo-funa run $FUNCNAME
 	wait-idle
-	echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
-		crm configure load update -
-	for N in "//rsc_order[@id='$MSTORD']" \
-		"//rsc_colocation[@id='$MSTCOL']" \
-		"//master[@id='$MSTOLD']" \
-		"//clone[@id='$CLNTOP']" \
-		; do
-			echo "cibadmin --delete --xpath ${N}"
-			[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
-		done
+	for N in "//rsc_colocation[@id='$MSTCOL']" "//rsc_order[@id='$MSTORD']" "//master[@id='$MSTOLD']"; do
+		echo "cibadmin --delete --xpath \"${N}\""
+		[ $DRYRUN = no ] && cibadmin --delete --xpath ${N}
+	done
 	wait-idle
 	echo "crm resource refresh $RSCCON"
 	[ $DRYRUN = no ] && crm resource refresh $RSCCON
+	echo-funa end $FUNCNAME
+}
+
+function f_add-saphanatop-angi() {
+	echo-funa run $FUNCNAME
+	wait-idle
+	echo -n "echo \""
+	echo -n $CIB_CLNTMP_ANG |\
+		sed -e s/@@sid@@/${SID}/g \
+		-e s/@@ino@@/${INO}/g \
+		-e s/@@mstnew@@/${CLNTOP}/g \
+		-e s/'#'/\\n'#'\\n/g
+	echo "\" | crm configure load update -"
+	echo "crm configure show $CLNTOP"
+	[ $DRYRUN = no ] && echo $CIB_CLNTMP_ANG |\
+		sed -e s/@@sid@@/${SID}/g \
+		-e s/@@ino@@/${INO}/g \
+		-e s/@@mstnew@@/${CLNTOP}/g \
+		-e s/'#'/\\n'#'\\n/g |\
+			crm configure load update -
+	[ $DRYRUN = no ] && crm configure show $CLNTOP
 	echo-funa end $FUNCNAME
 }
 
@@ -373,7 +406,7 @@ function f_add-saphanacon-angi() {
 	echo-funa end $FUNCNAME
 }
 
-function f_add-sapfilesystem() {
+function f_add-saphanafil-angi() {
 	echo-funa run $FUNCNAME
 	wait-idle
 	echo -n "echo \""
@@ -553,6 +586,7 @@ function erase-classic() {
 	f_maintenance-on-classic
 	f_remove-srhook-classic
 	f_remove-saphanacon-classic
+	f_remove-saphanatop-classic
 	f_remove-property
 	f_remove-node-attribute
 	f_remove-rpm-classic
@@ -562,8 +596,9 @@ function upgrade-to-angi() {
 	erase-classic
 	f_install-rpm-angi
 	f_add-srhook-angi
+	f_add-saphanatop-angi
 	f_add-saphanacon-angi
-	f_add-sapfilesystem
+	f_add-saphanafil-angi
 	f_maintenance-off-angi
 	f_show-state
 	f_check-final-state
