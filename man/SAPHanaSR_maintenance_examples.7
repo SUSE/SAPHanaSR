@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR_maintenance_examples 7 "06 Dec 2023" "" "SAPHanaSR"
+.TH SAPHanaSR_maintenance_examples 7 "25 Jan 2023" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR_maintenance_examples \- maintenance examples for SAPHanaController.
@@ -43,6 +43,31 @@ This might be convenient when performing administrative actions or cluster tests
 .RS 4
 # watch -n9 "crm_mon -1r --include=none,nodes,resources,failures;echo;SAPHanaSR-showAttr;cs_clusterstate -i|grep -v '#'"
 .RE
+.PP
+\fB*\fR Overview on stopping the HANA database at one site.
+
+This procedure does work for scale-up and scale-out. No takeover will be done. This procedure
+should be used, when it is neccessary to stop the HANA database. Stopping the HANA database
+should not be done by just stopping the Linux cluster or shutting down the OS. This particularly
+applies to scale-out systems. It might be good to define upfront which HANA site needs to be
+stopped. In case both sites need to be stopped, it might be good to define the order. First
+stopping the primary should keep system replication in sync.
+.br
+How long a stop will take, depends on database size, performance of underlying infrastructure,
+SAP HANA version and configuration. Please refer to SAP HANA documentation for details on
+tuning and stopping an HANA database.
+.PP
+.RS 4
+1. Checking status of Linux cluster and HANA system replication pair.
+.br
+2. Setting SAPHana or SAPHanaController multi-state resource into maintenance.
+.br
+3. Stopping HANA database at the given site by using "sapcontrol -nr <nr> -function StopSystem".
+.br
+4. Checking that HANA is stopped.
+.RE
+.PP
+Note: Do not forget to end the resource maintenance after you have re-started the HANA database.
 .PP
 \fB*\fR Initiate an administrative takeover of the HANA primary from one node to the other by using the Linux cluster.
 
@@ -568,7 +593,7 @@ F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2017-2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2023 SUSE LLC
+(c) 2019-2024 SUSE LLC
 .br
 This maintenance examples are coming with ABSOLUTELY NO WARRANTY.
 .br
