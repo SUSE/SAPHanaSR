@@ -97,6 +97,7 @@ install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_SAPHanaSR %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_sus* %{buildroot}/usr/share/%{name}/samples
