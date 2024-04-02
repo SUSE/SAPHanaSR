@@ -1,0 +1,287 @@
+.\" Version: 1.001 
+.\"
+.TH SAPHanaSR-upgrade-to-angi-demo 8 "08 Mar 2024" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR-upgrade-to-angi-demo \- How to upgrade from SAPHanaSR to SAPHanaSR-angi.
+.PP
+.\"
+.SH SYNOPSIS
+\fBSAPHanaSR-upgrade-to-angi-demo\fR [ --help | --version | --list | --check | --erase | --upgrade ]
+.br
+\fBSAPHanaSR-upgrade-to-angi-demo\fR --run \fIFUNCTION\fP [ \fIFUNCTION\fP [ ...  ]] 
+.\"
+.SH DESCRIPTION
+.PP
+SAPHanaSR-upgrade-to-angi-demo demonstrates how to upgrade from SAPHanaSR to
+SAPHanaSR-angi. The script collects information from an Linux HA cluster with
+SAPHanaSR. Based on that data it suggests step by step the commands to upgrade
+the cluster. The running configuration is not changed. See also manual page
+SAPHanaSR_upgrade_to_angi(7).
+.PP
+.B SAPHanaSR-upgrade-to-angi-demo is shipped as technology preview.
+.PP
+.\"
+.SH OPTIONS
+.TP 4
+\fB --help\fP
+show help.
+.TP 4
+\fB --version\fP
+show version.
+.TP 4
+\fB --check\fP
+do some basic checks on configuration and status of Linux cluster.
+.TP 4
+\fB --erase\fP
+show demo for removing SAPHanaSR.
+.TP 4
+\fB --list\fP
+list SAPHanaSR-upgrade-to-angi-demo functions.
+.TP 4
+\fB --run \fP \fIFUNCTION\fP [ \fIFUNCTION\fP [ ... ]]
+run given function(s). Not all functions will work, once CIB attributes have been deleted. 
+.TP 4
+\fB --upgrade\fP
+show demo for upgrading from SAPHanaSR to SAPHanaSR-angi.
+.\"
+.PP
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.PP
+.\"
+.SH EXAMPLES
+.PP
+\fB*\fP Copying the script to outside the package.
+.PP
+The script needs to be still available on both cluster nodes after the SAPHanaSR
+RPM has been removed. Needs to be done on all cluster nodes.
+.PP
+.RS 2
+# cp -a /usr/shared/SAPHanaSR/samples/SAPHanaSR-upgrade-to-angi-demo /root/bin/
+.br
+# chmod 755 /root/bin/SAPHanaSR-upgrade-to-angi-demo
+.br
+# SAPHanaSR-upgrade-to-angi-demo --help
+.RE
+.PP
+\fB*\fP Example for finding the HANA primary node.
+.PP
+.RS 2
+# SAPHanaSR-showAttr --format=script |\\
+.br
+  awk -F/ '$3=="clone_state=\\"PROMOTED\\"" {print $2}'
+.br
+# crm_mon -1r | grep "* Masters: \\["
+.RE
+.PP
+\fB*\fP Checking sane state of cluster.
+.PP
+This steps should be performed before doing anything with the cluster, and after
+something has been done.
+See also SAPHanaSR_upgrade_to_angi(7) and SAPHanaSR_maintenance_examples(7).
+.PP
+.RS 2
+# cs_clusterstate -i
+.br
+# crm_mon -1r
+.br
+# crm configure show type:location | grep cli-
+.br
+# SAPHanaSR-showAttr
+.RE
+.PP
+\fB*\fP Checking pre-requisites for the upgrade.
+.PP
+The scripts should be run on the HANA primary node before the upgrade. It also
+could be run on the HANA secondary. Any error message should be investigated.
+The check covers several requirements for the upgrade, but not all. On the other
+hand, some of the pre-requisites are caused by limitations of the script
+SAPHanaSR-upgrade-to-angi-demo itself. Those might not be needed for doing the
+real upgrade manually. See also SAPHanaSR_upgrade_to_angi(7),
+cs_show_error_patterns(8) and cs_show_cluster_patterns(8).
+.PP
+.RS 2
+# SAPHanaSR-upgrade-to-angi-demo --check
+.RE
+.PP
+\fB*\fP Demonstrating an upgrade.
+.PP
+HANA´s SID and instance number will be detected, as well as the names of both
+cluster nodes. The names of cluster resources and constraints will be derived
+from the CIB. Based on that information, command sequences will be proposed for
+performing an upgrade: 
+.br
+- Collecting needed data.
+.br
+- Backing up old CIB, sudoers file and global.ini.
+.br
+- Setting HANA resource into maintenance mode.
+.br
+- Removing old rules from sudoers file on both nodes.
+.br
+- Removing old hook scripts from global.ini on both nodes.
+.br
+- Removing old cluster resources and constraints from CIB.
+.br
+- Removing old node attributes and SAPHanaSR properties from CIB.
+.br
+- Removing old SAPHanaSR package.
+.br
+- Adding new SAPHanaSR-angi package.
+.br
+- Adding new rules to sudoers file on both nodes.
+.br
+- Adding new hook scripts to global.ini on both nodes.
+.br
+- Adding new cluster resources and constraints to CIB.
+.br
+- Probing HANA resource status.
+.br
+- Setting HANA resource back to managed.
+.PP
+The script needs to be copied to all cluster nodes upfront. It should be called
+on the HANA primary node. Before doing this, you should check and prepare
+pre-requisites, see example above. The proposed commands need to be checked.
+Sometimes adaptions are neccessary.
+See also SAPHanaSR_upgrade_to_angi(7).
+.PP
+.RS 2
+# SAPHanaSR-upgrade-to-angi-demo --upgrade
+.RE
+.PP
+\fB*\fP Drafting a runbook for the manual upgrade.
+.PP
+The script should be used on the HANA primary node.
+Before doing this, you should check and prepare pre-requisites, see example
+above. The runbook draft is stored as file "SAPHanaSR-upgrade-draft.txt".
+This draft can be used for preparing details for the upgrade procedure. 
+The proposed commands need to be checked. Sometimes adaptions are
+neccessary. Of course the result needs to be checked finally as well.
+See also SAPHanaSR_upgrade_to_angi(7) and tee(1).
+.PP
+.RS 2
+# SAPHanaSR-upgrade-to-angi-demo --upgrade | tee SAPHanaSR-upgrade-draft.txt
+.br
+# less SAPHanaSR-upgrade-draft.txt
+.RE
+.PP
+\fB*\fP Demonstrating removal of package SAPHanaSR and its configuration.
+.PP
+Removing the old SAPHanaSR without performing the complete upgrade manually
+might be useful, if installation and configuration of the new SAPHanaSR-angi
+should be done by deploymant automation tools.
+.PP
+HANA´s SID and instance number will be detected, as well as the names of both
+cluster nodes. The names of cluster resources and constraints will be derived
+from the CIB. Based on that information, command sequences will be proposed for
+performing the removal of SAPHanaSR:
+.br
+- Collecting needed data.
+.br
+- Backing up old CIB, sudoers file and global.ini.
+.br
+- Setting HANA resource into maintenance mode.
+.br
+- Removing old rules from sudoers file on both nodes.
+.br
+- Removing old hook scripts from global.ini on both nodes.
+.br
+- Removing old cluster resources and constraints from CIB.
+.br
+- Removing old node attributes and SAPHanaSR properties from CIB.
+.br
+- Removing old SAPHanaSR package.
+.PP
+The script needs to be copied to all cluster nodes beforehand. It should be
+called on the HANA primary node. Before doing this, you should check and prepare
+pre-requisites, see example above. The proposed commands need to be checked.
+Sometimes adaptions are neccessary. Of course the result needs to be checked
+finally as well. See also SAPHanaSR_upgrade_to_angi(7).
+.PP
+.RS 2
+# SAPHanaSR-upgrade-to-angi-demo --erase 
+.RE
+.PP
+#
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/share/SAPHanaSR-angi/samples/SAPHanaSR-upgrade-to-angi-demo
+unsupported script for demonstrating the procedure on a test cluster
+.TP
+/etc/sudoers.d/SAPHanaSR
+recommended place for sudo permissions of HADR provider hook scripts
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+on-disk representation of HANA global system configuration
+.TP
+SAPHanaSR-upgrade-to-angi-demo.<timestamp>
+directory with backup of old configuration
+.PP
+.\"
+.SH REQUIREMENTS
+.PP
+* The initial configuration matches SUSE´s documented setup of the SAPHanaSR
+scale-up performance-optimised scenario.
+.br
+* Linux cluster, HANA and system replication are in sane state before the
+upgrade. All cluster nodes are online.
+.br
+* Package libxml2-tools is installed on both cluster nodes. Package ClusterTools2
+is recommended.
+.br
+* SAPHanaSR-upgrade-to-angi-demo is copied into /root/bin/ and made executable
+on both cluster nodes.
+.br
+* SAPHanaSR-upgrade-to-angi-demo is executed on the HANA primary node.
+.br
+* SAPHanaSR-upgrade-to-angi-demo should be run on test systems.
+.br
+* A backup has been made for the cluster nodes.
+.br
+* The commands suggested by SAPHanaSR-upgrade-to-angi-demo have been checked before
+they will be applied.
+.br
+* For further requirements see manual page SAPHanaSR_upgrade_to_angi(7).
+.PP
+.\"
+.SH BUGS
+.br
+In case of any problem, please use your favourite SAP support process to open a request for the component BC-OP-LNX-SUSE. Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.br
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) ,
+\fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBSAPHanaSR.py\fP(7) , \fBsusHanaSR.py\fP(7) , \fBSAPHanaSR_upgrade_to_angi\fP(7) ,
+\fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBcrm\fP(8) , \fBcrm_mon\fP(8) , \fBcrm_attribute\fP(8) , \fBcibadmin\fP(8) ,
+\fBcs_wait_for_idle\fP(8) ,
+.br
+https://documentation.suse.com/sbp/sap/ ,
+.br
+https://www.suse.com/c/tag/towardszerodowntime/
+.PP
+.\"
+.SH AUTHORS
+.br
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.br
+(c) 2024 SUSE LLC
+.br
+SAPHanaSR-upgrade-to-angi-demo comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
