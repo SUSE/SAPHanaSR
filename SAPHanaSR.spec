@@ -97,8 +97,10 @@ install -m 0644 srHook/susTkOver.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_SAPHanaSR %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_TakeoverBlocker %{buildroot}/usr/share/%{name}/samples
 install -m 0444 srHook/global.ini_CostOptMemConfig %{buildroot}/usr/share/%{name}/samples
+install -m 0444 srHook/global.ini_sus* %{buildroot}/usr/share/%{name}/samples
 
 # icons for SAPHanaSR-monitor
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
@@ -121,8 +123,7 @@ install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
-install -m 0644 test/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
-
+install -m 0555 test/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
 install -D -m 0644 wizard/hawk2/saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
 install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
