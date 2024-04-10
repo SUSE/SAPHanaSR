@@ -1,19 +1,21 @@
-.\" Version: 0.160.1
+.\" Version: 0.162.3
 .\"
-.TH SAPHanaSR-manageProvider 8 "22 Nov 2022" "" "SAPHanaSR"
+.TH SAPHanaSR-manageProvider 8 "13 Mar 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-manageProvider \- adds, updates, removes or shows HADR provider sections for SAP HANA
 .\"
+.PP
 .SH SYNOPSIS
 \fBSAPHanaSR-manageProvider\fR [ --help | --version ]
 .br
-\fBSAPHanaSR-manageProvider\fR [ --sid=SID ] [--reconfigure] --add <template-file>
+\fBSAPHanaSR-manageProvider\fR [ --sid=\fISID\fP ] [--reconfigure] --add \fItemplate-file\fR
 .br
-\fBSAPHanaSR-manageProvider\fR [ --sid=SID ] [--reconfigure] --remove <template-file>
+\fBSAPHanaSR-manageProvider\fR [ --sid=\fISID\fP ] [--reconfigure] --remove \fItemplate-file\fR
 .br
-\fBSAPHanaSR-manageProvider\fR [ --sid=SID ] --show --provider=<provider>
+\fBSAPHanaSR-manageProvider\fR [ --sid=\fISID\fP ] --show --provider=\fIprovider\fR
 .\"
+.PP
 .SH DESCRIPTION
 SAPHanaSR-manageProvider allows to add (and update), to remove and show SAP HANA
 HADR provider sections. This is possible online and offline. It is possible on
@@ -24,6 +26,7 @@ the section name. The provider hook script names are camelCase.
 .br
 This script needs to be run as <sid>adm user.
 .PP
+.\"
 .SH OPTIONS
 .TP 4
 \fB --help\fR
@@ -32,21 +35,22 @@ show help.
 \fB --version\fR
 show version.
 .TP 4
-\fB --add\fR <template-file>
+\fB --add\fR \fItemplate-file\fR
 add the section given in the template file to configuration.
 .TP 4
-\fB --remove\fR <template-file>
+\fB --remove\fR \fItemplate-file\fR
 remove the section given in the template file from configuration.
 .TP 4
 \fB --reconfigure\fR
-not implemented yet, use 'hdbnsutil -reloadHADRProviders' instead.
+apply change to running HANA, like 'hdbnsutil -reloadHADRProviders'.
 .TP 4
-\fB --show --provider\fR=<provider>
+\fB --show --provider\fR=\fIprovider\fR
 show the section for given provider from configuration.
 .TP 4
-\fB --sid\fR=<SID>
+\fB --sid\fR=\fISID\fR
 use SAP system ID <SID>. Should be autodetected, if there is only one SAP HANA
 instance installed on the local cluster node. 
+.PP
 .\"
 .SH RETURN CODES
 .B 0
@@ -54,8 +58,17 @@ Successful program execution.
 .br
 .B >0
 Usage, syntax or execution errors.
+.PP
 .\"
 .SH EXAMPLES
+\fB*\fR Show names of all HA/DR provider sections in global.ini.
+
+Might be useful to see whether sections are named lower/upper/camel-case.
+SID is HA1.
+.PP
+.RS 2
+# su - ha1adm -c "cdcoc; grep ^\\[ha_dr_provider_\ global.ini"  
+.RE
 .PP
 \fB*\fR Show the global.ini section ha_dr_provider_suschksrv, if available.
 
@@ -70,15 +83,11 @@ page susChkSrv.py(7).
 
 Example SID is HA1, the HADR provider hook script is SAPHanaSR.py. See also
 manual page SAPHanaSR.py(7).
-.br
-Note: 'hdbnsutil -reloadHADRProviders' loads everything from global.ini.
 .PP
 .RS 2
 # cat /usr/share/SAPHanaSR/globa.ini
 .br
-# su - ha1adm -c "/usr/sbin/SAPHanaSR-manageProvider --add /usr/share/SAPHanaSR/globa.ini"
-.br
-# su - ha1adm -c "hdbnsutil -reloadHADRProviders; echo rc=$?"
+# su - ha1adm -c "/usr/sbin/SAPHanaSR-manageProvider --reconfigure --add /usr/share/SAPHanaSR/globa.ini"
 .br
 # su - ha1adm -c "cdtrace; grep SAPHanaSR.init nameserver_*.trc" 
 .RE
@@ -112,6 +121,8 @@ susTkOver.py(7).
 ~> hdbnsutil -reloadHADRProviders
 .br
 ~> cdtrace; grep susTkOver.init namerserver_*.trc
+.RE
+.PP
 .\"
 .SH FILES
 .TP 4
@@ -129,11 +140,15 @@ directory with samples of HADR provider sections.
 .TP 4
 setParameter.py
 the SAP python script to interact with global.ini.
+.PP
 .\"
 .SH BUGS
 Command hangs, if it needs an input file and you do not specify the file.
 .br
-\-\-reconfiure does not work yet.
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
 .\"
 .SH SEE ALSO
 \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR\fP(7) ,
@@ -151,12 +166,14 @@ https://www.susecon.com/doc/2015/sessions/TUT19921.pdf ,
 https://www.susecon.com/archive-2020.html ,
 .br
 https://www.susecon.com/archive-2021.html
+.PP
 .\"
 .SH AUTHORS
 F.Herschel, L.Pinne.
+.PP
 .\"
 .SH COPYRIGHT
-(c) 2022 SUSE LLC
+(c) 2022-2024 SUSE LLC
 .br
 SAPHanaSR-manageProvider comes with ABSOLUTELY NO WARRANTY.
 .br

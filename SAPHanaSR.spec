@@ -23,7 +23,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        0.162.3
+Version:        0.162.5
 Release:        0
 Url:            http://scn.sap.com/community/hana-in-memory/blog/2014/04/04/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution
 
@@ -123,8 +123,7 @@ install -m 0555 test/SAPHanaSR-filter %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-hookHelper %{buildroot}/usr/sbin
 install -m 0555 test/SAPHanaSR-manageProvider %{buildroot}/usr/sbin
 install -m 0444 test/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
-install -m 0555 test/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
-
+install -m 0755 test/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
 install -D -m 0644 wizard/hawk2/saphanasr.yaml %{buildroot}%{crmscr_path}/saphanasr/main.yml
 install -D -m 0644 wizard/hawk2/saphanasr_su_po.yaml %{buildroot}%{crmscr_path}/saphanasr-su-po/main.yml
 install -D -m 0644 wizard/hawk2/saphanasr_su_co.yaml %{buildroot}%{crmscr_path}/saphanasr-su-co/main.yml
