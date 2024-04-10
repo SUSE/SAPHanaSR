@@ -10,7 +10,6 @@ FILE_LIST = LICENSE \
 		man \
 		ra \
 		srHook \
-		test \
 		tools \
 		wizard
 

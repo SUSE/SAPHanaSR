@@ -69,7 +69,6 @@ Authors:
 
 %prep
 tar xf %{S:0}
-# %define crmscr_path /usr/share/crmsh/scripts/
 
 %build
 gzip man/*
@@ -78,7 +77,6 @@ gzip man/*
 mkdir -p %{buildroot}/usr/bin
 mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/icons
-# mkdir -p %{buildroot}/usr/share/%{name}/tests
 mkdir -p %{buildroot}/usr/share/%{name}/samples
 mkdir -p %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
