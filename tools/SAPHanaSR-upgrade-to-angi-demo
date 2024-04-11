@@ -15,7 +15,7 @@ VERSION="2024-03-20 0.3"
 DRYRUN=yes
 # TODO DRYRUN=no
 EXE=$(basename $0)
-TMP=/run/$EXE.$RANDOM
+TMP=/run/"$EXE"."$RANDOM"
 TIMEST=$(date +%s)
 ALL_RC=0
 
@@ -76,32 +76,32 @@ function wait-idle() {
 }
 
 function init-variables() {
-	BAKDIR=/root/${EXE}.$TIMEST
-	mkdir -p $BAKDIR
-	cibadmin -Ql > $BAKDIR/cib.xml || exit 1
-	SCRIPT=/root/bin/$EXE
+	BAKDIR=/root/"${EXE}.$TIMEST"
+	mkdir -p "$BAKDIR"
+	cibadmin -Ql > "$BAKDIR"/cib.xml || exit 1
+	SCRIPT=/root/bin/"$EXE"
 	RPMOLD="SAPHanaSR"
 	RPMNEW="SAPHanaSR-angi"
 	SID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
 		awk '{print $4}')
 	INO=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
 		awk '{print $6}')
-	sid=${SID,,}
-	sidadm=${sid}adm
+	sid="${SID,,}"
+	sidadm="${sid}adm"
 	MSTOLD=$(xmllint -xpath \
-		"string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $BAKDIR/cib.xml)
+		"string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" "$BAKDIR/cib.xml")
 	# MSTOLD=$(SAPHanaSR-showAttr --format script |\
 	#      	awk -F"/" '$1~/Resource/ && $2~/ms.*'$SID'/ && $3~/maintenance=/ {print $2}')
-	RSCCON=$(xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" $BAKDIR/cib.xml)
+	RSCCON=$(xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" "$BAKDIR/cib.xml")
 	# RSCCON=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$MSTOLD'" {print $3}')
-	MSTNEW=mst_SAPHanaCon_${SID}_HDB${INO}
+	MSTNEW="mst_SAPHanaCon_${SID}_HDB${INO}"
 	CLNTOP=$(xmllint -xpath \
-		"string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $BAKDIR/cib.xml)
+		"string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" "$BAKDIR/cib.xml")
 	# CLNTOP=$(crm configure show type:order |\
 	#      	awk '$1=="order" && $5=="'$MSTOLD'" {print $4}')
 	RSCTOP=$(xmllint -xpath "\
-		string(///resources//*[@type='SAPHanaTopology']/@id)" $BAKDIR/cib.xml)
+		string(///resources//*[@type='SAPHanaTopology']/@id)" "$BAKDIR/cib.xml")
 	# RSCTOP=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
