@@ -181,24 +181,24 @@ function make-backup-local() {
 }
 
 function f_make-backup() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	crm cluster run "'$SCRIPT' -x make-backup-local"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_show-state() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm_mon -1r --include=failcounts,fencing-pending;echo;SAPHanaSR-showAttr;cs_clusterstate -i|grep -v \"#\""
 	crm_mon -1r --include=failcounts,fencing-pending
 	echo
 	SAPHanaSR-showAttr
 	cs_clusterstate -i | grep -v "#"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_maintenance-on-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm resource maintenance $MSTOLD on"
 	[ $DRYRUN = no ] && crm resource maintenance $MSTOLD on
@@ -209,11 +209,11 @@ function f_maintenance-on-classic() {
 	echo "echo \"property cib-bootstrap-options: stop-orphan-resources=false\" | crm configure load update -"
 	[ $DRYRUN = no ] && echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
 		crm configure load update -
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 }
 
 function f_maintenance-off-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm resource refresh $CLNTOP"
 	[ $DRYRUN = no ] && crm resource refresh $CLNTOP
@@ -236,7 +236,7 @@ function f_maintenance-off-angi() {
 	echo "echo \"property cib-bootstrap-options: stop-orphan-resources=true\" | crm configure load update -"
 	[ $DRYRUN = no ] && echo "property cib-bootstrap-options: stop-orphan-resources=true" |\
 		crm configure load update -
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 }
 
 function del-srhook-local-classic() {
@@ -276,9 +276,9 @@ function del-srhook-local-classic() {
 }
 
 function f_remove-srhook-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	crm cluster run "'$SCRIPT' -x del-srhook-local-classic"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function add-srhook-local-angi() {
@@ -313,24 +313,24 @@ function add-srhook-local-angi() {
 }
 
 function f_add-srhook-angi() {
-        echo-funa run $FUNCNAME
+        echo-funa run "${FUNCNAME[0]}"
 	crm cluster run "'$SCRIPT' -x add-srhook-local-angi"
-        echo-funa end $FUNCNAME
+        echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-property() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	crm configure show SAPHanaSR | awk -F"=" '$1~/hana_/ {print $1}' |\
 	while read; do
 		echo "crm_attribute --delete --type crm_config --name $REPLY"
 		[ $DRYRUN = no ] && crm_attribute --delete --type crm_config --name $REPLY
 	done
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-node-attribute() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	for N in $PRINOD $SECNOD; do
 		crm configure show $N | tr " " "\n" | awk -F "=" 'NR>5 {print $1}' |\
@@ -343,11 +343,11 @@ function f_remove-node-attribute() {
 		echo "crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete"
 		[ $DRYRUN = no ] && crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete		
 	done
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-saphanatop-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	for N in "//rsc_order[@id='$MSTORD']" "//clone[@id='$CLNTOP']"; do
 		echo "cibadmin --delete --xpath \"${N}\""
@@ -356,11 +356,11 @@ function f_remove-saphanatop-classic() {
 	wait-idle
 	echo "crm resource refresh $RSCTOP"
 	[ $DRYRUN = no ] && crm resource refresh $RSCTOP
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-saphanacon-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	for N in "//rsc_colocation[@id='$MSTCOL']" "//rsc_order[@id='$MSTORD']" "//master[@id='$MSTOLD']"; do
 		echo "cibadmin --delete --xpath \"${N}\""
@@ -369,11 +369,11 @@ function f_remove-saphanacon-classic() {
 	wait-idle
 	echo "crm resource refresh $RSCCON"
 	[ $DRYRUN = no ] && crm resource refresh $RSCCON
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_add-saphanatop-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	[ -z $sid ] && sid=${SID,,}
@@ -395,11 +395,11 @@ function f_add-saphanatop-angi() {
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $CLNTOP
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_add-saphanacon-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	[ -z $sid ] && sid=${SID,,}
@@ -423,11 +423,11 @@ function f_add-saphanacon-angi() {
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $MSTNEW
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_add-saphanafil-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo -n "echo \""
 	echo -n $CIB_CLNTMP_FIL |\
@@ -442,11 +442,11 @@ function f_add-saphanafil-angi() {
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $CLNFIL
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_install-rpm-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
 	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
@@ -456,19 +456,19 @@ function f_install-rpm-angi() {
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
 	echo "hash -r"
 	[ $DRYRUN = no ] && hash -r
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-rpm-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_check-prereq() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	# TODO meaningful return codes
 	pre_rc=0
 	if [ -z $PRINOD ]; then
@@ -574,26 +574,26 @@ function f_check-prereq() {
 	show-variables
 	ALL_RC=$pre_rc
 	echo "RC=$pre_rc"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_check-final-state() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "TODO /usr/bin/SAPHanaSR-manageAttr"
 	# TODO [ $DRYRUN = no ] && /usr/bin/SAPHanaSR-manageAttr
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_test-secondary() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "root@$SECNOD \"hostname; killall -9 hdbnameserver\""
 	[ $DRYRUN = no ] && ssh root@$SECNOD "hostname; killall -9 hdbnameserver"
 	wait-idle
 	echo "crm resource cleanup $CLNTOP"
 	 [ $DRYRUN = no ] && crm resource cleanup $CLNTOP
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function cleanup() {
