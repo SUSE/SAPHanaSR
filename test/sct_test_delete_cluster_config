@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# sct_test_delete_cluster_config  - delete the complete cluster config (CIB)
+#
+# - set cluster to maintenance
+# - erase the cluster config
+#
+# expected outcome: cluster config (CIB) empty, HANA still running 
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+
+#
+# set cluster to maintenance, erase the cluster configuration (CIB) and again set cluster to maintenance 
+#
+echo "== set maintenance mode and erase config =="
+ssh -T "${node01}" "crm maintenance on" 1>/dev/null 2>/dev/null 
+ssh -T "${node01}" "crm configure erase" 1>/dev/null 2>/dev/null
+ssh -T "${node01}" "crm maintenance on" 1>/dev/null 2>/dev/null
+
+#
+# restart the cluster - this deletes transient attributes from the cluster
+#
+ssh -T "${node01}" "crm cluster stop --all" 1>/dev/null 2>/dev/null
+sleep 5
+ssh -T "${node01}" "crm cluster start --all" 1>/dev/null 2>/dev/null
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 1>/dev/null 2>/dev/null
+
+#
+# delete persistent node attributes
+#
+ssh -T "${node01}" <<EOF
+crm configure show type:node | awk -F'\' '/^node / { print \$1 } ' >/root/crm.txt
+crm configure load update /root/crm.txt
+rm /root/crm.txt
+EOF
+
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 1>/dev/null 2>/dev/null
+
+#
+# take cluster out of maintenance
+#
+echo "== end of the cluster wide maintenance =="
+ssh -T "${node01}" "crm maintenance off" 1>/dev/null 2>/dev/null
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 1>/dev/null 2>/dev/null
+#

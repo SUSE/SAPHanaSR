@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR 7 "08 Aug 2023" "" "SAPHanaSR_basic_cluster"
+.TH SAPHanaSR 7 "18 Mar 2024" "" "SAPHanaSR_basic_cluster"
 .\"
 .SH NAME
 SAPHanaSR_basic_cluster \- SAP HANA System Replication scale-up basic cluster configuration.
@@ -10,7 +10,8 @@ SAPHanaSR_basic_cluster \- SAP HANA System Replication scale-up basic cluster co
 .\"
 The SAP HANA System Replication scale-up scenario needs a certain basic
 cluster configuration. Besides this necessary settings, some additional
-configurations might match specific needs.
+configurations might match specific needs. Adapting a few SAP HANA settings
+might be beneficial as well.
 .\"
 .\" \fB* Corosync Basics\fR
 .\"
@@ -111,6 +112,38 @@ to have the SAP instance service stopping after pacemaker at system shutdown.
 Therefor a drop-in file for the pacemaker service might help. See examples below.
 
 .PP
+\fB* SAP HANA Basics\fR
+
+\fB/usr/sap/${SID}/SYS/global/hdb/custom/config/global.ini\fR
+.PP
+\fB[memorymanager]\fR
+.br
+\fBfinal_memory_release_shutdown = [ auto | on | off ]\fR
+.br
+\fBfinal_memory_release_crash = [ auto | on | off ]\fR
+.PP
+Starting with SAP HANA 2.0 SPS06, the database shutdown can be accelerated by
+optimizing memory de-allocation. Please refer to SAP documentation before setting
+this parameters.
+.\" TODO SAP notes 3405297 ?
+
+\fB/usr/sap/${SID}/SYS/global/hdb/custom/config/daemon.ini
+.PP
+\fB[daemon]\fR
+.br
+\fBterminationtimeout = [ \fImillisec\fB ]\fR
+.br
+\fBforcedterminationtimeout = [ \fImillisec\fB ]\fR
+.PP
+The first parameter defines the timeout from sending SIGTERM to finally terminating
+child processes when HANA is shutting down by the STOP event. Used also as maximal
+delay in system restart if 'restartterminationtimeout' parameter is not set.
+The second defines the timeout from sending the SIGTERM to finally terminating
+child processes when HANA is shutting down by the QUIT event.
+Please refer to SAP documentation before setting this parameters.
+.\" TODO check above
+
+.PP
 .\"
 .SH EXAMPLES
 
@@ -164,7 +197,7 @@ SBD resource:
 .RS 2
 primitive rsc_stonith_sbd stonith:external/sbd \\
 .br
- params pcmk_delay_max="30"
+ params pcmk-delay-max=30
 .RE
 .PP
 
@@ -177,7 +210,7 @@ Example for a priority fencing disk-based SBD resource.
 .br
 primitive rsc_stonith_sbd stonith:external/sbd \\
 .br
- params pcmk_delay_base=15 \\
+ params pcmk-delay-max=15 \\
 .br
 property cib-bootstrap-options: \\
 .br
@@ -416,7 +449,7 @@ A.Briel, F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2023 SUSE LLC
+(c) 2019-2024 SUSE LLC
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

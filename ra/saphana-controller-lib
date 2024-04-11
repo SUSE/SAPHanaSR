@@ -181,6 +181,11 @@ function saphana_print_parameters() {
         <shortdesc lang="en">HANA instance profile name</shortdesc>
         <content type="string" default="" />
     </parameter>
+    <parameter name="ON_FAIL_ACTION" unique="0" required="0">
+        <longdesc lang="en">Technical preview: ON_FAIL_ACTION selects the level RA escalates monitor failures on primary. Useful values are "fence" and "proceed".</longdesc>
+        <shortdesc lang="en">Technical preview: ON_FAIL_ACTION defines the RA escalation level after failures</shortdesc>
+        <content type="string" default="proceed" />
+    </parameter>
 </parameters>
 '
 } # end function saphana_print_parameters
@@ -385,9 +390,22 @@ function saphana_init_get_ocf_parameters() {
     AUTOMATED_REGISTER="${OCF_RESKEY_AUTOMATED_REGISTER:-false}"
     DUPLICATE_PRIMARY_TIMEOUT="${OCF_RESKEY_DUPLICATE_PRIMARY_TIMEOUT:-7200}"
     ocf_env=$(env | grep 'OCF_RESKEY_CRM')
+    ON_FAIL_ACTION="${OCF_RESKEY_ON_FAIL_ACTION:-proceed}"
     super_ocf_log debug "DBG: OCF: $ocf_env"
     return 0
 } # end function saphana_init_get_ocf_parameters
+
+function saphana_reset_poison_pill() {
+    if [ -e "$pp_sap_hana_controller" ]; then
+        super_ocf_log info "RA reset old RA poison pill"
+        rm "$pp_sap_hana_controller"
+    fi
+} # end function  saphana_reset_poison_pill
+
+function saphana_set_poison_pill() {
+    super_ocf_log info "RA set RA poison pill"
+    touch "$pp_sap_hana_controller"
+} # end function  saphana_set_poison_pill
 
 function saphana_init() {
     # function: saphana_init - initialize variables for the resource agent
@@ -407,6 +425,7 @@ function saphana_init() {
     # create directory for HANA_CALL command sdtout and stderr tracking
     #
     runDir="/run/SAPHanaSR_${SID}"
+    pp_sap_hana_controller="/run/SAPHanaController_poison_pill_${SID}"
     mkdir -p "$runDir"
     chown "${SID,,}adm" "$runDir"
     super_ocf_log info "DEC: preparing runDir ($runDir) for access of user ${SID,,}adm"
@@ -779,23 +798,33 @@ function saphana_stop() {
     local rc=0
     local output=""
     super_ocf_log info "ACT: saphana_stop"
-    if is_the_master_nameserver; then
-	    super_ocf_log info "ACT: saphana_stop: is_the_master_nameserver"
-        # Stop the entire SAP HANA site (StopSystem)
-        saphana_stopSystem; rc=$?
-    elif is_active_nameserver_slave && [ -z "$gTheMaster" ]; then
-	    super_ocf_log info "ACT: saphana_stop: is_active_nameserver_slave and no master nameserver is available"
-        # Stop the entire SAP HANA site (StopSystem)
-        saphana_stopSystem; rc=$?
-    elif is_lost_nameserver_slave && [ -z "$gTheMaster" ]; then
-	    super_ocf_log info "ACT: saphana_stop: is_lost_nameserver_slave and no master nameserver is available"
-        # Stop ONLY the local SAP HANA instance to avoid an isolated SAP HANA nameserver slave does shutdown the entire site
-        saphana_stopSystem Stop rc=$?
+    #
+    # FAST-STOP: Check id poison pill has been created by a failed monitor
+    #
+    if [[ -e "$pp_sap_hana_controller" ]]; then
+        super_ocf_log info "RA poison pill detected - reporting stop error - sleep 5s"
+        sleep 5
+        saphana_reset_poison_pill
+        rc="$OCF_ERR_GENERIC"
     else
-	    is_active_nameserver_slave; is_slave_rc=$?
-	    super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($gTheMaster) NOR is_lost_nameserver_slave"
-        # TODO PRIO1: NG - Do we need to set a clone state here?
-        rc="$OCF_SUCCESS"
+        if is_the_master_nameserver; then
+            super_ocf_log info "ACT: saphana_stop: is_the_master_nameserver"
+            # Stop the entire SAP HANA site (StopSystem)
+            saphana_stopSystem; rc=$?
+        elif is_active_nameserver_slave && [ -z "$gTheMaster" ]; then
+            super_ocf_log info "ACT: saphana_stop: is_active_nameserver_slave and no master nameserver is available"
+            # Stop the entire SAP HANA site (StopSystem)
+            saphana_stopSystem; rc=$?
+        elif is_lost_nameserver_slave && [ -z "$gTheMaster" ]; then
+            super_ocf_log info "ACT: saphana_stop: is_lost_nameserver_slave and no master nameserver is available"
+            # Stop ONLY the local SAP HANA instance to avoid an isolated SAP HANA nameserver slave does shutdown the entire site
+            saphana_stopSystem Stop rc=$?
+        else
+            is_active_nameserver_slave; is_slave_rc=$?
+            super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($gTheMaster) NOR is_lost_nameserver_slave"
+            # TODO PRIO1: NG - Do we need to set a clone state here?
+            rc="$OCF_SUCCESS"
+        fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -1831,6 +1860,7 @@ function saphana_monitor_clone() {
     #
     # reset possible left SRACTION_HISTORY
     #
+    saphana_reset_poison_pill
     set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
     if ocf_is_probe; then
         super_ocf_log info "DEC: PROBE ONLY"
@@ -1851,6 +1881,25 @@ function saphana_monitor_clone() {
             fi
         fi
     else
+        #
+        # optional FAST-STOP
+        #
+        if [[ "$gFullRole" =~ ^1:P: ]]; then
+            if [[ "$ON_FAIL_ACTION" == "fence" ]]; then
+                test_rem_sr=$(get_SRHOOK "$gRemSite")
+                if [[ "$test_rem_sr" == "SOK" ]]; then
+                    super_ocf_log info "RA monitor() ON_FAIL_ACTION=$ON_FAIL_ACTION, remote site is SOK => BYPASS SCORING HERE"
+                    super_ocf_log info "RA monitor() ON_FAIL_ACTION=$ON_FAIL_ACTION, remote site is SOK and monitor failes => create poison pill file"
+                    saphana_set_poison_pill
+                else
+                    super_ocf_log info "RA test_rem_sr=$test_rem_sr != 'SOK'"
+                fi
+            else
+                super_ocf_log info "RA ON_FAIL_ACTION != 'fence'"
+            fi
+        else
+            super_ocf_log info "RA gFullRole=$gFullRole does not match '^1:P:'"
+        fi
         super_ocf_log info "DEC: scoring_crm_promote **11**"
         scoring_crm_promote "$gFullRole" "$gSrHook"
         # shellcheck disable=SC2154
@@ -1910,6 +1959,21 @@ function saphana_monitor_clone() {
         # instance is not THE master nameserver
         #
         saphana_monitor_clone_not_msn
+    fi
+    #
+    # optional FAST-STOP - remove possible poison pill, if monitor is ok right now
+    #
+    if ! ocf_is_probe; then
+        if [[ "$ON_FAIL_ACTION" == "fence" ]]; then
+            if [[ "$test_rem_sr" == "SOK" ]]; then
+                if [[ "$rc" != "$OCF_SUCCESS" && "$rc" != "$OCF_RUNNING_MASTER" ]]; then
+                    rc="$OCF_ERR_GENERIC"
+                fi
+            fi
+        fi
+        if [[ "$rc" == "$OCF_SUCCESS" || "$rc" == "$OCF_RUNNING_MASTER" ]]; then
+            saphana_reset_poison_pill
+        fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -2032,6 +2096,24 @@ function saphana_demote_clone() {
         rc="$OCF_ERR_GENERIC"
     else
         rc="$OCF_SUCCESS"
+    fi
+    #
+    # optional FAST-STOP (let demote fail to force stop of the resource; stop then triggers an error -> fence)
+    #
+    if [[ "$gFullRole" =~ ^1:P: ]]; then
+        if [[ "$ON_FAIL_ACTION" == "fence" ]]; then
+            test_rem_sr=$(get_SRHOOK "$gRemSite")
+            if [[ "$test_rem_sr" == "SOK" ]]; then
+                super_ocf_log info "RA monitor() ON_FAIL_ACTION=$ON_FAIL_ACTION, remote site is SOK => demote failed to trigger stop"
+                rc="$OCF_ERR_GENERIC"
+            else
+                super_ocf_log info "RA test_rem_sr=$test_rem_sr != 'SOK'"
+            fi
+        else
+            super_ocf_log info "RA ON_FAIL_ACTION != 'fence'"
+        fi
+    else
+        super_ocf_log info "RA gFullRole=$gFullRole does not match '^1:P:'"
     fi
     super_ocf_log info "ACT: Demoted $SID-$InstanceName."
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"

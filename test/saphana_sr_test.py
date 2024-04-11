@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "0.3.3"
+    version = "1.2.13"
 
     def message(self, msg, **kwargs):
         """
@@ -159,7 +159,7 @@ class SaphanasrTest:
         structure representing the data
         """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
-        cmd = "SAPHanaSR-showAttr --format=tester"
+        cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
@@ -354,7 +354,13 @@ class SaphanasrTest:
         return None
 
     def run_checks(self, checks, area_name, object_name, step_step ):
-        """ run all checks for area and object """
+        """ run all checks for area and object 
+            params:
+                   checks: list of checks to be run
+                   area_name: attribute area to be checked (global, Site, Resource, Host)
+                   object_name: aobject inside area to be checked (ROT, WDF, pizbuin01)
+                   step_step: TBD
+        """
         l_sr = self.dict_sr
         check_result = -1
         self.__reset_failed__()
@@ -367,6 +373,15 @@ class SaphanasrTest:
                 check_result = 2
                 break
             c_key = match_obj.group(1)
+            #
+            # rewrite key, if it contains a string @@sid@@ this is needed e.g. to match lpa_<sid>_lpt
+            #
+            #print(f"c_key={c_key}")
+            match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
+            if match_obj_key is not None:
+                #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
+                c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
+                #print(f"rewrite c_key={c_key}")
             c_comp = match_obj.group(2)
             c_reg_exp = match_obj.group(3)
             c_reg_exp_a = ""
@@ -426,6 +441,12 @@ class SaphanasrTest:
                             found = 1
                             c_err = 0
                             check_result = max(check_result, 0)
+                else:
+                    # if object does not even exist, the 'None' clause is true
+                    if c_comp == "is" and c_reg_exp == "None":
+                        found = 1
+                        c_err = 0
+                        check_result = max(check_result, 0)
                 if c_err == 1:
                     if not found:
                         l_val = None
@@ -435,6 +456,11 @@ class SaphanasrTest:
                 else:
                     check_result = max(check_result, 0)
                     self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+            if c_comp == "is" and c_reg_exp == "None":
+                # if area does not even exist, the 'None' clause is true
+                found = 1
+                c_err = 0
+                check_result = max(check_result, 0)
             if (found == 0) and (check_result < 2):
                 check_result = 2
         if self.config['dump_failures'] and 'failed' in self.run:

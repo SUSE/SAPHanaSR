@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR-ScaleOut_basic_cluster 7 "07 Aug 2023" "" "SAPHanaSR"
+.TH SAPHanaSR-ScaleOut_basic_cluster 7 "18 Mar 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-ScaleOut_basic_cluster \- SAP HANA System Replication scale-out basic cluster configuration.
@@ -10,7 +10,8 @@ SAPHanaSR-ScaleOut_basic_cluster \- SAP HANA System Replication scale-out basic 
 .\"
 The SAP HANA System Replication scale-out scenario needs a certain basic
 cluster configuration. Besides this necessary settings, some additional
-configurations might match specific needs.
+configurations might match specific needs. Adapting a few SAP HANA settings
+might be beneficial as well.
 .\"
 .\" \fB* Corosync Basics\fR
 .\"
@@ -109,6 +110,39 @@ The service saptune is highly recommended, see manual page saptune(8).
 In case systemd-style init is used for the HANA database, it might be desired
 to have the SAP instance service stopping after pacemaker at system shutdown.
 Therefor a drop-in file for the pacemaker service might help. See examples below.
+
+.PP
+\fB* SAP HANA Basics\fR
+
+\fB/usr/sap/${SID}/SYS/global/hdb/custom/config/global.ini\fR
+.PP
+\fB[memorymanager]\fR
+.br
+\fBfinal_memory_release_shutdown = [ auto | on | off ]\fR
+.br
+\fBfinal_memory_release_crash = [ auto | on | off ]\fR
+.PP
+Starting with SAP HANA 2.0 SPS06, the database shutdown can be accelerated by
+optimizing memory de-allocation. Please refer to SAP documentation before setting
+this parameters.
+.\" TODO SAP notes 3405297 ?
+
+\fB/usr/sap/${SID}/SYS/global/hdb/custom/config/daemon.ini
+.PP
+\fB[daemon]\fR
+.br
+\fBterminationtimeout =  [ \fImillisec\fB ]\fR
+.br
+\fBforcedterminationtimeout = [ \fImillisec\fB ]\fR
+.PP
+The first parameter defines the timeout from sending SIGTERM to finally terminating
+child processes when HANA is shutting down by the STOP event. Used also as maximal
+delay in system restart if 'restartterminationtimeout' parameter is not set.
+The second defines the timeout from sending the SIGTERM to finally terminating
+child processes when HANA is shutting down by the QUIT event. See also manual page
+susChkSrv.py(7).
+Please refer to SAP documentation before setting this parameters.
+.\" TODO check above
 
 .PP
 .\"
@@ -453,7 +487,7 @@ F.Herschel, L.Pinne.
 .SH COPYRIGHT
 (c) 2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2023 SUSE LLC
+(c) 2019-2024 SUSE LLC
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

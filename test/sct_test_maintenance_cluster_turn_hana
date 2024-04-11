@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# test_maintenance_cluster_turn_hana  - with resource in maintenace: exchange primary/secondary
+# sct_test_maintenance_cluster_turn_hana  - with resource in maintenace: exchange primary/secondary
 #
 # - set mst-resource in maintenance mode
 # - takeover on secondary with suspend primary (gets new primary)
@@ -19,8 +19,8 @@ source .test_properties
 # shellcheck disable=SC2029
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
-currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
-currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 #
 #########################################
@@ -30,8 +30,8 @@ currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/
 #
 #########################################
 
-vhostPrim="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
-vhostSecn="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
+vhostPrim="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
+vhostSecn="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
 if [[ -z "$vhostPrim ]]; then
     vhostPrim="$currPrimary"
 fi
@@ -42,7 +42,7 @@ fi
 
 echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
 
-sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
 sitePrimary="${sitePrimary//\"/}"
 
 echo "p=$currPrimary ($sitePrimary), s=$currSecondary"

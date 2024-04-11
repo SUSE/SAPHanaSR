@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH SAPHanaSR_upgrade_to_angi 7 "14 Feb 2024" "" "SAPHanaSR"
+.TH SAPHanaSR_upgrade_to_angi 7 "02 Apr 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR_upgrade_to_angi \- How to upgrade from SAPHanaSR or SAPHanaSR-ScaleOut to SAPHanaSR-angi.
@@ -15,89 +15,125 @@ SAPHanaSR-angi is quite similar to SAPHanaSR and SAPHanaSR-ScaleOut, but not
 fully backward compatible. Upgrading existing clusters is possible by following
 a defined procedure. The upgrade should lead to the same configuration as an
 installation from scratch.
+.PP
 The upgrade procedure depends on an initial setup as decribed in setup guides
 and manual pages. See REQUIREMENTS below and in manual pages SAPHanaSR(7) or
-SAPHanaSR-ScaleOut(7).
+SAPHanaSR-ScaleOut(7). The procedure does not neccesarily need downtime for
+HANA, if planned and excuted carefully. Nevertheless, it should be done under
+friendly conditions.
 .PP
 \fB*\fR What will be changed for SAP HANA scale-up scenarios?
 .PP
-.RS 2
+SAPHanaSR-angi unifies HA for HANA scale-up and scale-out. Therefor it handles
+scale-up as subset of scale-out, which changes the structure of attributes.
+The most significant changes are listed below.
+.PP
 a. The SAPHana RA and its multi-state config will be replaced by the new
 SAPHanaController and its clone promotable config.
 .br
 b. The SAPHanaSR.py HADR provider hook script will be replaced by the new
 susHanaSR.py.
 .br
-c. Tools are placed in /usr/bin/.
+c. Tools are placed in /usr/bin/ instead of /usr/sbin/.
 .br
 d. Node attributes will be removed.
-.br
+.RS 4
 hana_<sid>_vhost
+.br
 hana_<sid>_site
+.br
 hana_<sid>_remoteHost
+.br
 lpa_<sid>_lpt
+.br
 hana_<sid>_op_mode
+.br
 hana_<sid>_srmode
+.br
 hana_<sid>_sync_state
-TODO
 .br
-e. Site and global attributes will be removed from property SAPHanaSR.
-.br
-TODO
-.br
-f. Site and global attributes will be added to property SAPHanaSR.
-.br
+First and second field of hana_<sid>_roles
+.RE
+.\" e. Site and global attributes will be removed from property SAPHanaSR
+.\" .br
+e. Site and global attributes will be added to property SAPHanaSR.
+.RS 4
 hana_<sid>_glob_topology
+.br
 hana_<sid>_glob_prim
+.br
 hana_<sid>_glob_sec
+.br
 hana_<sid>_site_lpt_<site>
+.br
 hana_<sid>_site_lss_<site>
+.br
 hana_<sid>_site_mns_<site>
+.br
 hana_<sid>_site_srr_<site>
+.br
 hana_<sid>_site_opMode_<site>
+.br
 hana_<sid>_site_srMode_<site>
-hana_<sid>_site_srHook_<site>
+.br
 hana_<sid>_site_srPoll_<site>
-TODO
+.br
+TODO vhost remoteHost
 .RE
 .PP
 \fB*\fR What will be changed for SAP HANA scale-out scenarios?
 .PP
-.RS 2
+SAPHanaSR-angi unifies HA for HANA scale-up and scale-out. The structure of
+attributes stays unchanged. The most significant changes are listed below.
+.PP
 a. The SAPHanaController RA and its multi-state config will be replaced by the
 new SAPHanaController and its clone promotable config.
 .br
 b. The SAPHanaSrMultiTarget.py HADR provider hook script will be replaced by
 the new susHanaSR.py.
 .br
-c. Tools are placed in /usr/bin/.
+c. Tools are placed in /usr/bin/ instead of /usr/sbin/.
 .br
 d. Node attributes will be removed.
-.br
+.RS 4
 gra
+.br
 gsh
-.br
+TODO
+.RE
 e. Site and global attributes will be removed from property SAPHanaSR.
-.br
+.RS 4
 mts
 upd
 hana_<sid>_glob_sync_state
 hana_<sid>_glob_srHook (in case of obsolete scale-out SAPHanaSR.py)
 TODO
-.br
+.RE
 f. Site and global attributes will be added to property SAPHanaSR.
-.br
+.RS 4
 hana_<sid>_glob_topology
+.br
 hana_<sid>_site_lpt_<site>
+.br
 hana_<sid>_site_lss_<site>
+.br
 hana_<sid>_site_mns_<site>
+.br
 hana_<sid>_site_srr_<site>
+.br
 hana_<sid>_site_srMode_<site>
+.br
 hana_<sid>_site_srPoll_<site>
+.br
 TODO
 .RE
 .PP
-\fB*\fR How does the  procedure look like at a glance?
+\fB*\fR How does the upgrade procedure look like at a glance?
+.PP
+The upgrade procedure consists of four phases: preparing, removing, adding,
+finalising. Linux cluster and HANA are kept running. However, resource
+management is disabled and the system goes thru fragiles states during the
+upgrade. 
 .PP
 .RS 2
 1.1 Check for sane state of cluster, HANA and system replication
@@ -132,6 +168,8 @@ TODO
 4.1 Check for sane state of cluster, HANA and system replication
 .br
 4.2 Test RA on secondary and trigger susHanaSR.py (optional)
+.br
+4.3 Remove ad-hoc backup from local directories
 .RE
 .PP
 \fB*\fR What needs to be prepared upfront?
@@ -141,6 +179,7 @@ SAPHanaSR-angi. Refresh your knowledge of SAPHanaSR or SAPHanaSR-ScaleOut.
 .PP
 Next the following information needs to be collected and documented before
 upgrading a cluster:
+.PP
 .RS 2
 1.1 Path to config backup directory at both sites
 .br
@@ -228,7 +267,25 @@ Needs to be done once per Linux cluster.
 # crm configure show rsc_SAPHana_HA1_HDB00
 .RE
 .PP
-\fB*\fR Example for removing SAPHana resource config from CIB.
+\fB*\fR Example for making a backup of CIB, sudo config and global.ini.
+.PP
+SID is HA1, sudo config is /etc/sudoers.d/SAPHanaSR.
+.PP
+.RS 2
+# export BAKDIR=SAPHanaSR.$(date +%s)
+.br
+# mkdir ~/$BAKDIR
+.br
+# cp -a /hana/shared/HA1/global/hdb/custom/config/global.ini ~/$BAKDIR/
+.br
+# cp -a /etc/sudoers.d/SAPHanaSR ~/$BAKDIR/SAPHanaSR.sudo
+.br
+# crm configure show >~/$BAKDIR/crm_configure.txt
+.br
+# ls -l ~/$BAKDIR/*
+.RE
+.PP
+\fB*\fR Example for removing SAPHana resource config from CIB, scale-up.
 .PP
 First the CIB is written to file for backup.
 Next the cluster is told to not stop orphaned resources and the SAPHana
@@ -242,7 +299,7 @@ The resource names have been determined as shown in the example above.
 example above.
 .PP
 .RS 2
-# crm configure show > cib.SAPHanaSR-backup
+# crm configure show > SAPHanaSR-crm-backup
 .br
 # echo "property cib-bootstrap-options: stop-orphan-resources=false"|\\
   crm configure load update -
@@ -269,6 +326,22 @@ example above.
 # crm_mon -1r
 .RE
 .PP
+\fB*\fR Example for removing location constraints from CIB, scale-out.
+.PP
+First, the same steps as for scale-up have to be done, see example above.
+In addition the (anti-)location constraints for the majority maker node have to
+be removed. The resource names have been determined as shown in the example above.
+.PP
+.RS 2
+# cibadmin --delete --xpath \\
+.br
+  "//rsc_location[@id='SAPHanaCon_not_on_majority_maker']"
+.br
+# cibadmin --delete --xpath \\
+.br
+  "//rsc_location[@id='SAPHanaTop_not_on_majority_maker']"
+.RE
+.PP
 \fB*\fR Example for removing all reboot-safe node attributes from CIB.
 .PP
 All reboot-safe node attributes will be removed. Needed attributes are expected 
@@ -283,18 +356,16 @@ See also crm_attribute(8).
 .br
 # crm configure show node1 | tr " " "\\n" |\\
 .br
-  tail -n +6 | awk -F "=" '{print $1}' |\\
-.br
-while read; do \\
+  awk -F "=" 'NR>5 {print $1}' | while read; do \\
 .br
   crm_attribute --node node1 --name $REPLY --delete; done
 .RE
 .PP
-\fB*\fR Example for removing non-reboot-safe node attribute from CIB.
+\fB*\fR Example for removing non-reboot-safe node attribute from CIB, scale-up.
 .PP
 The attribute hana_<sid>_sync_state will be removed.
 Of course the CIB should be checked to see if the removal was successful.
-Needs to be done for both nodes, scale-up only.
+Needs to be done for both nodes. Scale-up only.
 Node is node1, SID is HA1.
 See also crm_attribute(8).
 .PP
@@ -308,14 +379,14 @@ See also crm_attribute(8).
   --lifetime reboot --delete
 .RE
 .PP
-\fB*\fR Example for removing all SAPHanaSR property attributes from CIB.
+\fB*\fR Example for removing all SAPHanaSR property attributes from CIB, scale-out.
 .PP
 All attributes of porperty SAPHanaSR will be removed. Needed attributes are
 expected to be re-added by the RAs later. The attribute for srHook will be
 added by the susHanaSR.py HADR provider script and might be missing until the
 HANA system replication status changes.
 Of course the CIB should be checked to see if the removal was successful.
-Needs to be done once per Linux cluster.
+Needs to be done once per Linux cluster. Scale-out only.
 See also SAPHanaSR-showAttr(8) and SAPHanaSR.py(7) or SAPHanaSrMultiTarget.py(7)
 respectively.
 .PP
@@ -324,9 +395,7 @@ respectively.
 .br
 # crm configure show SAPHanaSR |\\
 .br
-  awk -F"=" '$1~/hana_/ {print $1}' |\\
-.br
-while read; do \\
+  awk -F"=" '$1~/hana_/ {print $1}' | while read; do \\
 .br
   crm_attribute --delete --type crm_config --name $REPLY; done
 .RE
@@ -338,9 +407,11 @@ the section is determined from global.ini. Then the currenct HADR provider
 section is shown. If the section is identical with the shipped template, it can
 be removed easily from the configuration. Finally the HADR provider hook script 
 is removed from running HANA. Needs to be done for each HANA site.
-SID is HA1, case sensitive HADR provider name is SAPHanaSR. See manual page
-SAPHanaSR.py(7) or SAPHanaSrMultiTarget.py(7) for details on checking the hook
-script integration.
+SID is HA1, case sensitive HADR provider name is SAPHanaSR. The example is given
+for scale-up SAPHanaSR.py, for scale-out SAPHanaSrMultiTarget.py might be
+removed instead. The path /usr/sbin/ is used, because this step is done while
+the old RPM is still installed. See manual page SAPHanaSR.py(7) or
+SAPHanaSrMultiTarget.py(7) for details on checking the hook script integration.
 .PP
 .RS 2
 # su - ha1adm
@@ -351,11 +422,11 @@ script integration.
 .br
 ~> grep -i ha_dr_provider_saphanasr global.ini
 .br
-~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --show \\
+~> /usr/sbin/SAPHanaSR-manageProvider --sid=HA1 --show \\
 .br
   --provider=SAPHanaSR
 .br
-~> /usr/bin/SAPHanaSR-manageProvider --sid=HA1 --reconfigure \\
+~> /usr/sbin/SAPHanaSR-manageProvider --sid=HA1 --reconfigure \\
 .br
   --remove /usr/share/SAPHanaSR/samples/global.ini
 .br
@@ -364,7 +435,8 @@ script integration.
 .PP
 \fB*\fR Example for removing the SAPHanaSR.py hook script from sudoers. 
 .PP
-Needs to be done on each node.
+Needs to be done on each node. The example is given for scale-up SAPHanaSR.py,
+for scale-out SAPHanaSrMultiTarget.py might be removed instead.
 See manual page SAPHanaSR.py(7) for details on checking the hook script
 integration.
 .PP
@@ -380,7 +452,8 @@ integration.
 .PP
 The package SAPHanaSR is removed from all cluster nodes. Related packages
 defined by patterns and dependencies are not touched. Needs to be done once per
-Linux cluster.
+Linux cluster. The example is given for scale-up SAPHanaSR, for scale-out
+SAPHanaSR-ScaleOut might be removed instead.
 .PP
 .RS 2
 # crm cluster run "rpm -E --force SAPHanaSR"
@@ -457,28 +530,45 @@ Of course status of cluster, HANA and system replication needs to be checked.
 /etc/sudoers.d/SAPHanaSR
 recommended place for sudo permissions of HADR provider hook scripts
 .TP
-/usr/bin/
-path to tools
+/usr/sbin/ , /usr/bin/
+path to tools before the upgrade, after the upgrade
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 on-disk representation of HANA global system configuration
 .TP
 /usr/share/SAPHanaSR/samples/global.ini
-template for classical SAPHanaSR.py entry in global.ini
+template for classical scale-up SAPHanaSR.py entry in global.ini
+.TP
+/usr/share/SAPHanaSR-ScalOut/samples/global.ini
+template for classical scale-out SAPHanaSrMultiTarget.py entry in global.ini
 .TP
 /usr/share/SAPHanaSR-angi/samples/global.ini_susHanaSR
 template for susHanaSR.py entry in global.ini
+.TP
+/usr/share/SAPHanaSR-angi/samples/SAPHanaSR-upgrade-to-angi-demo
+unsupported script for demonstrating the procedure on a test cluster
 .PP
 .\"
 .SH REQUIREMENTS
 .PP
-* OS, Linux cluster and HANA are matching requirements for SAPHanaSR, or SAPHanaSR-ScaleOut respectively, and SAPHanaSR-angi.
+* OS, Linux cluster and HANA are matching requirements for SAPHanaSR, or
+SAPHanaSR-ScaleOut respectively, and SAPHanaSR-angi.
 .br
-* Linux cluster, HANA and system replication are in sane state before the upgrade. All cluster nodes are online.
+* The resource configuration matches a documented setup. Even if the general
+upgrade procedure is expected to work for customised configuration, details
+might need special treatment.
 .br
-* The whole procedure is tested carefully and documented in detail before being applied on production.
+* The whole upgrade procedure is tested carefully and documented in detail
+before being applied on production.
 .br
-* Linux cluster, HANA and system replication are checked and in sane state before set back into production.
+* Linux cluster, HANA and system replication are in sane state before the
+upgrade. All cluster nodes are online.
+.br
+* The HANA database is idle during the upgrade. No other changes on OS, cluster,
+database or infrastructure are done in parallel to the upgrade.
+.br
+* Linux cluster, HANA and system replication are checked and in sane state
+before set back into production.
 .PP
 .\"
 .SH BUGS
@@ -491,7 +581,7 @@ In case of any problem, please use your favourite SAP support process to open a 
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 \fBocf_suse_SAPHana\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBSAPHanaSR.py\fP(7) , \fBSAPHanaSrMultiTarget.py\fP(7) ,
-\fBsusHanaSR.py\fP(7) ,
+\fBsusHanaSR.py\fP(7) , \fBSAPHanaSR-upgrade-to-angi-demo\fP(8) ,
 \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBcrm\fP(8) , \fBcrm_mon\fP(8) , \fBcrm_attribute\fP(8) , \fBcibadmin\fP(8) , 
 .br

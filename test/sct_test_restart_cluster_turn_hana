@@ -21,8 +21,8 @@ source .test_properties
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resource"
 ssh "${node01}" "crm resource cleanup  $mstResource"
 
-currPrimary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
-currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 #########################################
 # VHOSTS
@@ -31,8 +31,8 @@ currSecondary="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'/
 #
 #########################################
 
-vhostPrim="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
-vhostSecn="$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
+vhostPrim="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
+vhostSecn="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
 if [[ -z "$vhostPrim ]]; then
     vhostPrim="$currPrimary"
 fi
@@ -40,9 +40,9 @@ if [[ -z "$vhostSecn ]]; then
     vhostPrim="$currSecondary"
 fi
 
-sitePrimary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
+sitePrimary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
 sitePrimary="${sitePrimary//\"/}"
-siteSecondary=$(ssh "${node01}" "SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currSecondary")
+siteSecondary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currSecondary")
 siteSecondary="${siteSecondary//\"/}"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary, vhostPrim=$vhostPrim, vhostSecn=$vhostSecn"

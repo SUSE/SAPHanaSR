@@ -65,7 +65,7 @@ Comment: Infrastructure failure, main cluster case.
 .RS 2
 Descr: Block HANA SR and freeze HANA FS on primary node.
 .br
-Topology: ScaleUp.
+Topology: ScaleUp (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -84,7 +84,7 @@ Comment: Infrastructure failure, main cluster case.
 Descr: Block HANA SR and freeze HANA NFS on primary master node
 (not yet implemented).
 .br
-Topology: ScaleOut.
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -103,7 +103,7 @@ Comment: Infrastructure failure, main cluster case.
 Descr: Block HANA SR and freeze HANA NFS on primary site
 (not yet implemented).
 .br
-Topology: ScaleOut.
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -151,7 +151,7 @@ Comment: Just housekeeping.
 .RS 2
 Descr: Freeze HANA FS on primary node.
 .br
-Topology: ScaleUp.
+Topology: ScaleUp (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -170,7 +170,7 @@ Comment: Infrastructure failure, main cluster case.
 .RS 2
 Descr: Freeze HANA NFS on primary master node.
 .br
-Topology: ScaleOut.
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -189,7 +189,7 @@ Comment: Infrastructure failure, main cluster case.
 .RS 2
 Descr: Freeze HANA NFS on primary site.
 .br
-Topology: ScaleOut.
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -208,7 +208,7 @@ Comment: Infrastructure failure, main cluster case.
 .RS 2
 Freeze HANA NFS on secondary site.
 .br
-Topology: ScaleOut.
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
@@ -431,6 +431,56 @@ No takeover. One fencing.
 Comment: Node failure, main cluster case.
 .RE
 .PP
+\fBmaintenance_cluster_bootstrap\fP
+.RS 2
+Descr: Initially configuring cluster resources in CIB.
+.br
+Topology: ScaleUp, ScaleOut (not yet implemented).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See SAPHanaSR_basic_cluster(7),  SAPHanaSR-ScaleOut_basic_cluster(7),
+ocf_suse_SAPHanaController(7), ocf_suse_SAPHanaTopology(7),
+ocf_suse_SAPHanaFilesystem(7),
+https://documentation.suse.com/sbp/sap-15/ .
+.br
+TODO
+.br
+Expect: CIB contains the documented resource configuration.
+All nodes stay online.
+Cluster stopped and restarted.
+Both HANA keep running.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Very first admin procedure. \fBOriginal CIB will be lost.\fP
+.RE
+.PP
+\fBmaintenance_cluster_hana_running\fP
+.RS 2
+Descr: Stop and restart cluster, keep HANA running.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See SAPHanaSR_maintenance_examples(7).
+crm maintenance on;
+crm cluster stop --all;
+crm cluster start --all;
+crm resource refresh <cln_topology>;
+crm resource refresh <msl_controller>;
+crm resource maintenance off;
+.br
+Expect: All nodes stay online.
+Cluster stopped and restarted.
+Both HANA keep running.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Main admin procedure.
+.RE
+.PP
 \fBmaintenance_cluster_turn_hana\fP
 .RS 2
 Descr: Maintenance procedure, manually turning HANA sites.
@@ -484,6 +534,21 @@ Expect: Cluster and HANA are up and running, all good.
 Comment: Main cluster case.
 .RE
 .PP
+\fBone_stable_hour\fP
+.RS 2
+Descr: Check regulary for one hour that there is no failure.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Wait and see, repeat every ten minutes for one hour.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.br
+Comment: Main cluster case.
+.RE
+.PP
 \fBregister_prim_cold_hana\fP
 .RS 2
 Descr: Stop cluster, do manual takeover, leave former primary down and unregistered, start cluster.
@@ -507,13 +572,13 @@ Comment: Admin mistake.
 .RS 2
 Descr: Stop and restart cluster, keep HANA running.
 .br
-Topology: ScaleUp, ScaleOut.
+Topology: ScaleUp, ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: crm maintenance on;
-crm cluster run "crm cluster stop";
-crm cluster run "crm cluster start";
+crm cluster stop --all;
+crm cluster start --all;
 crm resource refresh <cln_topology>;
 crm resource refresh <msl_controller>;
 crm resource maintenance off;
@@ -524,21 +589,21 @@ Both HANA keep running.
 SR stays SOK.
 No takeover. No fencing.
 .br
-Comment: Main admin procedure.
+Comment: Sub-optimal admin procedure.
 .RE
 .PP
 \fBrestart_cluster\fP
 .RS 2
 Descr: Stop and restart cluster and HANA.
 .br
-Topology: ScaleUp, ScaleOut.
+Topology: ScaleUp, ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: crm cluster run "crm cluster stop";
+Test: crm cluster stop --all;
 sapcontrol ... StartSystem;
 sapcontrol ... StartSystem;
-crm cluster run "crm cluster start";
+crm cluster start --all;
 .br
 Expect: All nodes stay online.
 Cluster stopped and restarted.
@@ -687,8 +752,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-tests-syntax\fP(5) , \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) ,
-\fBSAPHanaSR-tests-angi-ScaleOut\fP(7) , \fBSAPHanaSR-angi\fP(7) ,
-\fBSAPHanaSR-showAttr\fP(8)
+\fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
+\fBSAPHanaSR-tests-classic-ScaleUp\fP(7) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8)
 .PP
 .\"
 .SH AUTHORS

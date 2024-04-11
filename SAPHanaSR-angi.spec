@@ -1,9 +1,9 @@
 #
-# spec file for package SAPHanaSR
+# spec file for package SAPHanaSR-angi
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2023 SUSE LLC.
+# Copyright (c) 2017-2024 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        1.2.5
+Version:        1.2.6
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -78,6 +78,7 @@ mkdir -p %{buildroot}/usr/bin
 mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/icons
 mkdir -p %{buildroot}/usr/share/%{name}/samples
+mkdir -p %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 mkdir -p %{buildroot}/usr/lib/ocf/resource.d/suse
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}%{_mandir}/man7
@@ -95,6 +96,9 @@ install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini_* %{buildroot}/usr/share/%{name}/samples
 
+# crm config templates
+install -m 0644 crm_cfg/angi-ScaleUp/[0-9]*_* %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
+
 # icons for SAPHanaSR-monitor
 install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
 
@@ -111,6 +115,7 @@ install -m 0555 tools/SAPHanaSR-replay-archive-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-filter-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
+install -m 0555 tools/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
 install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 

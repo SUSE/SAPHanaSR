@@ -1,7 +1,8 @@
 #
-# spec file for package SAPHanaSR
+# spec file for package SAPHanaSR-tester
 #
-# Copyright (c) 2023 SUSE LLC.
+# Author: Fabian Herschel
+# Copyright (c) 2023-2024 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -19,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.2.8
+Version:        1.2.13
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -30,6 +31,11 @@ Source0:        %{name}-%{version}.tgz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
 Requires:       python3
+
+%package client
+Group:          Productivity/Clustering/HA
+Summary:        Test suite for SAPHanaSR clusters - SAPHanaSR-tester-client is to be installed on all SAPHanaSR classic nodes
+Conflicts:      SAPHanaSR-angi
 
 %description
 SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focussed test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
@@ -44,17 +50,22 @@ Authors:
 --------
     Fabian Herschel
 
+%description client
+SAPHanaSR-tester-client is to be installed on all SAPHanaSR classic nodes to allow SAPHanaSR-tester to check the cluster attributes with the same method.
+
 %prep
 tar xf %{S:0}
 #%define crmscr_path /usr/share/crmsh/scripts/
 
 %build
 gzip man-tester/*
+gzip man-tester-client/*
 
 %install
 mkdir -p %{buildroot}/usr/bin
 #mkdir -p %{buildroot}%{_docdir}/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}
+mkdir -p %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}%{_mandir}/man5
 mkdir -p %{buildroot}%{_mandir}/man7
@@ -71,27 +82,44 @@ install -m 0755 test/callTest* %{buildroot}/usr/bin
 install -m 0755 test/loopTests* %{buildroot}/usr/bin
 install -m 0755 test/sct_* %{buildroot}/usr/bin
 
+# client files
+install -m 0755 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
+mkdir -p %{buildroot}/usr/lib/SAPHanaSR-angi
+install -m 0755 tools/saphana_sr_tools.py %{buildroot}/usr/lib/SAPHanaSR-angi
+
 # test definitions
 pwd
 ls test/json
-cp -va test/json %{buildroot}/usr/share/%{name}
-cp -va test/www %{buildroot}/usr/share/%{name}
+cp -a test/json %{buildroot}/usr/share/%{name}
+cp -a test/www %{buildroot}/usr/share/%{name}
+install -m 0644 crm_cfg/angi-ScaleUp/[0-9]*_* %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 
 # manual pages
 install -m 0444 man-tester/*.5.gz %{buildroot}%{_mandir}/man5
 install -m 0444 man-tester/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man-tester/*.8.gz %{buildroot}%{_mandir}/man8
 
+# man pages for client package
+install -m 0444 man-tester-client/*.7.gz %{buildroot}%{_mandir}/man7
+
 %files
 %defattr(-,root,root)
 /usr/share/%{name}
 %dir /usr/lib/%{name}
 /usr/lib/%{name}/saphana_sr_*.py
-/usr/bin/*
-
+/usr/bin/SAPHanaSR-testCluster
+/usr/bin/SAPHanaSR-checkJson
+/usr/bin/sct_*
+/usr/bin/callTest*
+/usr/bin/loopTests*
+/usr/bin/cs_ssh
+/usr/bin/SAPHanaSR-testCluster-html
 %license LICENSE
-#%dir %{_docdir}/%{name}
 %doc README.md
 %doc %{_mandir}/man*/*
+
+%files client
+/usr/bin/SAPHanaSR-showAttr
+/usr/lib/SAPHanaSR-angi
 
 %changelog

@@ -272,6 +272,8 @@ class HanaStatus():
         self.res_dict = {}
         # Controller
         con_res_arr = self.root.findall(f"./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")
+        if len(con_res_arr) == 0:
+            con_res_arr = self.root.findall(f"./configuration/resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='{sid}']/../../..")
         if len(con_res_arr) == 1:
             con_res = con_res_arr[0]
             con_name = con_res.attrib['id']
@@ -528,6 +530,8 @@ class HanaStatus():
         sids = []
         try:
             for ia in root.findall("./configuration/resources//*[@type='SAPHanaController']/instance_attributes/nvpair[@name='SID']"):
+                sids.append(ia.attrib['value'])
+            for ia in root.findall("./configuration/resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID']"):
                 sids.append(ia.attrib['value'])
         except AttributeError:
             print(f"Could not find any SAPHanaController resource in cluster config")

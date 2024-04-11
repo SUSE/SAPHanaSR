@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# sct_test_create_cluster_config  - complete cluster config (basic, resources, constraints)
+#
+source .test_properties
+
+#
+#  node all attributes
+#
+echo "== add cluster configuration =="
+cd /usr/share/SAPHanaSR-tester/samples/crm_cfg/angi-ScaleUp || exit 1
+for configStep in [0-9]*_*; do 
+    echo "$configStep";
+    rsync -v "$configStep" "${node01}":/root/crm.txt 2>/dev/null 1>/dev/null
+    ssh -T "${node01}" <<EOF
+        cat /root/crm.txt | sed -e 's/@@SID@@/HA1/g' -e 's/@@INO@@/00/g' -e 's/@@IP@@/192.168.7.234/g' | crm configure load update -
+        rm /root/crm.txt
+        cs_wait_for_idle -s 5 2>/dev/null 1>/dev/null
+EOF
+done
+
+ssh -T "${node01}" "cs_wait_for_idle -s 5 2>/dev/null 1>/dev/null"
+
+#
+# take resource out of maintenance
+#
+echo "== get $mstResource out of maintenance =="
+ssh -T "${node01}" "crm resource maintenance $mstResource off"
+ssh -T "${node01}" "cs_wait_for_idle -s 5" 2>/dev/null 1>/dev/null
