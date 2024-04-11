@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086,SC2317,SC1090,SC2034,SC2046,SC2162
 #
 # SAPHanaSR-upgrade-to-angi-demo
 #
@@ -22,18 +23,18 @@ ALL_RC=0
 # TODO how to use templates from package SAPHanaSR-angi?
 CIB_MSTTMP_ANG="#
 primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaController \
-  op start interval="0" timeout="3600" \
-  op stop interval="0" timeout="3600" \
-  op promote interval="0" timeout="900" \
-  op demote interval="0" timeout="320" \
-  op monitor interval="60" role="Promoted" timeout="700" \
-  op monitor interval="61" role="Unpromoted" timeout="700" \
-     params SID="@@sid@@" InstanceNumber="@@ino@@" PREFER_SITE_TAKEOVER="true" \
-     DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="true" \
-  meta maintenance="true"
+  op start interval=0 timeout3600 \
+  op stop interval=0 timeout=3600 \
+  op promote interval=0 timeout=900 \
+  op demote interval=0 timeout=320 \
+  op monitor interval=60 role=Promoted timeout=700 \
+  op monitor interval=61 role=Unpromoted timeout=700 \
+     params SID=@@sid@@ InstanceNumber=@@ino@@ PREFER_SITE_TAKEOVER=true \
+     DUPLICATE_PRIMARY_TIMEOUT=7200 AUTOMATED_REGISTER=true \
+  meta maintenance=true
 #
 clone @@mstnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
-  meta clone-node-max="1" promotable="true" interleave="true" maintenance="true"
+  meta clone-node-max=1 promotable=true interleave=true maintenance=true
 #
 order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #
@@ -42,26 +43,26 @@ colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: @@rscipa@@:Started @@mstne
 
 CIB_CLNTMP_ANG="#
 primitive rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaTopology \
-  op start interval="0" timeout="600" \
-  op stop interval="0" timeout="600" \
-  op monitor interval="50" timeout="600" \
-     params SID="@@sid@@" InstanceNumber="@@ino@@"
+  op start interval=0 timeout=600 \
+  op stop interval=0 timeout=600 \
+  op monitor interval=50 timeout=600 \
+     params SID=@@sid@@ InstanceNumber=@@ino@@
 #
 clone @@clntop@@ rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ \
-  meta clone-node-max="1" interleave="true"
+  meta clone-node-max=1 interleave=true
 #
 order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #"
 
 CIB_CLNTMP_FIL="#
 primitive rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaFilesystem \
-  op start interval="0" timeout="10" \
-  op stop interval="0" timeout="20" on-fail="fence" \
-  op monitor interval="120" timeout="120" \
-  params SID="@@sid@@" InstanceNumber="@@ino@@"
+  op start interval=0 timeout=10 \
+  op stop interval=0 timeout=20 on-fail=fence \
+  op monitor interval=120 timeout=120 \
+  params SID=@@sid@@ InstanceNumber=@@ino@@
 #
 clone cln_SAPHanaFil_@@sid@@_HDB@@ino@@ rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ \
-  meta clone-node-max="1" interleave="true"
+  meta clone-node-max=1 interleave=true
 #"
 
 function echo-funa() {
@@ -500,6 +501,7 @@ function f_check-prereq() {
 	        echo "ERROR: Local HANA python looks like not supported."
 	        pre_rc=9
 	fi
+    # shellcheck disable=SC2029
 	ssh root@$SECNOD "'$SCRIPT' -v" | grep "$VERSION" >/dev/null; my_rc=$?
 	if [ $my_rc != 0 ]; then
         	echo "ERROR: Can not call $SCRIPT on ${SECNOD}."
@@ -519,7 +521,7 @@ function f_check-prereq() {
         	echo "ERROR: Can not access CIB."
         	pre_rc=9
 	fi
-	n_nd=$(crm configure show type:node | grep -c ^node\ [0-9])
+	n_nd=$(crm configure show type:node | grep -c "^node [0-9]")
 	if [ $n_nd != 2 ]; then
         	echo "ERROR: Not exactly two cluster nodes found in CIB."
         	pre_rc=9
