@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086,SC2317,SC1090,SC2034,SC2046,SC2162
 #
 # SAPHanaSR-upgrade-to-angi-demo
 #
@@ -15,25 +16,25 @@ VERSION="2024-03-20 0.3"
 DRYRUN=yes
 # TODO DRYRUN=no
 EXE=$(basename $0)
-TMP=/run/$EXE.$RANDOM
+TMP=/run/"$EXE"."$RANDOM"
 TIMEST=$(date +%s)
 ALL_RC=0
 
 # TODO how to use templates from package SAPHanaSR-angi?
 CIB_MSTTMP_ANG="#
 primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaController \
-  op start interval="0" timeout="3600" \
-  op stop interval="0" timeout="3600" \
-  op promote interval="0" timeout="900" \
-  op demote interval="0" timeout="320" \
-  op monitor interval="60" role="Promoted" timeout="700" \
-  op monitor interval="61" role="Unpromoted" timeout="700" \
-     params SID="@@sid@@" InstanceNumber="@@ino@@" PREFER_SITE_TAKEOVER="true" \
-     DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="true" \
-  meta maintenance="true"
+  op start interval=0 timeout3600 \
+  op stop interval=0 timeout=3600 \
+  op promote interval=0 timeout=900 \
+  op demote interval=0 timeout=320 \
+  op monitor interval=60 role=Promoted timeout=700 \
+  op monitor interval=61 role=Unpromoted timeout=700 \
+     params SID=@@sid@@ InstanceNumber=@@ino@@ PREFER_SITE_TAKEOVER=true \
+     DUPLICATE_PRIMARY_TIMEOUT=7200 AUTOMATED_REGISTER=true \
+  meta maintenance=true
 #
 clone @@mstnew@@ rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ \
-  meta clone-node-max="1" promotable="true" interleave="true" maintenance="true"
+  meta clone-node-max=1 promotable=true interleave=true maintenance=true
 #
 order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #
@@ -42,26 +43,26 @@ colocation col_SAPHanaCon_ip_@@sid@@_HDB@@ino@@ 2000: @@rscipa@@:Started @@mstne
 
 CIB_CLNTMP_ANG="#
 primitive rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaTopology \
-  op start interval="0" timeout="600" \
-  op stop interval="0" timeout="600" \
-  op monitor interval="50" timeout="600" \
-     params SID="@@sid@@" InstanceNumber="@@ino@@"
+  op start interval=0 timeout=600 \
+  op stop interval=0 timeout=600 \
+  op monitor interval=50 timeout=600 \
+     params SID=@@sid@@ InstanceNumber=@@ino@@
 #
 clone @@clntop@@ rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ \
-  meta clone-node-max="1" interleave="true"
+  meta clone-node-max=1 interleave=true
 #
 order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #"
 
 CIB_CLNTMP_FIL="#
 primitive rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaFilesystem \
-  op start interval="0" timeout="10" \
-  op stop interval="0" timeout="20" on-fail="fence" \
-  op monitor interval="120" timeout="120" \
-  params SID="@@sid@@" InstanceNumber="@@ino@@"
+  op start interval=0 timeout=10 \
+  op stop interval=0 timeout=20 on-fail=fence \
+  op monitor interval=120 timeout=120 \
+  params SID=@@sid@@ InstanceNumber=@@ino@@
 #
 clone cln_SAPHanaFil_@@sid@@_HDB@@ino@@ rsc_SAPHanaFil_@@sid@@_HDB@@ino@@ \
-  meta clone-node-max="1" interleave="true"
+  meta clone-node-max=1 interleave=true
 #"
 
 function echo-funa() {
@@ -76,32 +77,32 @@ function wait-idle() {
 }
 
 function init-variables() {
-	BAKDIR=/root/${EXE}.$TIMEST
-	mkdir -p $BAKDIR
-	cibadmin -Ql > $BAKDIR/cib.xml || exit 1
-	SCRIPT=/root/bin/$EXE
+	BAKDIR=/root/"${EXE}.$TIMEST"
+	mkdir -p "$BAKDIR"
+	cibadmin -Ql > "$BAKDIR"/cib.xml || exit 1
+	SCRIPT=/root/bin/"$EXE"
 	RPMOLD="SAPHanaSR"
 	RPMNEW="SAPHanaSR-angi"
 	SID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
 		awk '{print $4}')
 	INO=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
 		awk '{print $6}')
-	sid=${SID,,}
-	sidadm=${sid}adm
+	sid="${SID,,}"
+	sidadm="${sid}adm"
 	MSTOLD=$(xmllint -xpath \
-		"string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $BAKDIR/cib.xml)
+		"string(///resources//*[@type='SAPHana']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" "$BAKDIR/cib.xml")
 	# MSTOLD=$(SAPHanaSR-showAttr --format script |\
 	#      	awk -F"/" '$1~/Resource/ && $2~/ms.*'$SID'/ && $3~/maintenance=/ {print $2}')
-	RSCCON=$(xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" $BAKDIR/cib.xml)
+	RSCCON=$(xmllint -xpath "string(///resources//*[@type='SAPHana']/@id)" "$BAKDIR/cib.xml")
 	# RSCCON=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$MSTOLD'" {print $3}')
-	MSTNEW=mst_SAPHanaCon_${SID}_HDB${INO}
+	MSTNEW="mst_SAPHanaCon_${SID}_HDB${INO}"
 	CLNTOP=$(xmllint -xpath \
-		"string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" $BAKDIR/cib.xml)
+		"string(///resources//*[@type='SAPHanaTopology']/instance_attributes/nvpair[@name='SID'][@value='$SID']/../../../@id)" "$BAKDIR/cib.xml")
 	# CLNTOP=$(crm configure show type:order |\
 	#      	awk '$1=="order" && $5=="'$MSTOLD'" {print $4}')
 	RSCTOP=$(xmllint -xpath "\
-		string(///resources//*[@type='SAPHanaTopology']/@id)" $BAKDIR/cib.xml)
+		string(///resources//*[@type='SAPHanaTopology']/@id)" "$BAKDIR/cib.xml")
 	# RSCTOP=$(crm configure show type:clone |\
 	#      	awk '$1=="clone" && $2=="'$CLNTOP'" {print $3}')
 	CLNNEW=cln_SAPHanaTop_${SID}_HDB${INO}
@@ -181,24 +182,24 @@ function make-backup-local() {
 }
 
 function f_make-backup() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	crm cluster run "'$SCRIPT' -x make-backup-local"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_show-state() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm_mon -1r --include=failcounts,fencing-pending;echo;SAPHanaSR-showAttr;cs_clusterstate -i|grep -v \"#\""
 	crm_mon -1r --include=failcounts,fencing-pending
 	echo
 	SAPHanaSR-showAttr
 	cs_clusterstate -i | grep -v "#"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_maintenance-on-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm resource maintenance $MSTOLD on"
 	[ $DRYRUN = no ] && crm resource maintenance $MSTOLD on
@@ -209,11 +210,11 @@ function f_maintenance-on-classic() {
 	echo "echo \"property cib-bootstrap-options: stop-orphan-resources=false\" | crm configure load update -"
 	[ $DRYRUN = no ] && echo "property cib-bootstrap-options: stop-orphan-resources=false" |\
 		crm configure load update -
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 }
 
 function f_maintenance-off-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm resource refresh $CLNTOP"
 	[ $DRYRUN = no ] && crm resource refresh $CLNTOP
@@ -236,7 +237,7 @@ function f_maintenance-off-angi() {
 	echo "echo \"property cib-bootstrap-options: stop-orphan-resources=true\" | crm configure load update -"
 	[ $DRYRUN = no ] && echo "property cib-bootstrap-options: stop-orphan-resources=true" |\
 		crm configure load update -
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 }
 
 function del-srhook-local-classic() {
@@ -276,9 +277,9 @@ function del-srhook-local-classic() {
 }
 
 function f_remove-srhook-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	crm cluster run "'$SCRIPT' -x del-srhook-local-classic"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function add-srhook-local-angi() {
@@ -313,24 +314,24 @@ function add-srhook-local-angi() {
 }
 
 function f_add-srhook-angi() {
-        echo-funa run $FUNCNAME
+        echo-funa run "${FUNCNAME[0]}"
 	crm cluster run "'$SCRIPT' -x add-srhook-local-angi"
-        echo-funa end $FUNCNAME
+        echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-property() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	crm configure show SAPHanaSR | awk -F"=" '$1~/hana_/ {print $1}' |\
 	while read; do
 		echo "crm_attribute --delete --type crm_config --name $REPLY"
 		[ $DRYRUN = no ] && crm_attribute --delete --type crm_config --name $REPLY
 	done
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-node-attribute() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	for N in $PRINOD $SECNOD; do
 		crm configure show $N | tr " " "\n" | awk -F "=" 'NR>5 {print $1}' |\
@@ -343,11 +344,11 @@ function f_remove-node-attribute() {
 		echo "crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete"
 		[ $DRYRUN = no ] && crm_attribute --node $N --name master-rsc_SAPHana_${SID}_HDB$INO --lifetime reboot --delete		
 	done
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-saphanatop-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	for N in "//rsc_order[@id='$MSTORD']" "//clone[@id='$CLNTOP']"; do
 		echo "cibadmin --delete --xpath \"${N}\""
@@ -356,11 +357,11 @@ function f_remove-saphanatop-classic() {
 	wait-idle
 	echo "crm resource refresh $RSCTOP"
 	[ $DRYRUN = no ] && crm resource refresh $RSCTOP
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-saphanacon-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	for N in "//rsc_colocation[@id='$MSTCOL']" "//rsc_order[@id='$MSTORD']" "//master[@id='$MSTOLD']"; do
 		echo "cibadmin --delete --xpath \"${N}\""
@@ -369,11 +370,11 @@ function f_remove-saphanacon-classic() {
 	wait-idle
 	echo "crm resource refresh $RSCCON"
 	[ $DRYRUN = no ] && crm resource refresh $RSCCON
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_add-saphanatop-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	[ -z $sid ] && sid=${SID,,}
@@ -395,11 +396,11 @@ function f_add-saphanatop-angi() {
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $CLNTOP
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_add-saphanacon-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	[ -z $sid ] && sid=${SID,,}
@@ -423,11 +424,11 @@ function f_add-saphanacon-angi() {
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $MSTNEW
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_add-saphanafil-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo -n "echo \""
 	echo -n $CIB_CLNTMP_FIL |\
@@ -442,11 +443,11 @@ function f_add-saphanafil-angi() {
 		-e s/'#'/\\n'#'\\n/g |\
 			crm configure load update -
 	[ $DRYRUN = no ] && crm configure show $CLNFIL
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_install-rpm-angi() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm cluster run \"zypper --non-interactive in -l -f -y '${RPMNEW}'\""
 	[ $DRYRUN = no ] && crm cluster run "zypper --non-interactive in \
@@ -456,19 +457,19 @@ function f_install-rpm-angi() {
 	[ $DRYRUN = no ] && crm cluster run "rpm -q '${RPMNEW}' --queryformat %{NAME}"
 	echo "hash -r"
 	[ $DRYRUN = no ] && hash -r
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_remove-rpm-classic() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_check-prereq() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	# TODO meaningful return codes
 	pre_rc=0
 	if [ -z $PRINOD ]; then
@@ -500,6 +501,7 @@ function f_check-prereq() {
 	        echo "ERROR: Local HANA python looks like not supported."
 	        pre_rc=9
 	fi
+    # shellcheck disable=SC2029
 	ssh root@$SECNOD "'$SCRIPT' -v" | grep "$VERSION" >/dev/null; my_rc=$?
 	if [ $my_rc != 0 ]; then
         	echo "ERROR: Can not call $SCRIPT on ${SECNOD}."
@@ -519,7 +521,7 @@ function f_check-prereq() {
         	echo "ERROR: Can not access CIB."
         	pre_rc=9
 	fi
-	n_nd=$(crm configure show type:node | grep -c ^node\ [0-9])
+	n_nd=$(crm configure show type:node | grep -c "^node [0-9]")
 	if [ $n_nd != 2 ]; then
         	echo "ERROR: Not exactly two cluster nodes found in CIB."
         	pre_rc=9
@@ -574,26 +576,26 @@ function f_check-prereq() {
 	show-variables
 	ALL_RC=$pre_rc
 	echo "RC=$pre_rc"
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_check-final-state() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "TODO /usr/bin/SAPHanaSR-manageAttr"
 	# TODO [ $DRYRUN = no ] && /usr/bin/SAPHanaSR-manageAttr
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function f_test-secondary() {
-	echo-funa run $FUNCNAME
+	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
 	echo "root@$SECNOD \"hostname; killall -9 hdbnameserver\""
 	[ $DRYRUN = no ] && ssh root@$SECNOD "hostname; killall -9 hdbnameserver"
 	wait-idle
 	echo "crm resource cleanup $CLNTOP"
 	 [ $DRYRUN = no ] && crm resource cleanup $CLNTOP
-	echo-funa end $FUNCNAME
+	echo-funa end "${FUNCNAME[0]}"
 }
 
 function cleanup() {
