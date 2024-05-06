@@ -11,7 +11,7 @@
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
 #               (c) 2015-2016 SUSE Linux GmbH
-#               (c) 2017-2023 SUSE LLC
+#               (c) 2017-2024 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -23,7 +23,7 @@
 #
 #######################################################################
 #
-saphana_common_lib_version="1.001.1"
+saphana_common_lib_version="1.2.7"
 #
 #######################################################################
 
@@ -437,6 +437,8 @@ function HANA_CALL() {
     local cmd=""
     local pre_script=""
     local output=""
+    local suErr=""
+    local cmdErr=""
     while [ $# -gt 0 ]; do
         case "$1" in
             --timeout ) timeOut=$2; shift;;
@@ -490,9 +492,9 @@ function HANA_CALL() {
                             output=$(timeout --foreground -s 9 "$timeOut" su - "${sid}adm" -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
                             ;;
                   esac
-                  output=$(if [ -f "$cmd_out_log" ]; then cat "$cmd_out_log"; rm -f "$cmd_out_log"; fi)
-                  suErr=$(if [ -f "$su_err_log" ]; then cat "$su_err_log"; rm -f "$su_err_log"; else echo "NA"; fi)
-                  cmdErr=$(if [ -f "$cmd_err_log" ]; then cat "$cmd_err_log"; rm -f "$cmd_err_log"; else echo "NA"; fi)
+                  if [[ -f "$cmd_out_log" ]]; then output=$(<"$cmd_out_log"); rm -f "$cmd_out_log"; fi
+                  if [[ -f "$su_err_log" ]];  then suErr=$(<"$su_err_log");   rm -f "$su_err_log";  else suErr='NA'; fi
+                  if [[ -f "$cmd_err_log" ]]; then cmdErr=$(<"$cmd_err_log"); rm -f "$cmd_err_log"; else cmdErr='NA'; fi
                   super_ocf_log debug "DBG: RA ==== action HANA_CALL (cmd is '$cmd', rc is '$rc', stderr from su is '$suErr', stderr from cmd is '$cmdErr') ===="
                   # on rc=1 - retry to improve the behavior in AD environments
                   # fh 20230127 deactivate this part. rc=1 could also be the valid rc of the called command
