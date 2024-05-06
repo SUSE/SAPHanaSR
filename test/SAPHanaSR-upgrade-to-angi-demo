@@ -12,7 +12,7 @@
 #
 # define parameters and functions
 #
-VERSION="2024-03-20 0.3"
+VERSION="2024-05-06 0.3"
 DRYRUN=yes
 # TODO DRYRUN=no
 EXE=$(basename $0)
@@ -23,7 +23,7 @@ ALL_RC=0
 # TODO how to use templates from package SAPHanaSR-angi?
 CIB_MSTTMP_ANG="#
 primitive rsc_SAPHanaCon_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaController \
-  op start interval=0 timeout3600 \
+  op start interval=0 timeout=3600 \
   op stop interval=0 timeout=3600 \
   op promote interval=0 timeout=900 \
   op demote interval=0 timeout=320 \
@@ -50,8 +50,6 @@ primitive rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ ocf:suse:SAPHanaTopology \
 #
 clone @@clntop@@ rsc_SAPHanaTop_@@sid@@_HDB@@ino@@ \
   meta clone-node-max=1 interleave=true
-#
-order ord_SAPHanaTop_first Optional: @@clntop@@ @@mstnew@@
 #"
 
 CIB_CLNTMP_FIL="#
@@ -378,6 +376,7 @@ function f_add-saphanatop-angi() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	[ -z $sid ] && sid=${SID,,}
+	[ -z $CLNTOP ] && CLNTOP=${CLNNEW}
 	wait-idle
 	echo -n "echo \""
 	echo -n $CIB_CLNTMP_ANG |\
@@ -404,6 +403,7 @@ function f_add-saphanacon-angi() {
 	EXE=$(basename $0)
 	source /run/$EXE.variables
 	[ -z $sid ] && sid=${SID,,}
+	[ -z $RSCIPA ] && RSCIPA=rsc_ip_${SID}_HDB${INO}
 	wait-idle
 	echo -n "echo \""
 	echo -n $CIB_MSTTMP_ANG |\
