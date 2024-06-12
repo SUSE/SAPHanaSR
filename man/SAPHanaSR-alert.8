@@ -11,18 +11,22 @@ SAPHanaSR-alert can be used to react on Linux cluster fencing alerts.
 
 The Linux cluster provides TODO
 
-improves three use cases for HANA scale-out TODO
+SAPHanaSR-agent is used to fence all nodes of an HANA site, in case one of
+the gets fenced. This improves three use cases for HANA scale-out:
 .br
 - HA/DR provider hook script susChkSrv.py action_on_lost=fence
 .br
 - resource agent SAPHanaController ON_FAIL_ACTION=fence
 .br
 - resource agent SAPHanaFilesystem ON_FAIL_ACTION=fence
-.PP
+.br
 See also manual pages ocf_sus_SAPHanaController(7), ocf_suse_SAPHanaFilesystem(7)
 and susChkSrv.py(7).
 .PP
-This alert agent will run on all Linux cluster nodes.
+When  the Linux cluster has performed a node fencing, it calls SAPHanaSR-agent
+on each active cluster node. The agent checks whether the local node belongs to
+the same HANA site as the fenced node. If so, it asks the cluster to fence the
+local node as well.
 .PP
 .\"
 .\" .SH SUPPORTED PARAMETERS
@@ -90,7 +94,11 @@ the internal cache for host TODO site
 .PP
 4. No other alert agent should be configured for the fencing alert.
 .PP
-5. The alert agent runtime almost completely depends on call-outs to OS and
+5. Automatic start of the Linux cluster at boot should be switched off.
+At least automatic re-start on just fenced nodes should be disabled. See
+manual page sbd(8) for details.
+.PP
+6. The alert agent runtime almost completely depends on call-outs to OS and
 Linux cluster.
 .\"
 .SH BUGS
