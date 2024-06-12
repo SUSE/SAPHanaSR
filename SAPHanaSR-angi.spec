@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        1.2.7
+Version:        1.2.8
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -96,6 +96,9 @@ install -m 0644 srHook/susCostOpt.py %{buildroot}/usr/share/%{name}/
 install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini_* %{buildroot}/usr/share/%{name}/samples
 
+# alert manager
+install -m 0755 alert/SAPHanaSR-alert %{buildroot}/usr/bin
+
 # crm config templates
 install -m 0644 crm_cfg/angi-ScaleUp/[0-9]*_* %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
 
@@ -138,6 +141,7 @@ install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 /usr/bin/SAPHanaSR-filter-legacy
 /usr/bin/SAPHanaSR-hookHelper
 /usr/bin/SAPHanaSR-manageProvider
+/usr/bin/SAPHanaSR-alert
 
 %license LICENSE
 %dir %{_docdir}/%{name}

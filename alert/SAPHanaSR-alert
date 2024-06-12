@@ -5,7 +5,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2024 SUSE LLC
-# 2024-06-12-13:14
+# 2024-06-12-13:40
 #
 # crm configure alert nodes-1 "/usr/bin/SAPHanaSR-alert" select nodes
 # crm configure alert fencing-1 "/usr/bin/SAPHanaSR-alert" select fencing
@@ -33,7 +33,7 @@ function process_fencing()
 			/usr/bin/logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
 			/usr/sbin/crm --force node fence "${HOSTNAME}"; rc="$?"
 			if [[ "$rc" != "0" ]]; then
-				/usr/bin/logger -t "$logger_tag" "/usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
+				/usr/bin/logger -t "$logger_tag" "ACT: /usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
 			fi
 		else
 			/usr/bin/logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
@@ -46,16 +46,16 @@ function process_fencing()
 case "$crm_alert_kind" in
     node|nodes)
         msg="Node '${crm_alert_node}' is now '${crm_alert_desc}'"
-        /usr/bin/logger -t "$logger_tag" "$msg"
+        /usr/bin/logger -t "$logger_tag" "INFO: $msg"
         ;;
     fencing)
         msg="Fencing for '${crm_alert_node}': ${crm_alert_desc}"
-        /usr/bin/logger -t "$logger_tag" "$msg"
+        /usr/bin/logger -t "$logger_tag" "INFO: $msg"
         process_fencing
         ;;
     *)
 	    msg="Unhandled '$crm_alert_kind' alert (${crm_alert_desc})"
-        /usr/bin/logger -t "$logger_tag" "$msg"
+        /usr/bin/logger -t "$logger_tag" "INFO: $msg"
         ;;
 esac
 /usr/bin/logger -t "$logger_tag" "AH: end event '$crm_alert_kind'"
