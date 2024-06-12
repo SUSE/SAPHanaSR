@@ -5,7 +5,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2024 SUSE LLC
-# 2024-06-12-13:40
+# 2024-06-12-15:13
 #
 # crm configure alert nodes-1 "/usr/bin/SAPHanaSR-alert" select nodes
 # crm configure alert fencing-1 "/usr/bin/SAPHanaSR-alert" select fencing
@@ -26,19 +26,38 @@ function process_fencing()
 	# SAPHanaSR_site_cache has format (each line) host:site_name
 	# figure out fenced site
 
-    if [[ ! -e "$cache_file" ]]; then
-        SAPHanaSR-showAttr --format=tester | grep site= | sed -e 's/Host\///' -e 's/\/site=/:/' -e 's/"//g' > /run/crm/SAPHanaSR_site_cache
-    fi
-	
 	if [[ -e "$cache_file" ]]; then
 		fenced_site_name=$(awk -F: '$1 == host { print $2 }' host="${crm_alert_node}" "$cache_file")
 		local_site_name=$(awk -F: '$1 == host { print $2 }' host="${HOSTNAME}" "$cache_file")
+        /usr/bin/logger -t "$logger_tag" "INFO: cache_file=$cache_file, crm_alert_node=$crm_alert_node"
+        /usr/bin/logger -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
 		if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
 			/usr/bin/logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
+            sleep 10
 			/usr/sbin/crm --force node fence "${HOSTNAME}"; rc="$?"
 			if [[ "$rc" != "0" ]]; then
 				/usr/bin/logger -t "$logger_tag" "ACT: /usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
 			fi
+		else
+			/usr/bin/logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
+		fi
+	else
+	    /usr/bin/logger -t "$logger_tag" "DEC: NO FENCE (no cache)"
+	fi
+}
+
+function check_fencing()
+{
+	# SAPHanaSR_site_cache has format (each line) host:site_name
+	# figure out fenced site
+
+	if [[ -e "$cache_file" ]]; then
+		fenced_site_name=$(awk -F: '$1 == host { print $2 }' host="${crm_alert_node}" "$cache_file")
+		local_site_name=$(awk -F: '$1 == host { print $2 }' host="${HOSTNAME}" "$cache_file")
+        /usr/bin/logger -t "$logger_tag" "INFO: cache_file=$cache_file"
+        /usr/bin/logger -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
+		if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
+			/usr/bin/logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
 		else
 			/usr/bin/logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
 		fi
@@ -56,6 +75,11 @@ case "$crm_alert_kind" in
         msg="Fencing for '${crm_alert_node}': ${crm_alert_desc}"
         /usr/bin/logger -t "$logger_tag" "INFO: $msg"
         process_fencing
+        ;;
+    check)
+        msg="Checking for '${crm_alert_node}': ${crm_alert_desc}"
+        /usr/bin/logger -t "$logger_tag" "INFO: $msg"
+        check_fencing
         ;;
     *)
 	    msg="Unhandled '$crm_alert_kind' alert (${crm_alert_desc})"
