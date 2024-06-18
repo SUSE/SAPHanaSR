@@ -97,7 +97,7 @@ install -m 0644 srHook/susChkSrv.py %{buildroot}/usr/share/%{name}/
 install -m 0444 srHook/global.ini_* %{buildroot}/usr/share/%{name}/samples
 
 # alert manager
-install -m 0755 alert/SAPHanaSR-alert %{buildroot}/usr/bin
+install -m 0755 alert/SAPHanaSR-alert-fencing %{buildroot}/usr/bin
 
 # crm config templates
 install -m 0644 crm_cfg/angi-ScaleUp/[0-9]*_* %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
@@ -141,7 +141,7 @@ install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 /usr/bin/SAPHanaSR-filter-legacy
 /usr/bin/SAPHanaSR-hookHelper
 /usr/bin/SAPHanaSR-manageProvider
-/usr/bin/SAPHanaSR-alert
+/usr/bin/SAPHanaSR-alert-fencing
 
 %license LICENSE
 %dir %{_docdir}/%{name}
