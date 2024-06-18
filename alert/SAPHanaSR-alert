@@ -38,23 +38,23 @@ function process_fencing()
         if [[ -e "$cache_file" ]]; then
             fenced_site_name=$(awk -F: '$1 == host { print $2 }' host="${crm_alert_node}" "$cache_file")
             local_site_name=$(awk -F: '$1 == host { print $2 }' host="${HOSTNAME}" "$cache_file")
-            /usr/bin/logger -t "$logger_tag" "INFO: cache_file=$cache_file, crm_alert_node=$crm_alert_node"
-            /usr/bin/logger -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
+            $logger  -t "$logger_tag" "INFO: cache_file=$cache_file, crm_alert_node=$crm_alert_node"
+            $logger  -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
             if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
-                /usr/bin/logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
+                $logger  -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
                 sleep 10
                 /usr/sbin/crm --force node fence "${HOSTNAME}"; rc="$?"
                 if [[ "$rc" != "0" ]]; then
-                    /usr/bin/logger -t "$logger_tag" "ACT: /usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
+                    $logger  -t "$logger_tag" "ACT: /usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
                 fi
             else
-                /usr/bin/logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
+                $logger  -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
             fi
         else
-            /usr/bin/logger -t "$logger_tag" "DEC: NO FENCE (no cache)"
+            $logger  -t "$logger_tag" "DEC: NO FENCE (no cache)"
         fi
     else
-        /usr/bin/logger -t "$logger_tag" "DEC: NO FENCE (uptime < crm_alert_fencing_delay)"
+        $logger  -t "$logger_tag" "DEC: NO FENCE (uptime < crm_alert_fencing_delay)"
     fi
 }
 
