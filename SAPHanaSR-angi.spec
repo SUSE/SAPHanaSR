@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        1.2.7
+Version:        1.2.8
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -48,13 +48,9 @@ BuildRequires:  crmsh-scripts
 %description
 SAPHanaSR-angi is "SAP HANA SR - An Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
 
-The current version of SAPHanaSR-angi is targeting SAP HANA SR scale-up setups.
+The current version of SAPHanaSR-angi is targeting SAP HANA SR scale-up and scale-out setups.
 
-CIB attributes are not backward compatible between SAPHanaSR-angi and SAPHanaSR. So there is currently no easy migration path.
-
-SAPHanaSR-angi is shipped as technology preview.
-
-The resource agents SAPHanaController and SAPHanaTopology are responsible for controlling a SAP HANA Database which is running in system replication (SR) configuration.
+CIB attributes are not backward compatible between SAPHanaSR-angi and SAPHanaSR. Nevertheless, SAPHanaSR and SAPHanaSR-ScaleOut can be upgraded to SAPHanaSR-angi by following the documented procedure.
 
 For SAP HANA Databases in System Replication only the listed scenarios at https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html are supported. For any scenario not matching the scenarios named or referenced in our setup guides please contact SUSE services.
 
