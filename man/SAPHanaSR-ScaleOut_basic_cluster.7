@@ -254,7 +254,7 @@ with the HANA primary master nameserver.
 .PP
 .RS 2
 .br
-primitive rsc_ip_SLE_HDB00 IPAddr2 \\
+primitive rsc_ip_SLE_HDB00 IPaddr2 \\
 .br
  op monitor interval=10s timeout=20s \\
 .br
@@ -276,7 +276,7 @@ Note: This example works for two-node HANA scale-out.
 .PP
 .RS 2
 .br
-primitive rsc_ip_ro_SLE_HDB00 IPAddr2 \\
+primitive rsc_ip_ro_SLE_HDB00 IPaddr2 \\
 .br
  op monitor interval=10s timeout=20s \\
 .br
@@ -303,8 +303,7 @@ for specific public cloud purpose.
 .\" TODO
 .PP
 .RS 2
-.br
-primitive rsc_ip_SLE_HDB00 IPAddr2 \\
+primitive rsc_ip_SLE_HDB00 IPaddr2 \\
 .br
  op monitor interval=10s timeout=20s \\
 .br
@@ -324,43 +323,6 @@ colocation col_ip_with_SLE_HDB00 \\
 .RE
 .PP
 
-\fB* crm NFS check resource configuration\fR
-
-In case of NFS failure, HANA might stop working but the Linux cluster might not
-take action. To solve this, a dummy filesystem resource could be added. If this
-filesystem reports monitor failures, the node gets fenced and a takeover is
-initiated. The takeover will fail, if the HANA system replication is not in
-sanc (srHook shows SFAIL).
-.br
-Note: See manual page ocf_suse_SAPHanaFilesystem(7) for a better solution.
-.br
-Note: Understand the impact before implementing.
-.PP
-.RS 2
-primitive rsc_fs_check_SLE_HDB00 Filesystem \\
-.br
- params device="/hana/shared/SLE/check/" \\
- directory="/hana/shared/check/" fstype=nfs4 \\
-.br
-options="bind,defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock" \\
-.br
- op monitor interval=120 timeout=120 on-fail=fence \\
-.br
- op_params OCF_CHECK_LEVEL=20 \\
-.br
- op start interval=0 timeout=120 \\
-.br
- op stop interval=0 timeout=120
-.br
-clone cln_fs_check_SLE_HDB00 rsc_fs_check_SLE_HDB00 \\
-.br
- meta clone-node-max=1 interleave=true
-.br
-location fs_check_not_on_majority_maker \\
- cln_fs_check_SLE_HDB00 -inf: vm-majority
-.RE
-.PP
-
 \fB* check how resource stickiness affects promotion scoring\fR
 
 SAPHanaSR uses an internal scoring table. The promotion scores for HANA
@@ -368,7 +330,6 @@ primary and secondary master are in a certain range. The scores used by the
 Linux cluster should be in the same range.
 .PP
 .RS 2
-.br
 # SAPHanaSR-showAttr | grep master.:master
 .br
 # crm_simulate -Ls | grep promotion
@@ -382,7 +343,6 @@ After the root cause has been found and fixed, the failure message can be
 cleaned.
 .PP
 .RS 2
-.br
 # stonith_admin --cleanup --history=<originator_node> 
 .RE
 .PP
@@ -404,7 +364,6 @@ In case systemd-style init is used for the HANA database, the services can be
 checked. Example SID is HA1, instance number is 10.
 .PP
 .RS 2
-.br
 # systemctl list-unit-files | grep -i sap
 .br
 # systemctl status SAPHA1_10.service
@@ -461,8 +420,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
-\fBocf_suse_SAPHanaFilesystem\fP(7) ,
-\fBocf_heartbeat_IPAddr2\fP(7) , \fBocf_heartbeat_Filesystem\fP(7) ,
+\fBocf_suse_SAPHanaFilesystem\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) , 
 \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) , 
 \fBcrm_no_quorum_policy\fP(7) , \fBcrm\fP(8) , \fBcrm_simulate\fP(8) ,
 \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR-showAttr\fP(7) ,
