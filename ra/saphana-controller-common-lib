@@ -559,15 +559,15 @@ function get_hana_landscape_status() {
     else
         super_ocf_log info "RUNTIME do NOT use cached value for lss return code (cache_mode=$cache_mode, g_cache_lss=$g_cache_lss)"
         hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
-        if [[ "$rc" == 124 ]]; then
+        if [[ "$rc" -ge 124 ]]; then
             # TODO: PRIO 1: Check, if we should loop here like 'for i in 1 2 3 ...' ?
             # landscape timeout
-            super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds"
+            super_ocf_log warn "RA: landscapeHostConfiguration.py TIMEOUT after $HANA_CALL_TIMEOUT seconds (rc=$rc)"
             sleep 20
             # shellcheck disable=SC2034
             hana_LSS_Out=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "python landscapeHostConfiguration.py --sapcontrol=1" 2>/dev/null); rc=$?
-            if [ "$rc" == 124 ]; then
-               super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds"
+            if [ "$rc" -ge 124 ]; then
+               super_ocf_log warn "RA: landscapeHostConfiguration.py second TIMEOUT after $HANA_CALL_TIMEOUT seconds (rc=$rc)"
                # TODO PRIO2: How to handle still hanging lss - current solution is to say "FATAL" - Maybe we should return the stored attribute value?
                rc=0
             fi
