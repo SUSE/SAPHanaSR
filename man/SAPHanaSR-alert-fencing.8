@@ -1,0 +1,178 @@
+.\" Version: 1.001
+.\"
+.TH SAPHanaSR-alert-fencing 7 "12 Jun 2024" "" "SAPHanaSR"
+.\"
+.SH NAME
+SAPHanaSR-alert-fencing \- Alert agent for cluster fencing alerts.
+.PP
+.\"
+.SH DESCRIPTION
+SAPHanaSR-alert-fencing can be used to react on Linux cluster fencing alerts.
+.PP
+The Linux cluster provides an interface to initiate external action when a cluster
+event occurs (alert). Than the cluster calls an external program (an alert agent)
+to handle that alert.
+.PP
+When the Linux cluster has performed an node fencing, it can call
+SAPHanaSR-alert-fencing on each active cluster node. The agent checks whether
+the local node belongs to the same HANA site as the fenced node. If so, it asks
+the cluster to fence the local node as well.
+.PP
+This improves three use cases for HANA scale-out:
+.br
+- HA/DR provider hook script susChkSrv.py action_on_lost=fence
+.br
+- resource agent SAPHanaController ON_FAIL_ACTION=fence
+.br
+- resource agent SAPHanaFilesystem ON_FAIL_ACTION=fence
+.br
+See also manual pages ocf_sus_SAPHanaController(7), ocf_suse_SAPHanaFilesystem(7)
+and susChkSrv.py(7).
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+.TP
+\fBtimeout\fR
+If the alert agent does not complete within this amount of time, it will be terminated. Optional, default "30s". Example "meta timeout=30s".
+.\" .TP
+.\" \fBenabled\fR
+.\" If false for an alert, the alert will not be used. If true for an alert and false for a particular recipient of that alert, that recipient will not be used. Optional, default "true".
+.TP
+\fBalert_uptime_threshold\fR
+How long a node must be up and running (uptime) before fencing alerts will be processed. This avoids fencing loops. Optional, default "300". Example "attributes alert_uptime_threshold=300".
+.\"
+.PP
+.\"
+.SH RETURN CODES
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.br
+In addition log entries are written, which can be scanned by using a pattern
+like "SAPHanaSR-alert-fencing".
+.PP
+.\"
+.SH EXAMPLES
+.PP
+\fB*\fR Example configuration for the fencing alert handler.
+.PP
+The following lines needs to be added to the cluster´s CIB:
+.PP
+.RS 2
+alert fencing-1 "/usr/bin/SAPHanaSR-alert-fencing" \\
+.br
+ select fencing \\
+.br
+ attributes alert_uptime_threshold=300
+.RE
+.PP
+\fB*\fR Example for configuring the alert agent by using crm.
+.PP
+Alternate way for configuring the alert agent.
+.PP
+.RS 2
+# crm configure alert fencing-1 "/usr/bin/SAPHanaSR-alert-fencing" select fencing
+.RE
+.PP
+\fB*\fR Showing all configured alert agents.
+.PP
+.RS 2
+# crm configure show type:alert
+.RE
+.PP
+\fB*\fR Showing agent messages.
+.PP
+.RS 2
+# grep SAPHanaSR-alert-fencing /var/log/messages
+.RE
+.PP
+\fB*\fR Showing history of fence actions and cleaning it up.
+.PP
+Example node with failed fencing action is node22.
+.PP
+.RS 2
+# crm_mon -1 --include=none,fencing
+.br
+# stonith_admin --cleanup --history node22
+.RE
+.PP
+\fB*\fR Example for manually fencing an node.
+.PP
+This could be done for testing the SAPHanaSR-alert-fencing agent integration.
+This test should not be done on production systems.
+See manual page crm(8) for details.
+Fenced node is node1.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+# crm node fence node1
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/bin/SAPHanaSR-alert-fencing
+the alert agent
+.TP
+/run/crm/SAPHanaSR_site_cache
+the internal cache for host to site relation - do not touch this file
+.TP
+/etc/sysconfig/sbd
+config file for SBD daemon
+.PP
+.\"
+.SH REQUIREMENTS
+1. Pacemaker 2.1.2 or newer.
+.PP
+2. SAP HANA scale-out performance-optimized scenario. No HANA host auto-failover,
+thus no standby nodes.
+.PP
+3. Only one SID is controlled by the Linux cluster.
+.PP
+4. Site names and host names should not be changed.
+.PP
+5. No other alert agent should be configured for the fencing alert.
+.PP
+6. SAPHanaFilesystem RA with monitor operations is active. 
+.PP
+7. Automatic restart of just fenced nodes should be disabled by adapting
+SBD_START_MODE. In case of automatic restart of just fenced nodes, it might be
+necessary to adapt SBD_START_DELAY in order to avoid fencing loops. See manual
+page sbd(8).
+.PP
+8. Fencing is executed unconditionally. The alert agent relies on the preceding
+fencing decision. Neither site role nor SR state is checked.
+.PP
+9. The alert agent runtime almost completely depends on call-outs to OS and
+Linux cluster.
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaFilesystem\fP(7) ,
+\fBsusChkSrv.py\fP(7) , \fBcrm\fP(8) , \fBsbd\fP(8) ,
+.br
+https://clusterlabs.org/pacemaker/doc/2.1/Pacemaker_Administration/singlehtml/#alert-agents
+.PP
+.\"
+.SH AUTHORS
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.br
+(c) 2024 SUSE LLC
+.br
+SAPHanaSR-alert-fencing comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

@@ -5,6 +5,7 @@
 
 FILE_LIST = LICENSE \
 		README.md \
+        alert \
         crm_cfg \
 		icons \
 		man \

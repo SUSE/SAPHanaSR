@@ -113,7 +113,7 @@ SAPHanaTopology scans the output table of landscapeHostConfiguration.py to ident
         <shortdesc lang="en">Define timeout how long a call to HANA to receive information can take.</shortdesc>
         <longdesc lang="en">Define timeout how long a call to HANA to receive information can take. This could be eg landscapeHostConfiguration.py.
           There are some specific calls to HANA which have their own timeout values. For example the takeover command does not timeout (inf).
-          If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts
+          If the timeout is reached, the return code will be 124 or 137 (for kill -9). If you increase the timeouts for HANA calls you should also adjust the operation timeouts
           of your cluster resources.
         </longdesc>
         <content type="string" default="120" />
@@ -283,7 +283,7 @@ function sht_start() {
         start_saphostagent
     fi
     gNodeRole="$( get_role_by_landscape "$gVirtName")"; hanalrc="$?"
-    if [[ "$hanalrc" != 124 ]]; then
+    if [[ "$hanalrc" -lt 124 ]]; then
         set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
     # TODO PRIO 1: scale-out used side-effect via RC_hdbnsutil to give back different return codes; scale-up rc was always OCF_SUCCESS
@@ -451,7 +451,7 @@ function sht_stop_clone() {
     fi
     get_local_virtual_name
     gNodeRole="$( get_role_by_landscape "$gVirtName" --timeout="$timeout")"; hanalrc="$?"
-    if [[ "$hanalrc" != "124" ]]; then
+    if [[ "$hanalrc" -lt "124" ]]; then
         # normal exit, use gNodeRole
         tout=0
         set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
@@ -519,7 +519,7 @@ function sht_monitor_clone() {
         done
         g_cache_lss="$hanalrc"
         super_ocf_log info "DEC: gNodeRole=$gNodeRole gTopology=$gTopology hanalrc=$g_cache_lss"
-        if [[ "$hanalrc" != "124" ]]; then
+        if [[ "$hanalrc" -lt "124" ]]; then
             # normal exit, use gNodeRole
             super_ocf_log info "DEC: gNodeRole=$gNodeRole"
             set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
@@ -536,7 +536,7 @@ function sht_monitor_clone() {
             super_ocf_log info "DEC: set_hana_attribute ${NODENAME} $gSite ${ATTR_NAME_HANA_SITE[0]}"
         fi
         # TODO PRIO2: NG - COULD/SHOULD WE LIMIT THE SET OF THE LSS/SRR ATTRIBUTE TO ONLY THE_MASTER nodes?
-        # ignore timeout (124) and "ignore" (5) as return code from the landscapeHostConfiguration call
+        # ignore timeout (124, 137) and "ignore" (5) as return code from the landscapeHostConfiguration call
         case "$hanaPrim" in
             P ) ;;
             S ) # only secondary may propagate its sync status

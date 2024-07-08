@@ -1,6 +1,6 @@
 {
-    "test": "kill_prim_node",
-    "name": "Kill primary master node",
+    "test": "kill_prim_indexserver_fencing_alert",
+    "name": "Kill primary master indexserver with fencing alert agent implemented",
     "start": "prereq10",
     "steps": [
         {
@@ -9,7 +9,7 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "kill_prim_node",
+            "post": "kill_prim_indexserver",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
@@ -21,19 +21,20 @@
             "step": "step20",
             "name": "failure detected",
             "next": "step30",
-            "loop": 120,
+            "loop": 180,
             "wait": 2,
+            "comment": "sSite: srPoll could get SFAIL on scale-out",
             "pSite": [
-                "lss == 1",
+                "lss ~ (1|2)",
                 "srr == P",
-                "lpt >~ 1000000000:(20|10)",
+                "lpt >~ 1000000000:20",
                 "srHook ~ (PRIM|SWAIT|SREG)",
                 "srPoll == PRIM"
             ],
             "sSite": [
                 "lpt >~ 1000000000:30",
                 "lss == 4",
-                "srr ~ (S|P)",
+                "srr == S",
                 "srHook ~ (PRIM|SOK)",
                 "srPoll ~ (SOK|SFAIL)"
             ],
@@ -47,40 +48,66 @@
         },
         {
             "step": "step30",
+            "name": "pmaster fenced",
+            "next": "step40",
+            "loop": 120,
+            "wait": 2,
+            "pHost": [
+                "clone_state is None",
+                "role is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "pworker fenced",
+            "next": "step50",
+            "loop": 120,
+            "wait": 2,
+            "pWorker": [
+                "clone_state is None",
+                "role is None",
+                "score is None"
+        ]
+    },
+    {
+        "step": "step50",
             "name": "begin recover",
-            "next": "final40",
-            "loop": 300,
+            "next": "final60",
+            "loop": 120,
             "wait": 2,
             "todo": "pHost+sHost to check site-name",
             "pSite": [
-                "lss ~ (1|2)",
-                "srr ~ (P|S)",
+                "lss == 1",
+                "srr == P",
                 "lpt >~ 1000000000:(30|20|10)",
                 "srHook ~ (PRIM|SWAIT|SREG)",
-                "srPoll ~ (PRIM|SFAIL)"
+                "srPoll == PRIM"
             ],
             "sSite": [
                 "lpt >~ 1000000000:30",
                 "lss == 4",
                 "srr ~ (S|P)",
                 "srHook == PRIM",
-                "srPoll ~ (SOK|PRIM)"
+                "srPoll ~ (SOK|SFAIL)"
             ],
             "pHost": [
-                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
-                "roles == master1::worker:"
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (90|70|5)"
             ],
             "sHost": [
                 "clone_state ~ (DEMOTED|PROMOTED)",
                 "roles == master1:master:worker:master",
-                "score ~ (100|145|150)"
+                "score ~ (100|145)",
+                "srah == T"
             ]
         },
         {
-            "step": "final40",
+            "step": "final60",
             "name": "end recover",
             "next": "END",
-            "loop": 300,
+            "loop": 360,
             "wait": 2,
             "post": "cleanup",
             "remark": "pXXX and sXXX are now exchanged",

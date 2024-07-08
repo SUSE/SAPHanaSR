@@ -1,6 +1,6 @@
 .\" Version: 1.001 
 .\"
-.TH susChkSrv.py 7 "18 Mar 2024" "" "SAPHanaSR"
+.TH susChkSrv.py 7 "24 Jun 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 susChkSrv.py \- Provider for SAP HANA srHook method srServiceStateChanged().
@@ -75,8 +75,9 @@ If this is combined with SAPHanaController RA parameter 'AUTOMATED_REGISTER=true
 HANA needs to release all OS resources prior to the automated registering.
 .br
 - \fBfence\fP: do 'crm node fence <\fIhost\fR>'. This needs a Linux cluster
-STONITH method and sudo permission. This action is primarily meant for scale-up.If it happens on a scale-out worker node, the remaining master needs to time
-out before the Linux cluster will react.
+STONITH method and sudo permission. This action is primarily meant for scale-up.
+For scale-out, SAPHanaSR-agent-fencing should be configured additionally, see
+manual page SAPHanaSR-agent-fencing(8) for details.
 .br
 .\" TODO - suicide: do 'systemctl reboot'. Do NOT use this!
 .\" .br
@@ -112,7 +113,7 @@ See also SAPHanaSR_basic_cluster(7).
 .br
 Optional. Default is 20 seconds.
 .TP
-* The "HA/DR providers" API accepts the following parameter for the trace section in globnal.ini:
+* The "HA/DR providers" API accepts the following parameter for the trace section in global.ini:
 .TP
 \fB[trace]\fP
 .TP
@@ -427,8 +428,8 @@ susChkSrv.py parameter 'action_on_lost=fence' is set.
 SAPHanaController parameter 'AUTOMATED_REGISTER=true' is set, it depends on HANA
 to release all OS resources prior to the registering attempt.
 .PP
-10. If an HANA worker node of a scale-out site got fenced but not the master
-nameserver, the time needed for stopping the whole site depends on HANA timeouts.
+10. For HANA scale-out, the susChkSrv.py parameter 'action_on_lost=fence' should
+be used only, if the SAPHanaSR-alert-fencing is configured.
 .PP
 11. If the hook provider should be pre-compiled, the particular Python version
 that comes with SAP HANA has to be used.
@@ -442,8 +443,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,  \fBSAPHanaSR.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
-\fBSAPHanaSR-hookHelper\fP(8) ,
-\fBSAPHanaSR-manageProvider\fP(8) , \fBcrm\fP(8) , \fBcrm_attribute\fP(8) ,
+\fBSAPHanaSR-hookHelper\fP(8) , \fBSAPHanaSR-manageProvider\fP(8) , 
+\fBSAPHanaSR-alert-fencing\fP(8) ,
+\fBcrm\fP(8) , \fBcrm_attribute\fP(8) ,
 \fBpython3\fP(8) , \fBkillall\fP(1) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM?locale=en-US
