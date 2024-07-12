@@ -1,0 +1,220 @@
+.\" Version: 1.001 
+.\"
+.TH SAPHanaSR-tests-description_on-fail-fence 7 "12 Jul 2024" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+SAPHanaSR-tests-description \- Functional tests for SAPHanaSR with immediate fencing.
+.PP
+.\"
+.SH DESCRIPTION
+.PP
+Functional test are shipped for different scenarios. This tests could be run
+out-of-the-box. The test cases are defined in dedicated files.
+See manual page SAPHanaSR-tests-syntax(5) for syntax details. Tests for
+SAPHanaSR-angi scale-up scenarios are listed in
+SAPHanaSR-tests-angi-ScaleUp_on-fail-fence(7), for SAPHanaSR-angi scale-out ERP
+scenarios in SAPHanaSR-tests-angi-ScaleOut_on-fail-fence(7). 
+.PP
+Entry point for all predefined tests is a clean and idle Linux cluster and a
+clean HANA pair in sync. Same is true for the final state. 
+See manual page SAPHanaSR_maintenance_examples(7) for detecting the correct
+status and watching changes near real-time.
+.PP
+Each test can be executed by running the command SAPHanaSR-testCluster with
+appropriate parameters. See manual page SAPHanaSR-testCluster(8).
+.PP
+Predefined functional tests with immediate fencing:
+.PP
+\fBfreeze_prim_master_nfs_fencing_alert\fP
+.RS 2
+Descr: Freeze HANA NFS on primary master node.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See ocf_suse_SAPHanaFilesystem(7).
+.br
+Expect: Primary nodes fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fence TODO.
+.br
+Comment: Infrastructure failure, main cluster case.
+.RE
+.PP
+\fBkill_prim_indexserver_fencing_alert\fP
+.RS 2
+Descr: Kill primary indexserver, for susChkSrv.py.
+On scale-out, kill primary master indexserver.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See susChkSrv.py(7).
+.br
+Expect: All primary nodes fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. TODO fencing (for action_on_lost=fence).
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_prim_inst_fencing_alert\fP
+.RS 2
+Descr: Kill primary instance.
+On scale-out, kill primary master instance.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: HDB kill
+.br
+Expect: All primary nodes fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. TODO fencing.
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_prim_node_fencing_alert\fP
+.RS 2
+Descr: Kill primary master node. (fencing alert agent configured).
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: systemctl reboot --force
+.br
+Expect: All primary nodes fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fencing for each primary node.
+.br
+Comment: Node failure, main cluster case.
+.RE
+.PP
+\fBkill_prim_worker_indexserver_fencing_alert\fP
+.RS 2
+Descr: Kill primary worker indexserver, for susChkSrv.py.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See susChkSrv.py(7).
+.br
+Expect: All primary nodes fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. TODO fencing (for action_on_lost=fence).
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_prim_worker_inst_fencing_alert\fP
+.RS 2
+Descr: Kill primary worker instance.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: HDB kill
+.br
+Expect: All primary nodes fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. TODO fencing.
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_prim_worker_node_fencing_alert\fP
+.RS 2
+Descr: Kill primary worker node.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: systemctl reboot --force
+.br
+Expect: All primary nodes fenced. 
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. TODO fencing.
+.br
+Comment: Node failure, main cluster case.
+.RE
+.PP
+.\"
+.SH EXAMPLES
+.PP
+* List all shipped tests for immediate fencing
+.PP
+.RS 2
+# find /usr/share/SAPHanaSR-tester/json/ -name "*fenc*.json" -exec basename {} \\; | sort -u
+.RE
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
+functional tests for SAPHanaSR-angi scale-up scenarios.
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleOut/
+functional tests for SAPHanaSR-angi scale-out ERP scenarios.
+.TP
+/usr/bin/sct_test_*
+shell scripts for un-easy tasks on the cluster nodes.
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
+See also ocf_suse_SAPHanaController(7), susChkSrv.py(7) and
+SAPHanaSR-alert-fencing(8) for configuration of immediate fencing.
+Of course, HANA database and Linux cluster also have certain requirements.
+Please refer to the product documentation.
+.PP
+.\"
+.SH BUGS
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+\fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tests-syntax\fP(5) , \fBSAPHanaSR-tests-description\fP(7) ,
+\fBSAPHanaSR-tests-angi-ScaleOut_on-fail-fence\fP(7) ,
+\fBSAPHanaSR-tests-angi-ScaleUp_on-fail-fence\fP(7) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8)
+.PP
+.\"
+.SH AUTHORS
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+(c) 2024 SUSE LLC
+.br
+The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
