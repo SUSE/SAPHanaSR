@@ -1,0 +1,104 @@
+#!/usr/bin/python3
+# pylint: disable=consider-using-f-string
+# pylint: disable=fixme
+"""
+ SAPHanaSR-testSelect
+ Author:       Fabian Herschel, July 2024
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2024 SUSE LLC
+"""
+
+# pylint: disable=unused-import
+import json
+import argparse
+#sys.path.insert(1, '/usr/lib/SAPHanaSR-tester')
+#from saphana_sr_test import SaphanasrTest
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--file", nargs="*", help="specify the json file (s)")
+parser.add_argument("--select", nargs="*", help="selection by purpose key words")
+#
+# --file : one or multiple occurences
+# --select : one or more occurences
+#
+# proposal for a purpose-selection
+# --select='primary cluster'   : selects a test, if purposes contains primary AND cluster"
+# --select='primary '!cluster' : selects a test, if purposes contains primary BUT NOT cluster
+# --select='primary' "cluster' : selects a test, if purposes contains primary (first select) OR cluster (second select)
+# --select='hugo' '!hugo'      : selects a test, if purposes contains hugo or not (means that matches all tests purpose definition)
+#
+args = parser.parse_args()
+json_file = None
+quiet = False
+
+if args.file:
+    #print("PARAM: files: {}\n".format(args.file))
+    pass
+
+if args.select:
+    # print("PARAM: select: {}\n".format(args.select))
+    pass
+
+if args.file is None:
+    print(f"file not specified")
+    exit(1)
+
+if args.select is None:
+    print(f"select not specified")
+    exit(1)
+
+for json_file in args.file:
+    json_data = None
+    try:
+        with open(json_file, encoding="utf-8") as json_fh:
+            try:
+                json_data = (json.load(json_fh))
+            except json.decoder.JSONDecodeError as e_jerr:
+                print(f"json error n file {json_file}: ({e_jerr})")
+                exit(1)
+    except FileNotFoundError as e_ferr:
+        print(f"file not found ({e_ferr})")
+        exit(1)
+    except PermissionError as e_ferr:
+        print(f"permisson error ({e_ferr})")
+        exit(1)
+    match = False
+    if json_data:
+        # print(f"file {json_file} loaded)")
+        if "purpose" in json_data:
+            # print(f"purpose: <<{json_data['purpose']}>>")
+            for m_select in args.select:
+                s_match=True
+                for single_expression in m_select.split():
+                    a_match = False
+                    if single_expression[0] == "!":
+                        if single_expression[1:] in json_data['purpose']:
+                            s_match=False
+                        else:
+                            a_match = True
+                    else:
+                        if single_expression not in json_data['purpose']:
+                            s_match=False
+                        else:
+                            a_match = True
+
+                    #if a_match:
+                    #    print(f"file {json_file} matches single_expression '{single_expression}'")
+                    #else:
+                    #    print(f"file {json_file} does not match single_expression '{single_expression}'")
+                if s_match:
+                    #print(f"file {json_file} matches select '{m_select}'")
+                    match = True
+                else:
+                    #print(f"file {json_file} does not match select '{m_select}'")
+                    pass
+    if match:
+        #print(f"file {json_file} finally selected")    
+        print(json_file)    
+    else:
+        # print(f"file {json_file} finally not selected")    
+        pass
+
+exit(0)
+    
+
