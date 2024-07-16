@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.2.14"
+    version = "1.2.99.0-beta"
 
     def message(self, msg, **kwargs):
         """
@@ -79,6 +79,7 @@ class SaphanasrTest:
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
+        self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'pHost': 'Host', 'sHost': 'Host' }
         self.debug("INIT: tester version: {}".format(self.version))
         if cmdparse:
             self.debug("DEBUG: lib parses cmdline")
@@ -330,15 +331,26 @@ class SaphanasrTest:
             test_prop_fh.write(f"userkey={self.test_data.get('userKey','')}\n")
             test_prop_fh.flush()
 
-    def __add_failed__(self, area_object, key_val_reg):
+    def __add_failed__(self, area_object, key_val_reg, **kwargs):
         """ document failed checks """
+        fatal_check = False
+        fatal_name = ""
+        if 'fatal_check' in kwargs:
+            fatal_check = kwargs["fatal_check"]
+        if 'fatal_name' in kwargs:
+            fatal_name = kwargs["fatal_name"]
+        ( _area, _obj ) = area_object
         if 'failed' in self.run:
             _l_failed = self.run['failed']
+            if fatal_check:
+                _l_header = f"{_area}={_obj}: "
+            else:
+                _l_header = ""
         else:
-            ( _area, _obj ) = area_object
-            _l_failed = f"{_area}={_obj}: "
+            _l_failed = ""
+            _l_header = f"{fatal_name}{_area}={_obj}: "
         ( _key, _val, _reg, _comp ) = key_val_reg
-        _l_failed += f'expect "{_key} {_comp} {_reg}", have "{_val}"; '
+        _l_failed += f'{_l_header} expect "{_key} {_comp} {_reg}", have "{_val}"; '
         self.run['failed'] = _l_failed
         self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
@@ -353,7 +365,7 @@ class SaphanasrTest:
             return self.run['failed']
         return None
 
-    def run_checks(self, checks, area_name, object_name, step_step ):
+    def run_checks(self, checks, area_name, object_name, step_step, **kwargs ):
         """ run all checks for area and object 
             params:
                    checks: list of checks to be run
@@ -361,9 +373,17 @@ class SaphanasrTest:
                    object_name: aobject inside area to be checked (ROT, WDF, pizbuin01)
                    step_step: TBD
         """
+        fatal_check = False
+        fatal_name = ""
+        fail_msg = "MISSED"
+        if 'fatal_check' in kwargs:
+            fatal_check = kwargs["fatal_check"]
+        if 'fatal_name' in kwargs:
+            fatal_name = kwargs["fatal_name"]
         l_sr = self.dict_sr
         check_result = -1
-        self.__reset_failed__()
+        if fatal_check == False:
+            self.__reset_failed__()
         for single_check in checks:
             # match <key> <comp> <regExp>
             # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
@@ -450,7 +470,7 @@ class SaphanasrTest:
                 if c_err == 1:
                     if not found:
                         l_val = None
-                    self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
+                    self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name)
                     check_result = max(check_result, 1)
                     self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
                 else:
@@ -463,8 +483,9 @@ class SaphanasrTest:
                 check_result = max(check_result, 0)
             if (found == 0) and (check_result < 2):
                 check_result = 2
-        if self.config['dump_failures'] and 'failed' in self.run:
-            self.message(f"MISSED: step={step_step} {self.__get_failed__()}", stdout=False)
+        if fatal_check == False:
+            if self.config['dump_failures'] and 'failed' in self.run:
+                self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -481,6 +502,53 @@ class SaphanasrTest:
                 object_name = topolo[topology_object_name]
                 rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''))
         return rc_checks
+
+    def process_fatal_condition(self, step):
+        """ process_fatal_conditions 
+            rc == 0 : no fatal condition matched
+            rc != 0 : at least one of the fatal packages (childs) mathed
+        """
+        rc_condition = 0
+        fail_msg = "FATAL"
+        step_step = step['step']
+        if "fatalCondition" in step:
+            fc = step["fatalCondition"]
+            topolo = self.topolo
+            self.debug(f"DEBUG: TOPOLO {topolo}")
+            #
+            # process all fatalCondition childs
+            #
+            for child in fc:
+                self.__reset_failed__()
+                rc_child = 1
+                #
+                # process only childs which are not reserved
+                #
+                if child not in ['next','comment','name']:
+                    fc_child = fc[child]
+                    self.message(f"DEBUG: fatalConditions: {child} dump {fc_child}")
+                    #
+                    # process all check-rules ( "name": [ "condition1" {,...} ] )
+                    #
+                    rc_child = 0
+                    for top_obj_name in fc_child:
+                        obj_name = topolo[top_obj_name]
+                        if top_obj_name in self.topo_translate:
+                            area_name = self.topo_translate[top_obj_name]
+                            checks = fc_child[top_obj_name]
+                            self.message(f"DEBUG: fatalConditions: area_name {area_name}, top_obj_name {top_obj_name}, obj_name {obj_name}, checks {checks}")
+                            rc_checks = self.run_checks(checks, area_name, obj_name, step.get('step',''), fatal_check = True, fatal_name=child)
+                            self.message(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
+                            rc_child = max(rc_child, rc_checks)
+                if rc_child == 0:
+                    self.message(f"DEBUG: fatalConditions: {child} BREAK")
+                    break
+                rc_condition = min(rc_condition, rc_child)
+            if rc_condition == 0:
+                if self.config['dump_failures'] and 'failed' in self.run:
+                    self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
+        return rc_condition
+            
 
     def process_step(self, step):
         """ process a single step including optional loops """
@@ -515,6 +583,14 @@ class SaphanasrTest:
                 print(".", end='', flush=True)
             process_result = -1
             self.read_saphana_sr()
+            if "fatalCondition" in step:
+                # self.message("STATUS: step {} to process fatalCondition".format(step_id))
+                process_result = self.process_fatal_condition(step)
+                self.message("STATUS: step {} to processed fatalCondition with process_result {}".format(step_id, process_result))
+                if process_result == 0:
+                    self.message("STATUS: step {} failed with fatalCondition".format(step_id))
+                    process_result = 2
+                    break
             process_result = max (
                                   self.process_topology_object(step, 'global', 'Global'),
                                   self.process_topology_object(step, 'pSite', 'Site'),
