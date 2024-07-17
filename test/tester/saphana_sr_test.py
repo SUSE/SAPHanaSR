@@ -511,7 +511,7 @@ class SaphanasrTest:
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
         """
-        rc_condition = 0
+        rc_condition = 1
         fail_msg = "FATAL"
         step_step = step['step']
         if "fatalCondition" in step:
