@@ -109,6 +109,7 @@ install -m 0444 man-tester-client/*.7.gz %{buildroot}%{_mandir}/man7
 /usr/lib/%{name}/saphana_sr_*.py
 /usr/bin/SAPHanaSR-testCluster
 /usr/bin/SAPHanaSR-checkJson
+/usr/bin/SAPHanaSR-testSelect
 /usr/bin/sct_*
 /usr/bin/callTest*
 /usr/bin/loopTests*
