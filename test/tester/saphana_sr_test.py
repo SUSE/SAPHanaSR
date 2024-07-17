@@ -526,7 +526,7 @@ class SaphanasrTest:
                 #
                 if child not in ['next','comment','name']:
                     fc_child = fc[child]
-                    self.message(f"DEBUG: fatalConditions: {child} dump {fc_child}")
+                    self.debug(f"DEBUG: fatalConditions: {child} dump {fc_child}")
                     #
                     # process all check-rules ( "name": [ "condition1" {,...} ] )
                     #
@@ -536,17 +536,14 @@ class SaphanasrTest:
                         if top_obj_name in self.topo_translate:
                             area_name = self.topo_translate[top_obj_name]
                             checks = fc_child[top_obj_name]
-                            self.message(f"DEBUG: fatalConditions: area_name {area_name}, top_obj_name {top_obj_name}, obj_name {obj_name}, checks {checks}")
+                            self.debug(f"DEBUG: fatalConditions: area_name {area_name}, top_obj_name {top_obj_name}, obj_name {obj_name}, checks {checks}")
                             rc_checks = self.run_checks(checks, area_name, obj_name, step.get('step',''), fatal_check = True, fatal_name=child)
-                            self.message(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
+                            self.debug(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
                             rc_child = max(rc_child, rc_checks)
                 if rc_child == 0:
-                    self.message(f"DEBUG: fatalConditions: {child} BREAK")
+                    self.message(f"STATUS: fatalConditions: FAILED {child} {fc_child} - BREAK")
                     break
                 rc_condition = min(rc_condition, rc_child)
-            if rc_condition == 0:
-                if self.config['dump_failures'] and 'failed' in self.run:
-                    self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
         return rc_condition
             
 
