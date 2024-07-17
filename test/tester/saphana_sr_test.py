@@ -583,7 +583,7 @@ class SaphanasrTest:
             if "fatalCondition" in step:
                 # self.message("STATUS: step {} to process fatalCondition".format(step_id))
                 process_result = self.process_fatal_condition(step)
-                self.message("STATUS: step {} to processed fatalCondition with process_result {}".format(step_id, process_result))
+                self.debug("DEBUG: step {} to processed fatalCondition with process_result {}".format(step_id, process_result))
                 if process_result == 0:
                     self.message("STATUS: step {} failed with fatalCondition".format(step_id))
                     process_result = 2
