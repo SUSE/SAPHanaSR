@@ -32,6 +32,7 @@ class SaphanasrTest:
         message with formatted timestamp
         """
         stdout = kwargs.get('stdout', True)
+        pre_cr = kwargs.get('pre_cr', False)
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.run['r_id']:
@@ -40,6 +41,8 @@ class SaphanasrTest:
             r_id = ""
         msg_arr = msg.split(" ")
         if stdout:
+            if pre_cr:
+                print()
             print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])), flush=True)
         try:
             if self.run['log_file_handle']:
@@ -541,7 +544,7 @@ class SaphanasrTest:
                             self.debug(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
                             rc_child = max(rc_child, rc_checks)
                 if rc_child == 0:
-                    self.message(f"STATUS: fatalConditions: FAILED {child} {fc_child} - BREAK")
+                    self.message(f"STATUS: fatalConditions: FAILED {child} {fc_child} - BREAK", pre_cr=True)
                     break
                 rc_condition = min(rc_condition, rc_child)
         return rc_condition
@@ -574,6 +577,7 @@ class SaphanasrTest:
                      f" max_loops='{max_loops}'"
                  )
         self.message(_l_msg)
+        fatal = False
         while loops < max_loops:
             loops = loops + 1
             if self.config['dump_failures']:
@@ -587,6 +591,7 @@ class SaphanasrTest:
                 if process_result == 0:
                     self.message("STATUS: step {} failed with fatalCondition".format(step_id))
                     process_result = 2
+                    fatal = True
                     break
             process_result = max (
                                   self.process_topology_object(step, 'global', 'Global'),
@@ -600,7 +605,7 @@ class SaphanasrTest:
             if process_result == 0:
                 break
             time.sleep(wait)
-        if self.config['dump_failures']:
+        if self.config['dump_failures'] and fatal == False:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
