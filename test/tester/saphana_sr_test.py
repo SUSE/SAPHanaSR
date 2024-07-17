@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.2.99.0-beta"
+    version = "1.3.0"
 
     def message(self, msg, **kwargs):
         """
