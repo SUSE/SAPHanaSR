@@ -338,8 +338,8 @@ class SaphanasrTest:
         """ document failed checks """
         fatal_check = False
         fatal_name = ""
-        if 'fatal_check' in kwargs:
-            fatal_check = kwargs["fatal_check"]
+        fatal_check = kwargs.get("fatal_check", False)
+        fatal_name = kwargs.get("fatal_name", "")
         if 'fatal_name' in kwargs:
             fatal_name = kwargs["fatal_name"]
         ( _area, _obj ) = area_object
@@ -385,7 +385,7 @@ class SaphanasrTest:
             fatal_name = kwargs["fatal_name"]
         l_sr = self.dict_sr
         check_result = -1
-        if fatal_check == False:
+        if fatal_check is False:
             self.__reset_failed__()
         for single_check in checks:
             # match <key> <comp> <regExp>
@@ -486,7 +486,7 @@ class SaphanasrTest:
                 check_result = max(check_result, 0)
             if (found == 0) and (check_result < 2):
                 check_result = 2
-        if fatal_check == False:
+        if fatal_check is False:
             if self.config['dump_failures'] and 'failed' in self.run:
                 self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
@@ -506,14 +506,12 @@ class SaphanasrTest:
                 rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''))
         return rc_checks
 
-    def process_fatal_condition(self, step):
-        """ process_fatal_conditions 
+    def __process_fatal_condition(self, step):
+        """ __process_fatal_conditions 
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
         """
         rc_condition = 1
-        fail_msg = "FATAL"
-        step_step = step['step']
         if "fatalCondition" in step:
             fc = step["fatalCondition"]
             topolo = self.topolo
@@ -548,7 +546,7 @@ class SaphanasrTest:
                     break
                 rc_condition = min(rc_condition, rc_child)
         return rc_condition
-            
+
 
     def process_step(self, step):
         """ process a single step including optional loops """
@@ -586,7 +584,7 @@ class SaphanasrTest:
             self.read_saphana_sr()
             if "fatalCondition" in step:
                 # self.message("STATUS: step {} to process fatalCondition".format(step_id))
-                process_result = self.process_fatal_condition(step)
+                process_result = self.__process_fatal_condition(step)
                 self.debug("DEBUG: step {} to processed fatalCondition with process_result {}".format(step_id, process_result))
                 if process_result == 0:
                     self.message("STATUS: step {} failed with fatalCondition".format(step_id))
@@ -605,7 +603,7 @@ class SaphanasrTest:
             if process_result == 0:
                 break
             time.sleep(wait)
-        if self.config['dump_failures'] and fatal == False:
+        if self.config['dump_failures'] and fatal is False:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
