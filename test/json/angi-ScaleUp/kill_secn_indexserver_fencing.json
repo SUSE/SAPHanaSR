@@ -25,29 +25,15 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
+            "name": "failure detected + secondary fenced",
             "next": "step30",
-            "loop": 120,
+            "loop": 240,
             "wait": 2,
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "sSite": [
-                "lpt ~ (10|30)",
-                "lss ~ (1|2)",
+                "lpt == 10",
                 "srr == S",
-                "srHook == SFAIL",
-                "srPoll ~ (SFAIL|SOK)"
-            ]
-        },
-        {
-            "step": "step30",
-            "name": "secondary fenced",
-            "next": "step40",
-            "loop": 300,
-            "wait": 2,
-            "pSite": "pSiteUp",
-            "pHost": "pHostUp",
-            "sSite": [
                 "srHook == SFAIL"
             ],
             "sHost": [
@@ -57,23 +43,23 @@
             ]
         },
         {
-            "step": "step40",
+            "step": "step30",
             "name": "begin recover",
             "next": "final50",
-            "loop": 150,
+            "loop": 240,
             "wait": 2,
             "todo": "pHost+sHost to check site-name",
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "sSite": [
                 "lpt == 10",
-                "lss == 1",
+                "lss ~ (1|2)",
                 "srr == S",
-                "srHook == SFAIL",
+                "srHook ~ (SFAIL|SWAIT)",
                 "srPoll ~ (SFAIL|SOK)"
             ],
             "sHost": [
-                "clone_state == UNDEFINED",
+                "clone_state ~ (UNDEFINED|DEMOTED)",
                 "roles == master1::worker:",
                 "score ~ (-INFINITY|0|-1)"
             ]
