@@ -1,20 +1,13 @@
 {
     "test": "kill_prim_inst_fencing",
     "name": "Kill primary instance with on-fail fencing",
-    "purpose": [
-        "angi",
-        "ScaleUp",
-        "kill",
-        "primary",
-        "instance",
-        "fencing"
-    ],
+    "purpose": [ "angi", "ScaleUp", "kill", "primary", "instance", "fencing" ],
     "start": "prereq10",
     "steps": [
         {
             "step": "prereq10",
             "name": "test prerequitsites",
-            "next": "step30",
+            "next": "step20",
             "loop": 1,
             "wait": 1,
             "post": "kill_prim_inst",
@@ -25,48 +18,35 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
+            "name": "failure detected + pmaster fenced",
             "next": "step30",
-            "loop": 180,
-            "wait": 2,
-            "pSite": [
-                "lss ~ (1|2)",
-                "srr == P",
-                "lpt >~ 1000000000:20",
-                "srHook ~ (PRIM|SWAIT|SREG)",
-                "srPoll == PRIM"
-            ],
-            "sSite": [
-                "lpt >~ 1000000000:30",
-                "lss == 4",
-                "srr == S",
-                "srHook ~ (PRIM|SOK)",
-                "srPoll ~ (SOK|SFAIL)"
-            ],
-            "pHost": [],
-            "sHost": [
-                "clone_state ~ (PROMOTED|DEMOTED)",
-                "roles == master1:master:worker:master",
-                "score ~ (100|145)"
-            ]
-        },
-        {
-            "step": "step30",
-            "name": "pmaster fenced",
-            "next": "step40",
             "loop": 240,
             "wait": 2,
             "pHost": [
                 "clone_state is None",
                 "role is None",
                 "score is None"
-            ]
+            ],
+            "sHost": "sHostUp",
+            "sSite": [
+                "lss == 4",
+                "srHook == SOK"
+            ]   
         },
         {
-            "step": "step50",
+            "step": "step30",
+            "name": "takeover on secondary",
+            "next": "step40",
+            "loop": 120,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp"
+        },
+        {
+            "step": "step40",
             "name": "begin recover new secondary",
             "next": "final60",
-            "loop": 300,
+            "loop": 120,
             "wait": 2,
             "todo": "pHost+sHost to check site-name",
             "pSite": [
@@ -76,23 +56,13 @@
                 "srHook ~ (PRIM|SWAIT|SREG)",
                 "srPoll == SFAIL"
             ],
-            "sSite": [
-                "lpt > 1000000000",
-                "lss == 4",
-                "srr == P",
-                "srHook == PRIM",
-                "srPoll == PRIM"
-            ],
             "pHost": [
                 "clone_state ~ (UNDEFINED|DEMOTED)",
                 "roles == master1::worker:",
                 "score ~ (0|90|70|5)"
             ],
-            "sHost": [
-                "clone_state == PROMOTED",
-                "roles == master1:master:worker:master",
-                "score == 150"
-            ]
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp"
         },
         {
             "step": "final60",
