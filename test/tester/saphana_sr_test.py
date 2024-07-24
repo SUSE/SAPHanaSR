@@ -185,7 +185,7 @@ class SaphanasrTest:
                     sr_out = local_sr.stdout.decode()
                     break
             else:
-                result_sr = self.__do_ssh__(remote_node, "root", cmd)
+                result_sr = self.__do_ssh__(remote_node, "root", cmd, timeout=15)
                 if result_sr[2] != 20000:
                     if switched_remote:
                         self.message(f"STATUS: get data from {remote_node}")
@@ -298,6 +298,7 @@ class SaphanasrTest:
             except FileNotFoundError as e_file:
                 self.message(f"ERROR: File error: {e_file}")
                 return 1
+            # pylint: disable=broad-exception-caught
             except (PermissionError, Exception) as e_generic:
                 self.message(f"ERROR: File error: {e_generic}")
                 return 1
@@ -309,6 +310,7 @@ class SaphanasrTest:
             except FileNotFoundError as e_file:
                 self.message(f"ERROR: File error: {e_file}")
                 return 1
+            # pylint: disable=broad-exception-caught
             except (PermissionError, Exception) as e_generic:
                 self.message(f"ERROR: File error: {e_generic}")
                 return 1
@@ -340,8 +342,6 @@ class SaphanasrTest:
         fatal_name = ""
         fatal_check = kwargs.get("fatal_check", False)
         fatal_name = kwargs.get("fatal_name", "")
-        if 'fatal_name' in kwargs:
-            fatal_name = kwargs["fatal_name"]
         ( _area, _obj ) = area_object
         if 'failed' in self.run:
             _l_failed = self.run['failed']
@@ -368,6 +368,111 @@ class SaphanasrTest:
             return self.run['failed']
         return None
 
+    def __run_check__(self, single_check, area_name, object_name, step_step, **kwargs):
+        # match <key> <comp> <regExp>
+        # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
+        match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+        check_result = -1
+        if match_obj is None:
+            self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
+            check_result = 2
+        c_key = match_obj.group(1)
+        l_sr = self.dict_sr
+        # fail_msg = "MISSED"
+        fatal_check = kwargs.get('fatal_check', False)
+        fatal_name = kwargs.get('fatal_name', "")
+        #
+        # rewrite key, if it contains a string @@sid@@ this is needed e.g. to match lpa_<sid>_lpt
+        #
+        #print(f"c_key={c_key}")
+        match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
+        if match_obj_key is not None:
+            #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
+            c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
+            #print(f"rewrite c_key={c_key}")
+        c_comp = match_obj.group(2)
+        c_reg_exp = match_obj.group(3)
+        c_reg_exp_a = ""
+        c_reg_exp_b = ""
+        try:
+            if c_comp == ">~":
+                comp_obj = re.search("(.*):(.*)",c_reg_exp)
+                c_reg_exp_a = comp_obj.group(1)
+                c_reg_exp_b = comp_obj.group(2)
+        except (IndexError, AttributeError):
+            pass
+        self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+        found = False
+        if area_name in l_sr:
+            l_area = l_sr[area_name]
+            c_err = 1
+            if object_name in l_area:
+                l_obj = l_area[object_name]
+                if c_key in l_obj:
+                    l_val = l_obj[c_key]
+                    found = True
+                    # TODO '==' must be exact match, '~' is for regexp
+                    if c_comp == "==":
+                        if l_val == c_reg_exp:
+                            c_err = 0
+                    elif c_comp == "!=":
+                        if l_val != c_reg_exp:
+                            c_err = 0
+                    elif c_comp == "~":
+                        if re.search(c_reg_exp, l_val):
+                            c_err = 0
+                    elif c_comp == "!~":
+                        if not re.search(c_reg_exp, l_val):
+                            c_err = 0
+                    elif c_comp == ">":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) > int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == ">=":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) >= int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == "<":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) < int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == "<=":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) <= int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == ">~":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
+                            c_err = 0
+                else:
+                    if c_comp == "is" and c_reg_exp == "None":
+                        found = 1
+                        c_err = 0
+                        check_result = max(check_result, 0)
+            else:
+                # if object does not even exist, the 'None' clause is true
+                if c_comp == "is" and c_reg_exp == "None":
+                    found = 1
+                    c_err = 0
+                    check_result = max(check_result, 0)
+            if c_err == 1:
+                if not found:
+                    l_val = None
+                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name)
+                check_result = max(check_result, 1)
+                self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+            else:
+                check_result = max(check_result, 0)
+                self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+        if c_comp == "is" and c_reg_exp == "None":
+            # if area does not even exist, the 'None' clause is true
+            found = 1
+            c_err = 0
+            check_result = max(check_result, 0)
+        if (found == 0) and (check_result < 2):
+            check_result = 2
+        return check_result
+
     def run_checks(self, checks, area_name, object_name, step_step, **kwargs ):
         """ run all checks for area and object 
             params:
@@ -376,116 +481,14 @@ class SaphanasrTest:
                    object_name: aobject inside area to be checked (ROT, WDF, pizbuin01)
                    step_step: TBD
         """
-        fatal_check = False
-        fatal_name = ""
         fail_msg = "MISSED"
-        if 'fatal_check' in kwargs:
-            fatal_check = kwargs["fatal_check"]
-        if 'fatal_name' in kwargs:
-            fatal_name = kwargs["fatal_name"]
-        l_sr = self.dict_sr
+        fatal_check = kwargs.get('fatal_check', False)
+        fatal_name = kwargs.get('fatal_name', "")
         check_result = -1
         if fatal_check is False:
             self.__reset_failed__()
         for single_check in checks:
-            # match <key> <comp> <regExp>
-            # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
-            match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
-            if match_obj is None:
-                self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
-                check_result = 2
-                break
-            c_key = match_obj.group(1)
-            #
-            # rewrite key, if it contains a string @@sid@@ this is needed e.g. to match lpa_<sid>_lpt
-            #
-            #print(f"c_key={c_key}")
-            match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
-            if match_obj_key is not None:
-                #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
-                c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
-                #print(f"rewrite c_key={c_key}")
-            c_comp = match_obj.group(2)
-            c_reg_exp = match_obj.group(3)
-            c_reg_exp_a = ""
-            c_reg_exp_b = ""
-            try:
-                if c_comp == ">~":
-                    comp_obj = re.search("(.*):(.*)",c_reg_exp)
-                    c_reg_exp_a = comp_obj.group(1)
-                    c_reg_exp_b = comp_obj.group(2)
-            except (IndexError, AttributeError):
-                pass
-            self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-            found = False
-            if area_name in l_sr:
-                l_area = l_sr[area_name]
-                c_err = 1
-                if object_name in l_area:
-                    l_obj = l_area[object_name]
-                    if c_key in l_obj:
-                        l_val = l_obj[c_key]
-                        found = True
-                        # TODO '==' must be exact match, '~' is for regexp
-                        if c_comp == "==":
-                            if l_val == c_reg_exp:
-                                c_err = 0
-                        elif c_comp == "!=":
-                            if l_val != c_reg_exp:
-                                c_err = 0
-                        elif c_comp == "~":
-                            if re.search(c_reg_exp, l_val):
-                                c_err = 0
-                        elif c_comp == "!~":
-                            if not re.search(c_reg_exp, l_val):
-                                c_err = 0
-                        elif c_comp == ">":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) > int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == ">=":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) >= int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == "<":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) < int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == "<=":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) <= int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == ">~":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
-                                c_err = 0
-                    else:
-                        if c_comp == "is" and c_reg_exp == "None":
-                            found = 1
-                            c_err = 0
-                            check_result = max(check_result, 0)
-                else:
-                    # if object does not even exist, the 'None' clause is true
-                    if c_comp == "is" and c_reg_exp == "None":
-                        found = 1
-                        c_err = 0
-                        check_result = max(check_result, 0)
-                if c_err == 1:
-                    if not found:
-                        l_val = None
-                    self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name)
-                    check_result = max(check_result, 1)
-                    self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-                else:
-                    check_result = max(check_result, 0)
-                    self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-            if c_comp == "is" and c_reg_exp == "None":
-                # if area does not even exist, the 'None' clause is true
-                found = 1
-                c_err = 0
-                check_result = max(check_result, 0)
-            if (found == 0) and (check_result < 2):
-                check_result = 2
+            check_result = self.__run_check__(single_check, area_name, object_name, step_step, fatal_check=fatal_check, fatal_name=fatal_name)
         if fatal_check is False:
             if self.config['dump_failures'] and 'failed' in self.run:
                 self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
@@ -789,17 +792,21 @@ class SaphanasrTest:
             action_rc = self.action_on_os(action_name)
         return action_rc
 
-    def __do_ssh__(self, remote_host, user, cmd):
+    def __do_ssh__(self, remote_host, user, cmd, **kwargs):
         """
         ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
         """
+        ssh_timeout = kwargs.get('timeout', None)
         if remote_host:
             try:
                 ssh_client = paramiko.SSHClient()
                 ssh_client.load_system_host_keys()
-                ssh_client.connect(remote_host, username=user)
-                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
+                ssh_client.connect(remote_host, username=user, timeout=10)
+                cmd_timeout=f"timeout={ssh_timeout}"
+                #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
+                self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
                 result_stderr = cmd_stderr.read().decode("utf8")
                 result_rc = cmd_stdout.channel.recv_exit_status()
@@ -809,6 +816,7 @@ class SaphanasrTest:
             except paramiko.ssh_exception.SSHException as para_err:
                 self.message(f"FAILURE01: ssh connection to {user}@{remote_host}: {para_err}")
                 check_result=("", "", 20000)
+            # pylint: disable=broad-exception-caught
             except Exception as ssh_muell:
                 # except Exception as ssh_muell:
                 self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
