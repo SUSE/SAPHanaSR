@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.3.1"
+    version = "1.3.2"
 
     def message(self, msg, **kwargs):
         """
@@ -814,11 +814,15 @@ class SaphanasrTest:
                 ssh_client.close()
                 self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
             except paramiko.ssh_exception.SSHException as para_err:
+                if self.config['dump_failures']:
+                    print("")
                 self.message(f"FAILURE01: ssh connection to {user}@{remote_host}: {para_err}")
                 check_result=("", "", 20000)
             # pylint: disable=broad-exception-caught
             except Exception as ssh_muell:
                 # except Exception as ssh_muell:
+                if self.config['dump_failures']:
+                    print("")
                 self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
                 check_result=("", "", 20000)
         else:
