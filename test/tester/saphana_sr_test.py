@@ -613,7 +613,7 @@ class SaphanasrTest:
                 break
             self.__min_failed_role_counter__ = min(self.__min_failed_role_counter__, self.__failed_role_counter__)
             self.__max_failed_role_counter__ = max(self.__max_failed_role_counter__, self.__failed_role_counter__)
-            self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})")
+            self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})", stdout=False)
             time.sleep(wait)
         if self.config['dump_failures'] and fatal is False:
             print("")
