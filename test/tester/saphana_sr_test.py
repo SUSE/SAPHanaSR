@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.3.2"
+    version = "1.3.4"
 
     def message(self, msg, **kwargs):
         """
@@ -488,7 +488,7 @@ class SaphanasrTest:
         if fatal_check is False:
             self.__reset_failed__()
         for single_check in checks:
-            check_result = self.__run_check__(single_check, area_name, object_name, step_step, fatal_check=fatal_check, fatal_name=fatal_name)
+            check_result = max(check_result, self.__run_check__(single_check, area_name, object_name, step_step, fatal_check=fatal_check, fatal_name=fatal_name))
         if fatal_check is False:
             if self.config['dump_failures'] and 'failed' in self.run:
                 self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
@@ -545,8 +545,7 @@ class SaphanasrTest:
                             self.debug(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
                             rc_child = max(rc_child, rc_checks)
                 if rc_child == 0:
-                    self.message(f"STATUS: fatalConditions: FAILED {child} {fc_child} - BREAK", pre_cr=True)
-                    break
+                    self.message(f"STATUS: fatalConditions: FAILED {child} {fc_child}", pre_cr=True)
                 rc_condition = min(rc_condition, rc_child)
         return rc_condition
 
@@ -590,7 +589,7 @@ class SaphanasrTest:
                 process_result = self.__process_fatal_condition(step)
                 self.debug("DEBUG: step {} to processed fatalCondition with process_result {}".format(step_id, process_result))
                 if process_result == 0:
-                    self.message("STATUS: step {} failed with fatalCondition".format(step_id))
+                    self.message("STATUS: step {} failed with fatalCondition - BREAK".format(step_id))
                     process_result = 2
                     fatal = True
                     break
