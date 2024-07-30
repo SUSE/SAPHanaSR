@@ -25,7 +25,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.3.4"
+    version = "1.3.5"
 
     def message(self, msg, **kwargs):
         """
@@ -84,6 +84,9 @@ class SaphanasrTest:
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'pHost': 'Host', 'sHost': 'Host' }
         self.debug("INIT: tester version: {}".format(self.version))
+        self.__failed_role_counter__ = 0
+        self.__min_failed_role_counter__ = 0
+        self.__max_failed_role_counter__ = 0
         if cmdparse:
             self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
@@ -459,6 +462,7 @@ class SaphanasrTest:
                 if not found:
                     l_val = None
                 self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name)
+                self.__failed_role_counter__ += 1
                 check_result = max(check_result, 1)
                 self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
             else:
@@ -578,7 +582,10 @@ class SaphanasrTest:
                  )
         self.message(_l_msg)
         fatal = False
+        self.__min_failed_role_counter__ = 1000
+        self.__max_failed_role_counter__ = 0
         while loops < max_loops:
+            self.__failed_role_counter__ = 0
             loops = loops + 1
             if self.config['dump_failures']:
                 print(".", end='', flush=True)
@@ -587,7 +594,7 @@ class SaphanasrTest:
             if "fatalCondition" in step:
                 # self.message("STATUS: step {} to process fatalCondition".format(step_id))
                 process_result = self.__process_fatal_condition(step)
-                self.debug("DEBUG: step {} to processed fatalCondition with process_result {}".format(step_id, process_result))
+                self.debug(f"DEBUG: step {step_id} to processed fatalCondition with process_result {process_result}")
                 if process_result == 0:
                     self.message("STATUS: step {} failed with fatalCondition - BREAK".format(step_id))
                     process_result = 2
@@ -604,6 +611,9 @@ class SaphanasrTest:
                                  )
             if process_result == 0:
                 break
+            self.__min_failed_role_counter__ = min(self.__min_failed_role_counter__, self.__failed_role_counter__)
+            self.__max_failed_role_counter__ = max(self.__max_failed_role_counter__, self.__failed_role_counter__)
+            self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})")
             time.sleep(wait)
         if self.config['dump_failures'] and fatal is False:
             print("")
