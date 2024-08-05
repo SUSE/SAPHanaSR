@@ -48,7 +48,7 @@ siteSecondary="${siteSecondary//\"/}"
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary, vhostPrim=$vhostPrim, vhostSecn=$vhostSecn"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Stop Cluster"
-ssh "${node02}" 'crm cluster run "crm cluster stop"'
+ssh "${node02}" "crm cluster stop --all"
 
 echo "==== SUSE Cluster Stopped ===="
 
@@ -107,6 +107,8 @@ srHookCache=$( ssh "$currPrimary" 'cat '"$cacheFile"'' )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currPrimary: $cacheFile: $srHookCache"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
-ssh "$node01" 'crm cluster run "crm cluster start"'
+ssh "$node01" "crm cluster start --all"
+sleep 30
+ssh "$node01" "crm cluster wait_for_startup 60"
 
 echo "==== SUSE Cluster Started ===="
