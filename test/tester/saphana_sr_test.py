@@ -327,16 +327,17 @@ class SaphanasrTest:
         write_test_properties - write bash test properties file so bash test helper could source the key-value settings
         """
         with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
-            test_prop_fh.write(f"node01={topology.get('pHost','node01')}\n")
-            test_prop_fh.write(f"node02={topology.get('sHost','node02')}\n")
-            test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
-            test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
-            test_prop_fh.write(f"srMode={self.test_data.get('srMode','sync')}\n")
-            test_prop_fh.write(f"opMode={self.test_data.get('opMode','logreplay')}\n")
-            test_prop_fh.write(f"SID={self.test_data.get('sid','C11')}\n")
-            test_prop_fh.write(f"instNr={self.test_data.get('instNo','00')}\n")
-            test_prop_fh.write(f"sidadm={self.test_data.get('sid','C11').lower()}adm\n")
-            test_prop_fh.write(f"userkey={self.test_data.get('userKey','')}\n")
+            test_prop_fh.write(f"node01=\"{topology.get('pHost','node01')}\"\n")
+            test_prop_fh.write(f"node02=\"{topology.get('sHost','node02')}\"\n")
+            test_prop_fh.write(f"mstResource=\"{self.test_data.get('mstResource','')}\"\n")
+            test_prop_fh.write(f"clnResource=\"{self.test_data.get('clnResource','')}\"\n")
+            test_prop_fh.write(f"rscIPResource=\"{self.test_data.get('rscIPResource','')}\"\n")
+            test_prop_fh.write(f"srMode=\"{self.test_data.get('srMode','sync')}\"\n")
+            test_prop_fh.write(f"opMode=\"{self.test_data.get('opMode','logreplay')}\"\n")
+            test_prop_fh.write(f"SID=\"{self.test_data.get('sid','C11')}\"\n")
+            test_prop_fh.write(f"instNr=\"{self.test_data.get('instNo','00')}\"\n")
+            test_prop_fh.write(f"sidadm=\"{self.test_data.get('sid','C11').lower()}adm\"\n")
+            test_prop_fh.write(f"userkey=\"{self.test_data.get('userKey','')}\"\n")
             test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg, **kwargs):

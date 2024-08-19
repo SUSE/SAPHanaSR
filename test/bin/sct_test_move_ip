@@ -6,9 +6,13 @@ dir_path=$(dirname "$full_path")
 source .test_properties
 currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 
-echo "==== moce ip address ===="
-
-ssh "$currPrimary" 'crm resource move rsc_ip_HA1 force'
-sleep 10
-ssh "$currPrimary" 'crm resource clear rsc_ip_HA1'
+if [[ -n "$rscIPResource" ]]; then
+    echo "==== moce ip address ===="
+    ssh "$currPrimary" "crm resource move $rscIPResource force"
+    sleep 10
+    ssh "$currPrimary" "crm resource clear $rscIPResource"
+else
+    echo "rscIPResource not set in properties file"
+    exit 2
+fi
  
