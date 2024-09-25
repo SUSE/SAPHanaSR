@@ -1,6 +1,6 @@
 .\" Version: 1.001
 .\"
-.TH susHanaSR.py 7 "01 Mar 2024" "" "SAPHanaSR"
+.TH susHanaSR.py 7 "24 Sep 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 susHanaSR.py \- Provider for SAP HANA srHook method srConnectionChanged().
@@ -69,7 +69,7 @@ Usage, syntax or execution errors.
 \fB*\fR Example for entry in sudo permissions /etc/sudoers.d/SAPHanaSR
 .PP
 .RS 2
-# SAPHanaSR (Scale-Up) needs for srHook
+# SAPHanaSR needs for srHook
 .br
 ha1adm ALL=(ALL) NOPASSWD: /usr/sbin/crm_attribute -n hana_ha1_site_srHook_*
 .RE
@@ -126,6 +126,32 @@ Do not copy the file between nodes. Please check SAP HANA documentation for deta
 .br
 register_secondaries_on_takeover = true
 .br
+ ...
+.RE
+.PP
+* Example for entry in SAP HANA 2.0 nameserver configuration
+/hana/shared/$SID/global/hdb/custom/config/nameserver.ini for two-node scale-out HANA without standby nodes.
+.br
+This entry is needed at both sites that are managed by the Linux cluster.
+The HANA has to be stopped before the files can be edited. Do not copy the file
+between nodes. It might be necessary to un-register and re-register the secondary
+to make the change effective on the secondary site. 
+Please check SAP HANA documentation for details. In this example the master node
+is suse11, the worker is suse12.
+.PP
+.RS 2
+[landscape]
+ ...
+.br
+master = suse11:31001
+.br
+worker = suse11 suse12
+.br
+active_master = suse11:31001
+.br
+roles_suse11 = worker
+.br
+roles_suse12 = worker
  ...
 .RE
 .PP
@@ -264,6 +290,9 @@ the hook provider, delivered with the RPM
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 the on-disk representation of HANA global system configuration
+.TP
+/hana/shared/$SID/global/hdb/custom/config/nameserver.ini
+the on-disk representation of HANA nameserver configuration
 .TP
 /etc/sudoers , /etc/sudoers.d/*
 the sudo permissions configuration
