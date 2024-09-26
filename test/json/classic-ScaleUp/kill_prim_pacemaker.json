@@ -1,0 +1,75 @@
+{
+    "test": "kill_prim_pacemaker",
+    "name": "kill pacemaker-controld on primary node",
+    "purpose": [
+        "ScaleUp",
+        "secondary",
+        "cluster"
+    ],
+    "todo": "please correct this file",
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_prim_pacemaker",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 180,
+            "wait": 2,
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "pSite": [
+                "srHook == PRIM"
+            ],
+            "pHost": [
+                "clone_state is None",
+                "lpa_@@sid@@_lpt > 1000000000",
+                "lss is None",
+                "srr is None",
+                "roles is None",
+                "score == -1",
+                "sync_state is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 300,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "pSite": [
+                "srHook == PRIM"
+            ],
+            "pHost": [
+                "clone_state ~ (DEMOTED|UNDEFINED)",
+                "lpa_@@sid@@_lpt > 1000000000"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 240,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        }
+    ]
+}
