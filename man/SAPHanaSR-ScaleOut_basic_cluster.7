@@ -1,13 +1,13 @@
-.\" Version: 1.001 
+.88\" Version: 1.001 
 .\"
-.TH SAPHanaSR-ScaleOut_basic_cluster 7 "18 Mar 2024" "" "SAPHanaSR"
+.TH SAPHanaSR-ScaleOut_basic_cluster 7 "27 Sep 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-ScaleOut_basic_cluster \- SAP HANA System Replication scale-out basic cluster configuration.
 .PP
 .\"
 .SH DESCRIPTION
-.\"
+.PP
 The SAP HANA System Replication scale-out scenario needs a certain basic
 cluster configuration. Besides this necessary settings, some additional
 configurations might match specific needs. Adapting a few SAP HANA settings
@@ -15,12 +15,11 @@ might be beneficial as well.
 .\"
 .\" \fB* Corosync Basics\fR
 .\"
-.\".PP
-
+.PP
 \fB* CRM Basics\fR
-
+.PP
 \fBno-quorum-policy = freeze\fR
-
+.PP
 The crm basic parameter no-quorum-policy defines how the cluster should act in
 case of quorum loss. With more than two nodes, the cluster must not ignore the
 quorum loss. For SAPHanaSR-ScaleOut, an odd number of nodes is required. Setting
@@ -28,9 +27,9 @@ no-quorum-policy to 'freeze' won't allow the partition to shoot any other node
 when it doesn't have quorum. Cluster will not be able to add and start new resources,
 but running will stay alive.
 If the cluster uses disk-less SBD, the no-quorum-policy 'suicide' is required. 
-
+.PP
 \fBdefault-resource-stickiness = 1000\fR
-
+.PP
 The crm basic parameter default-resource-stickiness defines the 'stickiness'
 score a resource gets on the node where it is currently running. This prevents
 the cluster from moving resources around without an urgent need during a
@@ -40,80 +39,77 @@ HANA primary master resource can affect cluster decisions.
 Too high value might prevent not only unwanted but also useful actions.
 This is because SAPHanaSR uses an internal scoring table for placing the HANA
 roles on the right nodes.
-
+.PP
 \fBconcurrent-fencing = true\fR
-
+.PP
 The crm basic parameter concurrent-fencing allows the cluster to fence more
 than one node at a time. This helps to reduce the time needed for a take over in
 case a whole data center is lost. If nodes are fenced one by one, the time needed
 would be equal to the \fBnumber of nodes * stonith timeout\fR. With concurrent-fencing
 enabled the time needed is in the range of \fB2 * stonith timeout\fR, independent of
 the number of nodes. See also \fBpcmk_action_limit\fR below.
-
+.PP
 \fBfailure-timeout = 86400\fR
-
+.PP
 The crm basic parameter failure-timeout defines how long failed actions will
 be kept in the CIB. After that time the failure record will be deleted. The
 time is measured in seconds. See also \fBmigration-threshold\fR below.
-
+.PP
 \fBmigration-threshold = 50\fR
-
+.PP
 The crm basic parameter migration-threshold defines how many errors on a
 resource can be detected before this resource will be migrated to another node.
 See also \fBfailure-timeout\fR.
-
+.PP
 \fBrecord-pending = false\fR
-
+.PP
 The op_default record-pending defines, whether the intention of an action
 upon the resource is recorded in the Cluster Information Base (CIB).
 Setting this parameter to 'true' allows the user to see pending actions like 'starting'
 and 'stopping' in \fBcrm_mon\fR and \fBHawk\fR.
-
 .PP
 \fB* SBD STONITH Basics\fR
-
+.PP
 \fBpcmk_action_limit = -1\fR
-
+.PP
 The sbd stonith parameter pcmk_action_limit defines the maximum number of
 concurrent fencing actions. It allows parallel fencing of multiple nodes. 
 A value of '-1' means virtually unlimited. 
 See also \fBconcurrent-fencing\fR above.
-
+.PP
 \fBpcmk_delay_max = 1s\fR
-
+.PP
 The sbd stonith parameter pcmk_delay_max defines an upper limit for waiting
 before a fencing/stonith request will be triggerd.
 This parameter should prevent the cluster from unwanted double fencing in case
 of spilt-brain. A value around 30 seconds is required in two-node clusters. It
 is not needed in usual SAPHanaSR-ScaleOut setups.
-
 .PP
 \fB* systemd Basics\fR
-
+.PP
 \fBsaphostagent.service enabled\fR
 .br
 \fBSAP${SID}_${INO}.service enabled\fR
-
+.PP
 In case systemd-style init is used for the HANA database, the services saphostagent
 and SAP${SID}_${INO} need to be enabled and running inside the SAP slice.
 The instance profile Autostart feature needs to be off.
 The service saptune is highly recommended, see manual page saptune(8).
-
+.PP
 \fB* pacemaker service dependency to SAP instance service\fR
-
+.PP
 \fB[Unit]\fR
 .br
 \fBWants=SAP${SID}_${INO}.service\fR
 .br
 \fBAfter=SAP${SID}_${INO}.service\fR
-
+.PP
 In case systemd-style init is used for the HANA database, it might be desired
 to have the SAP instance service stopping after pacemaker at system shutdown.
 Therefor a drop-in file for the pacemaker service might help. See examples below.
-
 .PP
 \fB* SAP HANA Basics\fR
-
+.PP
 \fB/usr/sap/${SID}/SYS/global/hdb/custom/config/global.ini\fR
 .PP
 \fB[memorymanager]\fR
@@ -126,7 +122,7 @@ Starting with SAP HANA 2.0 SPS06, the database shutdown can be accelerated by
 optimizing memory de-allocation. Please refer to SAP documentation before setting
 this parameters.
 .\" TODO SAP notes 3405297 ?
-
+.PP
 \fB/usr/sap/${SID}/SYS/global/hdb/custom/config/daemon.ini
 .PP
 \fB[daemon]\fR
@@ -143,13 +139,38 @@ child processes when HANA is shutting down by the QUIT event. See also manual pa
 susChkSrv.py(7).
 Please refer to SAP documentation before setting this parameters.
 .\" TODO check above
-
+.PP
+\fB/hana/shared/$SID/global/hdb/custom/config/nameserver.ini\fR
+.PP
+.RS 2
+[landscape]
+ ...
+.br
+master = suse11:31001
+.br
+worker = suse11 suse12
+.br
+active_master = suse11:31001
+.br
+roles_suse11 = worker
+.br
+roles_suse12 = worker
+ ...
+.RE
+.PP
+For two-node scale-out HANA without standby nodes, this entry is needed at both
+sites that are managed by the Linux cluster.
+The HANA has to be stopped before the files can be edited. Do not copy the file
+between nodes. It might be necessary to un-register and re-register the secondary
+to make the change effective on the secondary site.
+Please check SAP HANA documentation for details. In this example the master node
+is suse11, the worker is suse12.
 .PP
 .\"
 .SH EXAMPLES
-
+.PP
 \fB* crm basic configuration\fR
-
+.PP
 Below is an example crm basic configuration for SAPHanaSR-ScaleOut. Shown are
 specific parameters which are needed. Some general parameters are left out.
 .br
@@ -231,9 +252,8 @@ op_defaults op-options: \\
 .RE
 .PP
 .\" TODO example for SLE-HA 15 SP5 with disk-based and diskless SBD.
-
 \fB* crm SBD stonith configuration\fR
-
+.PP
 To complete the SBD setup, it is necessary to activate SBD as STONITH/fencing
 mechanism in the CIB. The SBD is normally used for SAPHanaSR-ScaleOut instead
 of any other fencing/stonith mechanism. Example for a basic disk-based SBD
@@ -246,9 +266,8 @@ primitive rsc_stonith_sbd stonith:external/sbd \\
  params pcmk_action_limit="-1" pcmk_delay_max="1"
 .RE
 .PP
-
 \fB* crm simple IP address resource configuration\fR
-
+.PP
 Let the Linux cluster manage one IP address and move that address along
 with the HANA primary master nameserver.
 .PP
@@ -265,9 +284,8 @@ colocation col_ip_with_SLE_HDB00 \\
  2000: rsc_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
 .RE
 .PP
-
 \fB* crm IP address for active/active read-enabled resource configuration\fR
-
+.PP
 Let the Linux cluster manage an additional IP address and move that address
 along with the HANA secondary master nameserver.
 .br
@@ -294,9 +312,8 @@ location loc_ip_ro_not_master_SLE_HDB00 \\
 .\" TODO works this for multi-node:  rule 8000: score eq 100
 .RE
 .PP
-
 \fB* crm grouped IP address resource configuration\fR
-
+.PP
 Let the Linux cluster manage one IP address and move that address along
 with the HANA primary master nameserver. An auxiliary resource is needed
 for specific public cloud purpose.
@@ -322,9 +339,8 @@ colocation col_ip_with_SLE_HDB00 \\
  8000: grp_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
 .RE
 .PP
-
 \fB* check how resource stickiness affects promotion scoring\fR
-
+.PP
 SAPHanaSR uses an internal scoring table. The promotion scores for HANA
 primary and secondary master are in a certain range. The scores used by the
 Linux cluster should be in the same range.
@@ -335,9 +351,8 @@ Linux cluster should be in the same range.
 # crm_simulate -Ls | grep promotion
 .RE
 .PP
-
 \fB* clean up SDB stonith resource after write failure\fR
-
+.PP
 In rare cases the SBD stonith resource failes writing to the block device.
 After the root cause has been found and fixed, the failure message can be
 cleaned.
@@ -346,9 +361,8 @@ cleaned.
 # stonith_admin --cleanup --history=<originator_node> 
 .RE
 .PP
-
 \fB* check saphostagent and show SAP instances\fR
-
+.PP
 Basic check for the saphostagent.
 .PP
 .RS 2
@@ -357,9 +371,8 @@ Basic check for the saphostagent.
 # /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
 .RE
 .PP
-
 \fB* check systemd services for the HANA database\fR
-
+.PP
 In case systemd-style init is used for the HANA database, the services can be
 checked. Example SID is HA1, instance number is 10.
 .PP
@@ -376,14 +389,12 @@ checked. Example SID is HA1, instance number is 10.
 .\" TODO check Autostart not set.
 .RE
 .PP
-
 \fB* show pacemaker service drop-in file\fR
-
+.PP
 In case systemd-style init is used for the HANA database, it might be desired
 to have the  SAP instance service stopping after pacemaker at system shutdown.
 A drop-in file might help. Example SID is S07, instance number is 00.
-
-.pp
+.PP
 .RS 2
 # cat /etc/systemd/system/pacemaker.service.d/00-pacemaker.conf
 .br
@@ -398,9 +409,8 @@ Wants=SAPS07_00.service
 After=SAPS07_00.service
 .RE
 .PP
-
 \fB* check for pacemaker dependency to SAP instance service\fR
-
+.PP
 Example SID is S07, instance number is 00.
 .PP
 .RS 2
@@ -413,12 +423,14 @@ Example SID is S07, instance number is 00.
 .PP
 .\"
 .SH BUGS
+.PP
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+.PP
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBocf_suse_SAPHanaFilesystem\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) , 
 \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) , 
@@ -437,12 +449,14 @@ https://www.suse.com/support/kb/ ,
 .br
 https://www.clusterlabs.org
 .PP
+.\"
 .SH AUTHORS
-.br
+.PP
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
+.PP
 (c) 2018 SUSE Linux GmbH, Germany.
 .br
 (c) 2019-2024 SUSE LLC
