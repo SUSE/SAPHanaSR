@@ -303,7 +303,7 @@ Comment: Node failure, main cluster case.
 \fBkill_prim_pacemakerd\fP
 .RS 2
 Descr: Kill primary pacemakerd.
-On scale-out, kill secondary master node´s pacemakerd.
+On scale-out, kill primary master node´s pacemakerd.
 .br
 Topology: ScaleUp, ScaleOut.
 .br
@@ -330,9 +330,11 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: killall -9 pacemaker-controld
 .br
-Expect: Node fenced TODO.
-HANA primary TODO.
-TODO takeover. TODO fencing.
+Expect: Primary (master) node fenced (for PCMK_fast_fail=yes).
+HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fencing.
 .br
 Comment: Cluster failure.
 .RE
@@ -392,6 +394,23 @@ One takeover. One fencing.
 Comment: Node failure, main cluster case.
 .RE
 .PP
+\fBkill_prim_worker_pacemakerd\fP
+.RS 2
+Descr: Kill primary worker node´s pacemakerd.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -9 pacemakerd
+.br
+Expect: Primary worker pacemakerd restarted.
+Both HANA stay online.
+No takeover. No fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
 \fBkill_prim_worker_pacemkr-ctrld\fP
 .RS 2
 Descr: Kill primary worker node´s pacemaker-controld.
@@ -402,9 +421,11 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: killall -9 pacemaker-controld
 .br
-Expect: TODO.
-HANA primary TODO.
-TODO takeover. TODO fencing.
+Expect: Primary worker node fenced (for PCMK_fast_fail=yes).
+HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fencing.
 .br
 Comment: Cluster failure.
 .RE
