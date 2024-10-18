@@ -73,13 +73,13 @@ mkdir -p %{buildroot}%{_mandir}/man8
 
 # test engine itself
 mkdir -p %{buildroot}/usr/lib/%{name}
-install -m 0755 test/SAPHanaSR-* %{buildroot}/usr/bin
-install -m 0644 test/saphana_sr_test.py %{buildroot}/usr/lib/%{name}
+install -m 0755 test/tester/SAPHanaSR-* %{buildroot}/usr/bin
+install -m 0644 test/tester/saphana_sr_test.py %{buildroot}/usr/lib/%{name}
 
 # test help programs, test loops and test calls
-install -m 0755 test/cs_* %{buildroot}/usr/bin
-install -m 0755 test/callTest* %{buildroot}/usr/bin
-install -m 0755 test/loopTests* %{buildroot}/usr/bin
+install -m 0755 test/bin/cs_* %{buildroot}/usr/bin
+install -m 0755 test/bin/callTest* %{buildroot}/usr/bin
+install -m 0755 test/bin/loopTests* %{buildroot}/usr/bin
 install -m 0755 test/bin/sct_* %{buildroot}/usr/bin
 
 # client files
