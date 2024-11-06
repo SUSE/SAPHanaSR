@@ -1,0 +1,188 @@
+.\" Version: 1.2
+.\"
+.TH SAPHanaSR-angi-scenarios 7 "28 Oct 2024" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+SAPHanaSR-angi-scenarios \- SAP HANA system replication scenarios.
+.PP
+.\"
+.SH DESCRIPTION
+.PP
+SAPHanaSR-angi covers two topologies, scale-up and scale-out. On each topology,
+several scenarios are supported. Finally, for most scenarios, two variants are
+possible. 
+.PP
+\fB* Scenarios overview\fB
+.PP
+The table below shows the known SUSE HA scenarios for HANA system replication
+for the two HANA topologies. The current support status is also shown.
+.PP
+.\" see man tbl and https://technicallywewrite.com/2023/09/23/tblexample
+.TS
+tab(@) allbox center;
+cb cb cb
+c c c
+^ c ^
+^ c ^
+^ c c
+^ c ^
+^ c ^
+^ c ^
+^ c c
+^ c ^
+c c c
+^ c ^
+^ c ^
+^ c c
+^ c c
+^ c ^
+^ c ^
+^ c ^.
+Topology@Scenario@Status
+Scale-Up@perf-opt@Supported
+@perf-opt, 2nd site read-enabled@Supported
+@perf-opt, multi-target, 3rd site outside cluster@Supported
+@perf-opt, multi-SID@Undocumented
+@perf-opt, w. S/4 ENSA2 in same cluster@Undocumented
+@cost-opt@Undocumented
+@cost-opt, multi-target@Non-supported
+@perf-opt, multi-target, 3rd site inside cluster@Non-supported
+@two perf-opt clusters connected@Non-supported
+Scale-Out@perf-opt, up to 12 nodes, no standby (BW)@Supported
+@perf-opt, 4 nodes, 2nd site read-enabled (ERP)@Supported
+@perf-opt, multi-target, 3rd site outside cluster@Supported
+@perf-opt, up to 30 nodes w. standby (BW)@Undocumented
+@perf-opt, multi-target, 3rd site inside cluster@Non-supported
+@perf-opt, multi-SID@Non-supported
+@cost-opt@Non-supported
+@two perf-opt clusters connected@Non-supported
+.TE
+.PP
+.RS 8
+Note: One additional Linux cluster node at 3rd site is needed for all scale-out scenarios.
+.RE
+.\" TODO align wording with "Supported HA Solutions"
+.PP
+\fBSupported\fP - the scenario is known to work for the given topology. The
+setup has been tested and is documented in a setup guide. It is supported by
+SUSE.
+.PP
+\fBUndocumented\fP - the scenario is expected to work for the given topology.
+The setup is currently not documented in a setup guide. SUSE services are prepared to help with implementation. Once the setutp is working, it is supported by
+SUSE.
+.PP
+\fBNon-supported\fP - the scenario is expected not to work. It is not supported
+by SUSE. 
+.PP
+For details on requirements and configuration of the scenarios, please refer to manual pages SAPHanaSR-angi(7), SAPHanaSR(7) and SAPHanaSR-ScaleOut(7), as well as the respective setup guides.
+.PP
+\fB* Scenario notation\fB
+.PP
+It might help to describe scenarios in a pseudo-visualising notation.
+.PP
+.TS
+tab(@) allbox center;
+cb cb
+c c
+c c
+c c
+c c
+c c
+c c
+c c
+c c.
+Symbol@Meaning
+[ ]@Linux cluster
+ A B C@master nameserver node
+ a b c@worker node
+ _ @ standby node
+=>@syncronous replication
+->@asyncronous replication
+'@primary IP address
+"@secondary (read-enabled) IP address
+.TE
+
+.PP
+The scale-up performance-optimised multi-target scenario can be noted as:
+.br
+[ A' => B ] -> C
+.PP
+\fB* Variants overview\fB
+.PP
+.\" TODO variants conservative, progressive
+SAPHanaSR-angi allows to define different variants of reaction on failures.
+.PP
+\fBConservative\fR – default configuration
+.br
+The cluster is patient, it prefers stopping HANA over fencing nodes. It does
+not react on filesystem failures.
+.PP
+\fBProgressive\fR – alternative configuration
+.br
+The cluster reacts on failures of HANA or filesystem with fencing all nodes
+of the affected site. Takeover time might be further reduced by using diskless SBD.
+.PP
+For details on configuration of the variants, please refer to manual pages
+ocf_suse_SAPHanaController(7), ocf_suse_SAPHana(7), ocf_suse_SAPHanaFilesystem(7), SAPHanaSR-alert-fencing(8), susChkSrv.py(7),
+SAPHanaSR_basic_cluster(7), SAPHanaSR-ScaleOut_basic_cluster(7).
+.PP
+.\"
+.SH EXAMPLES
+.PP
+\fB* Examples for supported scenarios\fR
+.TP
+Scale-up performance-optimised multi-target
+[ A' => B ] -> C
+.TP
+Scale-up cost-optimised
+[ A' => B,Q ]
+.TP
+Scale-out performance-optimised multi-target read-enabled (ERP)
+[ 'Aa => "Bb ] -> Cc -> Dd
+.TP
+Scale-out performance-optimised 8-node w. standby (BW)
+[ 'Aaaaaaa_ => Bbbbbbb_ ]
+.PP
+\fB* Examples for non-supported scenarios\fR
+.TP
+Scale-up performance-optimised multi-target 3rd site in cluster
+[ A' => B => C ]
+.TP
+Scale-out performance-optimised two clusters connected
+[ 'Aa => Bb ] -> [ 'Cc => Dd ]
+.PP
+.\"
+.SH BUGS
+.PP
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.PP
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
+\fBocf_suse_SAPHanaFilesystem\fP(7) , \fBSAPHanaSR-alert-fencing\fP(8) ,
+\fBsusChkSrv.py\fP(7) , \fBSAPHanaSR_basic_cluster\fP(7) ,
+\fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) ,
+.br
+https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html ,
+.br
+https://documentation.suse.com/sbp/sap-15/
+.PP
+.\"
+.SH AUTHORS
+.PP
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.PP
+(c) 2024 SUSE LLC
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
