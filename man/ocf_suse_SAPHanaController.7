@@ -1,6 +1,6 @@
-.\" Version: 1.001
+.\" Version: 1.2.9
 .\"
-.TH ocf_suse_SAPHanaController 7 "21 Jun 2024" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "18 Oct 2024" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication.
@@ -11,7 +11,7 @@ SAPHanaController \- Manages takeover between two SAP HANA databases with system
 .PP
 .\"
 .SH DESCRIPTION
-
+.PP
 \fBSAPHanaController\fP is a resource agent (RA) for SAP HANA databases in scale-up and scale-out setups.
 It manages takeover for a SAP HANA database with system replication in an OCF promotable clone configuration.
 .PP
@@ -87,7 +87,7 @@ Please see also the REQUIREMENTS section below.
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
-.br
+.PP
 This resource agent supports the following parameters:
 .PP
 \fBSID\fR
@@ -148,7 +148,7 @@ Values: [ proceed | fence ].
 .br
 - fence: trigger stop failure and node fencing, if conditions are matched.
 .br
-Experimental (Optional). Default value: proceed.
+Optional. Default value: proceed.
 .RE
 .PP
 \fBPREFER_SITE_TAKEOVER\fR
@@ -176,7 +176,7 @@ Optional. Default value: false\&.
 .PP
 .\"
 .SH SUPPORTED PROPERTIES
-.br
+.PP
 \fBhana_${sid}_glob_filter\fR
 .RS 4
 Global cluster property \fBhana_${sid}_glob_filter\fR . This property defines which messages are logged by the RA. It should only be set if requested by support engineers. The default is sufficient for normal operation. See also SAPHanaSR-showAttr(8).
@@ -218,6 +218,7 @@ Optional.
 .PP
 .\"
 .SH SUPPORTED ACTIONS
+.PP
 This resource agent supports the following actions (operations):
 .PP
 \fBstart\fR
@@ -285,6 +286,7 @@ Changes parameters without forcing a recover of the resource. Suggested minimum 
 .PP
 .\"
 .SH RETURN CODES
+.PP
 The return codes are defined by the OCF cluster framework. Please refer to the
 OCF definition on the website mentioned below. 
 In addition return code 124 will be logged if HANA_CALL_TIMEOUT has been exceeded.
@@ -293,6 +295,7 @@ In addition, log entries are written, which can be scanned by using a pattern li
 .PP
 .\"
 .SH EXAMPLES
+.PP
 * Below is an example configuration for a SAPHanaController multi-state resource in an HANA scale-out performance-optimised scenario.
 .br
 The HANA consists of two sites with five nodes each. An additional cluster node is used as majority maker for split-brain situations. In addition, a SAPHanaTopology clone resource is needed to make this work.
@@ -394,22 +397,22 @@ OCF_RESKEY_CRM_meta_interval=0
 .RE
 .PP
 * Use of DUPLICATE_PRIMARY_TIMEOUT and Last Primary Timestamp (LPT) in case the primary node has been crashed completely.
-
+.PP
 Typically on each side where the RA detects a running primary a time stamp is written to the node's attributes (last primary seen at time: lpt). If the timestamps ("last primary seen at") differ less than the DUPLICATE_PRIMARY_TIMEOUT then the RA could not automatically decide which of the two primaries is the better one.
-
+.PP
 .RS 2
 1. nodeA is primary and has a current time stamp, nodeB is secondary and has a secondary marker set:
 .br
 nodeA: 1479201695
 .br
 nodeB: 30
-
+.PP
 2. Now nodeA crashes and nodeB takes over:
 .br
 (nodeA: 1479201695)
 .br
 nodeB: 1479201700
-
+.PP
 3. A bit later nodeA comes back into the cluster:
 .br
 nodeA: 1479201695
@@ -417,7 +420,7 @@ nodeA: 1479201695
 nodeB: 1479202000
 .br
 You see while nodeA keeps its primary down the old timestamp is kept. NodeB increases its timestamp on each monitor run.
-
+.PP
 4. After some more time (depending on the parameter DUPLICATE_PRIMARY_TIMEOUT)
 .br
 nodeA: 1479201695
@@ -425,13 +428,13 @@ nodeA: 1479201695
 nodeB: 1479208895
 .br
 Now the time stamps differ >= DUPLICATE_PRIMARY_TIMEOUT. The algorithm defines nodeA now as "the looser" and depending on the AUTOMATED_REGISTER the nodeA will become the secondary.
-
+.PP
 5. NodeA would be registered:
 .br
 nodeA: 10
 .br
 nodeB: 1479208900
-
+.PP
 6. Some time later the secondary gets into sync
 .br
 nodeA: 30
@@ -440,34 +443,34 @@ nodeB: 1479209100
 .RE
 .PP
 * Use of DUPLICATE_PRIMARY_TIMEOUT and Last Primary Timestamp (LPT) in case the the database on primary node has been crashed, but the node is still alive.
-
+.PP
 Typically on each side where the RA detects a running primary a time stamp is written to the node's attributes (last primary seen at time: lpt). If the timestamps ("last primary seen at") differ less than the DUPLICATE_PRIMARY_TIMEOUT then the RA could not automatically decide which of the two primaries is the better one.
-
+.PP
 .RS 2
 1. nodeA is primary and has a current time stamp, nodeB is secondary and has a secondary marker set:
 .br
 nodeA: 1479201695
 .br
 nodeB: 30
-
+.PP
 2. Now HANA on nodeA crashes and nodeB takes over:
 .br
 nodeA: 1479201695
 .br
 nodeB: 1479201700
-
+.PP
 3. As the cluster could be sure to properly stopped the HANA instance at nodeA it *immediately* marks the old primary to be a register candidate, if AUTOMATED_REGISTER is true:
 .br
 nodeA: 10
 .br
 nodeB: 1479201760
-
+.PP
 4. Depending on the AUTOMATED_REGISTER parameter the RA will also immediately regisiter the former primary to become the new secondary:
 .br
 nodeA: 10
 .br
 nodeB: 1479201820
-
+.PP
 5. And after a while the secondary gets in sync
 .br
 nodeA: 30
@@ -476,7 +479,7 @@ nodeB: 1479202132
 .RE
 .PP
 * Set parameter AUTOMATED_REGISTER="true". See SUPPORTED PARAMETERS section above for details.
-
+.PP
 .RS 4
 # crm_resource -r rsc_SAPHanaCon_HA1_HDB00 -p AUTOMATED_REGISTER -v true
 .br
@@ -508,6 +511,7 @@ default path for DIR_PROFILE
 .PP
 .\"
 .SH REQUIREMENTS
+.PP
 For the current version of the SAPHanaController resource agent that comes with the software package SAPHanaSR-angi, the support is limited to the scenarios and parameters described in the manual pages SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
 .PP
 .\"

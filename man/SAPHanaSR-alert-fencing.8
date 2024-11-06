@@ -1,6 +1,6 @@
-.\" Version: 1.001
+.\" Version: 1.2.4
 .\"
-.TH SAPHanaSR-alert-fencing 7 "12 Jun 2024" "" "SAPHanaSR"
+.TH SAPHanaSR-alert-fencing 7 "18 Sep 2024" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-alert-fencing \- Alert agent for cluster fencing alerts.
@@ -9,16 +9,16 @@ SAPHanaSR-alert-fencing \- Alert agent for cluster fencing alerts.
 .SH DESCRIPTION
 SAPHanaSR-alert-fencing can be used to react on Linux cluster fencing alerts.
 .PP
-The Linux cluster provides an interface to initiate external action when a cluster
-event occurs (alert). Than the cluster calls an external program (an alert agent)
-to handle that alert.
+The Linux cluster provides an interface to initiate external actions when a
+cluster event occurs (alert). Than the cluster calls an external program (an
+alert agent) to handle that alert.
 .PP
 When the Linux cluster has performed an node fencing, it can call
 SAPHanaSR-alert-fencing on each active cluster node. The agent checks whether
 the local node belongs to the same HANA site as the fenced node. If so, it asks
 the cluster to fence the local node as well.
 .PP
-This improves three use cases for HANA scale-out:
+This improves four use cases for HANA scale-out:
 .br
 - HA/DR provider hook script susChkSrv.py action_on_lost=fence
 .br
@@ -26,8 +26,10 @@ This improves three use cases for HANA scale-out:
 .br
 - resource agent SAPHanaFilesystem ON_FAIL_ACTION=fence
 .br
-See also manual pages ocf_sus_SAPHanaController(7), ocf_suse_SAPHanaFilesystem(7)
-and susChkSrv.py(7).
+- pacemaker service PCMK_fail_fast=yes
+.br
+See also manual pages ocf_suse_SAPHanaController(7), ocf_suse_SAPHanaFilesystem(7),
+SAPHanaSR-ScaleOut_basic_cluster(7) and susChkSrv.py(7).
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
@@ -111,6 +113,16 @@ Note: Understand the impact before trying.
 # crm node fence node1
 .RE
 .PP
+\fB*\fR Example for sudo permissions in /etc/sudoers.d/SAPHanaSR .
+.PP
+See also manual page sudoers(5).
+.PP
+.RS 2
+# SAPHanaSR-alert-fencing needs
+.br
+hacluster ALL=(ALL) NOPASSWD: /usr/sbin/crm --force node fence *
+.RE
+.PP
 .\"
 .SH FILES
 .TP
@@ -122,6 +134,9 @@ the internal cache for host to site relation - do not touch this file
 .TP
 /etc/sysconfig/sbd
 config file for SBD daemon
+.TP
+/etc/sysconfig/pacermaker
+config file for pacemaker daemon
 .PP
 .\"
 .SH REQUIREMENTS
@@ -136,17 +151,23 @@ thus no standby nodes.
 .PP
 5. No other alert agent should be configured for the fencing alert.
 .PP
-6. SAPHanaFilesystem RA with monitor operations is active. 
+6. User hacluster is member of group haclient. Both are defined locally on each cluster nodes.
 .PP
-7. Automatic restart of just fenced nodes should be disabled by adapting
+7. User hacluster needs password-less sudo permission on "/usr/sbin/crm --force node fence *".
+.PP
+8. Concurrent fencing is configured, see manual page SAPHanaSR-ScaleOut_basic_cluster(7).
+.PP
+9. SAPHanaFilesystem RA with monitor operations is active.
+.PP
+10. Automatic restart of just fenced nodes should be disabled by adapting
 SBD_START_MODE. In case of automatic restart of just fenced nodes, it might be
 necessary to adapt SBD_START_DELAY in order to avoid fencing loops. See manual
 page sbd(8).
 .PP
-8. Fencing is executed unconditionally. The alert agent relies on the preceding
-fencing decision. Neither site role nor SR state is checked.
+11. The alert agent unconditionally executes fencing. The alert agent relies on
+the preceding fencing decision. Neither site role nor SR state is checked.
 .PP
-9. The alert agent runtime almost completely depends on call-outs to OS and
+12. The alert agent runtime almost completely depends on call-outs to OS and
 Linux cluster.
 .\"
 .SH BUGS
@@ -158,7 +179,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 \fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaFilesystem\fP(7) ,
-\fBsusChkSrv.py\fP(7) , \fBcrm\fP(8) , \fBsbd\fP(8) ,
+\fBsusChkSrv.py\fP(7) , \fBcrm\fP(8) , \fBsbd\fP(8) , \fBsudoers\fP(5) ,
 .br
 https://clusterlabs.org/pacemaker/doc/2.1/Pacemaker_Administration/singlehtml/#alert-agents
 .PP
