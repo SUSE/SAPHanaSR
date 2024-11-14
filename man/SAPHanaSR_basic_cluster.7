@@ -1,6 +1,6 @@
-.\" Version: 1.001 
+.\" Version: 1.2
 .\"
-.TH SAPHanaSR 7 "27 Sep 2024" "" "SAPHanaSR_basic_cluster"
+.TH SAPHanaSR 7 "14 Nov 2024" "" "SAPHanaSR_basic_cluster"
 .\"
 .SH NAME
 SAPHanaSR_basic_cluster \- SAP HANA System Replication scale-up basic cluster configuration.
@@ -222,14 +222,40 @@ property cib-bootstrap-options: \\
 .PP
 \fB* crm simple IP address resource configuration\fR
 .PP
-Let the Linux cluster manage one IP address and move that address along
-with the HANA primary master nameserver.
+Let the Linux cluster manage one IP address and move that address along with
+the HANA primary master nameserver. Interval and timeout are set for friendly
+conditions.
 .PP
 .RS 2
 .br
 primitive rsc_ip_SLE_HDB00 IPaddr2 \\
 .br
  op monitor interval=10 timeout=20 \\
+.br
+ params ip=192.168.178.188
+.br
+colocation col_ip_with_SLE_HDB00 \\
+.br
+ 2000: rsc_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
+.RE
+.PP
+.PP
+\fB* crm protective IP address resource configuration\fR
+.PP
+Let the Linux cluster manage one IP address and move that address along with
+the HANA primary master nameserver. The resource should tolerate short absence
+of (virtual) network cards. If a monitor and the resulting start fails, the
+node should get fenced. This protects against risk of HANA dual-primary. This
+configuration might be used in public cloud environments.
+.PP
+.RS 2
+.br
+primitive rsc_ip_SLE_HDB00 IPaddr2 \\
+.br
+ op monitor interval=30 timeout=60 \\
+.br
+ op start timeout=90 on-fail=fence \\
+.\" TODO on-fail=standby?
 .br
  params ip=192.168.178.188
 .br
