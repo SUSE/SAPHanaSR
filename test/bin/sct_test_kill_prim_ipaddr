@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+# sct_test_kill_prim_ipaddr - kill primary HANA´s IP address
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+
+echo "==== Kill primary HANA´s IP address ===="
+
+# TODO fixme
+IP=$( ssh "$currPrimary" "crm configure show | grep -A4 primitive.*IPaddr2| grep params.ip=" |\
+                            awk -F'=' '{print $2}' | awk -F' ' '{print $1} )
+IPNM=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $2}' )
+NIC=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $8}' )
+
+ssh "$currPrimary" "ip a d '"${IPNM}"' dev '"${NIC}"'"
+# sleep 60
