@@ -1,0 +1,92 @@
+{
+    "test": "kill_secn_nameserver",
+    "name": "Kill secondary master nameserver",
+    "purpose": [
+        "classic",
+        "ScaleUp",
+        "secondary",
+        "kill",
+        "hana"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_secn_nameserver",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pSite": [
+                "srHook == PRIM"
+            ],
+            "sSite": [
+                "srHook == SFAIL"
+            ],
+            "pHost": [
+                "lpa_@@sid@@_lpt > 1000000000",
+                "clone_state == PROMOTED",
+                "roles == 4:P:master1:master:worker:master",
+                "sync_state == PRIM",
+                "score == 150"
+            ],
+            "sHost": [
+                "lpa_@@sid@@_lpt ~ (10|30)",
+                "clone_state == DEMOTED",
+                "roles ~ (1|2):S:master1::worker:",
+                "sync_state ~ (SFAIL|SOK)",
+                "score ~ (-INFINITY|0)"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "pSite": [
+                "srHook == PRIM"
+            ],
+            "sSite": [
+                "srHook ~ (SFAIL|SWAIT)"
+            ],
+            "pHost": [
+                "lpa_@@sid@@_lpt > 1000000000",
+                "clone_state == PROMOTED",
+                "roles == 4:P:master1:master:worker:master",
+                "sync_state == PRIM",
+                "score == 150"
+            ],
+            "sHost": [
+                "lpa_@@sid@@_lpt == 10",
+                "clone_state == UNDEFINED",
+                "roles == 1:S:master1::worker:",
+                "sync_state ~ (SFAIL|SOK)",
+                "score ~ (-INFINITY|0|-1)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        }
+    ]
+}
