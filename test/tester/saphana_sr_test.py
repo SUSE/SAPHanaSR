@@ -77,7 +77,8 @@ class SaphanasrTest:
                         'remote_node': None,
                         'remote_nodes': [],
                         'printTestProperties': False,
-                        'debug': False
+                        'debug': False,
+                        'password': None
                       }
         self.dict_sr = {}
         self.test_data = {}
@@ -188,7 +189,7 @@ class SaphanasrTest:
                     sr_out = local_sr.stdout.decode()
                     break
             else:
-                result_sr = self.__do_ssh__(remote_node, "root", cmd, timeout=15)
+                result_sr = self.__do_ssh__(remote_node, "root", cmd, timeout=15, password=self.config['password'])
                 if result_sr[2] != 20000:
                     if switched_remote:
                         self.message(f"STATUS: get data from {remote_node}")
@@ -692,7 +693,7 @@ class SaphanasrTest:
                 self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
             else:
                 self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
-                a_result = self.__do_ssh__(remote, "root", cmd)
+                a_result = self.__do_ssh__(remote, "root", cmd, password=self.config['password'])
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
@@ -808,33 +809,24 @@ class SaphanasrTest:
         returns a tuple ( stdout-string, stderr, string, rc )
         """
         ssh_timeout = kwargs.get('timeout', None)
+        ssh_password = kwargs.get('password', None)
         if remote_host:
-            try:
-                ssh_client = paramiko.SSHClient()
-                ssh_client.load_system_host_keys()
+            ssh_client = paramiko.SSHClient()
+            ssh_client.load_system_host_keys()
+            if ssh_password:
+                ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
+            else:
                 ssh_client.connect(remote_host, username=user, timeout=10)
-                cmd_timeout=f"timeout={ssh_timeout}"
-                #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
-                self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
-                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
-                result_stdout = cmd_stdout.read().decode("utf8")
-                result_stderr = cmd_stderr.read().decode("utf8")
-                result_rc = cmd_stdout.channel.recv_exit_status()
-                check_result = (result_stdout, result_stderr, result_rc)
-                ssh_client.close()
-                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
-            except paramiko.ssh_exception.SSHException as para_err:
-                if self.config['dump_failures']:
-                    print("")
-                self.message(f"FAILURE01: ssh connection to {user}@{remote_host}: {para_err}")
-                check_result=("", "", 20000)
-            # pylint: disable=broad-exception-caught
-            except Exception as ssh_muell:
-                # except Exception as ssh_muell:
-                if self.config['dump_failures']:
-                    print("")
-                self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
-                check_result=("", "", 20000)
+            cmd_timeout=f"timeout={ssh_timeout}"
+            #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
+            self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
+            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+            result_stdout = cmd_stdout.read().decode("utf8")
+            result_stderr = cmd_stderr.read().decode("utf8")
+            result_rc = cmd_stdout.channel.recv_exit_status()
+            check_result = (result_stdout, result_stderr, result_rc)
+            ssh_client.close()
+            self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
         else:
             self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)
