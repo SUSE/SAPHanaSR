@@ -6,7 +6,7 @@
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023 SUSE LLC
+ Copyright:    (c) 2023,2024 SUSE LLC
 """
 
 import time
@@ -727,6 +727,12 @@ class SaphanasrTest:
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_prim_nameserver":
+            remote = self.topolo['pHost']
+            cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
+        elif action_name == "kill_secn_nameserver":
+            remote = self.topolo['sHost']
+            cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
@@ -794,8 +800,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver",
-                                   "kill_prim_worker_indexserver", "kill_secn_worker_indexserver" , "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
