@@ -1,6 +1,6 @@
-.\" Version: 1.001 
+.\" Version: 1.2
 .\"
-.TH SAPHanaSR-tests-description 7 "04 Jul 2024" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-description 7 "26 Nov 2024" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tests-description \- Functional tests for SAPHanaSR.
@@ -13,16 +13,16 @@ out-of-the-box. The test cases are defined in dedicated files.
 See manual page SAPHanaSR-tests-syntax(5) for syntax details. Tests for
 SAPHanaSR-angi scale-up scenarios are listed in SAPHanaSR-tests-angi-ScaleUp(7),
 for SAPHanaSR-angi scale-out ERP scenarios in SAPHanaSR-tests-angi-ScaleOut(7). 
-
+.PP
 Entry point for all predefined tests is a clean and idle Linux cluster and a
 clean HANA pair in sync. Same is true for the final state. 
 See manual page SAPHanaSR_maintenance_examples(7) for detecting the correct
 status and watching changes near real-time.
-
+.PP
 Each test can be executed by running the command SAPHanaSR-testCluster with
 appropriate parameters. See manual page SAPHanaSR-testCluster(8).
 .PP
-Predefined functional tests:
+Predefined functional tests without immediate fencing:
 .PP
 \fBblock_manual_takeover\fP
 .RS 2
@@ -204,6 +204,25 @@ One takeover. One fence.
 Comment: Infrastructure failure, main cluster case.
 .RE
 .PP
+\fBfreeze_secn_fs\fP
+.RS 2
+Descr: Freeze HANA FS on secondary node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See ocf_suse_SAPHanaFilesystem(7).
+Freeze is shorter than SAPHanaController monitor timeout.
+.br
+Expect: Primary keeps running.
+HANA secondary keeps running.
+SR SFAIL and finally SOK.
+No takeover. No fence.
+.br
+Comment: Infrastructure failure, main cluster case.
+.RE
+.PP
 \fBfreeze_secn_site_nfs\fP
 .RS 2
 Freeze HANA NFS on secondary site.
@@ -251,7 +270,7 @@ Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: HDB kill
+Test: HDB kill-9
 .br
 Expect: Primary (master) node stays online.
 HANA primary (master) stopped and finally started as secondary.
@@ -262,9 +281,66 @@ One takeover. No fencing.
 Comment: Application failure, main cluster case.
 .RE
 .PP
+\fBkill_prim_ipaddr\fP
+.RS 2
+Descr: Kill primary HANA´s IP address once.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: ip a d <vIP> dev <nic>
+.br
+Expect: IP address is recovered.
+All nodes stay online.
+Primary and secondary HANA stay online.
+No takeover. No fencing.
+.br
+Comment:
+.RE
+.PP
+\fBkill_prim_nameserver\fP
+.RS 2
+Descr: Kill primary nameserver.
+On scale-out, kill primary master nameserver (not yet implemented).
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -11 hdbnameserver
+.br
+Expect: Primary (master) nameserver restarted.
+HANA primary temporarily degraded (lss=2), no Linux cluster resource failure.
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+.TP
+\fBkill_prim_nic\fP
+.RS 2
+Descr: Kill primary HANA network interface.
+On scale-out, kill primary master HANA network interface (not yet implemented).
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: TODO (IPAddr2 start on-fail=fence).
+.br
+Expect: Primary (master) node fenced and finally started as secondary.
+HANA primary stopped and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. One fencing.
+.br
+Comment: Infrastructure failure. 
+.RE
+.PP
 \fBkill_prim_node\fP
 .RS 2
-Descr: Kill primary node (no fencing alert agent configured).
+Descr: Kill primary node.
 On scale-out, kill primary master node.
 .br
 Topology: ScaleUp, ScaleOut.
@@ -282,24 +358,43 @@ One takeover. One fencing.
 Comment: Node failure, main cluster case.
 .RE
 .PP
-\fBkill_prim_node_fencing_alert\fP
+\fBkill_prim_pacemakerd\fP
 .RS 2
-Descr: Kill primary node (fencing alert agent configured).
-On scale-out, kill primary master node.
+Descr: Kill primary pacemakerd.
+On scale-out, kill primary master node´s pacemakerd.
 .br
-Topology: ScaleOut.
+Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: systemctl reboot --force
+Test: killall -9 pacemakerd
 .br
-Expect: All primary nodes fenced and finally started as secondary.
+Expect: Primary (master) pacemakerd restarted.
+Both HANA stay online.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_prim_pacemkr-ctrld\fP
+.RS 2
+Descr: Kill primary pacemaker-controld.
+On scale-out, kill primary master node´s pacemaker-controld.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -9 pacemaker-controld
+.br
+Expect: Primary (master) node fenced (for PCMK_fast_fail=yes).
 HANA primary stopped and finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
-One takeover. One fencing for each primary node.
+One takeover. One fencing.
 .br
-Comment: Node failure, main cluster case.
+Comment: Cluster failure.
 .RE
 .PP
 \fBkill_prim_worker_indexserver\fP
@@ -328,7 +423,7 @@ Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: HDB kill
+Test: HDB kill-9
 .br
 Expect: HANA primary stopped and finally started as secondary.
 HANA secondary becomes finally primary.
@@ -357,23 +452,40 @@ One takeover. One fencing.
 Comment: Node failure, main cluster case.
 .RE
 .PP
-\fBkill_prim_worker_node_fencing_alert\fP
+\fBkill_prim_worker_pacemakerd\fP
 .RS 2
-Descr: Kill primary worker node (fencing alert agent configured)..
+Descr: Kill primary worker node´s pacemakerd.
 .br
 Topology: ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: systemctl reboot --force
+Test: killall -9 pacemakerd
 .br
-Expect: All primary nodes fenced.
+Expect: Primary worker pacemakerd restarted.
+Both HANA stay online.
+No takeover. No fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_prim_worker_pacemkr-ctrld\fP
+.RS 2
+Descr: Kill primary worker node´s pacemaker-controld.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -9 pacemaker-controld
+.br
+Expect: Primary worker node fenced (for PCMK_fast_fail=yes).
 HANA primary stopped and finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
-One takeover. One fencing for each primary node.
+One takeover. One fencing.
 .br
-Comment: Node failure, main cluster case.
+Comment: Cluster failure.
 .RE
 .PP
 \fBkill_secn_indexserver\fP
@@ -404,7 +516,7 @@ Topology: ScaleUp, ScaleOut.
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
-Test: HDB kill
+Test: HDB kill-9
 .br
 Expect: HANA secondary stopped and finally online.
 HANA primary stays online.
@@ -412,6 +524,26 @@ SR SFAIL and finally SOK.
 No takeover. No fencing.
 .br
 Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_secn_nameserver\fP
+.RS 2
+Descr: Kill secondary nameserver.
+On scale-out, kill secondary master nameserver (not yet implemented).
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -11 hdbnameserver
+.br
+Expect: Secondary (master) nameserver restarted.
+HANA secondary temporarily degraded (lss=2), no Linux cluster resource failure.
+HANA primary stays online.
+SR SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
 .RE
 .PP
 \fBkill_secn_node\fP
@@ -433,6 +565,44 @@ No takeover. One fencing.
 Comment: Node failure, main cluster case.
 .RE
 .PP
+\fBkill_secn_pacemakerd\fP
+.RS 2
+Descr: Kill secondary pacemakerd.
+On scale-out, kill secondary master node´s pacemakerd.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -9 pacemakerd
+.br
+Expect: Secondary (master) pacemakerd restarted.
+Both HANA stay online.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_secn_pacemkr-ctrld\fP
+.RS 2
+Descr: Kill secondary pacemaker-controld.
+On scale-out, kill secondary master node´s pacemaker-controld.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -9 pacemaker-controld
+.br
+Expect: Secondary (master) node fenced (for PCMK_fast_fail=yes).
+HANA primary stays online.
+SR SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
 \fBkill_secn_worker_inst\fP
 .RS 2
 Descr: Kill secondary worker instance.
@@ -443,13 +613,28 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test:
 .br
-Expect:
-
-HANA primary stays online.
+Expect: HANA primary stays online.
 SR SFAIL and finally SOK.
 No takeover. No fencing.
 .br
 Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_secn_worker_pacemkr-ctrld\fP
+.RS 2
+Descr: Kill secondary worker node´s pacemaker-controld.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: killall -9 pacemaker-controld
+.br
+Expect: TODO.
+HANA secondary TODO.
+No takeover. TODO fencing.
+.br
+Comment: Cluster failure.
 .RE
 .PP
 \fBkill_secn_worker_node\fP
@@ -778,6 +963,10 @@ shell scripts for un-easy tasks on the cluster nodes.
 .SH REQUIREMENTS
 .\"
 See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
+Further, HANA database and Linux cluster are configured according to the SUSE
+setup guide for the scale-up performance-optimised scenario or the
+scale-out ERP style scenario (two nodes per site, no standby).
+No immediate fencing is configured, except for the SAPHanaFilesystem RA.
 Of course, HANA database and Linux cluster also have certain requirements.
 Please refer to the product documentation.
 .PP
@@ -793,6 +982,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBSAPHanaSR-tests-syntax\fP(5) , \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) ,
 \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
 \fBSAPHanaSR-tests-classic-ScaleUp\fP(7) ,
+\fBSAPHanaSR-tests-description_on-fail-fence\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8)
 .PP
 .\"

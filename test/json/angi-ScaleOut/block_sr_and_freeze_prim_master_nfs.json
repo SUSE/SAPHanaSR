@@ -1,0 +1,111 @@
+{
+    "test": "block_sr_and_freeze_prim_master_nfs",
+    "name": "block sr and freeze sap hana nfs on primary master node",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "primary",
+        "block",
+        "freeze",
+        "master",
+        "network",
+        "storage",
+        "nfs",
+        "susHanaSR",
+        "hadr"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_block_sap_hana_sr",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "check SFAIL",
+            "next": "step30",
+            "loop": 30,
+            "wait": 2,
+            "post": "shell sct_test_freeze_prim_master_nfs",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "wait with frozen nfs",
+            "next": "step35",
+            "loop": 30,
+            "wait": 2,
+            "post": "sleep 120",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ]
+        },
+        {
+            "step": "step35",
+            "name": "unfreeze nfs",
+            "next": "step37",
+            "loop": 30,
+            "wait": 2,
+            "post": "shell sct_test_unfreeze_prim_master_nfs",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ]
+        },
+        {
+            "step": "step37",
+            "name": "unblock sr",
+            "next": "final40",
+            "loop": 30,
+            "wait": 2,
+            "post": "shell sct_test_unblock_sap_hana_sr",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "recovery",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        }
+    ]
+}

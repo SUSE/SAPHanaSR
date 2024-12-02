@@ -1,6 +1,6 @@
-.\" Version: 1.001
+.\" Version: 1.2.4
 .\"
-.TH SAPHanaSR-tests-angi-ScaleOut 7 "06 Jul 2024" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-angi-ScaleOut_on-fail-fence 7 "30 Sep 2024" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tests-angi-ScaleOut_on-fail-fence \- Functional tests for SAPHanaSR Scale-Out with immediate fencing.
@@ -10,58 +10,67 @@ SAPHanaSR-tests-angi-ScaleOut_on-fail-fence \- Functional tests for SAPHanaSR Sc
 .PP
 Functional test are shipped for the scale-out ERP scenario when configured for
 immediate fencing. See manual page ocf_suse_SAPHanaController(7), susChkSrv.py(7)
-nd SAPHanaSR-alert-fencing(8) for the respective configuration details. This
+and SAPHanaSR-alert-fencing(8) for the respective configuration details. This
 tests could be run out-of-the-box. The test cases are defined in dedicated files.
 See manual page SAPHanaSR-tests-syntax(5) for syntax details. Details like
 performed steps or expected behaviour of cluster and HANA are explained in
 SAPHanaSR-tests-description(7).
-
+.PP
 Each test can be executed by running the command SAPHanaSR-testCluster with
 appropriate parameters. See manual page SAPHanaSR-testCluster(8).
 .PP
-Predefined functional tests specific for scale-out ERP with immediate fencing overwiev:
+Overview on predefined functional tests specific for scale-out ERP with immediate fencing:
 .TP
 \fBfreeze_prim_master_nfs_fencing_alert\fP
-Freeze HANA NFS on primary master node.
+Freeze HANA NFS on primary master node, for SAPHanaFilesystem (fencing alert agent configured).
 .TP
-\fBkill_prim_indexserver_on_fail_fence\fP
-Kill primary master indexserver, for susChkSrv.py.
+\fBkill_prim_indexserver_fencing_alert\fP
+Kill primary master indexserver, for susChkSrv.py (action_on_lost=fence and fencing alert agent configured).
 .TP
-\fBkill_prim_inst\fP
-Kill primary master instance.
+\fBkill_prim_inst_fencing_alert\fP
+Kill primary master instance, for SAPHanaController (ON_FAIL_ACTION=fence and fencing alert agent configured).
+.TP
+\fBkill_prim_nic_fencing_alert\fP
+Kill primary HANA network interface (IPAddr2 start on-fail=fence, fencing alert agent configured). Not yet implemented.
 .TP
 \fBkill_prim_node_fencing_alert\fP
 Kill primary master node (fencing alert agent configured).
 .TP
-\fBkill_prim_worker_indexserver_on_fail_fence\fP
-Kill primary worker indexserver, for susChkSrv.py.
+\fBkill_prim_pacemakerd_fencing_alert\fP
+Kill primary master node´s pacemakerd (PCMK_fail_fast=yes and fencing alert agent configured).
 .TP
-\fBkill_prim_worker_inst\fP
-Kill primary worker instance.
+\fBkill_prim_pacemkr-ctrld_fencing_alert\fP
+Kill primary master node´s pacemaker-controld (PCMK_fail_fast=yes and fencing alert agent configured).
 .TP
-\fBkill_prim_worker_node\fP
-Kill primary worker node (no fencing alert agent configured).
+\fBkill_prim_worker_indexserver_fencing_alert\fP
+Kill primary worker indexserver, for susChkSrv.py (action_on_lost=fence and fencing alert agent configured).
+.TP
+\fBkill_prim_worker_inst_fencing_alert\fP
+Kill primary worker instance, for SAPHanaController (ON_FAIL_ACTION=fence and fencing alert agent configured).
 .TP
 \fBkill_prim_worker_node_fencing_alert\fP
-Kill primary master node (fencing alert agent configured).
+Kill primary worker node (fencing alert agent configured).
 .TP
-\fBkill_secn_indexserver\fP
-Kill secondary master indexserver, for susChkSrv.py.
+\fBkill_secn_indexserver_fencing_alert\fP
+Kill secondary master indexserver, for susChkSrv.py (action_on_lost=fence and fencing alert agent configured).
 .TP
-\fBkill_secn_inst\fP
-Kill secondary master instance.
+\fBkill_secn_node_fencing_alert\fP
+Kill secondary master node (fencing alert agent configured).
 .TP
-\fBkill_secn_node\fP
-Kill secondary master node.
+\fBkill_secn_pacemakerd_fencing_alert\fP
+Kill secondary master node´s pacemakerd (PCMK_fail_fast=yes and fencing alert agent configured).
 .TP
-\fBkill_secn_worker_inst\fP
-Kill secondary worker instance.
+\fBkill_secn_pacemkr-ctrld_fencing_alert\fP
+Kill secondary master node´s pacemaker-controld (PCMK_fail_fast=yes and fencing alert agent configured).
 .TP
-\fBkill_secn_worker_node\fP
-Kill secondary worker node.
+\fBkill_secn_worker_indexserver_fencing_alert\fP
+Kill secondary worker indexserver, for susChkSrv.py (action_on_lost=fence and fencing alert agent configured).
 .TP
-\fBkill_secn_site\fP
-Kill secondary site nodes. Not yet implemented.
+\fBkill_secn_worker_node_fencing_alert\fP
+Kill secondary worker node (fencing alert agent configured).
+.PP
+More recommended tests, but not specific to immediate fencing, are listed in
+manual page SAPHanaSR-tests-angi-ScaleOut(7). 
 .PP
 .\"
 .SH EXAMPLES
@@ -85,8 +94,11 @@ shell scripts for un-easy tasks on the cluster nodes.
 .SH REQUIREMENTS
 .PP
 See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
-See also ocf_suse_SAPHanaController(7), susChkSrv.py(7) and
-SAPHanaSR-alert-fencing(8) for configuration.
+Further, HANA database and Linux cluster are configured almost according to the
+SUSE setup guide for the scale-out ERP style scenario (two nodes per site, no
+standby). In opposite to that guide, immediate fencing is configured.
+See ocf_suse_SAPHanaController(7), susChkSrv.py(7) and
+SAPHanaSR-alert-fencing(8).
 Of course, HANA database and Linux cluster have certain requirements.
 Please refer to the product documentation.
 .\"
@@ -98,8 +110,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tests-description_on-fail-fence\fP(7) ,
 \fBSAPHanaSR-tests-description\fP(7) , \fBSAPHanaSR-tests-syntax\fP(5) ,
-\fBSAPHanaSR-tests-angi-ScaleOu\fP(7) ,
+\fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBocf_suse_SAPHanaController\fP(7) , \fBsusChkSrv.py\fP(7) ,
 \fBSAPHanaSR-alert-fencing\fP(8)

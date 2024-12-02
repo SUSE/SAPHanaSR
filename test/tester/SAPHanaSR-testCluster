@@ -42,10 +42,11 @@ parser.add_argument("--printTestProperties", help="print test properties and exi
                     action="store_true")
 parser.add_argument("--debug", help="output and log debug messages", action="store_true")
 parser.add_argument("--version", help="output version and exit", action="store_true")
+parser.add_argument("--password", help="optinal ssh password, if key based authentication is not used"),
 args = parser.parse_args()
 if args.version:
     print(f"SAPHanaSR-tester {test01.version}")
-    exit(0)
+    sys.exit(0)
 test01.message(f"INIT: {test01.version}")
 if args.testFile:
     test01.message("PARAM: testFile: {}".format(args.testFile))
@@ -78,6 +79,10 @@ if args.printTestProperties:
 if args.debug:
     test01.config['debug'] = args.debug
     test01.message("PARAM: DEBUG activated")
+if args.password:
+    test01.config['password' ]= args.password
+else:
+    test01.config['password'] = "bla bla"
 
 while test01.run['count'] <= test01.config['repeat']:
     # test01.message(f"count: {test01.run['count']}")
@@ -132,14 +137,34 @@ while test01.run['count'] <= test01.config['repeat']:
     # TODO: do we need the old method as fallback, if msn is empty or misleading?
     #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
     #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
-    l_msg = (
-                f"TOPO: pSite={l_top['pSite']}"
-                f" sSite={l_top['sSite']}"
-                f" pHost={l_top['pHost']}"
-                f" sHost={l_top['sHost']}"
-                f" pWorker={l_top['pWorker']}"
-                f" sWorker={l_top['sWorker']}"
-            )
+    if l_top['pHost'] is None:
+        # pHost is empty - this indicates a serious detection problem
+        l_msg = (
+                    f"TOPO: UNKNOWN pSite={l_top['pSite']}"
+                    f" sSite={l_top['sSite']}"
+                    f" pHost={l_top['pHost']}"
+                    f" sHost={l_top['sHost']}"
+                    f" pWorker={l_top['pWorker']}"
+                    f" sWorker={l_top['sWorker']}"
+                )
+    elif l_top['pWorker'] is None:
+        # pWorker is empty - this indicates scale-up
+        l_msg = (
+                    f"TOPO: scaleUp pSite={l_top['pSite']}"
+                    f" sSite={l_top['sSite']}"
+                    f" pHost={l_top['pHost']}"
+                    f" sHost={l_top['sHost']}"
+                )
+    else:
+        # pWorker is set - this indicates scale-out
+        l_msg = (
+                    f"TOPO: scaleOut pSite={l_top['pSite']}"
+                    f" sSite={l_top['sSite']}"
+                    f" pHost={l_top['pHost']}"
+                    f" sHost={l_top['sHost']}"
+                    f" pWorker={l_top['pWorker']}"
+                    f" sWorker={l_top['sWorker']}"
+                )
     test01.message(l_msg)
 
     if test01.read_test_file() != 0:

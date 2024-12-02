@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# sct_test_kill_prim_ipaddr - kill primary HANA IP address once
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+
+echo "==== Kill primary HANA IP address ===="
+
+# TODO could property ipAddr be used? or get all data by one call
+IP=$( ssh "$currPrimary" "crm configure show" |\
+    grep -A4 primitive.*IPaddr2 | grep params.ip=" | awk -F'=' '{print $2}' |\
+    awk '{print $1}' )
+IPNM=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $2}' )
+NIC=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $8}' )
+
+ssh "$currPrimary" "ip a d '"${IPNM}"' dev '"${NIC}"'"
+# TODO sleep twice the monitor interval
+sleep 60
+# TODO specify cleanup rsc_ip_
+crm resource cleanup
+#

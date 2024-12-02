@@ -1,6 +1,6 @@
-.\" Version: 1.001
+.\" Version: 1.2.4
 .\"
-.TH SAPHanaSR-tests-angi-ScaleOut 7 "20 Dec 2023" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-angi-ScaleOut 7 "30 Sep 2024" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tests-angi-ScaleOut \- Functional tests for SAPHanaSR Scale-Out.
@@ -13,17 +13,20 @@ be run out-of-the-box. The test cases are defined in dedicated files.
 See manual page SAPHanaSR-tests-syntax(5) for syntax details. Details like
 performed steps or expected behaviour of cluster and HANA are explained in
 SAPHanaSR-tests-description(7).
-
+.PP
 Each test can be executed by running the command SAPHanaSR-testCluster with
 appropriate parameters. See manual page SAPHanaSR-testCluster(8).
 .PP
-Predefined functional tests for scale-out ERP overwiev:
+Overview on predefined functional tests for scale-out ERP:
 .TP
 \fBblock_manual_takeover\fP
 Blocked manual takeover, for susTkOver.py.
 .TP
+\fBblock_sr\fP
+Block HANA SR between master nodes and check SFAIL attribute, unblock to recover, for susHanaSR.py.
+.TP
 \fBblock_sr_and_freeze_prim_master_nfs\fP
-Block HANA SR and freeze HANA NFS on primary master node. Not yet implemented.
+Block HANA SR and freeze HANA NFS on primary master node.
 .TP
 \fBblock_sr_and_freeze_prim_site_nfs\fP
 Block HANA SR and freeze HANA NFS on primary site. Not yet implemented.
@@ -38,43 +41,67 @@ Freeze HANA NFS on primary master node.
 Freeze HANA NFS on primary site.
 .TP
 \fBfreeze_secn_site_nfs\fP
-Freeze HANA NFS on secondary site. Not yet implemented.
+Freeze HANA NFS on secondary site.
 .TP
 \fBkill_prim_indexserver\fP
-Kill primary master indexserver, for susChkSrv.py.
+Kill primary master indexserver, for susChkSrv.py (action_on_lost=kill).
 .TP
 \fBkill_prim_inst\fP
 Kill primary master instance.
 .TP
-\fBkill_prim_node\fP
-Kill primary master node (no fencing alert agent configured).
+\fBkill_prim_ipaddr\fP
+Kill primary HANA´s IP address once.
 .TP
-\fBkill_prim_node_fencing_alert\fP
-Kill primary master node (fencing alert agent configured).
+\fBkill_prim_nameserver\fP
+Kill primary master nameserver. Not yet implemented.
+.TP
+\fBkill_prim_node\fP
+Kill primary master node.
+.TP
+\fBkill_prim_pacemakerd\fP
+Kill primary master node´s pacemakerd (PCMK_fail_fast=yes).
+.TP
+\fBkill_prim_pacemkr-ctrld\fP
+Kill primary master node´s pacemaker-controld (PCMK_fail_fast=yes).
 .TP
 \fBkill_prim_worker_indexserver\fP
-Kill primary worker indexserver, for susChkSrv.py.
+Kill primary worker indexserver, for susChkSrv.py (action_on_lost=kill).
 .TP
 \fBkill_prim_worker_inst\fP
 Kill primary worker instance.
 .TP
 \fBkill_prim_worker_node\fP
-Kill primary worker node (no fencing alert agent configured).
+Kill primary worker node.
 .TP
-\fBkill_prim_worker_node_fencing_alert\fP
-Kill primary master node (fencing alert agent configured).
+\fBkill_prim_worker_pacemakerd\fP
+Kill primary worker node´s pacemakerd (PCMK_fail_fast=yes).
+.TP
+\fBkill_prim_worker_pacemkr-ctrld\fP
+Kill primary worker node´s pacemaker-controld (PCMK_fail_fast=yes).
 .TP
 \fBkill_prim_site\fP
 Kill primary site nodes. Not yet implemented.
 .TP
 \fBkill_secn_indexserver\fP
-Kill secondary master indexserver, for susChkSrv.py.
+Kill secondary master indexserver, for susChkSrv.py (action_on_lost=kill).
 .TP
 \fBkill_secn_inst\fP
 Kill secondary master instance.
 .TP
+\fBkill_secn_nameserver\fP
+Kill secondary master nameserver. Not yet implemented.
+.TP
 \fBkill_secn_node\fP
 Kill secondary master node.
+.TP
+\fBkill_secn_pacemakerd\fP
+Kill secondary master node´s pacemakerd (PCMK_fail_fast=yes).
+.TP
+\fBkill_secn_pacemkr-ctrld\fP
+Kill secondary master node´s pacemaker-controld (PCMK_fail_fast=yes).
+.TP
+\fBkill_secn_site\fP
+Kill secondary site nodes. Not yet implemented.
 .TP
 \fBkill_secn_worker_inst\fP
 Kill secondary worker instance.
@@ -82,8 +109,11 @@ Kill secondary worker instance.
 \fBkill_secn_worker_node\fP
 Kill secondary worker node.
 .TP
-\fBkill_secn_site\fP
-Kill secondary site nodes. Not yet implemented.
+\fBkill_secn_worker_pacemakerd\fP
+Kill secondary worker node´s pacemakerd (PCMK_fail_fast=yes).
+.TP
+\fBkill_secn_worker_pacemkr-ctrld\fP
+Kill secondary worker node´s pacemaker-controld (PCMK_fail_fast=yes).
 .TP
 \fBmaintenance_cluster_bootstrap\fP
 Maintenance procedure, initially configuring cluster resources. Not yet implemented.
@@ -147,28 +177,36 @@ shell scripts for un-easy tasks on the cluster nodes.
 .SH REQUIREMENTS
 .PP
 See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
+Further, HANA database and Linux cluster are configured according to the SUSE
+setup guide for the scale-out ERP style scenario (two nodes per site, no standby).
+No immediate fencing is configured, except for the SAPHanaFilesystem RA.
 Of course, HANA database and Linux cluster have certain requirements.
 Please refer to the product documentation.
 .\"
 .SH BUGS
+.PP
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+.PP
 \fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-tests-description\fP(7) , \fBSAPHanaSR-tests-syntax\fP(5) ,
+\fBSAPHanaSR-tests-angi-ScaleOut_on-fail-fence\fP(7) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8)
 .PP
 .\"
 .SH AUTHORS
+.PP
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2023 SUSE LLC
+.PP
+(c) 2023-2024 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
 .br

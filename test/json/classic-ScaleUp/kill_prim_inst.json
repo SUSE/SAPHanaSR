@@ -1,11 +1,18 @@
 {
     "test": "kill_prim_inst",
     "name": "Kill primary instance",
+    "purpose": [
+        "classic",
+        "ScaleUp",
+        "primary",
+        "kill",
+        "hana"
+    ],
     "start": "prereq10",
     "steps": [
         {
             "step": "prereq10",
-            "name": "test prerequitsites",
+            "name": "test prerequisites",
             "next": "step20",
             "loop": 1,
             "wait": 1,
@@ -19,7 +26,7 @@
             "step": "step20",
             "name": "failure detected",
             "next": "step30",
-            "loop": 120,
+            "loop": 90,
             "wait": 2,
             "pSite": [
                 "srHook ~ (PRIM|SWAIT|SREG)"
@@ -53,21 +60,21 @@
                 "srHook ~ (PRIM|SWAIT|SREG)"
             ],
             "sSite": [
-                "srHook == PRIM"
+                "srHook ~ (PRIM|SOK)"
             ],
             "pHost": [
                 "lpa_@@sid@@_lpt >~ 1000000000:(10)",
-                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4LPA)",
                 "roles == 1:P:master1::worker:",
                 "sync_state ~ (PRIM|SOK)",
-                "score ~ (-9000|5)"
+                "score ~ (-9000|0|5)"
             ],
             "sHost": [
                 "lpa_@@sid@@_lpt >~ 1000000000:(30)",
                 "clone_state ~ (DEMOTED|PROMOTED)",
                 "roles ~ 4:(S|P):master1:master:worker:master",
                 "sync_state == SOK",
-                "score ~ (100|145)",
+                "score ~ (100|145|150)",
                 "srah == T"
             ]
         },
@@ -75,7 +82,7 @@
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 120,
+            "loop": 180,
             "wait": 2,
             "post": "cleanup",
             "remark": "pXXX and sXXX are now exchanged",

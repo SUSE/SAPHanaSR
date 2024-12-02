@@ -1,49 +1,50 @@
-.\" Version: 1.001
+.\" Version: 1.2.4
 .\"
-.TH SAPHanaSR-tester 7 "04 Jul 2024" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tester 7 "20 Nov 2024" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tester \- Functional testing for SAPHanaSR clusters.
 .PP
 .\"
 .SH DESCRIPTION
-.\"
+.PP
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
-
+.PP
 .B SAPHanaSR-tester is shipped as technology preview. 
-
+.PP
 The package is focussing on functional tests for the SAPHanaSR resource agents,
-the related configuration of the Linux cluster and the SAP HANA database pair.
+alert agents, HA/DR provider hook scripts, the related configuration of the Linux
+cluster and the SAP HANA database pair.
 In addition to this functional tests, specific tests for the underlying
 infrastructure, Linux OS and cluster as well as the database need to be done.
 See manual page SAPHanaSR-tests-basic-cluster(7).
-
+.PP
 SAPHanaSR-tester provides predefined functional tests for scale-up and scale-out
 scenarios. This tests could be run out-of-the-box. The predefined tests also
 can be used for creating new test definitions. So parameters for timing and
 expected attributes can be customised.
-
+.PP
 The test cases are defined in dedicated files. Each test is separated into 
 steps. For each step there is an expectation for SAPHanaSR attributes, which
 need to match. Additionally each step defines the 'next' step and an optional
 action to be triggered if the step status has been reached (all expectations
 match).
-
+.PP
 The tests usually are self-contained and can run in any order. Entry point
 always is a clean and idle Linux cluster and a clean HANA pair in sync. Same
 is true for the final state. Of course the HANA sites may change during the
 test. Consequently, each predefined test starts and ends with checking the
 clean status of the HANA pair.
-
+.PP
 For tests involving complex actions on the cluster nodes, predefined shell
 scripts are executed remotely.
-
+.PP
 Input - Processing - Output
 .\" TODO
-
+.PP
 \fB*\fP Input: Test cases and test system properties
-
+.PP
 a. Test cases are defined in JSON files. Each case is described in one file.
 It also can reference to defaults.json for common status definitions.
 Each step contains an expectation for SAPHanaSR attributes, which need to
@@ -52,23 +53,23 @@ Each test step status is described by one or more conditions. Each condition
 is described by one comparision.
 See manual page SAPHanaSR-tests-syntax(5) for details, see also the EXAMPLES
 section in SAPHanaSR-tests-angi-ScaleUp(7) and SAPHanaSR-tests-angi-ScaleOut(7).
-
+.PP
 b. Test system properties are defined in JSON files.
 This properties are decribing the test system. The properties are separated from
 the test cases, because they need to be adapted for each system. The values are
 static during test run and common for all test on one system.
 The test cases on the other hand are mostly similar for all test systems.
 See manual page SAPHanaSR-tests-syntax(5) for details, see also example below.
-
+.PP
 \fB*\fP Processing:
-
+.PP
 .\" TODO SAPHanaSR-testCluster
 .\" TODO shell scripts shiped with SAPhanaSR-tester, e.g. sct_test_
 .\" TODO custom scripts and test automation frameworks
 See manual page SAPHanaSR-testCluster(8) and SAPHanaSR-tests-description(7).
-
+.PP
 \fB*\fP Output: Test results 
-
+.PP
 .\" TODO output of SAPHanaSR-testCluster
 See manual page SAPHanaSR-testCluster(8) and SAPHanaSR-tests-description(7).
 .PP
@@ -88,7 +89,7 @@ node1 and node2, SID is Q42, instance number is 85, HANA´s virtual IP address i
 .br
 # zypper in python3-paramiko
 .br
-# ssh-kegen -t rsa -b 4096
+# ssh-keygen -t rsa -b 4096
 .br
 # ssh-copy-id root@node1
 .br
@@ -160,19 +161,18 @@ while read; do echo $REPLY; grep "name" $REPLY | head -1; done
 .PP
 .\"
 .SH FILES
-.\"
 .TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/
 functional tests for SAPHanaSR-angi scale-up scenarios.
 .TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleOut/
-functional tests for SAPHanaSR-angi scale-out ERP scenarios, without HANA host auto-autofailover.
+functional tests for SAPHanaSR-angi scale-out ERP scenarios, without HANA host auto-failover.
 .TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleOut-BW/
-functional tests for SAPHanaSR-angi scale-out BW scenarios, with HANA host auto-autofailover. Not yet implemented.
+functional tests for SAPHanaSR-angi scale-out BW scenarios, with HANA host auto-failover. Not yet implemented.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleUp/
-not yet implemented.
+functional tests for SAPHanaSR classic scale-up scenarios.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleOut/
 not yet implemented.
@@ -191,17 +191,22 @@ SAPHanaSR-showAttr, compatible to SAPHanaSR-angi and SAPHanaSR-tester
 .PP
 .\"
 .SH REQUIREMENTS
-.\"
+.PP
 For the current version of the SAPHanaSR-tester, the capabilities are limited
 to the following:
 .PP
-\fB*\fP Resource agents and configuration of SAPHanaSR-angi is supported.
+\fB*\fP SLES-for-SAP 15 SP4 or newer.
+.PP
+\fB*\fP Resource agents and configuration of SAPHanaSR-angi 1.2 or newer is supported.
 .PP
 \fB*\fP Resource agents and configuration of SAPHanaSR or SAPHanaSR-ScaleOut
 with additional package SAPHanaSR-tester-client is supported.
 .PP
 \fB*\fP Scale-up setups with or without multi-target replication.
 No scale-up multi-SID (MCOS) setups.
+.PP
+\fB*\fP The tester checks cluster attributes via SAPHanaSR-showAttr. It only
+detects an status represented by those attributes.
 .PP
 \fB*\fP Scale-out setups with or without multi-target replication.
 No HANA host auto-failover.
@@ -216,7 +221,8 @@ login as database user SYSTEM into the HANA database. This is only needed for
 some test cases.
 .PP
 \fB*\fP Package python3-paramiko is needed on the tester machine for the
-tester´s multi-node feature.
+tester´s multi-node feature. The cluster nodes need to run an openssh-server
+compatible to that python3-paramiko.
 .PP
 \fB*\fP Package ClusterTools2 is needed on the cluster nodes.
 .PP
@@ -228,6 +234,11 @@ If disk-based SBD is used, then service sbd enabled and SBD_STARTMODE=always
 is needed for this tests. The stonith-action=reboot is needed in any case.
 This cluster basics might be different for production.
 .PP
+\fB*\fP In some cases the various timings for stonith and service startup might
+need alignement to prevent fenced nodes from re-joining the cluster before the
+resource takeover has been finished. This most likely applies if stonith-timeout
+is long, but the cluster nodes are booting very fast.
+.PP
 \fB*\fP Sufficient disk space, particularly for HANA transaction logs, e.g.
 /hana/log/. Depending on the backup implementation, also space for log backups
 might be needed, e.g. /hana/shared/<SID>/HDB<nr>/backup/. Strict housekeeping
@@ -238,6 +249,7 @@ Most tests are disruptive.
 .PP
 .\"
 .SH BUGS
+.PP
 The SAPHanaSR-tester is under development. Syntax and formats are subject to
 change.
 .br
@@ -247,8 +259,10 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+.PP
 \fBSAPHanaSR-testCluster\fP(8) , \fBSAPHanaSR-tests-syntax\fP(5) ,
-\fBSAPHanaSR-tests-description\fP(7) , 
+\fBSAPHanaSR-tests-description\fP(7) ,
+\fBSAPHanaSR-tests-description_on-fail-fence\fP(7) , 
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
 \fBSAPHanaSR-tests-classic-ScaleUp\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) ,
@@ -262,10 +276,12 @@ https://www.suse.com/releasenotes/
 .PP
 .\"
 .SH AUTHORS
+.PP
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
+.PP
 (c) 2023-2024 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.

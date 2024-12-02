@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# sct_test_kill_prim_nic - kill primary HANA network interface
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+
+echo "==== Kill primary HANA network interface ===="
+
+IPR=$( ssh "$currPrimary" "crm configure show" |\
+        grep primitive.*IPaddr2 | awk '{print $2}' )
+
+# simulate monitor failure
+# crm_attribute -N node01 -n "fail-count-rsc_ip_HXE_HDB90#monitor_30" -l reboot -t status -v 1
+ssh "$currPrimary" "crm_attribute -N '"${currPrimary}"' \
+        -n '"fail-count-${IPR}\#monitor_30"' -l reboot -t status -v 1"
+ssh "$currPrimary" "crm_attribute -N '"${currPrimary}"' \
+        -n '"fail-count-${IPR}\#start_0"' -l reboot -t status -v INFINITY"
+#

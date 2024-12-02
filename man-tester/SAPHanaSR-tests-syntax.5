@@ -1,6 +1,6 @@
-.\" Version: 1.001
+.\" Version: 1.2
 .\"
-.TH SAPHanaSR-tests-syntax 5 "20 Nov 2023" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-syntax 5 "19 Nov 2024" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tests-syntax \- Syntax for SAPHanaSR test cases and properties.
@@ -10,17 +10,17 @@ SAPHanaSR-tests-syntax \- Syntax for SAPHanaSR test cases and properties.
 .\"
 SAPHanaSR-tester is a suite of tools for automating functional tests of SAP HANA
 system replication HA clusters.
-
+.PP
 Test cases are defined in dedicated files. Each test is separated into steps.
 For each step there is an expectation for SAPHanaSR attributes, which need to
 match. Additionally each step defines the 'next' step and an optional action
 to be triggered if the step status has been reached (all expectations match).
 See section SYNTAX below for comparators and other details.
-
+.PP
 For tests involving complex actions on the cluster nodes, predefined shell
 scripts are executed remotely.
 .\" TODO state machine.
-
+.PP
 See manual pages SAPHanaSR-tests-angi-ScaleUp(7) and
 SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases.
 .PP
@@ -29,17 +29,20 @@ SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases.
 .\"
 Test cases are defined in JSON files. Each test case is described in one file.
 It also can reference to defaults.json for common status definitions.
-
+.PP
 TODO on first level
-[ test | name | start | comment | steps ]
+[ test | name | purpose | start | comment | steps ]
 .\" TODO comment or remark?
-
+.PP
 .TP
 \fBtest\fP
 test identifier, unique
 .TP
 \fBname\fP
 test description
+.TP
+\fBpurpose\fB
+list of keywords, indicating which topology, components and case is tested, see below - [ angi | classic ] [ ScaleUp | ScaleOut ] [ master | worker ] [ ... ]
 .TP
 \fBstart\fP
 name of step to start the test with
@@ -48,13 +51,7 @@ name of step to start the test with
 comment, just a string
 .TP
 \fBsteps\fP
-test steps, see below
-.PP
-\fBsteps\fP
-
-TODO
-[ step | name | next | loop | wait | post | comment | <status> ]
-
+test steps - [ step | name | next | loop | wait | post | comment | <status> ]
 .TP
 \fBstep\fP
 step identifier, unique
@@ -76,16 +73,89 @@ comment, just a string
 .TP
 \fBstatus\fP
 status definition, see below
-
+.TP
+\fBstart\fP
+name of step to start the test with
+.TP
+\fBcomment\fP
+comment, just a string
+.PP
+\fB*\fP Test purpose
+.\" TODO script to list/find testcases by purpose
+.PP
+TODO
+.TP
+alert
+test alert agent
+.TP
+angi
+SAPHanaSR-angi
+.TP
+classic
+SAPHanaSR or SAPHanaSR-ScaleOut
+.TP
+cluster
+test cluster failure
+.TP
+fencing
+test leads to node fencing
+.TP
+hadr
+test HANA HA/DR provider hook script
+.TP
+hana
+test HANA failure
+.TP
+kill
+kill something, for testing a failure
+.TP
+maintenance
+test a maintenance procedure
+.TP
+master
+test on HANA master nameserver node
+.TP
+network
+test network failure
+.TP
+node
+test node failure
+.TP
+primary
+test failure at primary site
+.TP
+protective
+configuration variant "protective"
+.TP
+ScaleOut
+scale-out topology
+.TP
+ScaleUp
+scale-up topology
+.TP
+secondary
+test failure at secondary site
+.TP
+site
+failure of complete site (all nodes)
+.TP
+split-brain
+test split-brain
+.TP
+storage
+test storage or IO stack failure
+.TP
+worker
+test on HANA worker node
 .PP
 \fB*\fP Test step status <status>
 .PP
 Each step contains an expectation for SAPHanaSR attributes, which need to match.
 The attributes are arranged along the CIB and SAPHanaSR-showAttr sections. 
 The 
-
+.PP
 [ pHost | sHost | pWorker | sWorker | pSite | sSite | pGlobal | sGlobal ]
-
+.PP
 .TP
 pHost, sHost, pWorker, sWorker
 node attributes
@@ -234,9 +304,6 @@ kill secondary instance (scale-out: secondary master instance)
 kill_secn_worker_inst
 kill worker secondary instance (scale-out)
 .TP
-kill_prim_indexserver
-kill primary indexserver (scale-out: primary master indexserver)
-.TP
 kill_secn_indexserver
 kill secondary indexserver (scale-out: secondary master indexserver)
 .TP
@@ -245,6 +312,12 @@ kill primary worker indexserver (scale-out)
 .TP
 kill_secn_worker_indexserver
 kill secondary worker indexserver (scale-out)
+.TP
+kill_secn_nameserver
+kill secondary nameserver (scale-out: secondary master nameserver)
+.TP
+kill_prim_nameserver
+kill primary nameserver (scale-out: primary master nameserver)
 .TP
 simulate_split_brain
 break corosync communcation
@@ -268,14 +341,13 @@ online_secn_worker_node
 online secondary worker node (scale-out)
 .TP
 script <script>
-execure predefined script
+execute predefined script
 .TP
 shell <command>
 execute command
 .TP
 sleep <seconds>
 sleep some seconds
-.RE
 .PP
 See also manual pages SAPHanaSR-tests-angi-ScaleUp(7), 
 SAPHanaSR-tests-angi-ScaleOut(7) and SAPHanaSR-tests-description(7).
@@ -286,29 +358,31 @@ This properties are decribing the test system. The properties are separated from
 the test cases, because they need to be adapted for each system. The values are
 static during test run and common for all test on one system.
 The test cases on the other hand are mostly similar for all test systems.
-
+.PP
 TODO
 .br
 {
+.RS 5
 .br
-    "sid": "\fISID\fP",
+"sid": "\fISID\fP",
 .br
-    "instNo": "\fINR\fP",
+"instNo": "\fINR\fP",
 .br
-    "mstResource": "\fISTRING\fP",
+"mstResource": "\fISTRING\fP",
 .br
-    "clnResource": "\fISTRING\fP",
+"clnResource": "\fISTRING\fP",
 .br
-    "ipAddr": "\fIIPADDRESS\fP",
+"ipAddr": "\fIIPADDRESS\fP",
 .br
-    "userKey": "\fISTRING\fP"
+"userKey": "\fISTRING\fP"
 .br
+.RE 
 }
-
+.PP
 See also EXAMPLES section in manual page SAPHanaSR-tester(7).
-
+.PP
 \fB*\fP Test results
-
+.PP
 See manual page SAPHanaSR-testCluster(8) for TODO
 .PP
 .\"
@@ -324,13 +398,13 @@ TODO
 functional tests for SAPHanaSR-angi scale-up scenarios.
 .TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleOut/
-functional tests for SAPHanaSR-angi scale-out ERP scenarios, without HANA host auto-autofailover.
+functional tests for SAPHanaSR-angi scale-out ERP scenarios, without HANA host auto-failover.
 .TP
 /usr/share/SAPHanaSR-tester/json/angi-ScaleOut-BW/
-functional tests for SAPHanaSR-angi scale-out BW scenarios, with HANA host auto-autofailover. Not yet implemented.
+functional tests for SAPHanaSR-angi scale-out BW scenarios, with HANA host auto-failover. Not yet implemented.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleUp/
-not yet implemented.
+functional tests for SAPHanaSR classic scale-up scenarios.
 .TP
 /usr/share/SAPHanaSR-tester/json/classic-ScaleOut/
 not yet implemented.
@@ -357,9 +431,11 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-\fBSAPHanaSR-tester\fP(7) ,  \fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
-\fBSAPHanaSR-tests-definition\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR-tests-classic-ScaleUp\fP(7) , \fBSAPHanaSR-tests-definition\fP(7) ,
+\fBSAPHanaSR-tests-definition_on-fail-fence\fP(7) , 
+\fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-checkJson\fP(8) ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
@@ -373,7 +449,7 @@ F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2023 SUSE LLC
+(c) 2023-2024 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
 .br

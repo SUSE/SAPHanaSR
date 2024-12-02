@@ -6,7 +6,7 @@
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023 SUSE LLC
+ Copyright:    (c) 2023,2024 SUSE LLC
 """
 
 import time
@@ -25,13 +25,14 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.2.13"
+    version = "1.3.5"
 
     def message(self, msg, **kwargs):
         """
         message with formatted timestamp
         """
         stdout = kwargs.get('stdout', True)
+        pre_cr = kwargs.get('pre_cr', False)
         # TODO: specify, if message should be written to stdout, stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         if self.run['r_id']:
@@ -40,6 +41,8 @@ class SaphanasrTest:
             r_id = ""
         msg_arr = msg.split(" ")
         if stdout:
+            if pre_cr:
+                print()
             print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])), flush=True)
         try:
             if self.run['log_file_handle']:
@@ -74,12 +77,17 @@ class SaphanasrTest:
                         'remote_node': None,
                         'remote_nodes': [],
                         'printTestProperties': False,
-                        'debug': False
+                        'debug': False,
+                        'password': None
                       }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
+        self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'pHost': 'Host', 'sHost': 'Host' }
         self.debug("INIT: tester version: {}".format(self.version))
+        self.__failed_role_counter__ = 0
+        self.__min_failed_role_counter__ = 0
+        self.__max_failed_role_counter__ = 0
         if cmdparse:
             self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
@@ -181,7 +189,7 @@ class SaphanasrTest:
                     sr_out = local_sr.stdout.decode()
                     break
             else:
-                result_sr = self.__do_ssh__(remote_node, "root", cmd)
+                result_sr = self.__do_ssh__(remote_node, "root", cmd, timeout=15, password=self.config['password'])
                 if result_sr[2] != 20000:
                     if switched_remote:
                         self.message(f"STATUS: get data from {remote_node}")
@@ -294,6 +302,7 @@ class SaphanasrTest:
             except FileNotFoundError as e_file:
                 self.message(f"ERROR: File error: {e_file}")
                 return 1
+            # pylint: disable=broad-exception-caught
             except (PermissionError, Exception) as e_generic:
                 self.message(f"ERROR: File error: {e_generic}")
                 return 1
@@ -305,6 +314,7 @@ class SaphanasrTest:
             except FileNotFoundError as e_file:
                 self.message(f"ERROR: File error: {e_file}")
                 return 1
+            # pylint: disable=broad-exception-caught
             except (PermissionError, Exception) as e_generic:
                 self.message(f"ERROR: File error: {e_generic}")
                 return 1
@@ -318,27 +328,37 @@ class SaphanasrTest:
         write_test_properties - write bash test properties file so bash test helper could source the key-value settings
         """
         with open(".test_properties", 'w', encoding="utf-8") as test_prop_fh:
-            test_prop_fh.write(f"node01={topology.get('pHost','node01')}\n")
-            test_prop_fh.write(f"node02={topology.get('sHost','node02')}\n")
-            test_prop_fh.write(f"mstResource={self.test_data.get('mstResource','')}\n")
-            test_prop_fh.write(f"clnResource={self.test_data.get('clnResource','')}\n")
-            test_prop_fh.write(f"srMode={self.test_data.get('srMode','sync')}\n")
-            test_prop_fh.write(f"opMode={self.test_data.get('opMode','logreplay')}\n")
-            test_prop_fh.write(f"SID={self.test_data.get('sid','C11')}\n")
-            test_prop_fh.write(f"instNr={self.test_data.get('instNo','00')}\n")
-            test_prop_fh.write(f"sidadm={self.test_data.get('sid','C11').lower()}adm\n")
-            test_prop_fh.write(f"userkey={self.test_data.get('userKey','')}\n")
+            test_prop_fh.write(f"node01=\"{topology.get('pHost','node01')}\"\n")
+            test_prop_fh.write(f"node02=\"{topology.get('sHost','node02')}\"\n")
+            test_prop_fh.write(f"mstResource=\"{self.test_data.get('mstResource','')}\"\n")
+            test_prop_fh.write(f"clnResource=\"{self.test_data.get('clnResource','')}\"\n")
+            test_prop_fh.write(f"rscIPResource=\"{self.test_data.get('rscIPResource','')}\"\n")
+            test_prop_fh.write(f"srMode=\"{self.test_data.get('srMode','sync')}\"\n")
+            test_prop_fh.write(f"opMode=\"{self.test_data.get('opMode','logreplay')}\"\n")
+            test_prop_fh.write(f"SID=\"{self.test_data.get('sid','C11')}\"\n")
+            test_prop_fh.write(f"instNr=\"{self.test_data.get('instNo','00')}\"\n")
+            test_prop_fh.write(f"sidadm=\"{self.test_data.get('sid','C11').lower()}adm\"\n")
+            test_prop_fh.write(f"userkey=\"{self.test_data.get('userKey','')}\"\n")
             test_prop_fh.flush()
 
-    def __add_failed__(self, area_object, key_val_reg):
+    def __add_failed__(self, area_object, key_val_reg, **kwargs):
         """ document failed checks """
+        fatal_check = False
+        fatal_name = ""
+        fatal_check = kwargs.get("fatal_check", False)
+        fatal_name = kwargs.get("fatal_name", "")
+        ( _area, _obj ) = area_object
         if 'failed' in self.run:
             _l_failed = self.run['failed']
+            if fatal_check:
+                _l_header = f"{_area}={_obj}: "
+            else:
+                _l_header = ""
         else:
-            ( _area, _obj ) = area_object
-            _l_failed = f"{_area}={_obj}: "
+            _l_failed = ""
+            _l_header = f"{fatal_name}{_area}={_obj}: "
         ( _key, _val, _reg, _comp ) = key_val_reg
-        _l_failed += f'expect "{_key} {_comp} {_reg}", have "{_val}"; '
+        _l_failed += f'{_l_header} expect "{_key} {_comp} {_reg}", have "{_val}"; '
         self.run['failed'] = _l_failed
         self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
 
@@ -353,7 +373,113 @@ class SaphanasrTest:
             return self.run['failed']
         return None
 
-    def run_checks(self, checks, area_name, object_name, step_step ):
+    def __run_check__(self, single_check, area_name, object_name, step_step, **kwargs):
+        # match <key> <comp> <regExp>
+        # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
+        match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+        check_result = -1
+        if match_obj is None:
+            self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
+            check_result = 2
+        c_key = match_obj.group(1)
+        l_sr = self.dict_sr
+        # fail_msg = "MISSED"
+        fatal_check = kwargs.get('fatal_check', False)
+        fatal_name = kwargs.get('fatal_name', "")
+        #
+        # rewrite key, if it contains a string @@sid@@ this is needed e.g. to match lpa_<sid>_lpt
+        #
+        #print(f"c_key={c_key}")
+        match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
+        if match_obj_key is not None:
+            #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
+            c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
+            #print(f"rewrite c_key={c_key}")
+        c_comp = match_obj.group(2)
+        c_reg_exp = match_obj.group(3)
+        c_reg_exp_a = ""
+        c_reg_exp_b = ""
+        try:
+            if c_comp == ">~":
+                comp_obj = re.search("(.*):(.*)",c_reg_exp)
+                c_reg_exp_a = comp_obj.group(1)
+                c_reg_exp_b = comp_obj.group(2)
+        except (IndexError, AttributeError):
+            pass
+        self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+        found = False
+        if area_name in l_sr:
+            l_area = l_sr[area_name]
+            c_err = 1
+            if object_name in l_area:
+                l_obj = l_area[object_name]
+                if c_key in l_obj:
+                    l_val = l_obj[c_key]
+                    found = True
+                    # TODO '==' must be exact match, '~' is for regexp
+                    if c_comp == "==":
+                        if l_val == c_reg_exp:
+                            c_err = 0
+                    elif c_comp == "!=":
+                        if l_val != c_reg_exp:
+                            c_err = 0
+                    elif c_comp == "~":
+                        if re.search(c_reg_exp, l_val):
+                            c_err = 0
+                    elif c_comp == "!~":
+                        if not re.search(c_reg_exp, l_val):
+                            c_err = 0
+                    elif c_comp == ">":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) > int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == ">=":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) >= int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == "<":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) < int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == "<=":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) <= int(c_reg_exp):
+                            c_err = 0
+                    elif c_comp == ">~":
+                        # TODO check l_val and c_reg_exp if they could transformed into int
+                        if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
+                            c_err = 0
+                else:
+                    if c_comp == "is" and c_reg_exp == "None":
+                        found = 1
+                        c_err = 0
+                        check_result = max(check_result, 0)
+            else:
+                # if object does not even exist, the 'None' clause is true
+                if c_comp == "is" and c_reg_exp == "None":
+                    found = 1
+                    c_err = 0
+                    check_result = max(check_result, 0)
+            if c_err == 1:
+                if not found:
+                    l_val = None
+                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name)
+                self.__failed_role_counter__ += 1
+                check_result = max(check_result, 1)
+                self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+            else:
+                check_result = max(check_result, 0)
+                self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
+        if c_comp == "is" and c_reg_exp == "None":
+            # if area does not even exist, the 'None' clause is true
+            found = 1
+            c_err = 0
+            check_result = max(check_result, 0)
+        if (found == 0) and (check_result < 2):
+            check_result = 2
+        return check_result
+
+    def run_checks(self, checks, area_name, object_name, step_step, **kwargs ):
         """ run all checks for area and object 
             params:
                    checks: list of checks to be run
@@ -361,110 +487,17 @@ class SaphanasrTest:
                    object_name: aobject inside area to be checked (ROT, WDF, pizbuin01)
                    step_step: TBD
         """
-        l_sr = self.dict_sr
+        fail_msg = "MISSED"
+        fatal_check = kwargs.get('fatal_check', False)
+        fatal_name = kwargs.get('fatal_name', "")
         check_result = -1
-        self.__reset_failed__()
+        if fatal_check is False:
+            self.__reset_failed__()
         for single_check in checks:
-            # match <key> <comp> <regExp>
-            # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
-            match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
-            if match_obj is None:
-                self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
-                check_result = 2
-                break
-            c_key = match_obj.group(1)
-            #
-            # rewrite key, if it contains a string @@sid@@ this is needed e.g. to match lpa_<sid>_lpt
-            #
-            #print(f"c_key={c_key}")
-            match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
-            if match_obj_key is not None:
-                #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
-                c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
-                #print(f"rewrite c_key={c_key}")
-            c_comp = match_obj.group(2)
-            c_reg_exp = match_obj.group(3)
-            c_reg_exp_a = ""
-            c_reg_exp_b = ""
-            try:
-                if c_comp == ">~":
-                    comp_obj = re.search("(.*):(.*)",c_reg_exp)
-                    c_reg_exp_a = comp_obj.group(1)
-                    c_reg_exp_b = comp_obj.group(2)
-            except (IndexError, AttributeError):
-                pass
-            self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-            found = False
-            if area_name in l_sr:
-                l_area = l_sr[area_name]
-                c_err = 1
-                if object_name in l_area:
-                    l_obj = l_area[object_name]
-                    if c_key in l_obj:
-                        l_val = l_obj[c_key]
-                        found = True
-                        # TODO '==' must be exact match, '~' is for regexp
-                        if c_comp == "==":
-                            if l_val == c_reg_exp:
-                                c_err = 0
-                        elif c_comp == "!=":
-                            if l_val != c_reg_exp:
-                                c_err = 0
-                        elif c_comp == "~":
-                            if re.search(c_reg_exp, l_val):
-                                c_err = 0
-                        elif c_comp == "!~":
-                            if not re.search(c_reg_exp, l_val):
-                                c_err = 0
-                        elif c_comp == ">":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) > int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == ">=":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) >= int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == "<":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) < int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == "<=":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) <= int(c_reg_exp):
-                                c_err = 0
-                        elif c_comp == ">~":
-                            # TODO check l_val and c_reg_exp if they could transformed into int
-                            if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
-                                c_err = 0
-                    else:
-                        if c_comp == "is" and c_reg_exp == "None":
-                            found = 1
-                            c_err = 0
-                            check_result = max(check_result, 0)
-                else:
-                    # if object does not even exist, the 'None' clause is true
-                    if c_comp == "is" and c_reg_exp == "None":
-                        found = 1
-                        c_err = 0
-                        check_result = max(check_result, 0)
-                if c_err == 1:
-                    if not found:
-                        l_val = None
-                    self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp))
-                    check_result = max(check_result, 1)
-                    self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-                else:
-                    check_result = max(check_result, 0)
-                    self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-            if c_comp == "is" and c_reg_exp == "None":
-                # if area does not even exist, the 'None' clause is true
-                found = 1
-                c_err = 0
-                check_result = max(check_result, 0)
-            if (found == 0) and (check_result < 2):
-                check_result = 2
-        if self.config['dump_failures'] and 'failed' in self.run:
-            self.message(f"MISSED: step={step_step} {self.__get_failed__()}", stdout=False)
+            check_result = max(check_result, self.__run_check__(single_check, area_name, object_name, step_step, fatal_check=fatal_check, fatal_name=fatal_name))
+        if fatal_check is False:
+            if self.config['dump_failures'] and 'failed' in self.run:
+                self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name):
@@ -481,6 +514,47 @@ class SaphanasrTest:
                 object_name = topolo[topology_object_name]
                 rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''))
         return rc_checks
+
+    def __process_fatal_condition(self, step):
+        """ __process_fatal_conditions 
+            rc == 0 : no fatal condition matched
+            rc != 0 : at least one of the fatal packages (childs) mathed
+        """
+        rc_condition = 1
+        if "fatalCondition" in step:
+            fc = step["fatalCondition"]
+            topolo = self.topolo
+            self.debug(f"DEBUG: TOPOLO {topolo}")
+            #
+            # process all fatalCondition childs
+            #
+            for child in fc:
+                self.__reset_failed__()
+                rc_child = 1
+                #
+                # process only childs which are not reserved
+                #
+                if child not in ['next','comment','name']:
+                    fc_child = fc[child]
+                    self.debug(f"DEBUG: fatalConditions: {child} dump {fc_child}")
+                    #
+                    # process all check-rules ( "name": [ "condition1" {,...} ] )
+                    #
+                    rc_child = 0
+                    for top_obj_name in fc_child:
+                        obj_name = topolo[top_obj_name]
+                        if top_obj_name in self.topo_translate:
+                            area_name = self.topo_translate[top_obj_name]
+                            checks = fc_child[top_obj_name]
+                            self.debug(f"DEBUG: fatalConditions: area_name {area_name}, top_obj_name {top_obj_name}, obj_name {obj_name}, checks {checks}")
+                            rc_checks = self.run_checks(checks, area_name, obj_name, step.get('step',''), fatal_check = True, fatal_name=child)
+                            self.debug(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
+                            rc_child = max(rc_child, rc_checks)
+                if rc_child == 0:
+                    self.message(f"STATUS: fatalConditions: FAILED {child} {fc_child}", pre_cr=True)
+                rc_condition = min(rc_condition, rc_child)
+        return rc_condition
+
 
     def process_step(self, step):
         """ process a single step including optional loops """
@@ -509,12 +583,25 @@ class SaphanasrTest:
                      f" max_loops='{max_loops}'"
                  )
         self.message(_l_msg)
+        fatal = False
+        self.__min_failed_role_counter__ = 1000
+        self.__max_failed_role_counter__ = 0
         while loops < max_loops:
+            self.__failed_role_counter__ = 0
             loops = loops + 1
             if self.config['dump_failures']:
                 print(".", end='', flush=True)
             process_result = -1
             self.read_saphana_sr()
+            if "fatalCondition" in step:
+                # self.message("STATUS: step {} to process fatalCondition".format(step_id))
+                process_result = self.__process_fatal_condition(step)
+                self.debug(f"DEBUG: step {step_id} to processed fatalCondition with process_result {process_result}")
+                if process_result == 0:
+                    self.message("STATUS: step {} failed with fatalCondition - BREAK".format(step_id))
+                    process_result = 2
+                    fatal = True
+                    break
             process_result = max (
                                   self.process_topology_object(step, 'global', 'Global'),
                                   self.process_topology_object(step, 'pSite', 'Site'),
@@ -526,8 +613,11 @@ class SaphanasrTest:
                                  )
             if process_result == 0:
                 break
+            self.__min_failed_role_counter__ = min(self.__min_failed_role_counter__, self.__failed_role_counter__)
+            self.__max_failed_role_counter__ = max(self.__max_failed_role_counter__, self.__failed_role_counter__)
+            self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})", stdout=False)
             time.sleep(wait)
-        if self.config['dump_failures']:
+        if self.config['dump_failures'] and fatal is False:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
@@ -603,7 +693,7 @@ class SaphanasrTest:
                 self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
             else:
                 self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
-                a_result = self.__do_ssh__(remote, "root", cmd)
+                a_result = self.__do_ssh__(remote, "root", cmd, password=self.config['password'])
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
@@ -637,6 +727,12 @@ class SaphanasrTest:
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_prim_nameserver":
+            remote = self.topolo['pHost']
+            cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
+        elif action_name == "kill_secn_nameserver":
+            remote = self.topolo['sHost']
+            cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
@@ -704,8 +800,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver",
-                                   "kill_prim_worker_indexserver", "kill_secn_worker_indexserver" , "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
@@ -713,30 +808,30 @@ class SaphanasrTest:
             action_rc = self.action_on_os(action_name)
         return action_rc
 
-    def __do_ssh__(self, remote_host, user, cmd):
+    def __do_ssh__(self, remote_host, user, cmd, **kwargs):
         """
         ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
         """
+        ssh_timeout = kwargs.get('timeout', None)
+        ssh_password = kwargs.get('password', None)
         if remote_host:
-            try:
-                ssh_client = paramiko.SSHClient()
-                ssh_client.load_system_host_keys()
-                ssh_client.connect(remote_host, username=user)
-                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
-                result_stdout = cmd_stdout.read().decode("utf8")
-                result_stderr = cmd_stderr.read().decode("utf8")
-                result_rc = cmd_stdout.channel.recv_exit_status()
-                check_result = (result_stdout, result_stderr, result_rc)
-                ssh_client.close()
-                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
-            except paramiko.ssh_exception.SSHException as para_err:
-                self.message(f"FAILURE01: ssh connection to {user}@{remote_host}: {para_err}")
-                check_result=("", "", 20000)
-            except Exception as ssh_muell:
-                # except Exception as ssh_muell:
-                self.message(f"FAILURE02: ssh connection to {user}@{remote_host}: {ssh_muell}")
-                check_result=("", "", 20000)
+            ssh_client = paramiko.SSHClient()
+            ssh_client.load_system_host_keys()
+            if ssh_password:
+                ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
+            else:
+                ssh_client.connect(remote_host, username=user, timeout=10)
+            cmd_timeout=f"timeout={ssh_timeout}"
+            #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
+            self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
+            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+            result_stdout = cmd_stdout.read().decode("utf8")
+            result_stderr = cmd_stderr.read().decode("utf8")
+            result_rc = cmd_stdout.channel.recv_exit_status()
+            check_result = (result_stdout, result_stderr, result_rc)
+            ssh_client.close()
+            self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
         else:
             self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)
