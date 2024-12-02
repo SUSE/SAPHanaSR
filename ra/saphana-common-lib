@@ -676,13 +676,13 @@ function get_local_sr_config() {
 function get_local_virtual_name() {
     # called by: TODO
     local -a listInstances
-    local lI lIh1
+    local lI
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
         mapfile -t listInstances < <( /usr/sap/hostctrl/exe/saphostctrl -function ListInstances )
         for lI in "${listInstances[@]}"; do
-            lIh1="${lI// /}"
-            # InstInfo:HA1-00-suse01-753,patch1010,changelist2124070
-            if [[ "$lIh1" =~ :"$SID"-"$InstanceNr"-([^-]*)-  ]]; then
+            # InstInfo : HA1 - 00 - suse-01 - 753,patch1010,changelist2124070
+            # bsc#1233972 - hostname may include dashes
+            if [[ "$lI" =~ "$SID - $InstanceNr - "([^ ]*)" -" ]]; then
                 gVirtName="${BASH_REMATCH[1]}"
                 break
             fi
