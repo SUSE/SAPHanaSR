@@ -1,17 +1,18 @@
-# <div align="center"> SAPHanaSR-angi - SAP HANA System Replication <br> A New Generation Interface </div>
+# <div align="center"> SAPHanaSR-angi - SAP HANA System Replication <br> A Next Generation Interface </div>
 
 The SUSE resource agents to control the SAP HANA database in system replication setups
 
-[![Build Status](https://github.com/SUSE/SAPHanaSR/actions/workflows/ChecksAndLinters.yml/badge.svg?branch=angi)](https://github.com/SUSE/SAPHanaSR/actions/workflows/ChecksAndLinters.yml/badge.svg?branch=angi)
+[![Build Status](https://github.com/SUSE/SAPHanaSR/actions/workflows/ChecksAndLinters.yml/badge.svg)](https://github.com/SUSE/SAPHanaSR/actions/workflows/ChecksAndLinters.yml/badge.svg)
 
 
 ## Introduction
 
-SAPHanaSR-angi provides an automatic failover between SAP HANA nodes with configured System Replication in HANA. Currently Scale-Up setups are targeted.
+SAPHanaSR-angi is "SAP HANA SR - An Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
+It provides an automatic failover between SAP HANA nodes with configured System Replication in HANA. The current version of SAPHanaSR-angi is targeting SAP HANA SR scale-up and scale-out setups.
 
-CIB attributes are not backward compatible between SAPHanaSR-angi and SAPHanaSR. So there is currently no easy migration path.
+CIB attributes are not backward compatible between SAPHanaSR-angi and the classic SAPHanaSR. Nevertheless, SAPHanaSR and SAPHanaSR-ScaleOut can be upgraded to SAPHanaSR-angi by following the documented procedure.
 
-This technology is included in the SUSE Linux Enterprise Server for SAP Applications 15 (as technology preview), via the RPM package with the same name.
+This technology is included in the SUSE Linux Enterprise Server for SAP Applications 15, via the RPM package with the same name.
 
 System replication will help to replicate the database data from one node to another node in order to compensate for database failures. With this mode of operation, internal SAP HANA high-availability (HA) mechanisms and the Linux cluster have to work together.
 
@@ -27,8 +28,12 @@ Only if the HANA landscape status indicates that HANA can not recover from the f
 An important task of the resource agent is to check the synchronisation status of the two SAP HANA databases. If the synchronisation is not "SOK", then the
 cluster avoids to take over to the secondary side, if the primary fails. This is to improve the data consistency.
 
-For more information, refer to the ["Supported High Availability Solutions by SLES for SAP Applications](https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html) and all the manual pages shipped with the package.
+For more information, refer to the ["Supported High Availability Solutions by SLES for SAP Applications"](https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html) and all the manual pages shipped with the package.
 
+For SAP HANA Databases in System Replication only the listed scenarios at ["Supported High Availability Solutions by SLES for SAP Applications"](https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html) are supported. For any scenario not matching the scenarios named or referenced in our setup guides please contact SUSE services.
+
+The following SUSE blog series gives a good overview about running SAP HANA in System Replication in the SUSE cluster:
+["towardszerodowntime"](https://www.suse.com/c/tag/towardszerodowntime/)
 
 ## File structure of installed package
 

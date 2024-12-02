@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        1.2.8
+Version:        1.2.9
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -41,6 +41,10 @@ Requires:       crmsh >= 4.4.0
 Requires:       crmsh-scripts >= 4.4.0
 Requires:       python3
 Requires:       /usr/bin/xmllint
+%if 0%{?suse_version} >= 1600
+Requires:       /usr/bin/sudo
+Requires:       /usr/bin/logger
+%endif
 BuildRequires:  resource-agents >= 4.1.0
 BuildRequires:  crmsh
 BuildRequires:  crmsh-scripts
