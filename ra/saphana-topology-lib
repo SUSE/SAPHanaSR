@@ -275,8 +275,8 @@ function sht_start() {
     local hanalrc=0
     #local loopcount=0
 
-    # TODO: PRIO3: move the string "$HA_RSCTMP/SAPHana/SAPTopologyON" to a variable
-    # TODO: PRIO3: move the file to the clusters tmp directory?
+    # TODO PRIO3: move the string "$HA_RSCTMP/SAPHana/SAPTopologyON" to a variable
+    # TODO PRIO3: move the file to the clusters tmp directory?
     mkdir -p "$HA_RSCTMP/SAPHana"
     touch "$HA_RSCTMP/SAPHana/SAPTopologyON.${SID}"
     if ! check_saphostagent; then
@@ -286,13 +286,13 @@ function sht_start() {
     if [[ "$hanalrc" -lt 124 ]]; then
         set_hana_attribute "${NODENAME}" "$gNodeRole" "${ATTR_NAME_HANA_ROLES[@]}"
     fi
-    # TODO PRIO 1: scale-out used side-effect via RC_hdbnsutil to give back different return codes; scale-up rc was always OCF_SUCCESS
+    # TODO PRIO1: scale-out used side-effect via RC_hdbnsutil to give back different return codes; scale-up rc was always OCF_SUCCESS
     # currently using the always-good mode to force OCF_SUCCESS
     RC_hdbnsutil=0
     case "$RC_hdbnsutil" in
-        0 | 1 ) rc="$OCF_SUCCESS";;     # TODO: Prio 3: Need to check rc==1 - is that success or not_running?
+        0 | 1 ) rc="$OCF_SUCCESS";;     # TODO PRIO3: Need to check rc==1 - is that success or not_running?
         2 )     rc="$OCF_NOT_RUNNING";; # rc==2 have been seen for bad persistency layer
-        * )     rc="$OCF_SUCCESS";;     # TODO: Prio 3: Need to check "other" return codes
+        * )     rc="$OCF_SUCCESS";;     # TODO PRIO3: Need to check "other" return codes
     esac
     # old scale-up code:
     # rc=$OCF_SUCCESS
@@ -329,12 +329,13 @@ function sht_monitor() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
     local vName="${NODENAME}"
-    # TODO PRIO 1: 'node_role_walk' is only needed for scale-out; how to differ that here?
+    # TODO PRIO1: 'node_role_walk' is only needed for scale-out; how to differ that here?
     node_role_walk --standbyFilter=off
     # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, NR is word#6, vHost is word#8
     #### SAP-CALL
+    ## TODO PRIO3: align method "ListInstances" with saphana-common-lib
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
         vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
             | awk '$4 == SID && $6=NR { print $8 }' SID="$SID" NR="$InstanceNr" 2>/dev/null )
@@ -434,7 +435,7 @@ function sht_stop_clone() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc=0  tout=0 nRole nNsConf
     hanaPrim="$(check_for_primary "live")";
-    # TODO: should we simplify the calculation of timeout (see saphana-silesystem-lib)?
+    # TODO PRIO3: should we simplify the calculation of timeout (see saphana-silesystem-lib)?
     # shellcheck disable=SC2154
     local actionTimeOut="$OCF_RESKEY_CRM_meta_timeout" stdTimeOut=300 actTimeOutPercent=50
     if [ -z "$actionTimeOut" ]; then
