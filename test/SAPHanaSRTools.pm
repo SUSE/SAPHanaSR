@@ -107,11 +107,15 @@ sub get_nodes_online
     my $result=0;
     my $sid=shift;
     my $result="";
+    # printf("DBG: get_nodes_online: keys:  %s\n", join(", ", keys(%{$$refHName{node_state}})));
     foreach my $h ( keys(%{$$refHName{node_state}}) ) {
-        if ( get_node_status($h) eq "online" ) {
-           $result++;
+	if ( not ($h =~ "^_[lt]") ) {
+		if ( get_node_status($h) eq "online" || get_node_status($h) =~ /^\d\d\d+$/ ) {
+		   $result++;
+		}
         }
     }
+    # printf("DBG: get_nodes_online: %s\n", $result);
     return $result;
 }
 
@@ -123,7 +127,7 @@ sub get_node_status
     my $node=shift;
     my $standby;
     $result=$$refHName{"node_state"}->{$node};
-#printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
+    # printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
     if ( defined ($$refHName{"standby"}->{$node})) {
        $standby = $$refHName{"standby"}->{$node};
        if ( $standby eq "on" ) {
