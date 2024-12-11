@@ -53,10 +53,12 @@ use Data::Dumper qw(Dumper);
     print_host_attr
     set_new_attribute_model
     set_cibFile
+    set_Host
     set_GName
     set_HName
     set_SName
     set_Site
+    set_Global
 );
 
 
@@ -106,15 +108,21 @@ my %selections = (
 #
 #
 
+my $refGlobal;
 my $refGName;  # reference to GlobalTableKeyName Hash attribute -> object - value
 my $refHName;  # reference to HostTableKeyName Hash
 my $refSName;  # reference to SiteTableKeyName Hash
 my $refRName;  # reference to ResourceTableKeyName Hash
 my $refSite;   # reference to Site-Hash
+my $refHost;   # reference to Host-Hash
 
 sub set_Site
 {
    $refSite=shift();
+}
+sub set_Host
+{
+   $refHost=shift();
 }
 sub set_HName
 {
@@ -123,6 +131,10 @@ sub set_HName
 sub set_GName
 {
    $refGName=shift();
+}
+sub set_Global
+{
+   $refGlobal=shift();
 }
 sub set_RName
 {
@@ -173,13 +185,14 @@ sub attr_in_selection {
 }
 
 sub max {
+ # thanks to http://www.perlunity.de/perl/forum/thread_018329.shtml
  my $a = shift;
  my $b = shift;
  return $a > $b ? $a : $b;
 }
 
 sub mysyslog {
-   my ($prio, $form, @param) = @_;
+   my ($prio, $form, @param) =(  @_ );
    syslog $prio, $form, @param;
 }
 
@@ -189,8 +202,10 @@ sub get_nodes_online
     my $sid=shift;
     my $result="";
     foreach my $h ( keys(%{$$refHName{node_state}}) ) {
-        if ( get_node_status($h) eq "online" ) {
-           $result++;
+	if ( not ($h =~ "^_[lt]") ) {
+		if ( get_node_status($h) eq "online" || get_node_status($h) =~ /^\d\d\d+$/ ) {
+		   $result++;
+		}
         }
     }
     return $result;
@@ -204,7 +219,7 @@ sub get_node_status
     my $node=shift;
     my $standby;
     $result=$$refHName{"node_state"}->{$node};
-#printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
+    # printf("DBG: node %s node_state %s standby %s\n", $node, $result, $$refHName{"standby"}->{$node});
     if ( defined ($$refHName{"standby"}->{$node})) {
        $standby = $$refHName{"standby"}->{$node};
        if ( $standby eq "on" ) {
@@ -304,7 +319,7 @@ sub get_hana_attributes
     } else  {
        open $CIB, "<", "$cibFile" or die "CIB file $cibFile not found or not able to read it";
     }
-    printf "DBG: selection=%s\n", $selection;
+    # printf "DBG: selection=%s\n", $selection;
     insertAttribute($sid, $refGL, $refGN, "global", "sid", uc($sid));
     while (<$CIB>) {
         chomp;
@@ -496,7 +511,7 @@ sub path_to_table
     }
 }
 
-sub get_hana_sync_state
+sub get_hana_sync_state_old # by global / symc_state
 {
     my $sid=shift;
     my $result="";
@@ -506,6 +521,26 @@ sub get_hana_sync_state
         foreach my $h ( keys(%{$$refHName{sync_state}}) ) {
             if ( $$refHName{sync_state}->{$h} =~ /(S.*)/ ) {
                $result=$1;
+            }
+        }
+    }
+    return $result;
+}
+
+sub get_hana_sync_state
+{
+    my $result="-";
+    if ( $newAttributeModel == 1 ) {
+        foreach my $s ( keys(%{$$refSName{"srr"}}) ) {
+            if ( $$refSName{"srr"}->{$s} =~ /S/ ) {
+                $result = $$refSName{"srHook"}->{$s}; 
+		# TODO: fall-back to srPoll, id result is SWAIT
+            }
+        }
+    } else  {
+        foreach my $h ( keys(%{$$refHName{"roles"}}) ) {
+            if ( $$refHName{"roles"}->{$h} =~ /[0-9]:S:/ ) {
+                $result = $$refHName{"score"}->{$h};
             }
         }
     }
@@ -596,6 +631,10 @@ sub check_node_status
     my $h=shift;
     if ( $newAttributeModel == 1 ) {
         my $site1=$$refHName{"site"}{$h};
+	my $value=$$refSite{$site1}->{lss};
+	#my @mks0=keys(%{$refSite});
+	#my @mks1=keys(%{$$refSite{$site1}});
+	#my @mes2=each(%{$$refSite{$site1}});
         if ( $$refSName{"lss"}{$site1} =~ /^[$lss]/ ) {
             return 1;
         }
@@ -790,7 +829,7 @@ sub check_all_ok
          $failed .= " #N=$result";
     }
     $result=get_hana_sync_state($sid);
-    # printf "+++ get_hana_sync_state($sid): %s\n", get_hana_sync_state($sid);
+    printf "+++ get_hana_sync_state($sid): %s\n", get_hana_sync_state($sid);
     if ( $result ne "SOK" ) {
          $rc++;
          $failed .= " sync=$result ";

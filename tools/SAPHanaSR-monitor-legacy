@@ -74,6 +74,7 @@ sub init()
     if ( $cibFile ) {
        set_cibFile($cibFile);
     }
+    set_new_attribute_model;
     return 0;
 }
 
@@ -239,6 +240,8 @@ openlog $ident, $logopt, $facility;
 
 mysyslog $priority, "%s", "Monitor startup";
 
+#use Data::Dumper;
+
 sub processMonitor($) {
     my $sid = shift();
     my $message;
@@ -255,10 +258,19 @@ sub processMonitor($) {
     my %RName;
     %Host=();
     %Host=(); %HName=(); %Global=(); %GName=(); %Site=(); %SName=();
+    set_Host(\%Host);
     set_HName(\%HName);
+    set_Site(\%Site);
+    set_SName(\%SName);
+    set_Global(\%Global);
+    set_GName(\%GName);
     # set_Host(\%Host);
     # get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName);
     get_hana_attributes($sid, \%Host, \%HName, \%Global, \%GName, \%Site,   \%SName, \%Resource, \%RName);
+
+    #print(Dumper(\%SName));
+    #print(Dumper(\%Site));
+
     # get_hana_attributes($sid);
 # we do not need the crm_mon status in the monitor any more
     my $crm_out="";
@@ -292,6 +304,8 @@ sub processMonitor($) {
     my $log_col="green";
     my $complete_col="green";
 
+    $phost=get_host_primary($sid, "1234");
+    $shost=get_host_secondary($sid, "1234");
     #
     #  for the grafic output
     #
@@ -311,11 +325,12 @@ sub processMonitor($) {
         if ( check_node_status($sid, "2" , $thenode) ) { $hanaStatus{$thenode}="yellow"; }
         if ( check_node_status($sid, "1" , $thenode) ) { $hanaStatus{$thenode}="red"; }
     }
+    my $ghss = get_hana_sync_state($sid);
     if ( get_hana_sync_state($sid) ne "SOK" ) { $sync_col="red"; }
     my $sync_direction="none";
-    if ( check_node_mode( $sid, "P" , $node_list[0]) && check_node_mode( $sid, "S" , $node_list[1]) ) {
+    if ( check_node_mode( $sid, "P" , $phost) && check_node_mode( $sid, "S" , $shost) ) {
     	$sync_direction="right";
-    } elsif ( check_node_mode( $sid, "S" , $node_list[0]) && check_node_mode( $sid, "P" , $node_list[1]) ) {
+    } elsif ( check_node_mode( $sid, "S" , $phost) && check_node_mode( $sid, "P" , $shost )) {
 	    $sync_direction="left";
     } else  {
         $sync_direction="none";
@@ -341,19 +356,12 @@ sub processMonitor($) {
     if ( get_number_secondary($sid, "234") != 1 ) { $attr_col="yellow"; $attr_errors .= " A-S";}
     if ( get_number_primary($sid, "234") > 1 ) { $attr_col="red"; $attr_errors .= " A-PP";}
     if ( get_hana_sync_state($sid) ne "SOK" ) { $attr_col="yellow"; $attr_errors .= " A-SFAIL"; }
-
-    #printf "\n";
-
-    #printf "%-16s %-16s %-16s\n", $hanaStatus{$node_list[0]}, "$sync_direction : $sync_col", $hanaStatus{$node_list[1]};
-    #printf "%-16s %-16s %-16s\n", $node_list[0], $sid, $node_list[1];
-
-    #printf "\n";
     # log checks
     my $log_errors="";
     my $check_lpa_status_col;
     my $check_lpa_msg;
 
-    ( $check_lpa_status_col, $check_lpa_msg)=check_lpa_status($sid, $node_list[0], $node_list[1]);
+    ( $check_lpa_status_col, $check_lpa_msg)=check_lpa_status($sid, $phost, $shost);
 
     if ( ( $attr_col eq "yellow" ) || ( $crm_col eq "yellow" ) ||
          ( $log_col eq "yellow" ) || ( $attr_col eq "yellow" ) ||
@@ -367,10 +375,10 @@ sub processMonitor($) {
     print_page(  format => $Format,
                   sid    => $sid,
                   sidColor => $complete_col,
-                  hanaStatusA => $hanaStatus{$node_list[0]},
-                  nodeListA  => $node_list[0],
-                  hanaStatusB => $hanaStatus{$node_list[1]},
-                  nodeListB  => $node_list[1],
+                  hanaStatusA => $hanaStatus{$phost},
+                  nodeListA  => $phost,
+                  hanaStatusB => $hanaStatus{$shost},
+                  nodeListB  => $shost,
                   syncColor  => $sync_col,
                   syncDirection => $sync_direction,
                   crmOut => $crm_out,
