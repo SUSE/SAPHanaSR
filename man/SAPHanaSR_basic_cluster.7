@@ -1,6 +1,6 @@
 .\" Version: 0.162.3
 .\"
-.TH SAPHanaSR 7 "26 Sep 2024" "" "SAPHanaSR_basic_cluster"
+.TH SAPHanaSR 7 "08 Jan 2025" "" "SAPHanaSR_basic_cluster"
 .\"
 .SH NAME
 SAPHanaSR_basic_cluster \- SAP HANA System Replication scale-up basic cluster configuration.
@@ -206,7 +206,42 @@ colocation col_ip_with_SLE_HDB00 \\
  2000: rsc_ip_SLE_HDB00:Started msl_SAPHanaCon_SLE_HDB00:Master
 .RE
 .PP
-.\" TODO seamless maintenance IP location
+\fB* crm IP address colocation for seamless maintenance
+.PP
+The IP address is moved along with the HANA primary master nameserver.
+The location is determined from the hana_<sid>_roles attribute. This location
+rule replaces the usual colocation to the HANA primary.
+.PP
+.RS 2
+location loc_ip_with_SAPHana rsc_ip_HXE_HDB00 rule 3000: \\
+.br
+ hana_hxe_roles eq 4:P:master1:master:worker:master
+.RE
+.PP
+\fB* crm protective IP address resource configuration\fR
+.PP
+Let the Linux cluster manage one IP address. The resource should tolerate short
+absence of (virtual) network cards. If a monitor and the resulting start fails,
+the node should get fenced. This protects against risk of HANA dual-primary.
+A colocation constraint between this IP address resource and the HANA primary
+master nameserver is needed as well, see respective examples.
+.PP
+.RS 2
+.br
+primitive rsc_ip_SLE_HDB00 IPaddr2 \\
+.br
+ op monitor interval=30 timeout=60 \\
+.br
+ op start timeout=90 on-fail=fence \\
+.br
+ params ip=192.168.178.188 cidr_netmask=32
+.RE
+.PP
+This configuration might be used in public cloud environments where virtual NICs
+might be expected to disappear temporarily. Of course, it would be better to not
+let NICs dissapear in production. I.e. by adding redundancy to the network or by
+setting the cluster into maintenance.
+.PP
 \fB* crm IP address for active/active read-enabled resource configuration\fR
 .PP
 Let the Linux cluster manage an additional IP address and move that address
