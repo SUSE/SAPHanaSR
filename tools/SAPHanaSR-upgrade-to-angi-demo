@@ -12,7 +12,7 @@
 #
 # define parameters and functions
 #
-VERSION="2024-06-05 0.3a"
+VERSION="2025-01-20 0.3b"
 DRYRUN=yes
 # TODO DRYRUN=no
 EXE=$(basename $0)
@@ -80,6 +80,7 @@ function init-variables() {
 	cibadmin -Ql > "$BAKDIR"/cib.xml || exit 1
 	SCRIPT=/root/bin/"$EXE"
 	RPMOLD="SAPHanaSR"
+	RPMDOC="SAPHanaSR-doc"
 	RPMNEW="SAPHanaSR-angi"
 	SID=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances |\
 		awk '{print $4}')
@@ -463,6 +464,8 @@ function f_install-rpm-angi() {
 function f_remove-rpm-classic() {
 	echo-funa run "${FUNCNAME[0]}"
 	wait-idle
+	echo "crm cluster run \"rpm -e --nodeps --quiet '${RPMDOC}' 2>/dev/null\""
+	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps --quiet '${RPMDOC}' 2>/dev/null"
 	echo "crm cluster run \"rpm -e --nodeps '${RPMOLD}'\""
 	[ $DRYRUN = no ] && crm cluster run "rpm -e --nodeps '${RPMOLD}'"
 	echo-funa end "${FUNCNAME[0]}"
