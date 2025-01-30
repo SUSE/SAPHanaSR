@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# sct_test_block_network_prim_site
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+# shellcheck disable=SC2029
+ssh "${node01}" "crm resource cleanup $mstResource"
+
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+# currSite="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '$2="'$currPrimary'" && { print $3 }' | colrm 1 6 | tr -d \" )"
+# currPriWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '$2!="'$currPrimary'" && $3=="site=\"'$currSite'\"" { print $2 }' )"
+currPriWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
+
+echo "==== Block network ===="
+# shellcheck disable=SC2029
+ssh "${currPrimary}" "ip a r default dev lo"
+ssh "${currPriWorker}" "ip a r default dev lo"
+sleep 60
