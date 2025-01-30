@@ -3,7 +3,7 @@
 # sct_test_block_network_secn_site
 #
 src=${BASH_SOURCE[0]}
-full_path=$(readlink -f  "$src")
+full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source .test_properties
 
@@ -11,12 +11,11 @@ source .test_properties
 ssh "${node01}" "crm resource cleanup $mstResource"
 
 currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
-
-# TODO get worker node
-currSite="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/Host='"$currSecondary"'/ { print $3 }  )"
+currSite="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '$2="'$currSecondary'" && { print $3 }' | colrm 1 6 | tr -d \" )"
+currSecWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '$2!="'$currSecondary'" && $3=="site=\"'$currSite'\"" { print $2 }' )"
 
 echo "==== Block network ===="
 # shellcheck disable=SC2029
 ssh "${currSecondary}" "ip a r default dev lo"
-# TODO worker node
+ssh "${currSecWorker}" "ip a r default dev lo"
 sleep 60
