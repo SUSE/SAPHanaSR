@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# sct_test_block_network_secn_site
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f  "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+# shellcheck disable=SC2029
+ssh "${node01}" "crm resource cleanup $mstResource"
+
+currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+# TODO get worker node
+
+echo "==== Block network ===="
+# shellcheck disable=SC2029
+ssh "${currSecondary}" "ip a r default dev lo"
+# TODO worker node
+sleep 60
