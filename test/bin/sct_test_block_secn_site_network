@@ -13,8 +13,9 @@ ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 currSecWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
 
-echo "==== Block network ===="
+echo "==== Block network on ${currSecondary} ===="
 # shellcheck disable=SC2029
 ssh "${currSecondary}" "rcnetwork stop & exit" &
-ssh "${currSecWorker}" "rcnetwork stop & exit"
+echo "==== Block network ${currSecWorker} ===="
+ssh "${currSecWorker}" "rcnetwork stop & exit" &
 #
