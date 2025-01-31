@@ -15,33 +15,29 @@
 # - end mst-resource in maintenance
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles NOT exchanged
+#
 src=${BASH_SOURCE[0]}
-full_path=$(readlink -f  "$src")
+full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source .test_properties
 
 # shellcheck disable=SC2029
-ssh "$node01" "crm resource cleanup $mstResource"
+ssh "$node01" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 ssh "$node01" "crm resource maintenance $mstResource on"
 ssh "$node01" "crm maintenance on"
 
 ssh "$node02" "crm cluster stop --all"
 
 echo "==== SUSE Cluster Stopped ===="
-
 sleep 60
 ssh "$node01" "crm cluster start --all"
 sleep 120
-ssh "$node01" "crm cluster wait_for_startup 60; cs_wait_for_idle --sleep 60"
+ssh "$node01" "crm cluster wait_for_startup 60; cs_wait_for_idle -s 60"
 
-ssh "$node01" "crm resource refresh $clnResource"
-ssh "$node01" "crm maintenance off"
-
-ssh "$node01" "cs_wait_for_idle --sleep 10"
-ssh "$node01" "crm resource refresh $mstResource"
-
-ssh "$node01" "cs_wait_for_idle --sleep 10"
+ssh "$node01" "crm resource refresh $clnResource; cs_wait_for_idle -s 5"
+ssh "$node01" "crm maintenance off; cs_wait_for_idle -s 10"
+ssh "$node01" "crm resource refresh $mstResource; cs_wait_for_idle -s 10"
 ssh "$node01" "crm resource maintenance $mstResource off"
 
 echo "==== SUSE Cluster Started ===="
-
+#

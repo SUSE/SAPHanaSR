@@ -8,6 +8,7 @@
 # - start cluster
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles NOT exchanged
+#
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f  "$src")
 dir_path=$(dirname "$full_path")
@@ -24,7 +25,7 @@ sitePrimary="${sitePrimary//\"/}"
 echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
 # shellcheck disable=SC2029
-ssh "$node01" "crm resource cleanup  $mstResource"
+ssh "$node01" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 
 ssh "$node02" "crm cluster stop --all"
 
@@ -48,7 +49,6 @@ echo "==== SAP HANA DBs started ===="
 
 ssh "$node01" "crm cluster start --all"
 sleep 30
-ssh "$node01" "crm cluster wait_for_startup 60"
-
+ssh "$node01" "crm cluster wait_for_startup 60; cs_wait_for_idle -s 10"
 echo "==== SUSE Cluster Started ===="
-
+#

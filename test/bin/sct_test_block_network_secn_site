@@ -8,15 +8,14 @@ dir_path=$(dirname "$full_path")
 source .test_properties
 
 # shellcheck disable=SC2029
-ssh "${node01}" "crm resource cleanup $mstResource"
+ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 
 currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
-# currSite="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '$2="'$currSecondary'" && { print $3 }' | colrm 1 6 | tr -d \" )"
-# currSecWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '$2!="'$currSecondary'" && $3=="site=\"'$currSite'\"" { print $2 }' )"
 currSecWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
 
 echo "==== Block network ===="
 # shellcheck disable=SC2029
-ssh "${currSecondary}" "ip a r default dev lo"
+ssh "${currSecondary}" "ip a r default dev lo" &
 ssh "${currSecWorker}" "ip a r default dev lo"
 sleep 60
+#
