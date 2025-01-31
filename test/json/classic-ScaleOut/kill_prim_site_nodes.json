@@ -34,14 +34,25 @@
             "next": "step40",
             "loop": 120,
             "wait": 2,
-            "global": "sync_state_sok",
-            "sSite": "sSiteUp",
-            "sHost": "sHostUp",
-            "sWorker": "sWorkerUp", 
             "todo": "fix pSite, pHost, pWorker",
-            "sSite": [],
-            "pHost": [],
-            "pWorker": [] 
+            "global": "sync_state_sok_or_sfail",
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt >~ 1000000000:(20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)"
+            ],
+            "sSite": [
+                "lpt >~ 1000000000:(30)",
+                "lss == 4",
+                "srr ~ (S|P)",
+                "srHook ~ (PRIM|SOK)"
+            ],
+            "sHost": [
+                "clone_state ~ (PROMOTED|DEMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145)"
+            ]
         },
         {
             "step": "step40",
@@ -49,21 +60,35 @@
             "next": "final50",
             "loop": 120,
             "wait": 2,
+            "todo": "fix pHost, sHost, pSite, sSite",
             "global": "sync_state_sok_or_sfail",
-            "todo": "fix sSite, sHost, sWorker",
-            "todo": "fix pSite, pHost, pWorker",
-            "sSite": [],
-            "sHost": [],
-            "sWorker": [],
-            "pSite": [],
-            "pHost": [],
-            "pWorker": []
+            "pSite": [
+                "lss ~ (1|2)",
+                "srr ~ (P|S)",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)"
+            ],
+            "sSite": [
+                "lpt >~ 1000000000:(30)",
+                "lss == 4",
+                "srr ~ (S|P)",
+                "srHook == PRIM"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
+                "roles == master1::worker:"
+            ],
+            "sHost": [
+                "clone_state ~ (DEMOTED|PROMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145|150)"
+            ]
         },
         {
             "step": "final50",
             "name": "end recover",
             "next": "END",
-            "loop": 240,
+            "loop": 300,
             "wait": 2,
             "post": "cleanup",
             "global": "sync_state_sok",
