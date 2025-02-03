@@ -6,7 +6,7 @@
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023,2024 SUSE LLC
+ Copyright:    (c) 2023-2025 SUSE LLC
 """
 
 import time
@@ -17,6 +17,7 @@ import json
 import argparse
 import random
 
+# Version: 1.4.20250202
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -25,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.3.5"
+    version = "1.4.20250202"
 
     def message(self, msg, **kwargs):
         """
