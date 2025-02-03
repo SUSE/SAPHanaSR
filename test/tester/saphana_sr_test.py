@@ -80,6 +80,7 @@ class SaphanasrTest:
                         'debug': False,
                         'password': None
                       }
+        self.result = { 'test_id': self.run['r_id'], 'config': self.config }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -319,6 +320,7 @@ class SaphanasrTest:
                 self.message(f"ERROR: File error: {e_generic}")
                 return 1
         self.run['test_id'] = self.test_data['test']
+        self.result.update({'test_name': self.run['test_id']})
         self.debug("DEBUG: test_data: {}".format(str(self.test_data)),
                         stdout=False)
         return 0
@@ -342,11 +344,16 @@ class SaphanasrTest:
             test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg, **kwargs):
-        """ document failed checks """
+        """ __add_failed__ ocument failed checks 
+        params: area_object, key_val_reg
+        kwargs: list_of_failures
+        """
+        list_of_failures = kwargs.get('list_of_failures', None)
         fatal_check = False
         fatal_name = ""
         fatal_check = kwargs.get("fatal_check", False)
         fatal_name = kwargs.get("fatal_name", "")
+        step_id = kwargs.get("step_id", "")
         ( _area, _obj ) = area_object
         if 'failed' in self.run:
             _l_failed = self.run['failed']
@@ -358,9 +365,16 @@ class SaphanasrTest:
             _l_failed = ""
             _l_header = f"{fatal_name}{_area}={_obj}: "
         ( _key, _val, _reg, _comp ) = key_val_reg
+        #
+        # also fill the failures list, if given
+        #
+        if type(list_of_failures) == type([]):
+            print(f"DBG: __add_failed__ list_of_failures.append()")
+            list_of_failures.append({'area': _area, 'object_name': _obj, 'expect': {'var': _key, 'expr': _reg, 'comp': _comp }, 'have': {'var': _key, 'val': _val} })
         _l_failed += f'{_l_header} expect "{_key} {_comp} {_reg}", have "{_val}"; '
         self.run['failed'] = _l_failed
         self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
+        print(f"DBG: __add_failed__ list_of_failures={list_of_failures}")
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
@@ -378,6 +392,7 @@ class SaphanasrTest:
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
         match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
         check_result = -1
+        list_of_failures = kwargs.get('list_of_failures', None)
         if match_obj is None:
             self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
             check_result = 2
@@ -463,7 +478,7 @@ class SaphanasrTest:
             if c_err == 1:
                 if not found:
                     l_val = None
-                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name)
+                self.__add_failed__((area_name, object_name), (c_key, l_val, c_reg_exp, c_comp), fatal_check=fatal_check, fatal_name=fatal_name, list_of_failures=list_of_failures)
                 self.__failed_role_counter__ += 1
                 check_result = max(check_result, 1)
                 self.debug(f"DEBUG: FAILED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
@@ -487,6 +502,7 @@ class SaphanasrTest:
                    object_name: aobject inside area to be checked (ROT, WDF, pizbuin01)
                    step_step: TBD
         """
+        list_of_failures = kwargs.get('list_of_failures', None)
         fail_msg = "MISSED"
         fatal_check = kwargs.get('fatal_check', False)
         fatal_name = kwargs.get('fatal_name', "")
@@ -494,15 +510,19 @@ class SaphanasrTest:
         if fatal_check is False:
             self.__reset_failed__()
         for single_check in checks:
-            check_result = max(check_result, self.__run_check__(single_check, area_name, object_name, step_step, fatal_check=fatal_check, fatal_name=fatal_name))
+            check_result = max(check_result, self.__run_check__(single_check, area_name, object_name, step_step, fatal_check=fatal_check, fatal_name=fatal_name, list_of_failures=list_of_failures))
         if fatal_check is False:
             if self.config['dump_failures'] and 'failed' in self.run:
                 self.message(f"{fail_msg}: step={step_step} {self.__get_failed__()}", stdout=False)
         return check_result
 
-    def process_topology_object(self, step, topology_object_name, area_name):
-        """ process_topology_object """
+    def process_topology_object(self, step, topology_object_name, area_name, **kwargs):
+        """ process_topology_object 
+            params: step, topology_object_name, area_name
+            kwargs: step_loop_failures[]
+        """
         rc_checks = -1
+        list_of_failures = kwargs.get('list_of_failures', None)
         if topology_object_name in step:
             checks = step[topology_object_name]
             if isinstance(checks,str):
@@ -512,15 +532,18 @@ class SaphanasrTest:
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
-                rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''))
+                rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''), list_of_failures=list_of_failures)
+        
         return rc_checks
 
-    def __process_fatal_condition(self, step):
+    def __process_fatal_condition(self, step, **kwagrs):
         """ __process_fatal_conditions 
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
+            kwargs: step_loop_failures[]
         """
         rc_condition = 1
+        list_of_failures = kwargs.get('list_of_failures', None)
         if "fatalCondition" in step:
             fc = step["fatalCondition"]
             topolo = self.topolo
@@ -547,7 +570,7 @@ class SaphanasrTest:
                             area_name = self.topo_translate[top_obj_name]
                             checks = fc_child[top_obj_name]
                             self.debug(f"DEBUG: fatalConditions: area_name {area_name}, top_obj_name {top_obj_name}, obj_name {obj_name}, checks {checks}")
-                            rc_checks = self.run_checks(checks, area_name, obj_name, step.get('step',''), fatal_check = True, fatal_name=child)
+                            rc_checks = self.run_checks(checks, area_name, obj_name, step.get('step',''), fatal_check = True, fatal_name=child, list_of_failures=list_of_failures)
                             self.debug(f"DEBUG: fatalConditions: {child} rc {rc_checks}")
                             rc_child = max(rc_child, rc_checks)
                 if rc_child == 0:
@@ -561,6 +584,11 @@ class SaphanasrTest:
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
+        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        step_result = { 'start_time': date_time }
+        self.result.update({step_id: step_result})
+        # self.result.update({ step_id: { 'name': step_name, 'next': step_next, 'status': 'running' } } )
+        step_result.update({ 'name': step_name, 'next': step_next, 'status': 'running' })
         if 'loop' in step:
             max_loops = step['loop']
         else:
@@ -586,9 +614,15 @@ class SaphanasrTest:
         fatal = False
         self.__min_failed_role_counter__ = 1000
         self.__max_failed_role_counter__ = 0
+        step_loops = [ ]
         while loops < max_loops:
             self.__failed_role_counter__ = 0
             loops = loops + 1
+            date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            step_loop = { loops: {'time': date_time} }
+            step_loops.append(step_loop)
+            list_of_failures = []
+            step_loop.update({'failures': list_of_failures})
             if self.config['dump_failures']:
                 print(".", end='', flush=True)
             process_result = -1
@@ -603,25 +637,37 @@ class SaphanasrTest:
                     fatal = True
                     break
             process_result = max (
-                                  self.process_topology_object(step, 'global', 'Global'),
-                                  self.process_topology_object(step, 'pSite', 'Site'),
-                                  self.process_topology_object(step, 'sSite', 'Site'),
-                                  self.process_topology_object(step, 'pHost', 'Host'),
-                                  self.process_topology_object(step, 'sHost', 'Host'),
-                                  self.process_topology_object(step, 'pWorker', 'Host'),
-                                  self.process_topology_object(step, 'sWorker', 'Host'),
+                                  self.process_topology_object(step, 'global', 'Global', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'pSite', 'Site', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'sSite', 'Site', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'pHost', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'sHost', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'pWorker', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'sWorker', 'Host', list_of_failures=list_of_failures),
                                  )
             if process_result == 0:
                 break
             self.__min_failed_role_counter__ = min(self.__min_failed_role_counter__, self.__failed_role_counter__)
             self.__max_failed_role_counter__ = max(self.__max_failed_role_counter__, self.__failed_role_counter__)
             self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})", stdout=False)
+            
             time.sleep(wait)
+        if self.__min_failed_role_counter__ == 1000:
+            self.__min_failed_role_counter__ = 0
+        step_result.update({'loops_needed': loops, 'loops_allowed': max_loops, 'min_fail': self.__min_failed_role_counter__, 'max_fail': self.__max_failed_role_counter__})
+        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        step_result.update({ 'end_time': date_time })
         if self.config['dump_failures'] and fatal is False:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
             self.action(step_action)
+            step_result.update({ 'status': 'passed' })
+            step_result.update({ 'action': step_action })
+        else:
+            step_result.update({ 'status': 'failed' })
+            step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
+        # self.result.update({step_id: step_result})
         return process_result
 
     def process_steps(self):
