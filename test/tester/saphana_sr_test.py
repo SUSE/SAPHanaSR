@@ -72,6 +72,7 @@ class SaphanasrTest:
                         'defaults_file': None,
                         'properties_file': "properties.json",
                         'log_file': "",
+                        'jsonOut': None,
                         'repeat': 1,
                         'dump_failures': False,
                         'remote_node': None,
@@ -369,12 +370,12 @@ class SaphanasrTest:
         # also fill the failures list, if given
         #
         if type(list_of_failures) == type([]):
-            print(f"DBG: __add_failed__ list_of_failures.append()")
+            #print(f"DBG: __add_failed__ list_of_failures.append()")
             list_of_failures.append({'area': _area, 'object_name': _obj, 'expect': {'var': _key, 'expr': _reg, 'comp': _comp }, 'have': {'var': _key, 'val': _val} })
         _l_failed += f'{_l_header} expect "{_key} {_comp} {_reg}", have "{_val}"; '
         self.run['failed'] = _l_failed
         self.debug("DEBUG: add-failed: " + self.__get_failed__(), stdout=False)
-        print(f"DBG: __add_failed__ list_of_failures={list_of_failures}")
+        #print(f"DBG: __add_failed__ list_of_failures={list_of_failures}")
 
     def __reset_failed__(self):
         """ deletes failed from the run dictionary """
