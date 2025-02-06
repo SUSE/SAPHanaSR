@@ -14,7 +14,7 @@
  saphana_sr_tools.py
  Author:       Fabian Herschel, May 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023 SUSE LLC
+ Copyright:    (c) 2023-2025 SUSE LLC
 
 # TODO: STEP01: SID-autodetection - get SID from query for SAPHanaController/SAPHanaTopologyResource - warn, if there are no or more than one SIDs found.
 # TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
@@ -56,7 +56,8 @@ def shorten(column_name, **kargs):
     """ shortens column name
         optinal parameter: sid=<sid> to be more precise in the pattern
         e.g. (1) hana_ha1_site -> site                ( a node attribute)
-             (2) hana_ha1_site_mns_S1 -> mns          ( a site attribute )
+             (2a) hana_ha1_site_mns_S1 -> mns          ( a site attribute )
+             (2b) hana_ha1_site_mns_S_1 -> mns          ( a site attribute, site-name with undersore )
              (3) hana_ha1_global_topology -> topology ( a global attribute )
              (4) master-rsc_SAPHanaCon_HA1_HDB10 -> score
     # TODO: Do we need to check, if the master-attribute belongs to the promotable clone for this SID?
@@ -69,7 +70,7 @@ def shorten(column_name, **kargs):
     match_obj = re.search(f"hana_{sid}_glob_(.*)", column_name)    # (3)
     if match_obj is not None:
         column_name = match_obj.group(1)
-    match_obj = re.search(f"hana_{sid}_site_(.*)_", column_name)   # (2)
+    match_obj = re.search(f"hana_{sid}_site_([^_]*)_", column_name)   # (2)
     if match_obj is not None:
         column_name = match_obj.group(1)
     match_obj = re.search(f"hana_{sid}_(.*)", column_name)         # (1)
@@ -366,7 +367,7 @@ class HanaStatus():
         return_site_name = False
         if 'return_site_name' in kargs:
             return_site_name = kargs['return_site_name']
-        match_obj = re.search("hana_..._site_.*_(.*)", column_name)
+        match_obj = re.search("hana_..._site_[^_]*_(.*)", column_name)
         if match_obj:
             if return_site_name:
                 return match_obj.group(1)
