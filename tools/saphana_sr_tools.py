@@ -350,6 +350,8 @@ class HanaStatus():
         host_status_obj_all = self.root.findall(f"./status/node_state[@uname='{hostname}']")
         if len(host_status_obj_all) > 0:
             host_status_obj = host_status_obj_all[0]
+            hostcrmd = host_status_obj.attrib['crmd']
+            node_table.update({'crmd': hostcrmd})
             for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
                 name = nv.attrib['name']
                 value = nv.attrib["value"]
