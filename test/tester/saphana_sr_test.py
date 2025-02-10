@@ -765,28 +765,28 @@ class SaphanasrTest:
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
         elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
-            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
-            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_worker_indexserver":
             remote = self.topolo['pWorker']
-            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
-            cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_xsengine":
             remote = self.topolo['pHost']
-            cmd = "pkill -f -u {}adm --signal 15 hdbxsengine".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_secn_xsengine":
             remote = self.topolo['sHost']
-            cmd = "pkill -f -u {}adm --signal 15 hdbxsengine".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_prim_nameserver":
             remote = self.topolo['pHost']
-            cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
         elif action_name == "kill_secn_nameserver":
             remote = self.topolo['sHost']
-            cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
