@@ -17,7 +17,7 @@ import json
 import argparse
 import random
 
-# Version: 1.4.20250202
+# Version: 1.4.20250210
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.4.20250202"
+    version = "1.4.20250210"
 
     def message(self, msg, **kwargs):
         """
@@ -775,6 +775,12 @@ class SaphanasrTest:
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
             cmd = "pkill -f -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+        elif action_name == "kill_prim_xsengine":
+            remote = self.topolo['pHost']
+            cmd = "pkill -f -u {}adm --signal 15 hdbxsengine".format(test_sid.lower())
+        elif action_name == "kill_secn_xsengine":
+            remote = self.topolo['sHost']
+            cmd = "pkill -f -u {}adm --signal 15 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_prim_nameserver":
             remote = self.topolo['pHost']
             cmd = "pkill -f -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
@@ -848,7 +854,7 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "bmt"):
+        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "kill_prim_xsengine", "kill_secn_xsengine", "bmt"):
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
