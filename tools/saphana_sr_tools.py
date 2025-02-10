@@ -138,6 +138,12 @@ class HanaCluster():
                                     'site': [],
                                     'host': ['site'],
                                 },
+                    'cmdline': {
+                                    'global': [],
+                                    'resource': [],
+                                    'site': [],
+                                    'host': [],
+                                },
                 }
 
     def __init__(self):
@@ -179,6 +185,29 @@ class HanaCluster():
                 else:
                     print(f"properties in file {self.config['properties_file']} do not set 'selections'")
 
+    def set_selections(self):
+        """
+        set_selections - experimental only - might be  changed or deleted without notice
+        the selections hash for key 'cmdline' will be overwritten by the config sheme in self.config['show_attributes']
+        show_attributes should look like: 'global:attrG1,... resource:attrR1,... site:attrS1,... host:attrH1,...'
+        """
+        show_attributes = self.config.get('show_attributes', None)
+        if show_attributes:
+            show_attributes_list = show_attributes.split(' ') # areas are separated by a single blank
+            for area_and_attributes in show_attributes_list:
+                try:
+                    (area_name, attributes) = area_and_attributes.split(':')   # e.g. global:AttributeList
+                    attributes_list = attributes.split(',')   # attribute names are separated by comma (',')
+                    if area_name == 'global':
+                        attributes_list.append('Global')
+                    selections['cmdline'].update({area_name: attributes_list})
+                except Exception:
+                    print(f"show_attributes not formatted correctly ({area_and_attributes})")
+                    sys.exit(2)
+            print(json.dumps(selections['cmdline']))
+        else:
+            print("show_attributes not found")
+            sys.exit(2)
 
 class HanaStatus():
     """
