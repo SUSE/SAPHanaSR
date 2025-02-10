@@ -464,6 +464,7 @@ class HanaStatus():
         # print headline
         #
         bar_len = 0
+        new_line = 0
         for col in column_names:
             if self.filter(area, col) is True:
                 if col in column_length:
@@ -471,13 +472,16 @@ class HanaStatus():
                 else:
                     col_len = 1
                 print("{0:<{width}} ".format(shorten(col), width=col_len), end='')
+                new_line = 1
                 bar_len += col_len + 1
-        print()
-        print('-' * bar_len)
+        if new_line:
+            print()
+            print('-' * bar_len)
         #
         # print rows
         #
         for key in print_dic:
+            new_line = 0
             for col in column_names[0:]:
                 if self.filter(area, col) is True:
                     if col in column_length:
@@ -491,8 +495,11 @@ class HanaStatus():
                     else:
                         value = ""
                     print("{0:<{width}} ".format(value, width=col_len), end='')
+                    new_line = 1
+            if new_line:
+                print()
+        if new_line:
             print()
-        print()
 
     def print_dic_as_table_sort_by(self, dic, index, index_type, index_reverse, area, table_name):
         """
