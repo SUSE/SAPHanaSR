@@ -7,9 +7,10 @@
  SAPHanaSR-testCluster
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023,2024 SUSE LLC
+ Copyright:    (c) 2023-2025 SUSE LLC
 """
 
+# Version: 1.4.20250202
 # pylint: disable=unused-import
 import time
 import re
@@ -26,6 +27,7 @@ from saphana_sr_test import SaphanasrTest
 
 # TODO: impement test sequences instead of "only" repeating the same test
 test01 = SaphanasrTest(cmdparse=False)
+test01.start_time = time.time()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--testFile", help="specify the test file")
@@ -38,6 +40,7 @@ parser.add_argument("--repeat", help="how often to repeat the test")
 parser.add_argument("--dumpFailures", help="print failed checks per loop",
                     action="store_true")
 parser.add_argument("--logFile", help="log file to write the messages")
+parser.add_argument("--jsonOut", help="json file to write detailled test results")
 parser.add_argument("--printTestProperties", help="print test properties and exit",
                     action="store_true")
 parser.add_argument("--debug", help="output and log debug messages", action="store_true")
@@ -73,6 +76,9 @@ if args.logFile:
     # disable 'consider to use with ...' - I am pretty sure with does not match here
     # pylint: disable-next=R1732
     test01.run['log_file_handle'] = open(test01.config['log_file'], 'a', encoding="utf-8")
+    test01.config['jsonOut'] = args.jsonOut
+if args.jsonOut:
+    test01.message("PARAM: jsonOut: {}".format(args.jsonOut))
 if args.printTestProperties:
     test01.config['printTestProperties'] = args.printTestProperties
     test01.message(f"PARAM: printTestProperties: {test01.config['printTestProperties']}")
@@ -191,12 +197,21 @@ while test01.run['count'] <= test01.config['repeat']:
     my_test_id = test01.run['test_id']
     test01.message("TEST: {} testNr={} CALLED ######".format(my_test_id, test01.run['count']))
     test01.run['test_rc'] = test01.process_test()
+    test01.end_time = time.time()
+    test01.result.update({'runtime': int(test01.end_time - test01.start_time)})
     MSG_TEMPL = "TEST: {} testNr={} testRc={} {} successfully {} ######"
     if test01.run['test_rc'] == 0:
         test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'PASSED',':)'))
+        test01.result.update({'status': 'passed'})
     else:
         test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'FAILED',';)'))
+        test01.result.update({'status': 'failed'})
     test01.run['count'] += 1
+    #print(json.dumps(test01.result, indent=4))
+    if test01.config['jsonOut']:
+        with open(test01.config['jsonOut'], "w", encoding="utf-8") as json_status:
+            json_status.write(json.dumps(test01.result, indent=4))
+            json_status.flush()
 if  test01.run['log_file_handle']:
     test01.run['log_file_handle'].close()
 if test01.run['test_rc'] == 0:

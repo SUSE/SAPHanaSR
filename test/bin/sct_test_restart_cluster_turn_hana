@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sct_test_restart_cluster_turn_hana -
+# sct_test_restart_cluster_turn_hana
 #
 # - cleanup mst-resource
 # - stop cluster (including SAP HANA)
@@ -19,7 +19,7 @@ source .test_properties
 
 # shellcheck disable=SC2029
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resource"
-ssh "${node01}" "crm resource cleanup  $mstResource"
+ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 
 currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
@@ -28,7 +28,6 @@ currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" |
 # VHOSTS
 # get vhosts fom node names
 # SAPHanaSR-showAttr --format=tester | grep pizbuin02.*vhost
-#
 #########################################
 
 vhostPrim="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
@@ -109,6 +108,7 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currPrima
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 ssh "$node01" "crm cluster start --all"
 sleep 30
-ssh "$node01" "crm cluster wait_for_startup 60"
+ssh "$node01" "crm cluster wait_for_startup 60; cs_wait_for_idle -s 10"
 
 echo "==== SUSE Cluster Started ===="
+#

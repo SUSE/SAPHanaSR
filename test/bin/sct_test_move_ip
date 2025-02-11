@@ -1,18 +1,21 @@
 #!/usr/bin/bash
 #
+# sct_test_move_ip
+#
 src=${BASH_SOURCE[0]}
-full_path=$(readlink -f  "$src")
+full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source .test_properties
+
 currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 
 if [[ -n "$rscIPResource" ]]; then
-    echo "==== moce ip address ===="
-    ssh "$currPrimary" "crm resource move $rscIPResource force"
+    echo "==== Move ip address ===="
+    ssh "$currPrimary" "crm resource move $rscIPResource force; cs_wait_for_idle -s 2"
     sleep 10
     ssh "$currPrimary" "crm resource clear $rscIPResource"
 else
     echo "rscIPResource not set in properties file"
     exit 2
 fi
- 
+# 

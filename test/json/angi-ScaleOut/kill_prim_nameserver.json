@@ -7,7 +7,8 @@
         "primary",
         "kill",
         "hana",
-        "master"
+        "master",
+        "takeover"
     ],
     "start": "prereq10",
     "steps": [
@@ -17,11 +18,13 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "kill_secn_nameserver",
+            "post": "kill_prim_nameserver",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
-            "sHost": "sHostUp"
+            "sHost": "sHostUp",
+            "pHost": "pWorkerUp",
+            "sHost": "sWorkerUp"
         },
         {
             "step": "step20",
@@ -31,7 +34,7 @@
             "wait": 2,
             "pSite": [
                 "lpt > 1000000000",
-                "lss == 2",
+                "lss ~ (2|4)",
                 "srr == P",
                 "srHook == PRIM",
                 "srPoll == PRIM"
@@ -41,7 +44,7 @@
                 "lpt ~ (10|30)",
                 "lss == 4",
                 "srr == S",
-                "srHook ~ (SFAIL|SOK)"
+                "srHook == SFAIL"
             ],
             "pHost": [
                 "clone_state == PROMOTED",
@@ -61,10 +64,12 @@
             "loop": 120,
             "wait": 2,
             "post": "cleanup",
-            "pSite": "pSiteUp",
-            "sSite": "sSiteUp",
-            "pHost": "pHostUp",
-            "sHost": "sHostUp"
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pHost": "sWorkerUp",
+            "sHost": "pWorkerUp"
         }
     ]
 }

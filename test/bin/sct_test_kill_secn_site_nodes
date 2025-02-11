@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# sct_test_kill_secn_site_nodes - kill all nodes of secondary site
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+# shellcheck disable=SC2029
+ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
+
+currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+currSecWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
+
+echo "==== Kill secondary site node ${currSecondary} ===="
+# shellcheck disable=SC2029
+ssh "${currSecondary}" "systemctl reboot --force" &
+echo "==== Kill secondary site node ${currSecWorker} ===="
+ssh "${currSecWorker}" "systemctl reboot --force" &
+#

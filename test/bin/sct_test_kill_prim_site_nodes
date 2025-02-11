@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# sct_test_prim_site_nodes - kill all nodes of primary site
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+
+# shellcheck disable=SC2029
+ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
+
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPriWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
+
+echo "==== Kill primary site node ${currPrimary} ===="
+# shellcheck disable=SC2029
+ssh "${currPrimary}" "systemctl reboot --force" &
+echo "==== Kill primary site node ${currPriWorker} ===="
+ssh "${currPriWorker}" "systemctl reboot --force"
+#
