@@ -1918,40 +1918,48 @@ function saphana_promote_clone() {
                 case "$hana_sync" in
                     SOK )
                         if is_the_master_nameserver; then
-                            super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."
-                            LPTloc=$(date '+%s')
-                            # TODO PRIO1: NG - check if we need to set remSite to 20
-                            # lpa_set_lpt 20 $remoteNode
-                            lpa_set_lpt "$LPTloc" "$gSite"
-                            lpa_push_lpt "$LPTloc"
-                            backup_global_and_nameserver
-                            set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
-                            # TODO PRIO5: 145 should not be static but come from the scoring table
-                            set_crm_promote 145
-                            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
-                            set_SRHOOK "$gSite" "PRIM"
-                            super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
-                            # set SRACTION to "T"; also set SRACTION_HISTORY
-                            set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
-                            set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
-                            #
-                            # SAP HANA takeover
-                            #
-                            tkMessage=$(HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"); srt_rc=$?
-                            super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
-                            if [[ "$srt_rc" != 0 ]]; then
-                                # TODO PRIO2: NG handle errors of the new takeover
-                                super_ocf_log error "ACT: SAP HANA TAKEOVER FAILED. $tkMessage"
-                                echo "$tkMessage"
-                                if grep 'rc=50277' < <(echo "$tkMessage"); then
-                                    super_ocf_log error "ACT: SAP HANA TAKEOVER BLOCKED. Most likely misconfigured takeover blocker hook script. Check sudoers and global.ini."
+                            # first test, if we are in attribute loss situation (node is still member) but score is gone
+                            remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
+                            crm_node --list | grep -q "$remoteHanaHost member"; still_member=$?
+                            remote_score=$("$CRM_PROMO" -N "$remoteHanaHost" -Gq "$CRM_PROMO_PARAMS")
+                            if [[ "$still_member" == "0" && "$remote_score" == "" ]]; then
+                                super_ocf_log info "ACT: SAP HANA TAKEOVER DECLINED: - Remote score missing but node is member"
+                            else
+                                super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."
+                                LPTloc=$(date '+%s')
+                                # TODO PRIO1: NG - check if we need to set remSite to 20
+                                # lpa_set_lpt 20 $remoteNode
+                                lpa_set_lpt "$LPTloc" "$gSite"
+                                lpa_push_lpt "$LPTloc"
+                                backup_global_and_nameserver
+                                set_hana_attribute "$NODENAME" "$gSite" "${ATTR_NAME_HANA_PRIM[@]}"
+                                # TODO PRIO5: 145 should not be static but come from the scoring table
+                                set_crm_promote 145
+                                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SEC[@]}"
+                                set_SRHOOK "$gSite" "PRIM"
+                                super_ocf_log info "ACT: SAP HANA TAKEOVER: SET MARK"
+                                # set SRACTION to "T"; also set SRACTION_HISTORY
+                                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION[@]}"
+                                set_hana_attribute "$NODENAME" "T" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                                #
+                                # SAP HANA takeover
+                                #
+                                tkMessage=$(HANA_CALL --timeout inf --use-su --cmd "hdbnsutil -sr_takeover"); srt_rc=$?
+                                super_ocf_log info "ACT: SAP HANA TAKEOVER: srt_rc=$srt_rc"
+                                if [[ "$srt_rc" != 0 ]]; then
+                                    # TODO PRIO2: NG handle errors of the new takeover
+                                    super_ocf_log error "ACT: SAP HANA TAKEOVER FAILED. $tkMessage"
+                                    echo "$tkMessage"
+                                    if grep 'rc=50277' < <(echo "$tkMessage"); then
+                                        super_ocf_log error "ACT: SAP HANA TAKEOVER BLOCKED. Most likely misconfigured takeover blocker hook script. Check sudoers and global.ini."
+                                    fi
+                                    set_hana_attribute "$NODENAME" "F" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
                                 fi
-                                set_hana_attribute "$NODENAME" "F" "${ATTR_NAME_HANA_SRACTION_HISTORY[@]}"
+                                # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
+                                set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
+                                super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
+                                backup_global_and_nameserver
                             fi
-                            # set SRACTION to "-"; keep SRACTION_HISTORY for next monitor
-                            set_hana_attribute "$NODENAME" "-" "${ATTR_NAME_HANA_SRACTION[@]}"
-                            super_ocf_log info "ACT: SAP HANA TAKEOVER: REMOVE MARK"
-                            backup_global_and_nameserver
                         fi
                         # check: SAP HANA is now PRIMARY? 
                         # TODO: PRIO3: check, if we need to differ between HANA_STATE_PRIMARY, HANA_STATE_SECONDARY, HANA_STATE_DEFECT
