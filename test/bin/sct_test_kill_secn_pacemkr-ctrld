@@ -10,7 +10,8 @@ source .test_properties
 currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 echo "==== Kill pacemaker-controld ===="
-
 # TODO signal 9 ?
-ssh "$currSecondary" 'pgrep -u hacluster -f pacemaker-controld; pkill -u hacluster -f pacemaker-controld -11; sleep 10; pgrep -u hacluster -f pacemaker-controld'
+ssh "$currSecondary" 'pgrep -u hacluster -f pacemaker-controld; pkill -u hacluster -f pacemaker-controld -11 & exit'
+sleep 10
+ssh -o ConnectTimeout=5 "$currSecondary" 'pgrep -u hacluster -f pacemaker-controld'
 #
