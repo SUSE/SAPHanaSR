@@ -30,15 +30,14 @@
             "step": "step20",
             "name": "failure detected + smaster fenced",
             "next": "step30",
-            "loop": 120,
+            "loop": 90,
             "wait": 2,
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "pWorker": "pWorkerUp",
             "sSite": [
-                "srHook ~ (SFAIL|SOK)",
-                "lpt == 30",
-                "srr is None"
+                "srHook == SFAIL",
+                "srr == S"
             ],
             "sHost": [
                 "clone_state is None",
@@ -48,22 +47,29 @@
         },
         {
             "step": "step30",
-            "name": "sworker fenced",
-            "next": "step40",
-            "loop": 240,
+            "name": "sworker stopped",
+            "next": "step50",
+            "loop": 180,
             "wait": 2,
+            "global": "sync_state_sfail",
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "pWorker": "pWorkerUp",
             "sSite": [
+                "srHook == SFAIL",
                 "lpt == 10",
-                "lss == 1",
-                "srHook == SFAIL"
+                "lss ~ (1|2)",
+                "srr == S"
+            ],
+            "sHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score == 0"
             ],
             "sWorker": [
-                "clone_state is None",
-                "role is None",
-                "score is None"
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "role == slave::worker:",
+                "score ~ (-INFINITY|-12200)"
             ]
         },
         {
@@ -72,14 +78,14 @@
             "next": "final50",
             "loop": 180,
             "wait": 2,
+            "global": "sync_state_sfail",
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "pWorker": "pWorkerUp",
             "sSite": [
                 "srHook ~ (SFAIL|SWAIT|SOK)",
                 "lpt == 10",
-                "srPoll ~ (SFAIL|SWAIT|SOK)",
-                "lss == 1",
+                "lss ~ (2|4)",
                 "srr == S"
             ],
             "sHost": [
@@ -90,11 +96,11 @@
             "sWorker": [
                 "clone_state ~ (UNDEFINED|DEMOTED)",
                 "roles == slave::worker:",
-                "score ~ (-INFINITY|0)"
+                "score ~ (-INFINITY|-22200)"
             ]
         },
         {
-            "step": "final50",
+            "step": "final40",
             "name": "end recover",
             "next": "END",
             "loop": 150,
