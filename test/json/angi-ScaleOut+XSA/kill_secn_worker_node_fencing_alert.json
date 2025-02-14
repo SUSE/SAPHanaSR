@@ -1,0 +1,110 @@
+{
+    "test": "kill_secn_worker_node_fencing_alert",
+    "name": "Kill secondary worker node with fencing alert agent",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "kill",
+        "secondary",
+        "node",
+        "worker",
+        "alert",
+        "fencing"  
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_secn_worker_node",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "sworker fenced + failure detected",
+            "next": "step30",
+            "loop": 240,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "srr == S",
+                "srHook == SFAIL"
+            ],
+            "sWorker": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "smaster fenced",
+            "next": "step40",
+            "loop": 240,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SFAIL"
+            ],
+            "sMaster": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "begin recover",
+            "next": "final50",
+            "loop": 300,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook ~ (SFAIL|SWAIT)"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:"
+            ],
+            "sWorker": [
+                "clone_state == DEMOTED",
+                "roles == slave::worker:"
+            ]
+        },
+        {
+            "step": "final50",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        }
+    ]
+}
