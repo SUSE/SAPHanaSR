@@ -1,0 +1,100 @@
+{
+    "test": "split_brain_prio",
+    "name": "split brain with prio fencing to simulate fence of secondary",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "XSA",
+        "split-brain",
+        "primary",
+        "secondary",
+        "cluster",
+        "network",
+        "hana",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "simulate_split_brain",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pSite": [
+                "lss == 4",
+                "srr == P",
+                "lpt > 1000000000",
+                "srHook == PRIM",
+                "srPoll == PRIM"
+            ],
+            "sSite": [
+                "lpt == 10",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ],
+            "pHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score == 150"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 150,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": [
+                "lss == 4",
+                "srr == P",
+                "lpt > 1000000000",
+                "srHook == PRIM",
+                "srPoll == PRIM"
+            ],
+            "sSite": [
+                "lpt == 10",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook ~ (SFAIL|SWAIT)",
+                "srPoll ~ (SFAIL|SOK)"
+            ],
+            "pHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score == 150"
+            ],
+            "sHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0|-1)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        }
+    ]
+}
