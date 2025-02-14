@@ -82,7 +82,7 @@ class SaphanasrTest:
                         'debug': False,
                         'password': None
                       }
-        self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'steps': {} }
+        self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -937,6 +937,7 @@ if __name__ == "__main__":
                     f" pHost={l_top['pHost']}"
                     f" sHost={l_top['sHost']}"
                 )
+        test01.result.update({'topology': l_top, 'testtag': 'test25' })
         test01.message(l_msg)
         test01.read_test_file()
         my_test_id = test01.run['test_id']
