@@ -82,7 +82,7 @@ class SaphanasrTest:
                         'debug': False,
                         'password': None
                       }
-        self.result = { 'test_id': self.run['r_id'], 'config': self.config }
+        self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'steps': {} }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -588,7 +588,9 @@ class SaphanasrTest:
         step_next = step['next']
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         step_result = { 'start_time': date_time }
-        self.result.update({step_id: step_result})
+        steps_result_dict = self.result.get('steps', {})
+        steps_result_dict.update({step_id: step_result})
+        self.result.update({'steps': steps_result_dict})
         # self.result.update({ step_id: { 'name': step_name, 'next': step_next, 'status': 'running' } } )
         step_result.update({ 'name': step_name, 'next': step_next, 'status': 'running' })
         if 'loop' in step:
