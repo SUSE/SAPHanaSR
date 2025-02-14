@@ -1,0 +1,87 @@
+{
+    "test": "kill_prim_indexserver_fencing",
+    "name": "Kill primary indexserver with on-fail fencing",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "primary",
+        "kill",
+        "hana",
+        "hadr",
+        "susChkSrv",
+        "fencing",
+        "takeover"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_prim_indexserver",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected + primary fenced",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pHost": [
+                "clone_state is None",
+                "role is None",
+                "score is None"
+            ],
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step30",
+            "name": "takeover on secondary",
+            "next": "step40",
+            "loop": 240,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp"
+        },
+        {
+            "step": "step40",
+            "name": "begin recover new secondary",
+            "next": "final50",
+            "loop": 120,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll == SFAIL"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (0|90|70|5)"
+            ],
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp"
+        },
+        {
+            "step": "final50",
+            "name": "end recover",
+            "next": "END",
+            "loop": 240,
+            "wait": 2,
+            "post": "cleanup",
+            "remark": "pXXX and sXXX are now exchanged",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp"
+        }
+    ]
+}
