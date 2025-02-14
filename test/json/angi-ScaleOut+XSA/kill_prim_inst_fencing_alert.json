@@ -1,0 +1,103 @@
+{
+    "test": "kill_prim_inst_fencing_alert",
+    "name": "Kill primary master instance with fencing alert agent",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "kill",
+        "instance",
+        "primary",
+        "master",
+        "alert",
+        "fencing",
+        "takeover"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step30",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_prim_inst",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step30",
+            "name": "failure detected + pmaster fenced",
+            "next": "step40",
+            "loop": 240,
+            "wait": 2,
+            "pHost": [
+                "clone_state is None",
+                "role is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "pworker fenced",
+            "next": "step50",
+            "loop": 240,
+            "wait": 2,
+            "pWorker": [
+                "clone_state is None",
+                "role is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step50",
+            "name": "begin recover new secondary",
+            "next": "final60",
+            "loop": 300,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll == SFAIL"
+            ],
+            "sSite": [
+                "lpt > 1000000000",
+                "lss == 4",
+                "srr == P",
+                "srHook == PRIM",
+                "srPoll == PRIM"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (0|90|70|5)"
+            ],
+            "sHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score == 150"
+            ]
+        },
+        {
+            "step": "final60",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "remark": "pXXX and sXXX are now exchanged",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        }
+    ]
+}
