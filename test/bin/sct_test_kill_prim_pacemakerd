@@ -3,13 +3,15 @@
 # sct_test_kill_prim_pacemakerd - kill pacemakerd on primary node
 #
 src=${BASH_SOURCE[0]}
-full_path=$(readlink -f  "$src")
+full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source .test_properties
 
 currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 
 echo "==== Kill pacemakerd ===="
-# TODO killall -11 ?
-ssh "$currPrimary" 'killall -9 pacemakerd'
+# TODO signal 9 ?
+ssh "$currPrimary" 'pgrep -u root pacemakerd; pkill -u root pacemakerd -11 & exit'
+sleep 10
+ssh -o ConnectTimeout=5 "$currPrimary" 'pgrep -u root pacemakerd'
 #

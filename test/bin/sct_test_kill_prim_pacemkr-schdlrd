@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# sct_test_kill_prim_pacemkr-schdlrd - kill pacemaker-schedulerd on primary node
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+
+echo "==== Kill pacemaker-schedulerd ===="
+# TODO signal 9 ?
+ssh "$currPrimary" 'pgrep -u hacluster -f pacemaker-schedulerd; pkill -u hacluster -f pacemaker-schedulerd -11 & exit'
+sleep 10
+ssh -o ConnectTimeout=5 "$currPrimary" 'pgrep -u hacluster -f pacemaker-schedulerd'
+#

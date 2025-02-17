@@ -179,24 +179,25 @@ function get_crm_promote() {
 function set_crm_promote() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
-    local rc=0 score=0 node=""
+    local rc=0 score=0 node_name="" node_opt=""
     if [ -n "$1" ]; then
         score=$1
     fi
     if [ -n "$2" ]; then
-        node="-N $2"
+        node_name="$2"
+        node_opt="-N"
     fi
     # shellcheck disable=SC2154
     ocf_version_cmp "3.9.0" "$OCF_RESKEY_crm_feature_set"
     # DONE: PRIO2: Only adjust master if value is really different (try to check that)
-    oldscore=$("${HA_SBIN_DIR}/$CRM_PROMO" "$node" -G -q "$CRM_PROMO_PARAMS" )
+    oldscore=$("${HA_SBIN_DIR}/$CRM_PROMO" "$node_opt" "$node_name" -G -q "$CRM_PROMO_PARAMS" )
     if [ "$oldscore" != "$score" ]; then
        dstr=$(date)
        if ocf_is_true "$log_attributes"; then
-           echo "$dstr: SAPHanaController: $CRM_PROMO $node -v $score $CRM_PROMO_PARAMS" >> "$log_attr_file"
+           echo "$dstr: SAPHanaController: $CRM_PROMO $node_opt $node_name -v $score $CRM_PROMO_PARAMS" >> "$log_attr_file"
        fi
-       super_ocf_log debug "DBG: SET crm promo: $node $score (old: $oldscore)"
-       "${HA_SBIN_DIR}/$CRM_PROMO" "$node" -v "$score" "$CRM_PROMO_PARAMS" ; rc="$?"
+       super_ocf_log debug "DBG: SET crm promo: $node_opt $node_name $score (old: $oldscore)"
+       "${HA_SBIN_DIR}/$CRM_PROMO" "$node_opt" "$node_name" -v "$score" "$CRM_PROMO_PARAMS" ; rc="$?"
     else
        super_ocf_log debug "DBG: LET crm promo: $score"
        rc=0

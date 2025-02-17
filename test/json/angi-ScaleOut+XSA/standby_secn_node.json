@@ -1,0 +1,91 @@
+{
+    "test": "standby_secn_node",
+    "name": "standby secondary master node (and online again)",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "standby",
+        "maintenance",
+        "secondary",
+        "node",
+        "master"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "ssn",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "node is standby",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "post": "osn",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ],
+            "sHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score == 100",
+                "standby == on"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "node back online",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == SFAIL"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pWorker": "pWorkerUp"
+        }
+    ]
+}

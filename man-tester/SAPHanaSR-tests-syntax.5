@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR-tests-syntax 5 "19 Nov 2024" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-syntax 5 "10 Jan 2025" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 SAPHanaSR-tests-syntax \- Syntax for SAPHanaSR test cases and properties.
@@ -89,13 +89,19 @@ alert
 test alert agent
 .TP
 angi
-SAPHanaSR-angi
+SAPHanaSR-angi, scale-up or scale-out
+.TP
+block
+block something, for testing a failure
 .TP
 classic
 SAPHanaSR or SAPHanaSR-ScaleOut
 .TP
 cluster
 test cluster failure
+.TP
+degraded
+test leads to degraded HANA (lss=2), HANA recovers on its own
 .TP
 fencing
 test leads to node fencing
@@ -124,8 +130,8 @@ test node failure
 primary
 test failure at primary site
 .TP
-protective
-configuration variant "protective"
+progressive
+configuration variant "progressive"
 .TP
 ScaleOut
 scale-out topology
@@ -144,6 +150,15 @@ test split-brain
 .TP
 storage
 test storage or IO stack failure
+.TP
+susChkSrv
+test susChkSrv.py HA/DR provider hook script
+.TP
+susHanaSR
+test susHanaSR.py HA/DR provider hook script
+.TP
+susTkOver
+test susTkOver.py HA/DR provider hook script
 .TP
 worker
 test on HANA worker node
@@ -175,6 +190,15 @@ both sites are up and in sync
 .TP
 globalDown
 not yet implemented
+.TP
+sync_state_sfail
+Global attribute sync_state is "SFAIL" (classic scale-out)
+.TP
+sync_state_sok_or_sfail
+Global attribute sync_state is "SOK" or "SFAIL" (classic scale-out)
+.TP
+sync_state_sok
+Global attribute sync_state is "SOK" (classic scale-out)
 .TP
 pHostUp
 host p (expected to be primary before the test starts) is up (scale-out: expected primary master node)
@@ -280,29 +304,32 @@ block manual takeover
 cleanup
 cleanup Linux cluster resource failure
 .TP
-kill_prim_worker_node
-kill pirmary worker node (scale-out)
-.TP
 kill_prim_node
-kill pirmary node (scale-out: primary master node)
-.TP
-kill_secn_worker_node
-kill secondary worker node (scale-out)
+kill primary node (scale-out: primary master node)
 .TP
 kill_secn_node
 kill secondary node (scale-out: secondary master node)
 .TP
-kill_prim_inst
-kill pirmary instance (scale-out: primary master instance)
+kill_prim_worker_node
+kill primary worker node (scale-out)
 .TP
-kill_prim_worker_inst
-kill worker pirmary instance (scale-out)
+kill_secn_worker_node
+kill secondary worker node (scale-out)
+.TP
+kill_prim_inst
+kill primary instance (scale-out: primary master instance)
 .TP
 kill_secn_inst
 kill secondary instance (scale-out: secondary master instance)
 .TP
+kill_prim_worker_inst
+kill worker primary instance (scale-out)
+.TP
 kill_secn_worker_inst
 kill worker secondary instance (scale-out)
+.TP
+kill_prim_indexserver
+kill primary indexserver (scale-out: primary master indexserver)
 .TP
 kill_secn_indexserver
 kill secondary indexserver (scale-out: secondary master indexserver)
@@ -313,11 +340,17 @@ kill primary worker indexserver (scale-out)
 kill_secn_worker_indexserver
 kill secondary worker indexserver (scale-out)
 .TP
+kill_prim_nameserver
+kill primary nameserver (scale-out: primary master nameserver)
+.TP
 kill_secn_nameserver
 kill secondary nameserver (scale-out: secondary master nameserver)
 .TP
-kill_prim_nameserver
-kill primary nameserver (scale-out: primary master nameserver)
+kill_prim_xsengine
+kill primary xsengine (scale-out: primary master xsengine)
+.TP
+kill_secn_xsengine
+kill secondary xsengine (scale-out: secondary master xsengine)
 .TP
 simulate_split_brain
 break corosync communcation
@@ -383,7 +416,8 @@ See also EXAMPLES section in manual page SAPHanaSR-tester(7).
 .PP
 \fB*\fP Test results
 .PP
-See manual page SAPHanaSR-testCluster(8) for TODO
+See manual pages SAPHanaSR-testCluster(8) and SAPHanaSR-testCluster-output(5)
+for information on output files and formats.
 .PP
 .\"
 .SH EXAMPLES
@@ -425,6 +459,9 @@ See the REQUIREMENTS section in SAPHanaSR-tester(7).
 .PP
 .\"
 .SH BUGS
+The SAPHanaSR-tester is under development. Syntax and formats are subject to
+change.
+.br
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
@@ -432,8 +469,10 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 \fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-testCluster-output\fP(5) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
-\fBSAPHanaSR-tests-classic-ScaleUp\fP(7) , \fBSAPHanaSR-tests-definition\fP(7) ,
+\fBSAPHanaSR-tests-classic-ScaleUp\fP(7) , \fBSAPHanaSR-tests-classic-ScaleOut\fP(7) ,
+\fBSAPHanaSR-tests-definition\fP(7) ,
 \fBSAPHanaSR-tests-definition_on-fail-fence\fP(7) , 
 \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-checkJson\fP(8) ,
 .br
@@ -449,7 +488,7 @@ F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-(c) 2023-2024 SUSE LLC
+(c) 2023-2025 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
 .br

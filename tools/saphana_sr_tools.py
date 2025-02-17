@@ -138,6 +138,12 @@ class HanaCluster():
                                     'site': [],
                                     'host': ['site'],
                                 },
+                    'cmdline': {
+                                    'global': [],
+                                    'resource': [],
+                                    'site': [],
+                                    'host': [],
+                                },
                 }
 
     def __init__(self):
@@ -179,6 +185,29 @@ class HanaCluster():
                 else:
                     print(f"properties in file {self.config['properties_file']} do not set 'selections'")
 
+    def set_selections(self):
+        """
+        set_selections - experimental only - might be  changed or deleted without notice
+        the selections hash for key 'cmdline' will be overwritten by the config sheme in self.config['show_attributes']
+        show_attributes should look like: 'global:attrG1,... resource:attrR1,... site:attrS1,... host:attrH1,...'
+        """
+        show_attributes = self.config.get('show_attributes', None)
+        if show_attributes:
+            show_attributes_list = show_attributes.split(' ') # areas are separated by a single blank
+            for area_and_attributes in show_attributes_list:
+                try:
+                    (area_name, attributes) = area_and_attributes.split(':')   # e.g. global:AttributeList
+                    attributes_list = attributes.split(',')   # attribute names are separated by comma (',')
+                    if area_name == 'global':
+                        attributes_list.append('Global')
+                    selections['cmdline'].update({area_name: attributes_list})
+                except Exception:
+                    print(f"show_attributes not formatted correctly ({area_and_attributes})")
+                    sys.exit(2)
+            print(json.dumps(selections['cmdline']))
+        else:
+            print("show_attributes not found")
+            sys.exit(2)
 
 class HanaStatus():
     """
@@ -350,6 +379,8 @@ class HanaStatus():
         host_status_obj_all = self.root.findall(f"./status/node_state[@uname='{hostname}']")
         if len(host_status_obj_all) > 0:
             host_status_obj = host_status_obj_all[0]
+            hostcrmd = host_status_obj.attrib['crmd']
+            node_table.update({'crmd': hostcrmd})
             for nv in host_status_obj.findall("./transient_attributes/instance_attributes/nvpair"):
                 name = nv.attrib['name']
                 value = nv.attrib["value"]
@@ -433,6 +464,7 @@ class HanaStatus():
         # print headline
         #
         bar_len = 0
+        new_line = 0
         for col in column_names:
             if self.filter(area, col) is True:
                 if col in column_length:
@@ -440,13 +472,16 @@ class HanaStatus():
                 else:
                     col_len = 1
                 print("{0:<{width}} ".format(shorten(col), width=col_len), end='')
+                new_line = 1
                 bar_len += col_len + 1
-        print()
-        print('-' * bar_len)
+        if new_line:
+            print()
+            print('-' * bar_len)
         #
         # print rows
         #
         for key in print_dic:
+            new_line = 0
             for col in column_names[0:]:
                 if self.filter(area, col) is True:
                     if col in column_length:
@@ -460,8 +495,11 @@ class HanaStatus():
                     else:
                         value = ""
                     print("{0:<{width}} ".format(value, width=col_len), end='')
+                    new_line = 1
+            if new_line:
+                print()
+        if new_line:
             print()
-        print()
 
     def print_dic_as_table_sort_by(self, dic, index, index_type, index_reverse, area, table_name):
         """

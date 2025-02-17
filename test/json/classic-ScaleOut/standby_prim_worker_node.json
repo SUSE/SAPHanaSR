@@ -1,0 +1,105 @@
+{
+    "test": "standby_prim_worker_node",
+    "name": "standby primary worker node (and online again)",
+    "purpose": [
+        "classic",
+        "ScaleOut",
+        "standby",
+        "maintenance",
+        "primary",
+        "node",
+        "worker",
+        "takeover"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "spn",
+            "global": "sync_state_sok",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "node is standby",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "global": "sync_state_sok",
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt > 1000000000",
+                "srHook == PRIM"
+            ],
+            "sSite": [
+                "lpt >~ 1000000000:(30)",
+                "lss == 4",
+                "srr == S",
+                "srHook ~ (PRIM|SOK)"
+            ],
+            "pHost": [
+            ],
+            "pWorker": [
+                "clone_state == UNDEFINED",
+                "roles == :::",
+                "score == -10000",
+                "standby == on"
+            ],
+            "sHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145)"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "takeover on secondary",
+            "next": "final40",
+            "loop": 120,
+            "post": "opn",
+            "wait": 2,
+            "global": "sync_state_sfail",
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt == 10",
+                "srHook == SWAIT"
+            ],
+            "pHost": [
+            ],
+            "pWorker": [
+                "clone_state == UNDEFINED",
+                "roles == :::",
+                "score == -10000"
+            ],
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "global": "sync_state_sok",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        }
+    ]
+}

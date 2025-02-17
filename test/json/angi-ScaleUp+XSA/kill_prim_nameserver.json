@@ -1,0 +1,71 @@
+{
+    "test": "kill_prim_nameserver",
+    "name": "Kill primary master nameserver",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "XSA",
+        "primary",
+        "kill",
+        "hana",
+        "takeover"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_prim_nameserver",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "final40",
+            "loop": 90,
+            "wait": 2,
+            "pSite": [
+                "lpt > 1000000000",
+                "lss ~ (4|2)",
+                "srr == P",
+                "srHook == PRIM",
+                "srPoll == PRIM"
+                
+            ],
+            "sSite": [
+                "lpt ~ (10|30)",
+                "lss == 4",
+                "srr == S",
+                "srHook == SFAIL"
+            ],
+            "pHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score == 150"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1:master:worker:master",
+                "score ~ (100|-INFINITY)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp"
+        }
+    ]
+}

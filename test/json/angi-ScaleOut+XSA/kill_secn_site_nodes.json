@@ -1,0 +1,120 @@
+{
+    "test": "kill_secn_site_nodes",
+    "name": "Kill all secondary site nodes",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "kill",
+        "secondary",
+        "node",
+        "site",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_secn_site_nodes",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp", 
+            "sSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|4)",
+                "srr == S",
+                "srHook ~ (SFAIL|SOK)",
+                "srPoll ~ (SFAIL|SOK)"
+           ],
+            "sHost": [
+                "roles is None",
+                "score is None",
+                "roles is None"
+            ],
+            "sWorker": [
+                "roles is None",
+                "score is None",
+                "roles is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "nodes back",
+            "next": "step40",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp", 
+            "sSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:"
+            ],
+            "sWorker": [
+                "clone_state == DEMOTED",
+                "roles == slave::worker:"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "begin recover",
+            "next": "final50",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "todo": "fix sSite, sHost, sWorker",
+            "sSite": [
+                "lpt == 10",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook ~ (SFAIL|SWAIT)",
+                "srPoll ~ (SFAIL|SOK)"
+            ],
+            "sHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0|-1)"
+            ]
+        },
+        {
+            "step": "final50",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "global": "sync_state_sok",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        }
+    ]
+}

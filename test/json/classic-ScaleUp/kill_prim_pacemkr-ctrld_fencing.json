@@ -1,0 +1,90 @@
+{
+    "test": "kill_prim_pacemkr-ctrld",
+    "name": "kill pacemaker-controld on primary node",
+    "purpose": [
+        "classic",
+        "ScaleUp",
+        "primary",
+        "kill",
+        "cluster",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_prim_pacemkr-ctrld",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 90,
+            "wait": 2,
+            "pSite": [
+                "srHook ~ (PRIM|SWAIT|SREG)"
+            ],
+            "sSite": [
+                "srHook ~ (PRIM|SOK)"
+            ],
+            "pHost": [
+                "lpa_@@sid@@_lpt > 1000000000",
+                "clone_state is None",
+                "roles is None",
+                "score is None",
+                "sync_state is None"
+            ],
+            "sHost": [
+                "lpa_@@sid@@_lpt ~ (1[6-9]........|30)",
+                "clone_state ~ (PROMOTED|DEMOTED)",
+                "roles ~ 4:(S|P):master1:master:worker:master",
+                "score ~ (100|145)",
+                "sync_state ~ (SOK|SFAIL)"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 180,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "pSite": [
+                "srHook ~ (PRIM|SWAIT|SREG)"
+            ],
+            "pHost": [
+                "lpa_@@sid@@_lpt ~ (1[6-9]........|30|20|10)",
+                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
+                "roles == 1:P:master1::worker:",
+                "sync_state ~ (PRIM|SFAIL)"
+            ],
+            "sHost": [
+                "lpa_@@sid@@_lpt ~ (1[6-9]........|30)",
+                "clone_state ~ (DEMOTED|PROMOTED)",
+                "roles == 4:P:master1:master:worker:master",
+                "score ~ (100|145|150)",
+                "sync_state == PRIM"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 180,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp"
+        }
+    ]
+}
