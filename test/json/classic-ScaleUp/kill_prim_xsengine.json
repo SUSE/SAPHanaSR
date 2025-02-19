@@ -1,0 +1,64 @@
+{
+    "test": "kill_prim_xsengine",
+    "name": "Kill primary xsengine",
+    "purpose": [
+        "classic",
+        "ScaleUp",
+        "primary",
+        "kill",
+        "hana"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_prim_xsengine",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "final40",
+            "loop": 90,
+            "wait": 2,
+            "pSite": [
+                "srHook == PRIM"
+            ],
+            "sSite": [
+                "srHook == SFAIL"
+            ],
+            "pHost": [
+                "lpa_@@sid@@_lpt > 1000000000",
+                "clone_state == PROMOTED",
+                "roles == 2:P:master1:master:worker:master",
+                "sync_state == PRIM",
+                "score == 150"
+            ],
+            "sHost": [
+                "lpa_@@sid@@_lpt ~ (30|10)",
+                "clone_state == DEMOTED",
+                "roles == 4:S:master1:master:worker:master",
+                "score ~ (100|-INFINITY)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        }
+    ]
+}

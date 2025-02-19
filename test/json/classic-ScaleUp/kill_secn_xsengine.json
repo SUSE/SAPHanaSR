@@ -1,0 +1,58 @@
+{
+    "test": "kill_secn_xsengine",
+    "name": "Kill secondary xsengine",
+    "purpose": [
+        "classic",
+        "ScaleUp",
+        "secondary",
+        "kill",
+        "hana",
+        "degraded"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_secn_xsengine",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "final40",
+            "loop": 60,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "sSite": [
+                "srHook == SFAIL"
+            ],
+            "sHost": [
+                "lpa_@@sid@@_lpt ~ (10|30)",
+                "clone_state == DEMOTED",
+                "roles ~ (2|4):S:master1:master:worker:master",
+                "score ~ (100|-INFINITY)",
+                "sync_state ~ (SFAIL|SOK)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        }
+    ]
+}

@@ -1,15 +1,12 @@
 {
     "test": "kill_prim_indexserver",
-    "name": "Kill primary master indexserver",
+    "name": "Kill primary indexserver",
     "purpose": [
         "classic",
         "ScaleUp",
         "primary",
         "kill",
-        "hana",
-        "hadr",
-        "susChkSrv",
-        "takeover"
+        "hana"
     ],
     "start": "prereq10",
     "steps": [
@@ -19,7 +16,7 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "kill_prim_indexserver",
+            "post": "kill_prim_nameserver",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
@@ -28,69 +25,40 @@
         {
             "step": "step20",
             "name": "failure detected",
-            "next": "step30",
+            "next": "final40",
             "loop": 90,
             "wait": 2,
             "pSite": [
-                "srHook ~ (PRIM|SWAIT|SREG)"
+                "srHook == PRIM"
             ],
             "sSite": [
-                "srHook ~ (PRIM|SOK)"
+                "srHook == SFAIL"
             ],
             "pHost": [
-                "lpa_@@sid@@_lpt >~ 1000000000:(20)",
-                "clone_state ~ (PROMOTED|WAITING4LPA|UNDEFINED)",
-                "roles == 1:P:master1::worker:",
+                "lpa_@@sid@@_lpt > 1000000000",
+                "clone_state == PROMOTED",
+                "roles == 2:P:master1:master:worker:master",
                 "sync_state == PRIM",
-                "score ~ (0|5|-9000)"
+                "score == 150"
             ],
             "sHost": [
-                "lpa_@@sid@@_lpt >~ 1000000000:(30)",
-                "clone_state ~ (PROMOTED|DEMOTED)",
+                "lpa_@@sid@@_lpt ~ (30|10)",
+                "clone_state == DEMOTED",
                 "roles == 4:S:master1:master:worker:master",
-                "sync_state == SOK",
-                "score ~ (100|145)"
-            ]
-        },
-        {
-            "step": "step30",
-            "name": "begin recover",
-            "next": "final40",
-            "loop": 150,
-            "wait": 2,
-            "todo": "pHost+sHost to check site-name",
-            "pSite": [
-                "srHook ~ (PRIM|SWAIT|SREG)"
-            ],
-            "sSite": [
-                "srHook ~ (PRIM|SOK)"
-            ],
-            "pHost": [
-                "lpa_@@sid@@_lpt >~ 1000000000:(30|20|10)",
-                "clone_state ~ (WAITING4LPA|UNDEFINED|DEMOTED)",
-                "roles == 1:P:master1::worker:",
-                "score ~ (0|5|-9000)"
-            ],
-            "sHost": [
-                "lpa_@@sid@@_lpt >~ 1000000000:(30)",
-                "clone_state ~ (DEMOTED|PROMOTED)",
-                "roles ~ 4:(S|P):master1:master:worker:master",
-                "score ~ (100|145|150)",
-                "srah == T"
+                "score ~ (100|-INFINITY)"
             ]
         },
         {
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 180,
+            "loop": 120,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
-            "pSite": "sSiteUp",
-            "sSite": "pSiteUp",
-            "pHost": "sHostUp",
-            "sHost": "pHostUp"
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
         }
     ]
 }

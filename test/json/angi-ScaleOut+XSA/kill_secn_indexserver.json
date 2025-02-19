@@ -1,0 +1,91 @@
+{
+    "test": "kill_secn_indexserver",
+    "name": "Kill secondary master indexserver",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "secondary",
+        "kill",
+        "master",
+        "hana",
+        "hadr",
+        "susChkSrv"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_secn_indexserver",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll ~ (SFAIL|SOK)"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0)"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll ~ (SFAIL|SOK)"
+            ],
+            "sHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0|-1)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 240,
+            "wait": 2,
+            "post": "cleanup",
+            "remark": "pXXX and sCCC to be the same as at test begin",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        }
+    ]
+}

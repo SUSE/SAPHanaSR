@@ -1,0 +1,106 @@
+{
+    "test": "maintenance_cluster_bootstrap",
+    "name": "delete cluster config and begin from scratch",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "XSA",
+        "maintenance",
+        "config",
+        "primary",
+        "secondary",
+        "cluster"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_delete_cluster_config",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "cluster without resources and attributes",
+            "next": "step30",
+            "loop": 30,
+            "wait": 2,
+            "post": "shell sct_test_create_cluster_config",
+            "pSite": [
+                "srr is None",
+                "lss is None"
+            ],
+            "sSite": [
+                "srr is None",
+                "lss is None"
+            ],
+            "pHost": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ],
+            "sHost": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "cluster back - need to trigger srHook (block)",
+            "next": "step35",
+            "loop": 100,
+            "wait": 2,
+            "post": "shell sct_test_block_sap_hana_sr",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "sSite": [
+                "srr == S",
+                "lss == 4",
+                "srHook is None",
+                "srPoll == SOK"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1:master:worker:master"
+            ]
+        },
+        {
+            "step": "step35",
+            "name": "cluster back - need to trigger srHook (unblock)",
+            "next": "final40",
+            "loop": 60,
+            "wait": 2,
+            "post": "shell sct_test_unblock_sap_hana_sr",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "sSite": [
+                "srr == S",
+                "lss == 4",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1:master:worker:master"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "running again",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        }
+    ]
+}

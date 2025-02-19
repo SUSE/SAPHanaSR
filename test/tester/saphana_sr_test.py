@@ -17,7 +17,7 @@ import json
 import argparse
 import random
 
-# Version: 1.4.20250210
+# Version: 1.4.20250214
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.4.20250210"
+    version = "1.4.20250214"
 
     def message(self, msg, **kwargs):
         """
@@ -82,7 +82,7 @@ class SaphanasrTest:
                         'debug': False,
                         'password': None
                       }
-        self.result = { 'test_id': self.run['r_id'], 'config': self.config }
+        self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
         self.test_data = {}
         self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
@@ -588,7 +588,9 @@ class SaphanasrTest:
         step_next = step['next']
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         step_result = { 'start_time': date_time }
-        self.result.update({step_id: step_result})
+        steps_result_dict = self.result.get('steps', {})
+        steps_result_dict.update({step_id: step_result})
+        self.result.update({'steps': steps_result_dict})
         # self.result.update({ step_id: { 'name': step_name, 'next': step_next, 'status': 'running' } } )
         step_result.update({ 'name': step_name, 'next': step_next, 'status': 'running' })
         if 'loop' in step:
@@ -935,6 +937,7 @@ if __name__ == "__main__":
                     f" pHost={l_top['pHost']}"
                     f" sHost={l_top['sHost']}"
                 )
+        test01.result.update({'topology': l_top, 'testtag': 'test25' })
         test01.message(l_msg)
         test01.read_test_file()
         my_test_id = test01.run['test_id']

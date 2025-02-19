@@ -1,0 +1,143 @@
+{
+    "test": "maintenance_with_standby_nodes",
+    "name": "standby+online secondary then standby+online primary",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "XSA",
+        "maintenance",
+        "standby",
+        "primary",
+        "secondary",
+        "cluster"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites ssn",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "ssn",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "secondary site: node is standby",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "post": "osn",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteDown",
+            "pHost": "pHostUp",
+            "sHost": "sHostDown"
+        },
+        {
+            "step": "step30",
+            "name": "secondary site: node back online",
+            "next": "step40",
+            "loop": 120,
+            "wait": 2,
+            "todo": "pHost+sHost to check site-name",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == SFAIL"
+            ],
+            "sHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0)"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "sr up and running again",
+            "next": "step110",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step110",
+            "name": "test prerequisites spn",
+            "next": "step120",
+            "loop": 1,
+            "wait": 1,
+            "post": "spn",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step120",
+            "name": "primary site: node is standby",
+            "next": "step130",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteDown",
+            "pHost": "pHostDown",
+            "sSite": [
+                "lpt ~ (30|1[6-9]........)",
+                "lss == 4",
+                "srr == S",
+                "srHook ~ (PRIM|SOK)",
+                "srPoll == SOK"
+            ],
+            "sHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145)"
+            ]
+        },
+        {
+            "step": "step130",
+            "name": "takeover on secondary",
+            "next": "final140",
+            "loop": 120,
+            "post": "opn",
+            "wait": 2,
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt == 10",
+                "srHook ~ (SWAIT|SFAIL)",
+                "srPoll == SFAIL"
+            ],
+            "pHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score == 150",
+                "standby == on"
+            ],
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp"
+        },
+        {
+            "step": "final140",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "remark": "pXXX and sXXX are now exchanged",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp"
+        }
+    ]
+}

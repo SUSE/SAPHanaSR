@@ -415,7 +415,7 @@ function sht_validate() {
 # globals:  OCF_*(r),
 # sht_start_clone
 #
-function sht_start_clone() { 
+function sht_start_clone() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
     local rc="$OCF_NOT_RUNNING"
@@ -500,6 +500,14 @@ function sht_monitor_clone() {
              start_saphostagent
         fi
         #
+        # Check for lost attributes symptome
+        #
+        check_crm_attribute_roles=$(get_hana_attribute "${NODENAME}" "" "${ATTR_NAME_HANA_ROLES[@]}")
+        if [[ "$check_crm_attribute_roles" == "" ]]; then
+            super_ocf_log info "ACT: recover lost transient cluster attributes"
+            attrd_updater -R
+        fi
+        #
         # First check, if we are PRIMARY or SECONDARY
         #
         hanaPrim="$(check_for_primary "cache")";
@@ -541,7 +549,7 @@ function sht_monitor_clone() {
         case "$hanaPrim" in
             P ) ;;
             S ) # only secondary may propagate its sync status
-                # TODO PRIO2: NG - need to be multi site specific. 
+                # TODO PRIO2: NG - need to be multi site specific.
                 #      maybe setting this attribute for the OLD primary during a begin of a promote (as getting P) for the register which could follow?
                 #      currently all sites will have the same replication mode (and operation mode)
                 super_ocf_log info "DEC: set_hana_site_attribute $gSite $gSrMode ${ATTR_NAME_HANA_SITE_REPLICATION_MODE[*]}"
