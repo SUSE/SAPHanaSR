@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# sct_test_unfreeze_secn_master_nfs - unfreeze nfs on secondary master
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+
+echo "==== Un-Freeze SAP HANA NFS ===="
+
+ssh "$currSecondary" 'iptables -D OUTPUT -p tcp -m multiport --ports 2049 -j DROP'
+sleep 60
+#
