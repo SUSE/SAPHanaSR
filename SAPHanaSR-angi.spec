@@ -115,7 +115,6 @@ install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
-install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 
 %files
@@ -126,7 +125,6 @@ install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 /usr/lib/ocf/resource.d/suse/*
 /usr/share/%{name}
 %dir /usr/lib/%{name}
-/usr/lib/%{name}/SAPHanaSRTools.pm
 /usr/lib/%{name}/saphana-*-lib
 /usr/lib/%{name}/saphana_sr_*.py
 /usr/bin/SAPHanaSR-showAttr
