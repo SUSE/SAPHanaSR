@@ -109,7 +109,7 @@ install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
 install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
-# auxiliary Perl library and test scripts
+# auxiliary python library and tools
 install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
