@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2013-2014 SUSE Linux Products GmbH, Nuernberg, Germany.
 # Copyright (c) 2014-2016 SUSE Linux GmbH, Nuernberg, Germany.
-# Copyright (c) 2017-2024 SUSE LLC.
+# Copyright (c) 2017-2025 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -21,7 +21,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Resource agents to control the HANA database in system replication setup
-Version:        1.2.9
+Version:        1.2.10
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -109,17 +109,12 @@ install -m 0444 icons/* %{buildroot}/usr/share/%{name}/icons
 install -m 0444 man/*.7.gz %{buildroot}%{_mandir}/man7
 install -m 0444 man/*.8.gz %{buildroot}%{_mandir}/man8
 
-# auxiliary Perl library and test scripts
-install -m 0555 tools/SAPHanaSR-monitor-legacy %{buildroot}/usr/bin
+# auxiliary python library and tools
 install -m 0555 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
-install -m 0555 tools/SAPHanaSR-showAttr-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
-install -m 0555 tools/SAPHanaSR-replay-archive-legacy %{buildroot}/usr/bin
-install -m 0555 tools/SAPHanaSR-filter-legacy %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
-install -m 0444 tools/SAPHanaSRTools.pm %{buildroot}/usr/lib/%{name}
 install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 
 %files
@@ -130,15 +125,10 @@ install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 /usr/lib/ocf/resource.d/suse/*
 /usr/share/%{name}
 %dir /usr/lib/%{name}
-/usr/lib/%{name}/SAPHanaSRTools.pm
 /usr/lib/%{name}/saphana-*-lib
 /usr/lib/%{name}/saphana_sr_*.py
-/usr/bin/SAPHanaSR-monitor-legacy
 /usr/bin/SAPHanaSR-showAttr
-/usr/bin/SAPHanaSR-showAttr-legacy
 /usr/bin/SAPHanaSR-replay-archive
-/usr/bin/SAPHanaSR-replay-archive-legacy
-/usr/bin/SAPHanaSR-filter-legacy
 /usr/bin/SAPHanaSR-hookHelper
 /usr/bin/SAPHanaSR-manageProvider
 /usr/bin/SAPHanaSR-alert-fencing
