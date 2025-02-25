@@ -328,21 +328,13 @@ function sht_monitor() {
     # called by: TODO
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc=0
-    local vName="${NODENAME}"
-    # TODO PRIO1: 'node_role_walk' is only needed for scale-out; how to differ that here?
+    local vName=""
     node_role_walk --standbyFilter=off
     # DONE: PRIO1: ASK: Is the output format of ListInstances fix? Could we take that as an API?
     # try to catch:  Inst Info : LNX - 42 - lv9041 - 740, patch 36, changelist 1444691
     # We rely on the following format: SID is word#4, NR is word#6, vHost is word#8
     #### SAP-CALL
-    ## TODO PRIO3: align method "ListInstances" with saphana-common-lib
-    if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
-        vName=$(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances \
-            | awk '$4 == SID && $6=NR { print $8 }' SID="$SID" NR="$InstanceNr" 2>/dev/null )
-        super_ocf_log debug "DBG: ListInstances: $(/usr/sap/hostctrl/exe/saphostctrl -function ListInstances)"
-    else
-        super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
-    fi
+    get_local_virtual_name; vName=${gVirtName}
     if [ -n "$vName" ]; then
        set_hana_attribute "${NODENAME}" "$vName" "${ATTR_NAME_HANA_VHOST[@]}" "${NODENAME}"
     else

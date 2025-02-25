@@ -670,6 +670,9 @@ function get_local_virtual_name() {
     # called by: TODO
     local -a listInstances
     local lI
+    #
+    # step 1 - get virtual host name by saphostagent
+    #
     if [ -e /usr/sap/hostctrl/exe/saphostctrl ]; then
         mapfile -t listInstances < <( /usr/sap/hostctrl/exe/saphostctrl -function ListInstances )
         for lI in "${listInstances[@]}"; do
@@ -680,17 +683,33 @@ function get_local_virtual_name() {
                 break
             fi
         done
+        super_ocf_log info "DEC: ${FUNCNAME[0]} Try to get SAP_HOSTNAME by ListInstances gVirtName=$gVirtName"
     else
         super_ocf_log error "ERR: SAPHOSTAGENT is not installed at /usr/sap/hostctrl/exe (saphostctrl missing)"
     fi
+    #
+    # step 2 - get virtual host name by user environment
+    #
+    if [ -z "$gVirtName" ]; then
+        gVirtName=$(HANA_CALL --timeout 60 --cmd "echo \$SAP_HOSTNAME" 2>/dev/null)
+        super_ocf_log info "DEC: ${FUNCNAME[0]} Try to get SAP_HOSTNAME by user environment gVirtName=$gVirtName"
+    fi
+    #
+    # step 3 - get virtual host name by cluster attribute
+    #
     if [ -z "$gVirtName" ]; then
        #
        # if saphostctrl does not know the answer, try to fallback to attribute provided by SAPHanaTopology
        #
        gVirtName=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_VHOST[@]}" "$NODENAME");
+       super_ocf_log info "DEC: ${FUNCNAME[0]} Try to get SAP_HOSTNAME by cluster attribute gVirtName=$gVirtName"
     fi
+    #
+    # step 4 - use local nodename instead
+    #
     if [ -z "$gVirtName" ]; then # last fallback if we are not able to figure out the virtual host name
        gVirtName="$NODENAME"
+       super_ocf_log info "DEC: ${FUNCNAME[0]} step 4: gVirtName=$gVirtName"
     fi
     return 0
 } # end function get_local_virtual_name
