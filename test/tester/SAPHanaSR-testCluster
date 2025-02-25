@@ -10,7 +10,7 @@
  Copyright:    (c) 2023-2025 SUSE LLC
 """
 
-# Version: 1.4.20250214
+# Version: 1.5.20250225
 # pylint: disable=unused-import
 import time
 import re
@@ -123,11 +123,25 @@ while test01.run['count'] <= test01.config['repeat']:
     # TODO: check, if l_top pSite/sSite are already set correctly
     # TODO: check for roles must be sloppy, check for site must be strict - maybe sloppy=['roles'] ??
     if l_top['pSite']:
-        l_top.update({'pWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)})
+        p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)
+        if p_worker:
+            l_top.update({'pWorker': p_worker})
+            l_top.update({'pWorkerType': 'worker'})
+        else:
+            p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':slave:none'}, sloppy=True)
+            l_top.update({'pWorker': p_worker})
+            l_top.update({'pWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
     else:
         l_top.update({'pWorker': None})
     if l_top['sSite']:
-        l_top.update({'sWorker': test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)})
+        s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)
+        if s_worker:
+            l_top.update({'sWorker': s_worker })
+            l_top.update({'sWorkerType': 'worker'})
+        else:
+            s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':slave:none'}, sloppy=True)
+            l_top.update({'sWorker': s_worker })
+            l_top.update({'sWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
     else:
         l_top.update({'sWorker': None})
 
@@ -168,6 +182,8 @@ while test01.run['count'] <= test01.config['repeat']:
                     f" sHost={l_top['sHost']}"
                     f" pWorker={l_top['pWorker']}"
                     f" sWorker={l_top['sWorker']}"
+                    f" pWorkerType={l_top['pWorkerType']}"
+                    f" sWorkerType={l_top['sWorkerType']}"
                 )
     test01.message(l_msg)
     test01.result.update({'topology': l_top })
