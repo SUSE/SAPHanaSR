@@ -8,18 +8,20 @@
 #
 # Version: 2025-02-25
 #
-PROPERTIES="./properties_angi-ScaleOut.json"
-REMOTENODES="hoeferspitze11 hoeferspitze21"
-ASTROOT=/usr/share/SAPHanaSR-tester/json/angi-ScaleOut
-LOGFILE="runtests.log"
 
-source /usr/share/SAPHanaSR-tester/samples/runtests_angi-ScaleOut_conservative.txt
+CASFILE=/usr/share/SAPHanaSR-tester/samples/runtests_angi-ScaleOut_conservative.txt
+source $CASFILE || exit 1
+
+#PROPERTIES="./properties_angi-ScaleOut.json"
+#ASTROOT=/usr/share/SAPHanaSR-tester/json/angi-ScaleOut
+#LOGFILE="runtests.log"
+REMOTENODES="peak11 peak21"
 
 exec 3>&1
 exec 1>>"$LOGFILE"
 
 # TCASES="flup free_log_area $SECNCAS free_log_area $PRIMCAS free_log_area $BOTHCAS free_log_area"
-TCASES="flup kill_prim_node free_log_area"
+TCASES="flup standby_prim_node free_log_area"
 
 for TEST in $TCASES; do
   echo "#### $(date +%Y-%m-%d" "%H:%M:%S) run test: $TEST ####"
@@ -32,7 +34,7 @@ for TEST in $TCASES; do
                         --remoteNodes $REMOTENODES --defaultsFile "$ASTROOT/defaults.json" \
                         --logFile "$TEST.log" --jsonOut "$TEST.json.out" --dumpFailures >&3; rc=$?
   echo "#### $(date +%Y-%m-%d" "%H:%M:%S) end test: $TEST rc: $rc ####"
-  gzip -g "$TEST.json.out"
+  gzip -g "$TEST.json.out" 2>/dev/null
   if [[ "$rc" != "0" ]]; then
     exit 1
   else
