@@ -1,0 +1,62 @@
+{
+    "test": "standby_prim_worker_node",
+    "name": "standby primary worker node (and online again)",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "standby",
+        "maintenance",
+        "primary",
+        "node",
+        "worker"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "standby_prim_worker_node",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "node is standby",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "post": "online_prim_worker_node",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "pWorker": [
+                "clone_state == UNDEFINED",
+                "roles == slave:slave:worker:slave",
+                "standby == on"
+            ],
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 180,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        }
+    ]
+}
