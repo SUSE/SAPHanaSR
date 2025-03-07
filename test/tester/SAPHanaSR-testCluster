@@ -10,7 +10,7 @@
  Copyright:    (c) 2023-2025 SUSE LLC
 """
 
-# Version: 1.5.20250225
+# Version: 1.5.20250307
 # pylint: disable=unused-import
 import time
 import re
@@ -46,6 +46,7 @@ parser.add_argument("--printTestProperties", help="print test properties and exi
 parser.add_argument("--debug", help="output and log debug messages", action="store_true")
 parser.add_argument("--version", help="output version and exit", action="store_true")
 parser.add_argument("--password", help="optinal ssh password, if key based authentication is not used"),
+parser.add_argument("--onFail", help="tester reaction after a failed step. possible values: continue,exit; default continue"),
 args = parser.parse_args()
 if args.version:
     print(f"SAPHanaSR-tester {test01.version}")
@@ -87,6 +88,8 @@ if args.debug:
     test01.message("PARAM: DEBUG activated")
 if args.password:
     test01.config['password' ]= args.password
+if args.onFail:
+    test01.config['on_fail_reaction' ]= args.onFail
 
 while test01.run['count'] <= test01.config['repeat']:
     # test01.message(f"count: {test01.run['count']}")
@@ -216,6 +219,11 @@ while test01.run['count'] <= test01.config['repeat']:
     except KeyboardInterrupt:
         test01.run['test_rc'] = 1
         test01.result.update({'interrupted': 'yes'})
+        try:
+            if test01.step_loops:
+                test01.result.update({'loops': test01.step_loops})
+        except Exception:
+                test01.result.update({'loops': "step_loops missing"})
     test01.end_time = time.time()
     test01.result.update({'runtime': int(test01.end_time - test01.start_time)})
     MSG_TEMPL = "TEST: {} testNr={} testRc={} {} successfully {} ######"
