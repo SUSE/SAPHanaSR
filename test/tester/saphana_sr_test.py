@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.5.20250307"
+    version = "2.0.20250310"
 
     def message(self, msg, **kwargs):
         """
@@ -588,6 +588,7 @@ class SaphanasrTest:
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
+        step_alternative = step.get('on_fail', None)
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         step_result = { 'start_time': date_time }
         steps_result_dict = self.result.get('steps', {})
@@ -672,8 +673,11 @@ class SaphanasrTest:
             step_result.update({ 'status': 'passed' })
             step_result.update({ 'action': step_action })
         else:
-            step_result.update({ 'status': 'failed' })
-            step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
+            if step_alternative:
+                step_result.update({ 'status': 'alternative/on_fail' })
+            else:
+                step_result.update({ 'status': 'failed' })
+                step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
         # self.result.update({step_id: step_result})
         return process_result
 
@@ -687,9 +691,14 @@ class SaphanasrTest:
         onfail = 'break'
         while step_step != "END":
             step_next = step['next']
+            #
+            # prepare an 'alternative' step sequence, if 'alternative/on_fail' is set for this step
+            #
+            step_alternative = step.get('on_fail', None)
             process_result = self.process_step(step)
             if process_result == 0:
                 self.message("STATUS: Test step {} PASSED successfully".format(step_step))
+                step=self.get_step(step_next)
             else:
                 r_code = 1
                 self.message("STATUS: Test step {} FAILED successfully ;)".format(step_step))
@@ -697,7 +706,13 @@ class SaphanasrTest:
                 # (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
-            step=self.get_step(step_next)
+                else:
+                    if step_alternative:
+                        # process alternative test steps, so reset the failed test rc_code
+                        r_code = 0
+                        step=self.get_step(step_alternative)
+                    else:
+                        step=self.get_step(step_next)
             if step:
                 step_step = step['step']
             else:
