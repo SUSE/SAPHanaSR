@@ -17,7 +17,7 @@ import json
 import argparse
 import random
 
-# Version: 1.4.20250214
+# Version: 1.5.20250306
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.4.20250214"
+    version = "1.5.20250307"
 
     def message(self, msg, **kwargs):
         """
@@ -80,7 +80,8 @@ class SaphanasrTest:
                         'remote_nodes': [],
                         'printTestProperties': False,
                         'debug': False,
-                        'password': None
+                        'password': None,
+                        'on_fail_reaction': 'continue'
                       }
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
@@ -91,6 +92,7 @@ class SaphanasrTest:
         self.__failed_role_counter__ = 0
         self.__min_failed_role_counter__ = 0
         self.__max_failed_role_counter__ = 0
+        self.step_loops = [ "x" ]
         if cmdparse:
             self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
@@ -625,6 +627,7 @@ class SaphanasrTest:
             date_time = time.strftime("%Y-%m-%d %H:%M:%S")
             step_loop = { loops: {'time': date_time} }
             step_loops.append(step_loop)
+            self.step_loops = step_loops
             list_of_failures = []
             step_loop.update({'failures': list_of_failures})
             if self.config['dump_failures']:
@@ -680,7 +683,7 @@ class SaphanasrTest:
         step=self.get_step(test_start)
         step_step = step['step']
         r_code = 0
-        # onfail for first step is 'break'
+        # onfail for FIRST step is 'break' - break, if INITIAL step fails
         onfail = 'break'
         while step_step != "END":
             step_next = step['next']
@@ -700,8 +703,12 @@ class SaphanasrTest:
             else:
                 # check, why we run into this code path
                 break
-            # onfail for all next steps is 'continue' to run also the recovery steps
-            onfail = 'continue'
+            # onfail for ALL NEXT steps is based on the on_fail_reaction command line option, default is 'continue' to run also the recovery steps
+            onfail_reaction = self.config.get('on_fail_reaction', 'continue')
+            if onfail_reaction == 'exit':
+                onfail = 'break'
+            else:
+                onfail = 'continue'
         return r_code
 
     def process_test(self):
@@ -807,6 +814,10 @@ class SaphanasrTest:
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif action_name == "opn":
             cmd = "crm node online {}".format(self.topolo['pHost'])
+        elif action_name == "standby_prim_worker_node":
+            cmd = "crm node standby {}".format(self.topolo['pWorker'])
+        elif action_name == "online_prim_worker_node":
+            cmd = "crm node online {}".format(self.topolo['pWorker'])
         elif action_name == "standby_secn_worker_node":
             cmd = "crm node standby {}".format(self.topolo['sWorker'])
         elif action_name == "online_secn_worker_node":
@@ -858,7 +869,7 @@ class SaphanasrTest:
             action_rc = 0
         elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "kill_prim_xsengine", "kill_secn_xsengine", "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)

@@ -379,7 +379,7 @@ function saphana_init() {
     # get landscape config (lss and roles)
     #
     # TODO PRIO1: NG - if clone_state or roles are (still) empty, then do not trust in the cluster attributes
-    #                  if roles is not se, them SAPHanaTopology did not report that so far, so check for life values
+    #                  if roles is not set, then SAPHanaTopology did not reported the roles so far; RA needs to check for life values
     # TODO PRIO1: NG - check for global variable gClone (set by clone_state attr)
     #
     gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
@@ -1922,7 +1922,10 @@ function saphana_promote_clone() {
                             remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
                             crm_node --list | grep -q "$remoteHanaHost member"; still_member=$?
                             remote_score=$("$CRM_PROMO" -N "$remoteHanaHost" -Gq "$CRM_PROMO_PARAMS")
-                            if [[ "$still_member" == "0" && "$remote_score" == "" ]]; then
+                            CRM_NODE_STATUS=$(crm_mon -1  --include none,nodes --node "$remoteHanaHost")
+                            if [[ "$CRM_NODE_STATUS" =~ "Online:".*"$remoteHanaHost" ]]; then still_crm_online=0; else still_crm_online=1; fi
+                            super_ocf_log info "DEC: SAP HANA TAKEOVER DECLINE?: - still_member=$still_member, still_crm_online=$still_crm_online, remote_score=$remote_score"
+                            if [[ "$still_crm_online" == "0" && "$remote_score" == "" ]]; then
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER DECLINED: - Remote score missing but node is member"
                             else
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."

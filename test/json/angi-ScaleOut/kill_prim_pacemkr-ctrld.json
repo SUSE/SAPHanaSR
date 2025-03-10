@@ -1,14 +1,13 @@
 {
-    "test": "kill_secn_nameserver",
-    "name": "Kill secondary master nameserver",
+    "test": "kill_prim_pacemkr-ctrld",
+    "name": "kill pacemaker-controld on primary master node",
     "purpose": [
         "angi",
         "ScaleOut",
-        "kill",
-        "secondary",
-        "hana",
+        "primary",
         "master",
-        "degraded"
+        "kill",
+        "cluster"
     ],
     "start": "prereq10",
     "steps": [
@@ -18,7 +17,7 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "kill_secn_nameserver",
+            "post": "shell sct_test_kill_prim_pacemkr-ctrld",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
@@ -28,24 +27,25 @@
         },
         {
             "step": "step20",
-            "name": "srHook SFAIL",
+            "name": "failure detected",
             "next": "final40",
-            "loop": 90,
+            "loop": 180,
             "wait": 1,
-            "post": "sleep 120",
             "pSite": "pSiteUp",
-            "sSite": [
-                "srHook == SFAIL"
-            ],
-            "pHost": "pHostUp",
+            "sHost": "sHostUp",
             "pWorker": "pWorkerUp",
+            "sSite": "sSiteUp",
+            "pHost": [
+                "clone_state is None",
+                "roles is None"
+            ],
             "sWorker": "sWorkerUp"
         },
         {
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 240,
+            "loop": 120,
             "wait": 2,
             "post": "cleanup",
             "pSite": "pSiteUp",

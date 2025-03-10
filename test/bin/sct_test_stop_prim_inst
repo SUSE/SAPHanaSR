@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sct_test_freeze_prim_fs - freeze fs in primary side
+# sct_test_stop_prim_inst - stop primary master instance
 #
 # (c) 2025 SUSE LLC
 # Author: F.Herschel, L.Pinne.
@@ -14,10 +14,6 @@ source .test_properties
 
 currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 
-echo "==== Freeze SAP HANA FS ===="
-
-ports="4${instNr}01,4${instNr}02,4${instNr}03"
-
-ssh "$currPrimary" 'fsfreeze --freeze /hana/shared/'"${SID}"
-sleep 60
+echo "==== Stop primary master instance ===="
+ssh "$currPrimary" 'su - '"$sidadm"' -c "HDB stop"'
 #
