@@ -1630,6 +1630,14 @@ function saphana_monitor_secondary() {
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_SECONDARY"
     get_hana_landscape_status "cache"; lss=$?
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss"
+    #
+    # check, if we have a pending HA/DR provider attribute files - e.g. from a former primary time period
+    #   these files needs to be removed to avoid applying very old values after a takeover (to be new primary)
+    #
+    for rFile in "/hana/shared/$SID/$InstanceName/.crm_attribute."*; do
+        # recover_site_attributes_from_file "$rFile"
+        rm "$rFile"
+    done
     case "$lss" in
         0 ) # FATAL
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
