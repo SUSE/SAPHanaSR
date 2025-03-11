@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.0.20250310"
+    version = "2.0.20250311"
 
     def message(self, msg, **kwargs):
         """
@@ -588,7 +588,7 @@ class SaphanasrTest:
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
-        step_alternative = step.get('on_fail', None)
+        step_alternative = step.get('onfail', None)
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         step_result = { 'start_time': date_time }
         steps_result_dict = self.result.get('steps', {})
@@ -694,7 +694,7 @@ class SaphanasrTest:
             #
             # prepare an 'alternative' step sequence, if 'alternative/on_fail' is set for this step
             #
-            step_alternative = step.get('on_fail', None)
+            step_alternative = step.get('onfail', None)
             process_result = self.process_step(step)
             if process_result == 0:
                 self.message("STATUS: Test step {} PASSED successfully".format(step_step))
