@@ -28,10 +28,11 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
-            "next": "final40",
+            "name": "failure detected - expect node to stay (SOK)",
+            "next": "step30",
             "loop": 180,
             "wait": 1,
+            "post": "sleep 90",
             "pSite": "pSiteUp",
             "sHost": "sHostUp",
             "pWorker": "pWorkerUp",
@@ -41,6 +42,49 @@
                 "roles is None"
             ],
             "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step30",
+            "name": "end recover (SOK) - or jump alternative (SFAIL)",
+            "next": "final40",
+            "loop": 10,
+            "wait": 2,
+            "onfail": "alt110",
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "alt110",
+            "name": "failure detected - node down secondary gets primary",
+            "next": "alt120",
+            "loop": 90,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp",
+            "pHost": [
+                "clone_state is None",
+                "roles is None"
+            ]
+        },
+        {
+            "step": "alt120 - takeover completed - SR again in sync",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
         },
         {
             "step": "final40",
