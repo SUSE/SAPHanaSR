@@ -863,7 +863,7 @@ class SaphanasrTest:
         action_name_short = action_array[0]
         cmd = ""
         if action_name_short == "sleep":
-            remote = self.config['remote_node']
+            remote = 'localhost'
             if len(action_array) == 2:
                 action_parameter = action_array[1]
             else:
