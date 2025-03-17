@@ -900,20 +900,28 @@ class SaphanasrTest:
         if remote_host:
             ssh_client = paramiko.SSHClient()
             ssh_client.load_system_host_keys()
-            if ssh_password:
-                ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
-            else:
-                ssh_client.connect(remote_host, username=user, timeout=10)
+            try:
+                if ssh_password:
+                    ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
+                else:
+                    ssh_client.connect(remote_host, username=user, timeout=10)
+            except Exception as e:
+                self.message(f"FAILURE: ssh connection to failed - ({e})")
+                check_result=("", "", 20000)
             cmd_timeout=f"timeout={ssh_timeout}"
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
-            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
-            result_stdout = cmd_stdout.read().decode("utf8")
-            result_stderr = cmd_stderr.read().decode("utf8")
-            result_rc = cmd_stdout.channel.recv_exit_status()
-            check_result = (result_stdout, result_stderr, result_rc)
-            ssh_client.close()
-            self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            try:
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            except Exception as e:
+                self.message(f"FAILURE: ssh connection to failed - ({e})")
+                check_result=("", "", 20000)
         else:
             self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)
