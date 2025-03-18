@@ -6,7 +6,8 @@
         "ScaleUp",
         "primary",
         "kill",
-        "cluster"
+        "cluster",
+        "onfail"
     ],
     "start": "prereq10",
     "steps": [
@@ -24,22 +25,56 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
-            "next": "final40",
-            "loop": 90,
-            "wait": 2,
-            "pSite": [
-                "srHook == PRIM",
-                "lpt > 1000000000",
-                "srr == P"
-            ],
+            "name": "failure detected - expect node to stay (SOK)",
+            "next": "step30",
+            "loop": 180,
+            "wait": 1,
+            "post": "sleep 90",
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "pSite": "pSiteUp",
             "pHost": [
                 "clone_state is None",
-                "roles is None",
-                "score is None"
-            ],
+                "roles is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "end recover (SOK) - or jump alternative (SFAIL)",
+            "next": "final40",
+            "loop": 10,
+            "wait": 2,
+            "onfail": "alt110",
+            "post": "cleanup",
+            "pSite": "pSiteUp",
             "sSite": "sSiteUp",
+            "pHost": "pHostUp",
             "sHost": "sHostUp"
+        },
+        {
+            "step": "alt110",
+            "name": "failure detected - node down secondary gets primary",
+            "next": "alt120",
+            "loop": 90,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "pHost": [
+                "clone_state is None",
+                "roles is None"
+            ]
+        },
+        {
+            "step": "alt120",
+            "name": "takeover completed - SR again in sync",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp"
         },
         {
             "step": "final40",

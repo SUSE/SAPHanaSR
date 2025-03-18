@@ -1,14 +1,14 @@
 {
-    "test": "kill_prim_pacemkr-ctrld",
-    "name": "kill pacemaker-controld on primary master node",
+    "test": "block_prim_node_network",
+    "name": "Block all network on primary node",
     "purpose": [
-        "classic",
-        "ScaleOut",
+        "angi",
+        "ScaleUp",
+        "block",
         "primary",
-        "master",
-        "kill",
+        "node",
         "fencing",
-        "cluster",
+        "network",
         "takeover"
     ],
     "start": "prereq10",
@@ -19,57 +19,61 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "shell sct_test_kill_prim_pacemkr-ctrld",
-            "global": "sync_state_sok",
+            "post": "shell sct_test_block_prim_node_network",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
-            "sHost": "sHostUp",
-            "pWorker": "pWorkerUp",
-            "sWorker": "sWorkerUp"
+            "sHost": "sHostUp"
         },
         {
             "step": "step20",
-            "name": "failure detected + pmaster fenced",
+            "name": "failure detected",
             "next": "step30",
-            "loop": 90,
+            "loop": 120,
             "wait": 2,
-            "sSite": "sSiteUp",
-            "sHost": "sHostUp",
-            "sWorker": "sWorkerUp",
             "pSite": [
                 "srr == P",
-                "srHook == PRIM"
+                "lpt ~ (1[6-9]........|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll == PRIM"
+            ],
+            "sSite": [
+                "lpt ~ (1[6-9]........|30)",
+                "lss == 4",
+                "srr ~ (S|P)",
+                "srHook ~ (PRIM|SOK)",
+                "srPoll ~ (SOK|SFAIL)"
             ],
             "pHost": [
                 "clone_state is None",
                 "roles is None",
                 "score is None"
             ],
-            "pWorker": [
-               "clone_state == DEMOTED",
-               "roles ~ slave:"
+            "sHost": [
+                "clone_state ~ (PROMOTED|DEMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145)"
             ]
         },
         {
             "step": "step30",
             "name": "begin recover",
             "next": "final40",
-            "todo": "split this step into two: 30=takeover and 40=begin recover",
-            "loop": 300,
+            "loop": 180,
             "wait": 2,
-            "global": "sync_state_sok_or_sfail",
             "pSite": [
                 "lss ~ (1|2)",
                 "srr ~ (P|S)",
-                "lpt >~ 1000000000:(30|20|10)",
-                "srHook ~ (PRIM|SWAIT|SREG)"
+                "lpt ~ (1[6-9]........|30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll ~ (PRIM|SFAIL)"
             ],
             "sSite": [
-                "lpt >~ 1000000000:(30)",
+                "lpt ~ (1[6-9]........|30)",
                 "lss == 4",
                 "srr ~ (S|P)",
-                "srHook == PRIM"
+                "srHook == PRIM",
+                "srPoll ~ (SOK|PRIM)"
             ],
             "pHost": [
                 "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
@@ -85,16 +89,13 @@
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 180,
+            "loop": 300,
             "wait": 2,
-            "global": "sync_state_sok",
             "post": "cleanup",
             "pSite": "sSiteUp",
             "sSite": "pSiteUp",
             "pHost": "sHostUp",
-            "sHost": "pHostUp",
-            "pWorker": "sWorkerUp",
-            "sWorker": "pWorkerUp"
+            "sHost": "pHostUp"
         }
     ]
 }

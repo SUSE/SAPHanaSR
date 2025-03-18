@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.5.20250307"
+    version = "2.0.20250311"
 
     def message(self, msg, **kwargs):
         """
@@ -588,6 +588,7 @@ class SaphanasrTest:
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
+        step_alternative = step.get('onfail', None)
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         step_result = { 'start_time': date_time }
         steps_result_dict = self.result.get('steps', {})
@@ -672,8 +673,11 @@ class SaphanasrTest:
             step_result.update({ 'status': 'passed' })
             step_result.update({ 'action': step_action })
         else:
-            step_result.update({ 'status': 'failed' })
-            step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
+            if step_alternative:
+                step_result.update({ 'status': 'alternative/on_fail' })
+            else:
+                step_result.update({ 'status': 'failed' })
+                step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
         # self.result.update({step_id: step_result})
         return process_result
 
@@ -687,9 +691,14 @@ class SaphanasrTest:
         onfail = 'break'
         while step_step != "END":
             step_next = step['next']
+            #
+            # prepare an 'alternative' step sequence, if 'alternative/on_fail' is set for this step
+            #
+            step_alternative = step.get('onfail', None)
             process_result = self.process_step(step)
             if process_result == 0:
                 self.message("STATUS: Test step {} PASSED successfully".format(step_step))
+                step=self.get_step(step_next)
             else:
                 r_code = 1
                 self.message("STATUS: Test step {} FAILED successfully ;)".format(step_step))
@@ -697,7 +706,13 @@ class SaphanasrTest:
                 # (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
-            step=self.get_step(step_next)
+                else:
+                    if step_alternative:
+                        # process alternative test steps, so reset the failed test rc_code
+                        r_code = 0
+                        step=self.get_step(step_alternative)
+                    else:
+                        step=self.get_step(step_next)
             if step:
                 step_step = step['step']
             else:
@@ -848,7 +863,7 @@ class SaphanasrTest:
         action_name_short = action_array[0]
         cmd = ""
         if action_name_short == "sleep":
-            remote = self.config['remote_node']
+            remote = 'localhost'
             if len(action_array) == 2:
                 action_parameter = action_array[1]
             else:
@@ -885,20 +900,28 @@ class SaphanasrTest:
         if remote_host:
             ssh_client = paramiko.SSHClient()
             ssh_client.load_system_host_keys()
-            if ssh_password:
-                ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
-            else:
-                ssh_client.connect(remote_host, username=user, timeout=10)
+            try:
+                if ssh_password:
+                    ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
+                else:
+                    ssh_client.connect(remote_host, username=user, timeout=10)
+            except Exception as e:
+                self.message(f"FAILURE: ssh connection to failed - ({e})")
+                check_result=("", "", 20000)
             cmd_timeout=f"timeout={ssh_timeout}"
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
-            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
-            result_stdout = cmd_stdout.read().decode("utf8")
-            result_stderr = cmd_stderr.read().decode("utf8")
-            result_rc = cmd_stdout.channel.recv_exit_status()
-            check_result = (result_stdout, result_stderr, result_rc)
-            ssh_client.close()
-            self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            try:
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            except Exception as e:
+                self.message(f"FAILURE: ssh connection to failed - ({e})")
+                check_result=("", "", 20000)
         else:
             self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)

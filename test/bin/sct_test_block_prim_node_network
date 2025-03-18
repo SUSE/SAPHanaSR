@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sct_test_block_prim_site_network - block all network on primary site nodes
+# sct_test_block_prim_node_network - block all network on primary node
 #
 # (c) 2025 SUSE LLC
 # Author: F.Herschel, L.Pinne.
@@ -16,11 +16,8 @@ source .test_properties
 ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 
 currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
-currPriWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
 
 echo "==== Block network on ${currPrimary} ===="
 # shellcheck disable=SC2029
 ssh "${currPrimary}" "rcnetwork stop & exit" &
-echo "==== Block network on ${currPriWorker} ===="
-ssh "${currPriWorker}" "rcnetwork stop & exit" &
 #
