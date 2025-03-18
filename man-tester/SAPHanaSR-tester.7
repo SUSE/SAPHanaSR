@@ -127,20 +127,21 @@ node1 and node2, SID is Q42, instance number is 85, HANA´s virtual IP address i
 :wq
 .RE
 .PP
-\fB*\fR Adapting openssh 9.6 and newer crypto policies for rsa-ssh.
+\fB*\fR Adapting openssh 9.6 and newer crypto policies for ssh-rsa.
 .PP
-On recent Linux, rsa-ssh keys might be not allowed. Type rsa-ssh could be added
-to the PubkeyAcceptedAlgorithms on the cluster nodes. Please see REQUIREMENTS below
+On recent Linux, ssh-rsa keys might be not allowed. Type ssh-rsa could be added
+to the PubkeyAcceptedAlgorithms on all cluster nodes. Please see REQUIREMENTS below
 and manual pages sshd_config(5), crypto-policies(7).
 .PP
 .RS 2
 # grep -i crypto.polic /etc/ssh/sshd_config.d/* /etc/ssh/sshd*
 .br
-# grep Pubkey /etc/crypto-policies/back-ends/opensshserver.config
+# cp /etc/crypto-policies/back-ends/opensshserver.config \\
 .br
-# cp /etc/crypto-policies/back-ends/opensshserver.config /etc/crypto-policies/back-ends/opensshserver.config.orig
+    /etc/ssh/sshd_config.d/30-SAPHanaSR-tester-crypto.conf
 .br
-# echo ",ssh-rsa" >>/etc/crypto-policies/back-ends/opensshserver.config
+# sed -i s/"PubkeyAcceptedAlgorithms "/"PubkeyAcceptedAlgorithms ssh-rsa,"/g \\
+    /etc/ssh/sshd_config.d/30-SAPHanaSR-tester-crypto.conf
 .br
 # systemctl restart sshd
 .RE
