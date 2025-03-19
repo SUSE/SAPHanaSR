@@ -19,14 +19,18 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--file", help="specify the json file")
 parser.add_argument("--quiet", help="do not output json data on success", action="store_true")
+parser.add_argument("--reverse_logic", help="exit with 1 on sucess instead of 0", action="store_true")
 args = parser.parse_args()
 json_file = None
 quiet = False
+reverse_logic = False
 
 if args.file:
     json_file = args.file
 if args.quiet:
     quiet = True
+if args.reverse_logic:
+    reverse_logic = True
 
 if json_file is None:
     print(f"file not specified")
@@ -37,8 +41,11 @@ try:
         try:
             json_data = (json.load(json_fh))
         except json.decoder.JSONDecodeError as e_jerr:
-            print(f"json error n file {json_file}: ({e_jerr})")
-            exit(1)
+            print(f"json error in file {json_file}: ({e_jerr})")
+            if reverse_logic:
+                exit(0)
+            else:
+                exit(1)
 except FileNotFoundError as e_ferr:
     print(f"file not found ({e_ferr})")
     exit(1)
@@ -49,6 +56,7 @@ except PermissionError as e_ferr:
 if not(quiet):
     print(json.dumps(json_data, indent=4))
 
-exit(0)
-    
-
+if reverse_logic:
+    exit(1)
+else:
+    exit(0)

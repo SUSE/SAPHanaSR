@@ -2,7 +2,7 @@
 # spec file for package SAPHanaSR-tester
 #
 # Author: Fabian Herschel
-# Copyright (c) 2023-2024 SUSE LLC.
+# Copyright (c) 2023-2025 SUSE LLC.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        1.3.5
+Version:        2.0
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -78,8 +78,8 @@ install -m 0644 test/tester/saphana_sr_test.py %{buildroot}/usr/lib/%{name}
 
 # test help programs, test loops and test calls
 install -m 0755 test/bin/cs_* %{buildroot}/usr/bin
-install -m 0755 test/bin/callTest* %{buildroot}/usr/bin
-install -m 0755 test/bin/loopTests* %{buildroot}/usr/bin
+#install -m 0755 test/bin/callTest* %{buildroot}/usr/bin
+#install -m 0755 test/bin/loopTests* %{buildroot}/usr/bin
 install -m 0755 test/bin/sct_* %{buildroot}/usr/bin
 
 # client files
@@ -111,8 +111,6 @@ install -m 0444 man-tester-client/*.7.gz %{buildroot}%{_mandir}/man7
 /usr/bin/SAPHanaSR-checkJson
 /usr/bin/SAPHanaSR-testSelect
 /usr/bin/sct_*
-/usr/bin/callTest*
-/usr/bin/loopTests*
 /usr/bin/cs_ssh
 /usr/bin/SAPHanaSR-testCluster-html
 %license LICENSE

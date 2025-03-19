@@ -7,9 +7,8 @@
         "primary",
         "kill",
         "cluster",
-        "fencing"
+        "onfail"
     ],
-    "todo": "please correct this file",
     "start": "prereq10",
     "steps": [
         {
@@ -26,74 +25,68 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
+            "name": "failure detected - expect node to stay (SOK)",
             "next": "step30",
-            "loop": 120,
-            "wait": 2,
-            "pSite": [
-                "srHook ~ (PRIM|SWAIT|SREG)"
-            ],
-            "sSite": [
-                "srHook ~ (PRIM|SOK)"
-            ],
+            "loop": 180,
+            "wait": 1,
+            "post": "sleep 90",
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "pSite": "pSiteUp",
             "pHost": [
-                "lpt > 1000000000",
                 "clone_state is None",
-                "roles is None",
-                "score is None",
-                "sync_state is None"
-            ],
-            "sHost": [
-                "lpt ~ (1[6-9]........|30)",
-                "clone_state ~ (PROMOTED|DEMOTED)",
-                "roles == master1:master:worker:master",
-                "lss == 4",
-                "srr ~ (S|P)",
-                "score ~ (100|145)",
-                "sync_state ~ (SOK|SFAIL)"
+                "roles is None"
             ]
         },
         {
             "step": "step30",
-            "name": "begin recover",
+            "name": "end recover (SOK) - or jump alternative (SFAIL)",
             "next": "final40",
-            "loop": 180,
+            "loop": 10,
             "wait": 2,
-            "todo": "pHost+sHost to check site-name",
+            "onfail": "alt110",
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "alt110",
+            "name": "failure detected - node down secondary gets primary",
+            "next": "alt120",
+            "loop": 90,
+            "wait": 2,
             "sSite": "pSiteUp",
-            "pSite": [
-                "srHook ~ (PRIM|SWAIT|SREG)"
-            ],
+            "sHost": "pHostUp",
             "pHost": [
-                "lpt ~ (1[6-9]........|30|20|10)",
-                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
-                "roles == master1::worker:",
-                "lss == 1",
-                "srr == P", 
-                "sync_state ~ (PRIM|SFAIL)"
-            ],
-            "sHost": [
-                "lpt ~ (1[6-9]........|30)",
-                "clone_state ~ (DEMOTED|PROMOTED)",
-                "roles == master1:master:worker:master",
-                "lss == 4",
-                "srr == P", 
-                "score ~ (100|145|150)",
-                "sync_state == PRIM"
+                "clone_state is None",
+                "roles is None"
             ]
+        },
+        {
+            "step": "alt120",
+            "name": "takeover completed - SR again in sync",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp"
         },
         {
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 150,
+            "loop": 120,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
-            "pSite": "sSiteUp",
-            "sSite": "pSiteUp",
-            "pHost": "sHostUp",
-            "sHost": "pHostUp"
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
         }
     ]
 }

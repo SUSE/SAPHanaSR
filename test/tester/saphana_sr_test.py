@@ -17,7 +17,7 @@ import json
 import argparse
 import random
 
-# Version: 1.4.20250214
+# Version: 1.5.20250306
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -26,7 +26,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "1.4.20250214"
+    version = "2.0.20250311"
 
     def message(self, msg, **kwargs):
         """
@@ -80,7 +80,8 @@ class SaphanasrTest:
                         'remote_nodes': [],
                         'printTestProperties': False,
                         'debug': False,
-                        'password': None
+                        'password': None,
+                        'on_fail_reaction': 'continue'
                       }
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
@@ -91,6 +92,7 @@ class SaphanasrTest:
         self.__failed_role_counter__ = 0
         self.__min_failed_role_counter__ = 0
         self.__max_failed_role_counter__ = 0
+        self.step_loops = [ "x" ]
         if cmdparse:
             self.debug("DEBUG: lib parses cmdline")
             parser = argparse.ArgumentParser()
@@ -586,6 +588,7 @@ class SaphanasrTest:
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
+        step_alternative = step.get('onfail', None)
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         step_result = { 'start_time': date_time }
         steps_result_dict = self.result.get('steps', {})
@@ -625,6 +628,7 @@ class SaphanasrTest:
             date_time = time.strftime("%Y-%m-%d %H:%M:%S")
             step_loop = { loops: {'time': date_time} }
             step_loops.append(step_loop)
+            self.step_loops = step_loops
             list_of_failures = []
             step_loop.update({'failures': list_of_failures})
             if self.config['dump_failures']:
@@ -669,8 +673,11 @@ class SaphanasrTest:
             step_result.update({ 'status': 'passed' })
             step_result.update({ 'action': step_action })
         else:
-            step_result.update({ 'status': 'failed' })
-            step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
+            if step_alternative:
+                step_result.update({ 'status': 'alternative/on_fail' })
+            else:
+                step_result.update({ 'status': 'failed' })
+                step_result.update({ 'loops': step_loops })  # for failed steps also report the loops and their failures
         # self.result.update({step_id: step_result})
         return process_result
 
@@ -680,13 +687,18 @@ class SaphanasrTest:
         step=self.get_step(test_start)
         step_step = step['step']
         r_code = 0
-        # onfail for first step is 'break'
+        # onfail for FIRST step is 'break' - break, if INITIAL step fails
         onfail = 'break'
         while step_step != "END":
             step_next = step['next']
+            #
+            # prepare an 'alternative' step sequence, if 'alternative/on_fail' is set for this step
+            #
+            step_alternative = step.get('onfail', None)
             process_result = self.process_step(step)
             if process_result == 0:
                 self.message("STATUS: Test step {} PASSED successfully".format(step_step))
+                step=self.get_step(step_next)
             else:
                 r_code = 1
                 self.message("STATUS: Test step {} FAILED successfully ;)".format(step_step))
@@ -694,14 +706,24 @@ class SaphanasrTest:
                 # (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
-            step=self.get_step(step_next)
+                else:
+                    if step_alternative:
+                        # process alternative test steps, so reset the failed test rc_code
+                        r_code = 0
+                        step=self.get_step(step_alternative)
+                    else:
+                        step=self.get_step(step_next)
             if step:
                 step_step = step['step']
             else:
                 # check, why we run into this code path
                 break
-            # onfail for all next steps is 'continue' to run also the recovery steps
-            onfail = 'continue'
+            # onfail for ALL NEXT steps is based on the on_fail_reaction command line option, default is 'continue' to run also the recovery steps
+            onfail_reaction = self.config.get('on_fail_reaction', 'continue')
+            if onfail_reaction == 'exit':
+                onfail = 'break'
+            else:
+                onfail = 'continue'
         return r_code
 
     def process_test(self):
@@ -807,6 +829,10 @@ class SaphanasrTest:
             cmd = "crm node standby {}".format(self.topolo['pHost'])
         elif action_name == "opn":
             cmd = "crm node online {}".format(self.topolo['pHost'])
+        elif action_name == "standby_prim_worker_node":
+            cmd = "crm node standby {}".format(self.topolo['pWorker'])
+        elif action_name == "online_prim_worker_node":
+            cmd = "crm node online {}".format(self.topolo['pWorker'])
         elif action_name == "standby_secn_worker_node":
             cmd = "crm node standby {}".format(self.topolo['sWorker'])
         elif action_name == "online_secn_worker_node":
@@ -837,7 +863,7 @@ class SaphanasrTest:
         action_name_short = action_array[0]
         cmd = ""
         if action_name_short == "sleep":
-            remote = self.config['remote_node']
+            remote = 'localhost'
             if len(action_array) == 2:
                 action_parameter = action_array[1]
             else:
@@ -858,7 +884,7 @@ class SaphanasrTest:
             action_rc = 0
         elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "kill_prim_xsengine", "kill_secn_xsengine", "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain","standby_secn_worker_node", "online_secn_worker_node"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
@@ -874,20 +900,28 @@ class SaphanasrTest:
         if remote_host:
             ssh_client = paramiko.SSHClient()
             ssh_client.load_system_host_keys()
-            if ssh_password:
-                ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
-            else:
-                ssh_client.connect(remote_host, username=user, timeout=10)
+            try:
+                if ssh_password:
+                    ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
+                else:
+                    ssh_client.connect(remote_host, username=user, timeout=10)
+            except Exception as e:
+                self.message(f"FAILURE: ssh connection to failed - ({e})")
+                check_result=("", "", 20000)
             cmd_timeout=f"timeout={ssh_timeout}"
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
-            (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
-            result_stdout = cmd_stdout.read().decode("utf8")
-            result_stderr = cmd_stderr.read().decode("utf8")
-            result_rc = cmd_stdout.channel.recv_exit_status()
-            check_result = (result_stdout, result_stderr, result_rc)
-            ssh_client.close()
-            self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            try:
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+                self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+            except Exception as e:
+                self.message(f"FAILURE: ssh connection to failed - ({e})")
+                check_result=("", "", 20000)
         else:
             self.message("FAILURE: ssh connection to failed - remote_host not specified")
             check_result=("", "", 20000)

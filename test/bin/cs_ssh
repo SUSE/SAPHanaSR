@@ -47,7 +47,8 @@ class SshMultiNode:
                         'hosts': [],
                         'quiet': False,
                         'report_hostname': False,
-                        'user': 'root'
+                        'user': 'root',
+                        'keyfile': '/root/.ssh/id_rsa'
                       }
 
 
@@ -57,21 +58,25 @@ class SshMultiNode:
         returns a tuple ( stdout-string, stderr, string, rc )
         """
         if host:
-            try:
+                #try:
                 ssh_client = SSHClient()
                 ssh_client.load_system_host_keys()
-                ssh_client.connect(host, username=user)
+                ssh_keyfile = self.config['keyfile']
+                #ssh_client.connect(host, username=user )
+                ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
                 result_stderr = cmd_stderr.read().decode("utf8")
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
-            except Exception as ssh_muell:
-                if test01.config['quiet'] is not True:
-                    self.message(f"ssh connection to {host} did not work ...")
-                    self.message(f"{type(ssh_muell)}")
-                check_result=("", "", 2)
+                """
+                except Exception as ssh_muell:
+                    if test01.config['quiet'] is not True:
+                        self.message(f"ssh connection to {host} did not work ...")
+                        self.message(f"{type(ssh_muell)}")
+                    check_result=("", "", 2)
+                """
         else:
             check_result=("", "", 2)
         return check_result
@@ -82,6 +87,7 @@ test01 = SshMultiNode()
 parser = argparse.ArgumentParser()
 parser.add_argument("--hosts", nargs="*", help="hosts to connect to (stops after first successful command)")
 parser.add_argument("--command", help="command to be called on the hosts")
+parser.add_argument("--keyfile", help="ssh private key to be used")
 parser.add_argument("--user", help="linux user to be used for ssh connection (default is root)")
 parser.add_argument("--quiet", help="linux user to be used for ssh connection (default is root)", action="store_true")
 parser.add_argument("--report_hostname", help="report hostname of succesful ssh connection", action="store_true")
@@ -96,6 +102,8 @@ if args.quiet:
     test01.config['quiet'] = args.quiet
 if args.report_hostname:
     test01.config['report_hostname'] = args.report_hostname
+if args.keyfile:
+    test01.config['keyfile'] = args.keyfile
 
 for host in test01.config['hosts']:
     result = test01.do_ssh(host, test01.config['user'], test01.config['command'])

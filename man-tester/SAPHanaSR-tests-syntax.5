@@ -1,8 +1,9 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR-tests-syntax 5 "10 Jan 2025" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tests-syntax 5 "14 Mar 2025" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
+.\"
 SAPHanaSR-tests-syntax \- Syntax for SAPHanaSR test cases and properties.
 .PP
 .\"
@@ -21,8 +22,9 @@ For tests involving complex actions on the cluster nodes, predefined shell
 scripts are executed remotely.
 .\" TODO state machine.
 .PP
-See manual pages SAPHanaSR-tests-angi-ScaleUp(7) and
-SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases.
+See manual pages SAPHanaSR-tests-angi-ScaleUp(7),
+SAPHanaSR-tests-angi-ScaleUp_on-fail-fence(7), SAPHanaSR-tests-angi-ScaleOut(7),
+and SAPHanaSR-tests-angi-ScaleOut_on-fail-fence(7) for predefined test cases.
 .PP
 .\"
 .SH SYNTAX
@@ -30,28 +32,40 @@ SAPHanaSR-tests-angi-ScaleOut(7) for predefined test cases.
 Test cases are defined in JSON files. Each test case is described in one file.
 It also can reference to defaults.json for common status definitions.
 .PP
+\fB*\fR Test case fields
+.PP
 TODO on first level
 [ test | name | purpose | start | comment | steps ]
 .\" TODO comment or remark?
-.PP
+.RS 2
 .TP
 \fBtest\fP
+.br
 test identifier, unique
 .TP
 \fBname\fP
+.br
 test description
 .TP
 \fBpurpose\fB
 list of keywords, indicating which topology, components and case is tested, see below - [ angi | classic ] [ ScaleUp | ScaleOut ] [ master | worker ] [ ... ]
 .TP
 \fBstart\fP
+.br
 name of step to start the test with
 .TP
 \fBcomment\fP
-comment, just a string
+comment, just a string (optional)
 .TP
 \fBsteps\fP
-test steps - [ step | name | next | loop | wait | post | comment | <status> ]
+.br
+test steps, see below - [ step | name | next | loop | wait | post | comment | <\fIstatus\fR> ]
+.RE
+.PP
+\fB*\fR Test steps
+.PP
+TODO
+.RS 2
 .TP
 \fBstep\fP
 step identifier, unique
@@ -60,7 +74,10 @@ step identifier, unique
 step description
 .TP
 \fBnext\fP
-name of step to do next
+name of step to do next, if this step succeeds
+.TP
+\fBonfail\fP
+name of step to do next, if this step fails (optional)
 .TP
 \fBloop\fP
 maximum number of loops to wait and check for status
@@ -69,99 +86,99 @@ maximum number of loops to wait and check for status
 how many seconds to wait for each loop TODO
 .TP
 \fBcomment\fP
-comment, just a string
+comment, just a string (optional)
 .TP
-\fBstatus\fP
-status definition, see below
-.TP
-\fBstart\fP
-name of step to start the test with
-.TP
-\fBcomment\fP
-comment, just a string
+<\fBstatus\fP>
+status definition, see below - [ pHost | sHost | pSite | sSite | pWorker | sWorker | ... ]
+.RE
 .PP
 \fB*\fP Test purpose
 .\" TODO script to list/find testcases by purpose
 .PP
 TODO
+.RS 2
 .TP
-alert
+\fBalert\fR
 test alert agent
 .TP
-angi
+\fBangi\fR
 SAPHanaSR-angi, scale-up or scale-out
 .TP
-block
+\fBblock\fR
 block something, for testing a failure
 .TP
-classic
+\fBclassic\fR
 SAPHanaSR or SAPHanaSR-ScaleOut
 .TP
-cluster
+\fBcluster\fR
 test cluster failure
 .TP
-degraded
+\fBdegraded\fR
 test leads to degraded HANA (lss=2), HANA recovers on its own
 .TP
-fencing
+\fBfencing\fR
 test leads to node fencing
 .TP
-hadr
+\fBhadr\fR
 test HANA HA/DR provider hook script
 .TP
-hana
+\fBhana\fR
 test HANA failure
 .TP
-kill
+\fBkill\fR
 kill something, for testing a failure
 .TP
-maintenance
+\fBmaintenance\fR
 test a maintenance procedure
 .TP
-master
+\fBmaster\fR
 test on HANA master nameserver node
 .TP
-network
+\fBnetwork\fR
 test network failure
 .TP
-node
+\fBnode\fR
 test node failure
 .TP
-primary
+\fBprimary\fR
 test failure at primary site
 .TP
-progressive
+\fBprogressive\fR
 configuration variant "progressive"
 .TP
-ScaleOut
+\fBScaleOut\fR
 scale-out topology
 .TP
-ScaleUp
+\fBScaleUp\fR
 scale-up topology
 .TP
-secondary
+\fBsecondary\fR
 test failure at secondary site
 .TP
-site
+\fBsite\fR
 failure of complete site (all nodes)
 .TP
-split-brain
+\fBsplit-brain\fR
 test split-brain
 .TP
-storage
+\fBstorage\fR
 test storage or IO stack failure
 .TP
-susChkSrv
+\fBsusChkSrv\fR
 test susChkSrv.py HA/DR provider hook script
 .TP
-susHanaSR
+\fBsusHanaSR\fR
 test susHanaSR.py HA/DR provider hook script
 .TP
-susTkOver
+\fBsusTkOver\fR
 test susTkOver.py HA/DR provider hook script
 .TP
-worker
+\fBonfail\fR
+test may pass with an alternate result
+.TP
+\fBworker\fR
 test on HANA worker node
+.RE
 .PP
 \fB*\fP Test step status <status>
 .PP
@@ -170,7 +187,7 @@ The attributes are arranged along the CIB and SAPHanaSR-showAttr sections.
 The 
 .PP
 [ pHost | sHost | pWorker | sWorker | pSite | sSite | pGlobal | sGlobal ]
-.PP
+.RS 2
 .TP
 pHost, sHost, pWorker, sWorker
 node attributes
@@ -237,6 +254,7 @@ host s is down (scale-out: master node)
 sWorkerDown
 worker node s is down (scale-out)
 not yet implemented
+.RE
 .PP
 Note: Prefixes "s" and "p" are statically indicating geographical sites, as
 seen at the beginning of a test. If a takeover happens during that test, the
@@ -260,6 +278,7 @@ A set of comparators is implemented. Some take integers, some take regular
 expression. In addition the "None" TODO. 
 .\" saphana_sr_test.py
 .\" re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+.RS 2
 .TP
 ==
 equal, integer
@@ -291,12 +310,14 @@ not like, regular expression
 .TP
 is
 TODO, the string "None"
+.RE
 .PP
 \fB*\fP Test step action "post"
 .PP
 TODO
 .PP
 action on cluster after step, one of:
+.RS 2
 .TP
 bmt
 block manual takeover
@@ -381,6 +402,7 @@ execute command
 .TP
 sleep <seconds>
 sleep some seconds
+.RE
 .PP
 See also manual pages SAPHanaSR-tests-angi-ScaleUp(7), 
 SAPHanaSR-tests-angi-ScaleOut(7) and SAPHanaSR-tests-description(7).
@@ -422,7 +444,34 @@ for information on output files and formats.
 .\"
 .SH EXAMPLES
 .\"
-TODO
+\fB*\fP Defaults definition for classical SAPHanaSR scale-up cluster.
+.PP
+This JSON file does not define a test. It defines default statuses for the
+classical SAPHanaSR scale-up scenario. The default statuses can be referenced in
+all tests for the given scenario.
+.PP
+.RS 2
+# cat /usr/share/SAPHanaSR-tester/json/classic-ScaleUp/defaults.json
+.RE
+.PP
+\fB*\fP Basic test for sane and idle SAPHanaSR-angi scale-up cluster.
+.PP
+This test is for SAPHanaSR-angi scale-up performance-optimised, both variants.
+It does nothing. It just checks if Linux cluster and HANA are fine, then it
+waits 240 seconds and checks again. The status for healthy nodes and sites are
+inherited from defaults, e.g. pHostUp.
+.PP
+.RS 2
+# cat /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/nop.json
+.RE
+.PP
+\fB*\fP Test failing pacemaker-controld on primary node, SAPHanaSR-angi scale-up.
+.PP
+TODO onfail:  two valid results
+.PP
+.RS 2
+# less /usr/share/SAPHanaSR-tester/json/angi-ScaleUp/kill_prim_pacemkr-ctrld.json
+.RE
 .PP
 .\"
 .SH FILES
@@ -459,6 +508,7 @@ See the REQUIREMENTS section in SAPHanaSR-tester(7).
 .PP
 .\"
 .SH BUGS
+.\"
 The SAPHanaSR-tester is under development. Syntax and formats are subject to
 change.
 .br
@@ -468,6 +518,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+.\"
 \fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
 \fBSAPHanaSR-testCluster-output\fP(5) ,
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
@@ -484,10 +535,12 @@ https://www.suse.com/releasenotes/
 .PP
 .\"
 .SH AUTHORS
+.\"
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
+.\"
 (c) 2023-2025 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.

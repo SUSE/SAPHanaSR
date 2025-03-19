@@ -379,7 +379,7 @@ function saphana_init() {
     # get landscape config (lss and roles)
     #
     # TODO PRIO1: NG - if clone_state or roles are (still) empty, then do not trust in the cluster attributes
-    #                  if roles is not se, them SAPHanaTopology did not report that so far, so check for life values
+    #                  if roles is not set, then SAPHanaTopology did not reported the roles so far; RA needs to check for life values
     # TODO PRIO1: NG - check for global variable gClone (set by clone_state attr)
     #
     gRole=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_ROLES[@]}")
@@ -810,7 +810,7 @@ function saphana_start_primary_handle_register_advice() {
     case "$lss" in
         2 | 3 | 4 ) # upps we are up - but shouldn't? - we should not register with started HDB
             super_ocf_log info "LPA: landscape: UP, LPA: register ==> take down"
-            set_crm_promote -inf
+            set_crm_promote -INFINITY
             rc="$OCF_NOT_RUNNING"
             ;;
         1 ) # lets try to register
@@ -948,7 +948,7 @@ function saphana_start_primary() {
             *)  # LPA failed with an unknown status - FAIL resource
                 lpa_advice="fail"
                 super_ocf_log info "LPA: LPA reports FAIL"
-                set_crm_promote -inf
+                set_crm_promote -INFINITY
                 rc="$OCF_NOT_RUNNING"
                 ;;
         esac
@@ -1630,6 +1630,14 @@ function saphana_monitor_secondary() {
     super_ocf_log debug "DBG: saphana_monitor_clone: HANA_STATE_SECONDARY"
     get_hana_landscape_status "cache"; lss=$?
     super_ocf_log debug "DBG: saphana_monitor_clone: get_hana_landscape_status=$lss"
+    #
+    # check, if we have a pending HA/DR provider attribute files - e.g. from a former primary time period
+    #   these files needs to be removed to avoid applying very old values after a takeover (to be new primary)
+    #
+    for rFile in "/hana/shared/$SID/$InstanceName/.crm_attribute."*; do
+        # recover_site_attributes_from_file "$rFile"
+        rm "$rFile"
+    done
     case "$lss" in
         0 ) # FATAL
             # TODO: PRIO3: is OCF_ERR_GENERIC best option?
@@ -1922,7 +1930,10 @@ function saphana_promote_clone() {
                             remoteHanaHost=$(get_hana_site_attribute "$remSite" "${ATTR_NAME_HANA_SITE_MNS[@]}")
                             crm_node --list | grep -q "$remoteHanaHost member"; still_member=$?
                             remote_score=$("$CRM_PROMO" -N "$remoteHanaHost" -Gq "$CRM_PROMO_PARAMS")
-                            if [[ "$still_member" == "0" && "$remote_score" == "" ]]; then
+                            CRM_NODE_STATUS=$(crm_mon -1  --include none,nodes --node "$remoteHanaHost")
+                            if [[ "$CRM_NODE_STATUS" =~ "Online:".*"$remoteHanaHost" ]]; then still_crm_online=0; else still_crm_online=1; fi
+                            super_ocf_log info "DEC: SAP HANA TAKEOVER DECLINE?: - still_member=$still_member, still_crm_online=$still_crm_online, remote_score=$remote_score"
+                            if [[ "$still_crm_online" == "0" && "$remote_score" == "" ]]; then
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER DECLINED: - Remote score missing but node is member"
                             else
                                 super_ocf_log info "ACT: SAP HANA TAKEOVER: - Promote REPLICA $SID-$InstanceName to be primary."

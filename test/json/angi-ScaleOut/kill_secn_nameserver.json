@@ -4,10 +4,11 @@
     "purpose": [
         "angi",
         "ScaleOut",
-        "secondary",
         "kill",
+        "secondary",
         "hana",
-        "master"
+        "master",
+        "degraded"
     ],
     "start": "prereq10",
     "steps": [
@@ -27,38 +28,32 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
+            "name": "srHook SFAIL",
             "next": "final40",
             "loop": 90,
-            "wait": 2,
+            "wait": 1,
+            "post": "sleep 120",
             "pSite": "pSiteUp",
-            "pHost": "pHostUp",
-            "pWorker": "pWorkerUp",
             "sSite": [
-                "lpt ~ (10|30)",
-                "lss == 2",
-                "srr == S",
                 "srHook == SFAIL"
             ],
-            "sHost": [
-                "clone_state == DEMOTED",
-                "roles == master1:master:worker:master",
-                "score ~ (100|-INFINITY)"
-            ]
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
         },
         {
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 120,
+            "loop": 240,
             "wait": 2,
             "post": "cleanup",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
             "sHost": "sHostUp",
-            "pHost": "pWorkerUp",
-            "sHost": "sWorkerUp"
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
         }
     ]
 }

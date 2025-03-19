@@ -2,6 +2,18 @@
 #
 # sct_test_kill_prim_pacemkr-ctrld - kill pacemaker-controld on primary node
 #
+# (c) 2025 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+function kill_again
+{
+    for i in 1 2 3 4 5 6 7 8 9; do
+        ssh "$currPrimary" 'pkill -u hacluster -f pacemaker-controld -11 & exit'
+        sleep 1
+    done
+}
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
@@ -11,6 +23,5 @@ currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | a
 echo "==== Kill pacemaker-controld ===="
 # TODO signal 9 ?
 ssh "$currPrimary" 'pgrep -u hacluster -f pacemaker-controld; pkill -u hacluster -f pacemaker-controld -11 & exit'
-sleep 10
-ssh -o ConnectTimeout=5 "$currPrimary" 'pgrep -u hacluster -f pacemaker-controld'
 #
+kill_again &
