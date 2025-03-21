@@ -81,7 +81,8 @@ class SaphanasrTest:
                         'printTestProperties': False,
                         'debug': False,
                         'password': None,
-                        'on_fail_reaction': 'continue'
+                        'on_fail_reaction': 'continue',
+                        'check_host': True
                       }
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
@@ -901,6 +902,8 @@ class SaphanasrTest:
             ssh_client = paramiko.SSHClient()
             ssh_client.load_system_host_keys()
             try:
+                if not self.config ['check_host']:
+                    ssh_client.set_missing_host_key_policy(AutoAddPolicy())
                 if ssh_password:
                     ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
                 else:
