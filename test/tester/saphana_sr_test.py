@@ -80,6 +80,7 @@ class SaphanasrTest:
                         'remote_nodes': [],
                         'printTestProperties': False,
                         'debug': False,
+                        'user': 'root',
                         'password': None,
                         'on_fail_reaction': 'continue',
                         'check_host': True
@@ -195,7 +196,7 @@ class SaphanasrTest:
                     sr_out = local_sr.stdout.decode()
                     break
             else:
-                result_sr = self.__do_ssh__(remote_node, "root", cmd, timeout=15, password=self.config['password'])
+                result_sr = self.__do_ssh__(remote_node, self.config['user'], cmd, timeout=15, password=self.config['password'])
                 if result_sr[2] != 20000:
                     if switched_remote:
                         self.message(f"STATUS: get data from {remote_node}")
@@ -766,7 +767,7 @@ class SaphanasrTest:
                 self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
             else:
                 self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
-                a_result = self.__do_ssh__(remote, "root", cmd, password=self.config['password'])
+                a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'])
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
