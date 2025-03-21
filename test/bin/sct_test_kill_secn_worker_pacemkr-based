@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+# sct_test_kill_secn_worker_pacemkr-based - kill pacemaker-based on secondary worker node
+#
+# (c) 2025 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source .test_properties
+currSecnWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
+
+echo "==== Kill pacemaker-based ===="
+# TODO signal 9 ?
+ssh "$currSecnWorker" 'pgrep -u hacluster -f pacemaker-based; pkill -u hacluster -f pacemaker-based -11 & exit'
+#
