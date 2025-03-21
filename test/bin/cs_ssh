@@ -18,6 +18,7 @@ import argparse
 # import random
 
 from paramiko import SSHClient
+from paramiko import AutoAddPolicy
 
 class SshMultiNode:
 
@@ -63,6 +64,8 @@ class SshMultiNode:
                 ssh_client.load_system_host_keys()
                 ssh_keyfile = self.config['keyfile']
                 #ssh_client.connect(host, username=user )
+                # optionally do not check against known_hosts - for labs only and for rapid changing host keys (redeployment)
+                ssh_client.set_missing_host_key_policy(AutoAddPolicy())
                 ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
@@ -89,7 +92,7 @@ parser.add_argument("--hosts", nargs="*", help="hosts to connect to (stops after
 parser.add_argument("--command", help="command to be called on the hosts")
 parser.add_argument("--keyfile", help="ssh private key to be used")
 parser.add_argument("--user", help="linux user to be used for ssh connection (default is root)")
-parser.add_argument("--quiet", help="linux user to be used for ssh connection (default is root)", action="store_true")
+parser.add_argument("--quiet", help="supress INFO messages", action="store_true")
 parser.add_argument("--report_hostname", help="report hostname of succesful ssh connection", action="store_true")
 args = parser.parse_args()
 if args.hosts:
