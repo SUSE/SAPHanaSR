@@ -23,13 +23,13 @@ full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source /usr/bin/sct_test_lib
 source .test_properties
+currPrimary=$(get_curr_prim "$node01")
+currSecondary=$(get_curr_secn "${node01}")
 
 # shellcheck disable=SC2029
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resource"
 ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 
-currPrimary=$(get_curr_prim "$node01")
-currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 #########################################
 # VHOSTS
@@ -46,10 +46,8 @@ if [[ -z "$vhostSecn ]]; then
     vhostPrim="$currSecondary"
 fi
 
-sitePrimary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
-sitePrimary="${sitePrimary//\"/}"
-siteSecondary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currSecondary")
-siteSecondary="${siteSecondary//\"/}"
+sitePrimary=$(get_site "${node01}" "$currPrimary")
+siteSecondary=$(get_site "${node01}" "$currSecondary")
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary, vhostPrim=$vhostPrim, vhostSecn=$vhostSecn"
 

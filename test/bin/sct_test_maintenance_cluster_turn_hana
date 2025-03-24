@@ -23,12 +23,12 @@ full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source /usr/bin/sct_test_lib
 source .test_properties
+currPrimary=$(get_curr_prim "$node01")
+currSecondary=$(get_curr_secn "${node01}")
 
 # shellcheck disable=SC2029
 ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
 
-currPrimary=$(get_curr_prim "$node01")
-currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
 
 #########################################
 # VHOSTS
@@ -36,8 +36,8 @@ currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" |
 # SAPHanaSR-showAttr --format=tester | grep pizbuin02.*vhost
 #########################################
 
-vhostPrim="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
-vhostSecn="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
+vhostPrim=$(get_vhost "${node01}" "$currPrimary")
+vhostSecn=$(get_vhost "${node01}" "$currSecondary")
 if [[ -z "$vhostPrim" ]]; then
     vhostPrim="$currPrimary"
 fi
@@ -47,8 +47,7 @@ fi
 
 echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
 
-sitePrimary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
-sitePrimary="${sitePrimary//\"/}"
+sitePrimary=$(get_site "${node01}" "$currPrimary")
 
 echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
