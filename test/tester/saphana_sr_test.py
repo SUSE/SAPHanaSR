@@ -21,6 +21,7 @@ import random
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
+from paramiko import AutoAddPolicy
 
 class SaphanasrTest:
     """
@@ -83,7 +84,8 @@ class SaphanasrTest:
                         'user': 'root',
                         'password': None,
                         'on_fail_reaction': 'continue',
-                        'check_host': True
+                        'check_host': True,
+                        'use_sudo': False,
                       }
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
@@ -542,7 +544,7 @@ class SaphanasrTest:
         
         return rc_checks
 
-    def __process_fatal_condition(self, step, **kwagrs):
+    def __process_fatal_condition(self, step, **kwargs):
         """ __process_fatal_conditions 
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
@@ -913,6 +915,11 @@ class SaphanasrTest:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)
             cmd_timeout=f"timeout={ssh_timeout}"
+            #
+            # "sudo-i-fy" the command to be able to call root command as deputy user
+            #
+            if self.config['use_sudo']:
+                cmd = f"sudo {cmd}"
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
             try:
