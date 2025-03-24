@@ -27,7 +27,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.0.20250311"
+    version = "2.2.20250324"
 
     def message(self, msg, **kwargs):
         """
@@ -177,6 +177,8 @@ class SaphanasrTest:
         """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
+        if self.config['use_sudo']:
+            cmd = f"sudo -u root {cmd}"
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
@@ -769,7 +771,7 @@ class SaphanasrTest:
                 self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
             else:
                 self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
-                a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'])
+                a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
@@ -778,10 +780,12 @@ class SaphanasrTest:
         """ perform a given action on SAP HANA primary or secondary """
         remote = self.config['remote_node']
         test_sid = self.test_data['sid']
+        test_ino = self.test_data['instNo']
         cmd = ""
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_secn_worker_inst":
             remote = self.topolo['sWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
@@ -818,6 +822,8 @@ class SaphanasrTest:
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
+        if self.config['use_sudo']:
+            cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
 
     def action_on_cluster(self, action_name):
@@ -901,6 +907,7 @@ class SaphanasrTest:
         """
         ssh_timeout = kwargs.get('timeout', None)
         ssh_password = kwargs.get('password', None)
+        do_log = kwargs.get('log', False)
         if remote_host:
             ssh_client = paramiko.SSHClient()
             ssh_client.load_system_host_keys()
@@ -918,10 +925,12 @@ class SaphanasrTest:
             #
             # "sudo-i-fy" the command to be able to call root command as deputy user
             #
-            if self.config['use_sudo']:
-                cmd = f"sudo {cmd}"
+            #if self.config['use_sudo']:
+            #    cmd = f"sudo {cmd}"
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
+            if do_log:
+                self.message(f"CALL: ssh cmd '{cmd}' timeout={ssh_timeout}")
             try:
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
@@ -930,6 +939,8 @@ class SaphanasrTest:
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
                 self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+                if do_log:
+                    self.message(f"CALL: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
             except Exception as e:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)
