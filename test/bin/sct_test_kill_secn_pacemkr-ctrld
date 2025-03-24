@@ -11,7 +11,7 @@ set -u
 function kill_again
 {
     for i in 1 2 3 4 5 6 7 8 9; do
-        ssh "$currSecondary" 'pkill -u hacluster -f pacemaker-controld -11 & exit'
+        kill_process "$currSecondary" "hacluster" "pacemaker-controld" "11"
         sleep 1
     done
 }
@@ -20,10 +20,10 @@ full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source /usr/bin/sct_test_lib
 source .test_properties
-currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+currSecondary=$(get_curr_secn "$node01")
 
 echo "==== Kill pacemaker-controld ===="
 # TODO signal 9 ?
-ssh "$currSecondary" 'pgrep -u hacluster -f pacemaker-controld; pkill -u hacluster -f pacemaker-controld -11 & exit'
+kill_process "$currSecondary" "hacluster" "pacemaker-controld" "11" & exit
 #
 kill_again &
