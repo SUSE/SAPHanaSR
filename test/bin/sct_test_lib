@@ -1,0 +1,39 @@
+#!/bin/bash
+#
+# sct_test_lib
+#
+# (c) 2025 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+
+function get_curr_prim()
+{
+    # get_curr_prim <node>
+    local currPrimary
+    local node01="$1"
+    currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+    echo "$currPrimary"
+    return 0
+}
+
+function get_curr_secn()
+{
+    # get_curr_secn <node>
+    local currSecondary
+    local node01="$1"
+    currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+    echo "$currPrimary"
+    return 0
+}
+
+function kill_process()
+{
+    # kill_process <node> <proc-user> <proc-pattern> <signal>
+    local node01="$1"
+    local proc_user="$2"
+    local proc_pattern="$3"
+    local proc_signal="$4"
+    ssh "${node01}" "pgrep -u ${proc_user} -f ${proc_pattern}; pkill -u $proc_user} -f ${proc_pattern}"
+}
