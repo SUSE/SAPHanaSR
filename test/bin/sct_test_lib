@@ -24,7 +24,7 @@ function get_curr_secn()
     local currSecondary
     local node01="$1"
     currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
-    echo "$currPrimary"
+    echo "$currSecondary"
     return 0
 }
 
@@ -34,7 +34,7 @@ function get_curr_prim_worker()
     local currPrimWorker
     local node01="$1"
     currPrimWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
-    echo "$currPrimWorker
+    echo "$currPrimWorker"
     return 0
 }
 
@@ -44,7 +44,31 @@ function get_curr_secn_worker()
     local currSecnWorker
     local node01="$1"
     currSecnWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
-    echo "$currSecnWorker
+    echo "$currSecnWorker"
+    return 0
+}
+
+function get_site()
+{
+    # get_site <node> <hana-node>
+    local site
+    local node01="$1"
+    local hana_node="$2"
+    site=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node")
+    site="${site//\"/}"
+    echo "$site"
+    return 0
+}
+
+function get_vhost()
+{
+    # get_vhost <node> <hana-node>
+    local vhost
+    local node01="$1"
+    local hana_node="$2"
+    vhost=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node")
+    vhost="${vhost//\"/}"
+    echo "$vhost"
     return 0
 }
 
@@ -56,6 +80,7 @@ function kill_process()
     local proc_pattern="$3"
     local proc_signal="$4"
     ssh "${node01}" "pgrep -u ${proc_user} -f ${proc_pattern}; pkill -u $proc_user} -f ${proc_pattern}"
+    return 0
 }
 
 function run_iptables()
@@ -64,4 +89,5 @@ function run_iptables()
     local node01="$1"
     local iptables_cmd="$2"
     ssh "${node01}" "$iptables_cmd"
+    return 0
 }
