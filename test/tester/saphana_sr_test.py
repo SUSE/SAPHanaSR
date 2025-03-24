@@ -21,7 +21,7 @@ import random
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
-from paramiko import AutoAddPolicy
+# from paramiko import AutoAddPolicy
 
 class SaphanasrTest:
     """
@@ -906,7 +906,7 @@ class SaphanasrTest:
             ssh_client.load_system_host_keys()
             try:
                 if not self.config ['check_host']:
-                    ssh_client.set_missing_host_key_policy(AutoAddPolicy())
+                    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 if ssh_password:
                     ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
                 else:
