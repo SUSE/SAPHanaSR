@@ -782,6 +782,7 @@ class SaphanasrTest:
         test_sid = self.test_data['sid']
         test_ino = self.test_data['instNo']
         cmd = ""
+        sudo_cmd = ""
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
@@ -789,39 +790,51 @@ class SaphanasrTest:
         elif action_name == "kill_secn_worker_inst":
             remote = self.topolo['sWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_worker_inst":
             remote = self.topolo['pWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_worker_indexserver":
             remote = self.topolo['pWorker']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_xsengine":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_secn_xsengine":
             remote = self.topolo['sHost']
             cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_prim_nameserver":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
         elif action_name == "kill_secn_nameserver":
             remote = self.topolo['sHost']
             cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
@@ -832,38 +845,52 @@ class SaphanasrTest:
         resource = self.test_data['mstResource']
         cmd = ""
         if action_name == "ssn":
-            cmd = "crm node standby {}".format(self.topolo['sHost'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['sHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "osn":
-            cmd = "crm node online {}".format(self.topolo['sHost'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['sHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "spn":
-            cmd = "crm node standby {}".format(self.topolo['pHost'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['pHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "opn":
-            cmd = "crm node online {}".format(self.topolo['pHost'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['pHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_prim_worker_node":
-            cmd = "crm node standby {}".format(self.topolo['pWorker'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['pWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_prim_worker_node":
-            cmd = "crm node online {}".format(self.topolo['pWorker'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['pWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_secn_worker_node":
-            cmd = "crm node standby {}".format(self.topolo['sWorker'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['sWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_secn_worker_node":
-            cmd = "crm node online {}".format(self.topolo['sWorker'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['sWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "cleanup":
-            cmd = "crm resource cleanup {}".format(resource)
+            cmd = "/usr/sbin/crm resource cleanup {}".format(resource)
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_worker_node":
             remote = self.topolo['sWorker']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_node":
             remote = self.topolo['sHost']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_prim_worker_node":
             remote = self.topolo['pWorker']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_prim_node":
             remote = self.topolo['pHost']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "simulate_split_brain":
             remote = self.topolo['sHost']
-            cmd = f"iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
+            cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
+            sudo_cmd = f"sudo -u root {cmd}"
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
