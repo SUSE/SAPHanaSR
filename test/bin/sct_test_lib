@@ -6,14 +6,24 @@
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
-
 set -u
+
+function init()
+{
+    G_CMD_CRM="/usr/sbin/crm"
+    G_CMD_IPTABLES="/usr/sbin/iptables"
+    G_CMD_SYSTEMCTL="/usr/bin/systemctl"
+    G_CMD_SHOWATTR="/usr/bin/SAPHanaSR-showAttr"   # for 'classic' you need the SAPHanaSR-tester-client package
+}
+
+
+
 function get_curr_prim()
 {
     # get_curr_prim <node>
     local currPrimary
     local node01="$1"
-    currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+    currPrimary="$(ssh "${node01}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
     echo "$currPrimary"
     return 0
 }
@@ -23,7 +33,7 @@ function get_curr_secn()
     # get_curr_secn <node>
     local currSecondary
     local node01="$1"
-    currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+    currSecondary="$(ssh "${node01}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
     echo "$currSecondary"
     return 0
 }
@@ -33,7 +43,7 @@ function get_curr_prim_worker()
     # get_curr_prim <node>
     local currPrimWorker
     local node01="$1"
-    currPrimWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
+    currPrimWorker="$(ssh "${node01}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
     echo "$currPrimWorker"
     return 0
 }
@@ -43,7 +53,7 @@ function get_curr_secn_worker()
     # get_curr_secn_worker <node>
     local currSecnWorker
     local node01="$1"
-    currSecnWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
+    currSecnWorker="$(ssh "${node01}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
     echo "$currSecnWorker"
     return 0
 }
@@ -54,7 +64,7 @@ function get_site()
     local site
     local node01="$1"
     local hana_node="$2"
-    site=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node")
+    site=$(ssh "${node01}" "$G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node")
     site="${site//\"/}"
     echo "$site"
     return 0
@@ -66,7 +76,7 @@ function get_vhost()
     local vhost
     local node01="$1"
     local hana_node="$2"
-    vhost=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node")
+    vhost=$(ssh "${node01}" "$G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node")
     vhost="${vhost//\"/}"
     echo "$vhost"
     return 0
@@ -85,9 +95,18 @@ function kill_process()
 
 function run_iptables()
 {
-    # kill_process <node> <proc-user> <proc-pattern> <signal>
+    # run_iptables <node> <iptables-command> (without 'iptables')
     local node01="$1"
     local iptables_cmd="$2"
-    ssh "${node01}" "$iptables_cmd"
+    ssh "${node01}" "$G_CMD_IPTABLES $iptables_cmd"
+    return 0
+}
+
+function run_crm()
+{
+    # run_crm <node> <crm-command> (without "crm")
+    local node01="$1"
+    local crm_cmd="$2"
+    ssh "${node01}" "$G_CMD_CRM $crm_cmd"
     return 0
 }
