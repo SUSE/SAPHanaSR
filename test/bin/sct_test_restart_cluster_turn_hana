@@ -78,14 +78,14 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "SAP HANA DBs started"
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currSecondary: sr_takeover suspendPrimary"
 
-ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
+run_hdbnsutil "$currSecondary" 'su - '"$sidadm"' -c "-sr_takeover --suspendPrimary"'
 
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( ssh "$currPrimary" 'cat '"$cacheFile"'' )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
-ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
+run_hdbnsutil "$currPrimary" 'su - '"$sidadm"' -c "-sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currSecondary ($siteSecondary), s=$currPrimary"
 
