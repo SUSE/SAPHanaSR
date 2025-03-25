@@ -19,7 +19,7 @@ currPrimary=$(get_curr_prim "$node01")
 echo "==== Kill primary HANA IP address ===="
 
 # TODO could property ipAddr be used? or get all data by one call
-IP=$( ssh "$currPrimary" "crm configure show" |\
+IP=$( run_crm "$currPrimary" "configure show" |\
     grep -A4 primitive.*IPaddr2 | grep params.ip=" | awk -F'=' '{print $2}' |\
     awk '{print $1}' )
 IPNM=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $2}' )
@@ -29,5 +29,5 @@ ssh "$currPrimary" "ip a d '"${IPNM}"' dev '"${NIC}"'"
 # TODO sleep twice the monitor interval
 sleep 60
 # TODO specify cleanup rsc_ip_
-ssh "$currPrimary" "crm resource cleanup; cs_wait_for_idle -s 2"
+run_crm "$currPrimary" "resource cleanup; cs_wait_for_idle -s 2"
 #
