@@ -25,6 +25,9 @@ function init()
     G_CMD_CAT="/usr/bin/cat"
 }
 
+#
+# cluster calls either need root or user with haclient group
+#
 function get_curr_prim()
 {
     # get_curr_prim <node>
@@ -89,6 +92,9 @@ function get_vhost()
     return 0
 }
 
+#
+# kill process either need root or process-owner user
+#
 function kill_process()
 {
     # kill_process <node> <proc-user> <proc-pattern> <signal>
@@ -100,6 +106,9 @@ function kill_process()
     return 0
 }
 
+#
+# iptables need root user
+#
 function run_iptables()
 {
     # run_iptables <node> <iptables-command> (without 'iptables')
@@ -109,6 +118,9 @@ function run_iptables()
     return 0
 }
 
+#
+# cluster calls need either root or user with group haclient
+#
 function run_crm()
 {
     # run_crm <node> <crm-command> (without "crm")
@@ -127,30 +139,24 @@ function run_crmattr()
     return 0
 }
 
+function run_cibadmin()
+{
+    # run_cibadmin <node> <cibadmin-command> (without "cibadmin")
+    local node01="$1"
+    local crm_cibadmin_cmd="$2"
+    ssh "${node01}" "$G_CMD_CIBADMIN $crm_cibadmin_cmd"
+    return 0
+}
+
+#
+# system calls need root user
+#
 function run_systemctl()
 {
     # run_systemctl <node> <systemctl-command> (without "systemctl")
     local node01="$1"
     local crm_systemctl_cmd="$2"
     ssh "${node01}" "$G_CMD_SYSTEMCTL $crm_systemctl_cmd"
-    return 0
-}
-
-function run_sapcontrol()
-{
-    # run_sapcontrol <node> <sapcontrol-command> (without "sapcontrol")
-    local node01="$1"
-    local crm_sapcontrol_cmd="$2"
-    ssh "${node01}" "$G_CMD_SAPCONTROL $crm_sapcontrol_cmd"
-    return 0
-}
-
-function run_hdbnsutil()
-{
-    # run_hdbnsutil <node> <hdbnsutil-command> (without "hdbnsutil")
-    local node01="$1"
-    local crm_hdbnsutil_cmd="$2"
-    ssh "${node01}" "$G_CMD_HDBNSUTIL $crm_hdbnsutil_cmd"
     return 0
 }
 
@@ -172,12 +178,15 @@ function run_rcnetwork()
     return 0
 }
 
-function run_cibadmin()
+#
+# sap calls need sid-adm user
+#
+function run_sapcontrol()
 {
-    # run_cibadmin <node> <cibadmin-command> (without "cibadmin")
+    # run_sapcontrol <node> <sapcontrol-command> (without "sapcontrol")
     local node01="$1"
-    local crm_cibadmin_cmd="$2"
-    ssh "${node01}" "$G_CMD_CIBADMIN $crm_cibadmin_cmd"
+    local crm_sapcontrol_cmd="$2"
+    ssh "${node01}" "$G_CMD_SAPCONTROL $crm_sapcontrol_cmd"
     return 0
 }
 
@@ -190,22 +199,38 @@ function run_sap_python3()
     return 0
 }
 
+function run_hdbsql()
+{
+    # run_hdbsql <node> <sidadm> <hanauserkey> <hdbsql-query> (without "hdbsql")
+    #
+    # needs su (or sudo) to <sid>adm
+    #
+    local node01="$1"
+    local sidadm="$2"
+    local userkey="$3"
+    local hdbsql_query="$4"
+    cs_ssh --hosts grauenstein02 --command "sudo -u $sidadm --login hdbsql -U $userkey $hdbsql_query"
+    return 0
+}
+
+function run_hdbnsutil()
+{
+    # run_hdbnsutil <node> <hdbnsutil-command> (without "hdbnsutil")
+    local node01="$1"
+    local crm_hdbnsutil_cmd="$2"
+    ssh "${node01}" "su - ha1adm --command='$G_CMD_HDBNSUTIL $crm_hdbnsutil_cmd'"
+    return 0
+}
+
+#
+# cat-file needs either root or file-owner
+#
 function run_cat()
 {
     # run_cat <node> <cat-command> (without "cat")
     local node01="$1"
     local crm_cat_cmd="$2"
     ssh "${node01}" "$G_CMD_CAT $crm_cat_cmd"
-    return 0
-}
-
-function run_hdbsql()
-{
-    # run_hdbsql <node> <hdbsql-command> (without "hdbsql")
-    # ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbsql -U '"$userkey"' \"ALTER SYSTEM RECLAIM LOG\""'
-    local node01="$1"
-    local crm_hdbsql_cmd="$2"
-    ssh "${node01}" "su - $sidadm $G_CMD_HDBSQL $crm_hdbsql_cmd"
     return 0
 }
 
