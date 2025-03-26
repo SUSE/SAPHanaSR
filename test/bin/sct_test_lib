@@ -33,9 +33,10 @@ function get_curr_prim()
     # get_curr_prim <node>
     local currPrimary
     local target_host="$1"
-    currPrimary="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+    local rc=0
+    currPrimary="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"; rc=$?
     echo "$currPrimary"
-    return 0
+    return $rc
 }
 
 function get_curr_secn()
@@ -43,9 +44,10 @@ function get_curr_secn()
     # get_curr_secn <node>
     local currSecondary
     local target_host="$1"
-    currSecondary="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+    local rc=0
+    currSecondary="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"; rc=$?
     echo "$currSecondary"
-    return 0
+    return $rc
 }
 
 function get_curr_prim_worker()
@@ -53,9 +55,10 @@ function get_curr_prim_worker()
     # get_curr_prim <node>
     local currPrimWorker
     local target_host="$1"
-    currPrimWorker="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
+    local rc=0
+    currPrimWorker="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"; rc=$?
     echo "$currPrimWorker"
-    return 0
+    return $rc
 }
 
 function get_curr_secn_worker()
@@ -63,9 +66,10 @@ function get_curr_secn_worker()
     # get_curr_secn_worker <node>
     local currSecnWorker
     local target_host="$1"
-    currSecnWorker="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"
+    local rc=0
+    currSecnWorker="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"; rc=$?
     echo "$currSecnWorker"
-    return 0
+    return $rc
 }
 
 function get_site()
@@ -74,10 +78,11 @@ function get_site()
     local site
     local target_host="$1"
     local hana_node="$2"
-    site=$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node")
+    local rc=0
+    site=$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node"); rc=$?
     site="${site//\"/}"
     echo "$site"
-    return 0
+    return $rc
 }
 
 function get_vhost()
@@ -86,10 +91,11 @@ function get_vhost()
     local vhost
     local target_host="$1"
     local hana_node="$2"
-    vhost=$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node")
+    local rc=0
+    vhost=$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node"); rc=$?
     vhost="${vhost//\"/}"
     echo "$vhost"
-    return 0
+    return $rc
 }
 
 #
@@ -102,8 +108,9 @@ function kill_process()
     local proc_user="$2"
     local proc_pattern="$3"
     local proc_signal="$4"
-    cs_ssh --hosts "${target_host}" --command "pgrep -u ${proc_user} -f ${proc_pattern}; pkill -u $proc_user} -f ${proc_pattern}"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "pgrep -u ${proc_user} -f ${proc_pattern}; pkill -u $proc_user} -f ${proc_pattern}"; rc=$?
+    return $rc
 }
 
 #
@@ -114,8 +121,9 @@ function run_iptables()
     # run_iptables <node> <iptables-command> (without 'iptables')
     local target_host="$1"
     local iptables_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_IPTABLES $iptables_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_IPTABLES $iptables_cmd"; rc=$?
+    return $rc
 }
 
 #
@@ -126,8 +134,9 @@ function run_crm()
     # run_crm <node> <crm-command> (without "crm")
     local target_host="$1"
     local crm_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_CRM $crm_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_CRM $crm_cmd"; rc=$?
+    return $rc
 }
 
 function run_crmattr()
@@ -135,8 +144,9 @@ function run_crmattr()
     # run_crmattr <node> <crmattr-command> (without "crm_attribute")
     local target_host="$1"
     local crm_attribute_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_CRMATTR $crm_attribute_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_CRMATTR $crm_attribute_cmd"; rc=$?
+    return $rc
 }
 
 function run_cibadmin()
@@ -144,8 +154,9 @@ function run_cibadmin()
     # run_cibadmin <node> <cibadmin-command> (without "cibadmin")
     local target_host="$1"
     local crm_cibadmin_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_CIBADMIN $crm_cibadmin_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_CIBADMIN $crm_cibadmin_cmd"; rc=$?
+    return $rc
 }
 
 #
@@ -156,8 +167,9 @@ function run_systemctl()
     # run_systemctl <node> <systemctl-command> (without "systemctl")
     local target_host="$1"
     local crm_systemctl_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_SYSTEMCTL $crm_systemctl_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_SYSTEMCTL $crm_systemctl_cmd"; rc=$?
+    return $rc
 }
 
 function run_fsfreeze()
@@ -165,8 +177,9 @@ function run_fsfreeze()
     # run_fsfreeze <node> <fsfreeze-command> (without "fsfreeze")
     local target_host="$1"
     local crm_fsfreeze_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_FSFREEZE $crm_fsfreeze_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_FSFREEZE $crm_fsfreeze_cmd"; rc=$?
+    return $rc
 }
 
 function run_rcnetwork()
@@ -174,8 +187,9 @@ function run_rcnetwork()
     # run_rcnetwork <node> <rcnetwork-command> (without "rcnetwork")
     local target_host="$1"
     local crm_rcnetwork_cmd="$2"
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_RCNETWORK $crm_rcnetwork_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_RCNETWORK $crm_rcnetwork_cmd"; rc=$?
+    return $rc
 }
 
 #
@@ -187,8 +201,9 @@ function run_sapcontrol()
     local target_host="$1"
     local sidadm="$2"
     local sapcontrol_cmd="$3"
-    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_SAPCONTROL $sapcontrol_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_SAPCONTROL $sapcontrol_cmd"; rc=$?
+    return $rc
 }
 
 function run_sap_python3()
@@ -197,8 +212,9 @@ function run_sap_python3()
     local target_host="$1"
     local sidadm="$2"
     local python3_cmd="$3"
-    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_SAP_PYTHON3 $python3_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_SAP_PYTHON3 $python3_cmd"; rc=$?
+    return $rc
 }
 
 function run_hdbsql()
@@ -211,8 +227,9 @@ function run_hdbsql()
     local sidadm="$2"
     local userkey="$3"
     local hdbsql_query="$4"
-    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBSQL -U $userkey $hdbsql_query"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBSQL -U $userkey $hdbsql_query"; rc=$?
+    return $rc
 }
 
 function run_hdbnsutil()
@@ -221,8 +238,9 @@ function run_hdbnsutil()
     local target_host="$1"
     local sidadm="$2"
     local crm_hdbnsutil_cmd="$3"
-    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBNSUTIL $crm_hdbnsutil_cmd"
-    return 0
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBNSUTIL $crm_hdbnsutil_cmd"; rc=$?
+    return $rc
 }
 
 #
@@ -233,8 +251,9 @@ function run_cat()
     # run_cat <node> <cat-command> (without "cat")
     local target_host="$1"
     local crm_cat_cmd="$2"
-    ssh "${target_host}" "$G_CMD_CAT $crm_cat_cmd"
-    return 0
+    local rc=0
+    ssh "${target_host}" "$G_CMD_CAT $crm_cat_cmd"; rc=$?
+    return $rc
 }
 
 init
