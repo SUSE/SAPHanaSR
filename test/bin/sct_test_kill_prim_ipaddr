@@ -22,10 +22,16 @@ echo "==== Kill primary HANA IP address ===="
 IP=$( run_crm "$currPrimary" "configure show" |\
     grep -A4 primitive.*IPaddr2 | grep params.ip=" | awk -F'=' '{print $2}' |\
     awk '{print $1}' )
-IPNM=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $2}' )
-NIC=$( ssh "$currPrimary" "ip a s | grep '"${IP}"'" | awk '{print $8}' )
 
-ssh "$currPrimary" "ip a d '"${IPNM}"' dev '"${NIC}"'"
+#
+# ip  -br a s secondary
+# eth0             UP             192.168.1.54/24
+#
+IP_BRF=$(run_ip "$currPrimary" "-br a s secondary")
+IPNM=${IP_BRF##* }
+NIC=${IP_BRF%% *}
+
+run_ip "$currPrimary" "a d ${IPNM} dev ${NIC}"
 # TODO sleep twice the monitor interval
 sleep 60
 # TODO specify cleanup rsc_ip_
