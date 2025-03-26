@@ -23,6 +23,7 @@ function init()
     G_CMD_FSFREEZE="/sbin/fsfreeze"
     G_CMD_RCNETWORK="/sbin/rcnetwork"
     G_CMD_CIBADMIN="/usr/sbin/cibadmin"
+    G_CMD_CS_WFIDLE="/usr/sbin/cs_wait_for_idle"
     G_CMD_CAT="/usr/bin/cat"
 }
 
@@ -160,6 +161,16 @@ function run_cibadmin()
     return $rc
 }
 
+function run_cs_wf_idle()
+{
+    # run_cs_wf_idle <node> <cs_wf_idle-command> (without "cs_wf_idle")
+    local target_host="$1"
+    local cs_wf_idle_cmd="$2"
+    local rc=0
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_CS_WFIDLE $cs_wf_idle_cmd"; rc=$?
+    return $rc
+}
+
 #
 # system calls need root user
 #
@@ -167,9 +178,9 @@ function run_systemctl()
 {
     # run_systemctl <node> <systemctl-command> (without "systemctl")
     local target_host="$1"
-    local crm_systemctl_cmd="$2"
+    local systemctl_cmd="$2"
     local rc=0
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_SYSTEMCTL $crm_systemctl_cmd"; rc=$?
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_SYSTEMCTL $systemctl_cmd"; rc=$?
     return $rc
 }
 
@@ -177,9 +188,9 @@ function run_fsfreeze()
 {
     # run_fsfreeze <node> <fsfreeze-command> (without "fsfreeze")
     local target_host="$1"
-    local crm_fsfreeze_cmd="$2"
+    local fsfreeze_cmd="$2"
     local rc=0
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_FSFREEZE $crm_fsfreeze_cmd"; rc=$?
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_FSFREEZE $fsfreeze_cmd"; rc=$?
     return $rc
 }
 
@@ -187,9 +198,9 @@ function run_rcnetwork()
 {
     # run_rcnetwork <node> <rcnetwork-command> (without "rcnetwork")
     local target_host="$1"
-    local crm_rcnetwork_cmd="$2"
+    local rcnetwork_cmd="$2"
     local rc=0
-    cs_ssh --hosts "${target_host}" --command "$G_CMD_RCNETWORK $crm_rcnetwork_cmd"; rc=$?
+    cs_ssh --hosts "${target_host}" --command "$G_CMD_RCNETWORK $rcnetwork_cmd"; rc=$?
     return $rc
 }
 
@@ -238,9 +249,9 @@ function run_hdbnsutil()
     # run_hdbnsutil <node> <sidadm> <hdbnsutil-command> (without "hdbnsutil")
     local target_host="$1"
     local sidadm="$2"
-    local crm_hdbnsutil_cmd="$3"
+    local hdbnsutil_cmd="$3"
     local rc=0
-    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBNSUTIL $crm_hdbnsutil_cmd"; rc=$?
+    cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBNSUTIL $hdbnsutil_cmd"; rc=$?
     return $rc
 }
 
@@ -262,9 +273,9 @@ function run_cat()
 {
     # run_cat <node> <cat-command> (without "cat")
     local target_host="$1"
-    local crm_cat_cmd="$2"
+    local cat_cmd="$2"
     local rc=0
-    ssh "${target_host}" "$G_CMD_CAT $crm_cat_cmd"; rc=$?
+    ssh "${target_host}" "$G_CMD_CAT $cat_cmd"; rc=$?
     return $rc
 }
 
