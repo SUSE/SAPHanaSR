@@ -29,7 +29,7 @@ currPrimary=$(sctl_get_curr_prim "$node01")
 currSecondary=$(sctl_get_curr_secn "${node01}")
 
 # shellcheck disable=SC2029
-run_crm "${node01}" "resource cleanup $mstResource"
+sctl_run_crm "${node01}" "resource cleanup $mstResource"
 run_cs_wf_idle "${node01}" "-s 2"
 
 
@@ -41,14 +41,14 @@ echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
 echo "==== SUSE Resource Maintenance Begin ===="
 # shellcheck disable=SC2029
-run_crm "${node02}" "resource maintenance $mstResource on"
+sctl_run_crm "${node02}" "resource maintenance $mstResource on"
 
 sctl_run_hdbsql "$currPrimary" "$sidadm" "$userkey" "ALTER SYSTEM RECLAIM LOG"
 run_find_action "$currPrimary" "$sidadm" "/usr/sap/$SID/HDB$instNr/backup/log -type f -mtime +2 -exec rm -v {} \;"
 sleep 55
 
 # shellcheck disable=SC2029
-run_crm "${node02}" "resource maintenance $mstResource off"
+sctl_run_crm "${node02}" "resource maintenance $mstResource off"
 
 echo "==== SUSE Resource Maintenance End ===="
 #

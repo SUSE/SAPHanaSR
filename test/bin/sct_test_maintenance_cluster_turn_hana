@@ -27,7 +27,7 @@ currPrimary=$(sctl_get_curr_prim "$node01")
 currSecondary=$(sctl_get_curr_secn "${node01}")
 
 # shellcheck disable=SC2029
-run_crm "${node01}" "resource cleanup $mstResource"
+sctl_run_crm "${node01}" "resource cleanup $mstResource"
 run_cs_wf_idle "${node01}" "-s 2"
 
 #########################################
@@ -52,7 +52,7 @@ echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
 echo "==== SUSE Resource Maintenance Begin ===="
 
-run_crm "${node02}" "resource maintenance $mstResource on"
+sctl_run_crm "${node02}" "resource maintenance $mstResource on"
 
 sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
 sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode --online"
@@ -67,9 +67,9 @@ while true; do
 done
 
 run_cs_wf_idle "${node02}" "-s 2"
-run_crm "${node02}" "resource refresh $mstResource"
+sctl_run_crm "${node02}" "resource refresh $mstResource"
 run_cs_wf_idle "${node02}" "-s 2"
-run_crm "${node02}" "resource maintenance $mstResource off"
+sctl_run_crm "${node02}" "resource maintenance $mstResource off"
 
 echo "==== SUSE Resource Maintenance End ===="
 #
