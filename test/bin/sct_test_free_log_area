@@ -17,6 +17,8 @@
 #
 # expected outcome: cluster running, SAP HANA instanes running, SR roles exchanged
 #
+# lib-mig-status: CHECK
+#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -42,7 +44,7 @@ echo "==== SUSE Resource Maintenance Begin ===="
 run_crm "${node02}" "resource maintenance $mstResource on"
 
 run_hdbsql "$currPrimary" "$sidadm" "$userkey" "ALTER SYSTEM RECLAIM LOG"
-ssh "$currPrimary" 'su - '"$sidadm"' -c "find /usr/sap/'"$SID"'/HDB'"$instNr"'/backup/log -type f -mtime +2 -exec rm {} \;"'
+run_find_action "$currPrimary" "$sidadm" "/usr/sap/$SID/HDB$instNr/backup/log -type f -mtime +2 -exec rm -v {} \;"
 sleep 55
 
 # shellcheck disable=SC2029
