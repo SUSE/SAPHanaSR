@@ -8,6 +8,8 @@
 # http://www.gnu.org/licenses/gpl.html
 #
 # TODO: IP adress is static here and needs to be fetched from .test_properies in the future
+# TODO: Differ conservarive and progressive - e.g. uses both templates: 050_clone_con_crm.txt AND 050_clone_con_fence_crm.txt which is wrong!
+# TODO: Other use cases beside 'angi-ScaleUp'
 #
 # lib-mig-status: CHECK
 #
@@ -27,16 +29,20 @@ for configStep in [0-9]*_*; do
     crm_target_file="/tmp/crm_${crm_cfg_id}.txt"
     cp "$configStep" "$crm_cfg_file"
     sed -i -e "s/@@SID@@/$SID/g" -e "s/@@INO@@/$instNr/g" -e "s/@@IP@@/192.168.7.234/g" "$crm_cfg_file"
+    #cat "$crm_cfg_file"
+    #read
     #
     # TODO: which target directory to be used - using /tmp for now
     # how to push to a valid target-directory for either root or deputy user
     # TODO: move rsync to library
     #
     # rsync -v "$crm_cfg_file" "${node01}:${crm_target_file}"
-    sctl_push_file "${node01}" "${crm_cfg_file}" "${crm_target_file}"
-    sctl_run_crm "${node01}" "crm configure load update ${crm_target_file}"
-    run_ca_wf_idle "${node01}" "-s 5" 2>/dev/null 1>/dev/null
+    sctl_push_file "${node01}" "${crm_cfg_file}" "${crm_target_file}" 2>/dev/null 1>/dev/null
+    #set -x
+    sctl_run_crm "${node01}" "configure load update ${crm_target_file}"
+    #set +x
     sctl_run_rm_file "${node01}" "-v ${crm_target_file}"
+    run_ca_wf_idle "${node01}" "-s 5" 2>/dev/null 1>/dev/null
 done
 
 sctl_run_cs_wf_idle "${node01}" "-s 5" 2>/dev/null 1>/dev/null
