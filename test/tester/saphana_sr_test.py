@@ -853,7 +853,7 @@ class SaphanasrTest:
             cmd = "systemctl reboot --force"
         elif action_name == "simulate_split_brain":
             remote = self.topolo['sHost']
-            cmd = f"iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
+            cmd = f"iptables -I INPUT -p udp -m multiport --ports 5405 -j DROP"
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
