@@ -8,23 +8,32 @@
 # http://www.gnu.org/licenses/gpl.html
 #
 # iptables -D INPUT -p tcp -m multiport --ports 40001,40002,40003 -j DROP
-# iptables -I INPUT -p tcp -m multiport --ports 40001,40002,40003 -j DROP
+# -I INPUT -p tcp -m multiport --ports 40001,40002,40003 -j DROP
 # about sap hana ports: https://www.stechies.com/hana-services-ports-interview-questions-answer/
 #
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-maintenance_cluster_bootstrap,block_sr: OK
+# used-in:
+#   angi-ScaleUp: block_sr, block_sr_and_freeze_prim_fs, maintenance_cluster_bootstrap
+#   angi-ScaleOut: block_sr, block_sr_and_freeze_prim_fs, maintenance_cluster_bootstrap
+#   classic-ScaleUp: block_sr
+#   classic-ScaleOut: block_sr
+#   - list-end
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
+currPrimary=$(sctl_get_curr_prim "$node01")
 
 # shellcheck disable=SC2029
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 
 echo "==== Block SAP HANA SR ===="
 
 ports="4${instNr}01,4${instNr}02,4${instNr}03"
 
-#iptables -D INPUT -p tcp -m multiport --ports "$ports" -j DROP
-ssh "$currPrimary" 'iptables -I INPUT -p tcp -m multiport --ports '"$ports"' -j DROP'
-ssh "$currPrimary" 'iptables -I OUTPUT -p tcp -m multiport --ports '"$ports"' -j DROP'
+sctl_run_iptables "$currPrimary" '-I INPUT -p tcp -m multiport --ports '"$ports"' -j DROP'
+sctl_run_iptables "$currPrimary" '-I OUTPUT -p tcp -m multiport --ports '"$ports"' -j DROP'
 sleep 60
 #

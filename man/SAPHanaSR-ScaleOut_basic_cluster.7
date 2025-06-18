@@ -1,6 +1,6 @@
 .\" Version: 1.2 
 .\"
-.TH SAPHanaSR-ScaleOut_basic_cluster 7 "20 Nov 2024" "" "SAPHanaSR"
+.TH SAPHanaSR-ScaleOut_basic_cluster 7 "05 Jul 2025" "" "SAPHanaSR"
 .\"
 .SH NAME
 SAPHanaSR-ScaleOut_basic_cluster \- SAP HANA System Replication scale-out basic cluster configuration.
@@ -262,16 +262,30 @@ op_defaults op-options: \\
 .RE
 .PP
 .\" TODO example for SLE-HA 15 SP5 with disk-based and diskless SBD.
-\fB* crm SBD stonith configuration\fR
+\fB* crm SBD stonith configuration for SLE 15\fR
 .PP
 To complete the SBD setup, it is necessary to activate SBD as STONITH/fencing
 mechanism in the CIB. The SBD is normally used for SAPHanaSR-ScaleOut instead
 of any other fencing/stonith mechanism. Example for a basic disk-based SBD
-resource:
+resource on SLE 15:
 .PP
 .RS 2
 .br
 primitive rsc_stonith_sbd stonith:external/sbd \\
+.br
+ params pcmk_action_limit="-1" pcmk_delay_max="1"
+.RE
+.PP
+\fB* crm SBD stonith configuration for SLE 16\fR
+.PP
+To complete the SBD setup, it is necessary to activate SBD as STONITH/fencing
+mechanism in the CIB. The SBD is normally used for SAPHanaSR-ScaleOut instead
+of any other fencing/stonith mechanism. Example for a basic disk-based SBD
+resource on SLE 16:
+.PP
+.RS 2
+.br
+primitive rsc_stonith_sbd stonith:fence_sbd \\
 .br
  params pcmk_action_limit="-1" pcmk_delay_max="1"
 .RE
@@ -374,6 +388,26 @@ colocation col_ip_with_SLE_HDB00 \\
  8000: grp_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
 .RE
 .PP
+\fB* crm MailTo resource configuration\fR
+.PP
+You could define a MailTo resource that informs you as soon as the score for
+the promoted instance of the SAPHanaController resource changes.
+See also manual pages SAPHanaSR-showAttr(8) and ocf_heartbeat_MailTo(7).
+.br
+Example SID is HA1, instance number is 10.
+.PP
+.RS 2
+primitive rsc_mailto_HA1_HDB10 MailTo \\
+.br
+ params email="root@localhost" subject="master-rsc_SAPHanaCon_HA1_HDB10 changed." \\
+.br
+ op monitor timeout=10 interval=30 depth=0 \\
+.br
+location loc_mailto_HA1_HDB10_with_primary rsc_mailto_HA1_HDB10 \\
+.br
+ rule 2000: master-rsc_SAPHanaCon_HA1_HDB10 eq 150
+.RE
+.PP
 \fB* check how resource stickiness affects promotion scoring\fR
 .PP
 SAPHanaSR uses an internal scoring table. The promotion scores for HANA
@@ -468,7 +502,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBocf_suse_SAPHanaFilesystem\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) , 
-\fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) , 
+\fBfence_sbd\fP(8) , \fBsbd\fP(8) , \fBstonith_sbd\fP(7) , \fBstonith_admin\fP(8) , 
 \fBcrm_no_quorum_policy\fP(7) , \fBcrm\fP(8) , \fBcrm_simulate\fP(8) ,
 \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR-showAttr\fP(7) ,
 \fBcorosync.conf\fP(5) , \fBvotequorum\fP(5) ,
@@ -494,7 +528,7 @@ F.Herschel, L.Pinne.
 .PP
 (c) 2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2024 SUSE LLC
+(c) 2019-2025 SUSE LLC
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

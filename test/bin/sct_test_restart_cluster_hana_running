@@ -20,27 +20,38 @@
 # - end cluster maintenace mode
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles NOT exchanged
+#
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-restart_cluster_hana_running: OK
+# used-in:
+#   angi-ScaleUp: restart_cluster_hana_running
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
 
 # shellcheck disable=SC2029
-ssh "$node01" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
-ssh "$node01" "crm maintenance on"
+sctl_run_crm "$node01" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 2"
+sctl_run_crm "$node01" "maintenance on"
 
-ssh "$node02" "crm cluster stop --all"
+sctl_run_crm "$node02" "cluster stop --all"
 
 echo "==== SUSE Cluster Stopped ===="
 sleep 60
-ssh "$node01" "crm cluster start --all"
+sctl_run_crm "$node01" "cluster start --all"
 sleep 120
-ssh "$node01" "crm cluster wait_for_startup 60; cs_wait_for_idle -s 10"
+sctl_run_crm "$node01" "cluster wait_for_startup 60"
+sctl_run_cs_wf_idle "$node01" "-s 10"
 
-ssh "$node01" "crm resource refresh $clnResource; cs_wait_for_idle -s 10"
-ssh "$node01" "crm resource refresh $mstResource; cs_wait_for_idle -s 10"
+sctl_run_crm "$node01" "resource refresh $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 10"
+sctl_run_crm "$node01" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 10"
 
-ssh "$node01" "crm maintenance off"
+sctl_run_crm "$node01" "maintenance off"
 
 echo "==== SUSE Cluster Started ===="
 #

@@ -7,15 +7,21 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-kill_prim_pacemkr-attrd: OK
+# used-in:
+#   angi-ScaleUp: kill_prim_pacemkr-attrd
+#   angi-ScaleOut: kill_prim_pacemkr-attrd
+#   - list-end
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPrimary=$(sctl_get_curr_prim "$node01")
 
 echo "==== Kill pacemaker-attrd ===="
 # TODO signal 9 ?
-ssh "$currPrimary" 'pgrep -u hacluster -f pacemaker-attrd; pkill -u hacluster -f pacemaker-attrd -11 & exit'
-sleep 10
-ssh -o ConnectTimeout 10 "$currPrimary" 'pgrep -u hacluster -f pacemaker-attrd'
+sctl_kill_process "$currPrimary" "hacluster" "pacemaker-attrd" "11" & exit
 #

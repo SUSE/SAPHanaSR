@@ -7,17 +7,24 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-freeze_prim_fs_fencing, block_sr_and_freeze_prim_fs: OK
+# used-in:
+#   angi-ScaleUp: freeze_prim_fs_fencing, block_sr_and_freeze_prim_fs
+#   - list-end
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
+currPrimary=$(sctl_get_curr_prim "$node01")
 
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
 
 echo "==== Freeze SAP HANA FS ===="
 
 ports="4${instNr}01,4${instNr}02,4${instNr}03"
 
-ssh "$currPrimary" 'fsfreeze --freeze /hana/shared/'"${SID}"
+sctl_run_fsfreeze "$currPrimary" '--freeze /hana/shared/'"${SID}"
 sleep 60
 #

@@ -127,20 +127,21 @@ node1 and node2, SID is Q42, instance number is 85, HANA´s virtual IP address i
 :wq
 .RE
 .PP
-\fB*\fR Adapting openssh 9.6 and newer crypto policies for rsa-ssh.
+\fB*\fR Adapting openssh 9.6 and newer crypto policies for ssh-rsa.
 .PP
-On recent Linux, rsa-ssh keys might be not allowed. Type rsa-ssh could be added
-to the PubkeyAcceptedAlgorithms on the cluster nodes. Please see REQUIREMENTS below
+On recent Linux, ssh-rsa keys might be not allowed. Type ssh-rsa could be added
+to the PubkeyAcceptedAlgorithms on all cluster nodes. Please see REQUIREMENTS below
 and manual pages sshd_config(5), crypto-policies(7).
 .PP
 .RS 2
 # grep -i crypto.polic /etc/ssh/sshd_config.d/* /etc/ssh/sshd*
 .br
-# grep Pubkey /etc/crypto-policies/back-ends/opensshserver.config
+# cp /etc/crypto-policies/back-ends/opensshserver.config \\
 .br
-# cp /etc/crypto-policies/back-ends/opensshserver.config /etc/crypto-policies/back-ends/opensshserver.config.orig
+    /etc/ssh/sshd_config.d/30-SAPHanaSR-tester-crypto.conf
 .br
-# echo ",ssh-rsa" >>/etc/crypto-policies/back-ends/opensshserver.config
+# sed -i s/"PubkeyAcceptedAlgorithms "/"PubkeyAcceptedAlgorithms ssh-rsa,"/g \\
+    /etc/ssh/sshd_config.d/30-SAPHanaSR-tester-crypto.conf
 .br
 # systemctl restart sshd
 .RE
@@ -216,7 +217,10 @@ program to run a predefined testcase.
 shell scripts for un-easy tasks on the cluster nodes.
 .TP
 /usr/bin/SAPHanaSR-showAttr
-SAPHanaSR-showAttr, compatible to SAPHanaSR-angi and SAPHanaSR-tester.
+SAPHanaSR-showAttr on all Linux cluster nodes, compatible to SAPHanaSR-angi and SAPHanaSR-tester.
+.TP
+/etc/ssh/sshd_config.d/30-SAPHanaSR-tester-crypto.conf
+custom crypto policies on all Linux cluster nodes, for openssh-server and python3-paramiko.
 .PP
 .\"
 .SH REQUIREMENTS
@@ -252,11 +256,12 @@ detects an status represented by those attributes.
 login as database user SYSTEM into the HANA database. This is only needed for
 some test cases.
 .PP
-\fB*\fP Package python3-paramiko is needed on the tester machine for the tester
-multi-node feature. The cluster nodes need to run an openssh-server compatible
-to that python3-paramiko.
+\fB*\fP Package python3-paramiko 3.4 or newer is needed on the tester machine for
+the tester multi-node feature. The cluster nodes need to run an openssh-server
+compatible to that python3-paramiko.
 .PP
-\fB*\fP Package ClusterTools2 is needed on the cluster nodes.
+\fB*\fP Packages iptables, ClusterTools2, supportutils, supportutils-plugin-ha-sap
+are needed on the cluster nodes.
 .PP
 \fB*\fP Strict time synchronization between the cluster nodes and the tester
 node, e.g. NTP. All nodes have configured the same timezone.
@@ -275,6 +280,8 @@ is long, but the cluster nodes are booting very fast.
 /hana/log/. Depending on the backup implementation, also space for log backups
 might be needed, e.g. /hana/shared/<SID>/HDB<nr>/backup/. Strict housekeeping
 might help as well.
+.PP
+\fB*\fP No SELinux rules must block any needed action. See also selinux(8).
 .PP
 \fB*\fP The tester must not be used for production systems.
 Most tests are disruptive.
@@ -298,8 +305,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) , \fBSAPHanaSR-tests-angi-ScaleOut\fP(7) ,
 \fBSAPHanaSR-tests-classic-ScaleUp\fP(7) , \fBSAPHanaSR-tests-classic-ScaleOut\fP(7) ,
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
-\fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) ,
-\fBssh-keygen\fP(1) , \fBssh-copy-id\fP(1) , sshd_config(5), crypto-policies(7) ,
+\fBSAPHanaSR-showAttr\fP(8) , \fBcrm_mon\fP(8) , \fBselinux(8)\fP ,
+\fBssh-keygen\fP(1) , \fBssh-copy-id\fP(1) , \fBsshd_config(5)\fP, \fBcrypto-policies(7)\fP ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
