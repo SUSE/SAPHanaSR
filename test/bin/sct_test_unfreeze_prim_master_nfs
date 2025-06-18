@@ -7,15 +7,22 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
+# lib-mig-status: CHECK
+# used-in:
+#   angi-ScaleOut: block_sr_and_freeze_prim_master_nfs
+#   -list-end
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
-currPrimWorker="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"
+currPrimary=$(sctl_get_curr_prim "$node01")
+currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
 
 echo "==== Un-Freeze SAP HANA NFS ===="
 
-ssh "$currPrimary" 'iptables -D OUTPUT -p tcp -m multiport --ports 2049 -j DROP'
+sctl_run_iptables "$currPrimary" '-D OUTPUT -p tcp -m multiport --ports 2049 -j DROP'
 sleep 60
 #

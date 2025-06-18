@@ -7,21 +7,32 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-kill_prim_pacemkr-ctrld: OK
+# used-in:
+#   angi-ScaleUp: kill_prim_pacemkr-ctrld, kill_prim_pacemkr-ctrld_fencing
+#   angi-ScaleOut: kill_prim_pacemkr-ctrld
+#   classic-ScaleUp:  kill_prim_pacemkr-ctrld_fencing
+#   classic-ScaleOut: kill_prim_pacemkr-ctrld_fencing
+#   - list-end
+#
+#
+set -u
 function kill_again
 {
     for i in 1 2 3 4 5 6 7 8 9; do
-        ssh "$currPrimary" 'pkill -u hacluster -f pacemaker-controld -11 & exit'
+        sctl_kill_process "$currPrimary" "hacluster" "pacemaker-controld" "11"
         sleep 1
     done
 }
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPrimary=$(sctl_get_curr_prim "$node01")
 
 echo "==== Kill pacemaker-controld ===="
 # TODO signal 9 ?
-ssh "$currPrimary" 'pgrep -u hacluster -f pacemaker-controld; pkill -u hacluster -f pacemaker-controld -11 & exit'
+sctl_kill_process "$currPrimary" "hacluster" "pacemaker-controld" "11" & exit
 kill_again &
 #

@@ -17,25 +17,34 @@
 #
 # expected outcome: cluster running, SAP HANA instanes running, SR roles exchanged
 #
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-sct_test_maintenance_cluster_turn_hana: OK
+# used-in:
+#   angi-ScaleUp: maintenance_cluster_turn_hana
+#   angi-ScaleOut: maintenance_cluster_turn_hana
+#   classic-ScaleUp: maintenance_cluster_turn_hana
+#   classic-ScaleOut: maintenance_cluster_turn_hana
+#   - list-end
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
+currPrimary=$(sctl_get_curr_prim "$node01")
+currSecondary=$(sctl_get_curr_secn "${node01}")
 
 # shellcheck disable=SC2029
-ssh "${node01}" "crm resource cleanup $mstResource; cs_wait_for_idle -s 2"
-
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
-currSecondary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"
+sctl_run_crm "${node01}" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "${node01}" "-s 2"
 
 #########################################
 # VHOSTS
 # get vhosts from node names
-# SAPHanaSR-showAttr --format=tester | grep pizbuin02.*vhost
 #########################################
 
-vhostPrim="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currPrimary | tr -d '"' )"
-vhostSecn="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node=$currSecondary | tr -d '"' )"
+vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
+vhostSecn=$(sctl_get_vhost "${node01}" "$currSecondary")
 if [[ -z "$vhostPrim" ]]; then
     vhostPrim="$currPrimary"
 fi
@@ -45,20 +54,19 @@ fi
 
 echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
 
-sitePrimary=$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$currPrimary")
-sitePrimary="${sitePrimary//\"/}"
+sitePrimary=$(sctl_get_site "${node01}" "$currPrimary")
 
 echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
 echo "==== SUSE Resource Maintenance Begin ===="
 
-ssh "${node02}" "crm resource maintenance $mstResource on"
+sctl_run_crm "${node02}" "resource maintenance $mstResource on"
 
-ssh "$currSecondary" 'su - '"$sidadm"' -c "hdbnsutil -sr_takeover --suspendPrimary"'
-ssh "$currPrimary" 'su - '"$sidadm"' -c "hdbnsutil -sr_register --remoteHost='"$vhostSecn"' --remoteInstance='"$instNr"' --name='"$sitePrimary"' --replicationMode='"$srMode"' --operationMode='"$opMode"' --online"'
+sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
+sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode --online"
 
 while true; do
-    ssh "$currSecondary" 'su - '"$sidadm"' -c "python3 exe/python_support/systemReplicationStatus.py 1>/dev/null"'; rc=$?
+    sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
     if [[ "$rc" != 15 ]]; then
         sleep 60
     else
@@ -66,9 +74,10 @@ while true; do
     fi
 done
 
-ssh "${node02}" 'cs_wait_for_idle -s 2'
-ssh "${node02}" "crm resource refresh $mstResource; cs_wait_for_idle -s 2"
-ssh "${node02}" "crm resource maintenance $mstResource off"
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource maintenance $mstResource off"
 
 echo "==== SUSE Resource Maintenance End ===="
 #

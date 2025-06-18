@@ -7,13 +7,19 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
+# lib-mig-status: CHECK
+# used-in:
+#   angi-ScaleOut: stop_prim_inst
+#   - list-end
+#
+set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
 source .test_properties
-
-currPrimary="$(ssh "${node01}" "/usr/bin/SAPHanaSR-showAttr --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"
+currPrimary=$(sctl_get_curr_prim "$node01")
 
 echo "==== Stop primary master instance ===="
-ssh "$currPrimary" 'su - '"$sidadm"' -c "HDB stop"'
+sctl_run_hdb "$currPrimary" "$sidadm" "stop"'
 #

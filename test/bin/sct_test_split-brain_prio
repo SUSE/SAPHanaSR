@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# sct_test_split-brain_prio - block corosync on secondary node
+#
+# (c) 2025 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# used-in:
+#   angi-ScaleUp: split-brain_prio
+#   classic-ScaleUp: split-brain_prio
+#   - list-end
+#
+set -u
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source /usr/bin/sct_test_lib
+source .test_properties
+currSecondary=$(sctl_get_curr_secn "${node01}")
+
+echo "==== Block corosync on ${currSecondary} ===="
+# shellcheck disable=SC2029
+sctl_run_iptables "$currSecondary" '-I INPUT -p udp -m multiport --ports 5405 -j DROP &'
+#
