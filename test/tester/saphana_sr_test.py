@@ -402,11 +402,19 @@ class SaphanasrTest:
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
         match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
         check_result = -1
+        c_key = "x"
+        c_comp = "x"
+        c_reg_exp = "x"
         list_of_failures = kwargs.get('list_of_failures', None)
         if match_obj is None:
             self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
             check_result = 2
-        c_key = match_obj.group(1)
+        try:
+            c_key = match_obj.group(1)
+            c_comp = match_obj.group(2)
+            c_reg_exp = match_obj.group(3)
+        except Exception:
+            self.message(f"ERROR: step={step_step} {single_check} does not match <key> <comp> <value>")   # TODO PRIO3: change from technical to user-friendly message
         l_sr = self.dict_sr
         # fail_msg = "MISSED"
         fatal_check = kwargs.get('fatal_check', False)
@@ -416,12 +424,14 @@ class SaphanasrTest:
         #
         #print(f"c_key={c_key}")
         match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
-        if match_obj_key is not None:
-            #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
-            c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
-            #print(f"rewrite c_key={c_key}")
-        c_comp = match_obj.group(2)
-        c_reg_exp = match_obj.group(3)
+        try:
+            if match_obj_key is not None:
+                #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
+                c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
+                #print(f"rewrite c_key={c_key}")
+        except Exception:
+            self.message(f"ERROR: step={step_step} c_comp and/or c_reg_exp not found in {single_check}")   # TODO PRIO3: change from technical to user-friendly message
+
         c_reg_exp_a = ""
         c_reg_exp_b = ""
         try:
@@ -786,19 +796,19 @@ class SaphanasrTest:
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_secn_worker_inst":
             remote = self.topolo['sWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_worker_inst":
             remote = self.topolo['pWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
@@ -834,7 +844,7 @@ class SaphanasrTest:
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
@@ -957,9 +967,15 @@ class SaphanasrTest:
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
             if do_log:
-                self.message(f"CALL: ssh cmd '{cmd}' timeout={ssh_timeout}")
+                if ssh_timeout:
+                    self.message(f"CALL: ssh cmd '{cmd}' timeout={ssh_timeout}")
+                else:
+                    self.message(f"CALL: ssh cmd '{cmd}'")
             try:
-                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                if ssh_timeout:
+                    (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                else:
+                    (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
                 result_stderr = cmd_stderr.read().decode("utf8")
                 result_rc = cmd_stdout.channel.recv_exit_status()
