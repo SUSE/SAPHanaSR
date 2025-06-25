@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH ocf_suse_SAPHanaController 7 "10 Mar 2025" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "23 Jun 2025" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication (scale-out).
@@ -142,6 +142,8 @@ Optional, well known directories will be searched by default.
 \fBON_FAIL_ACTION\fR
 .RS 4 
 Defines how the RA escalates monitor failures on an HANA primary node.
+It also defines whether HANA landscape status 0 and HANA call timeout are handled
+as failure.
 If srHook=SOK, in case of monitor failure an node fencing could be triggered. 
 For srHook=SFAIL, the restart will be proceeded as usual. This option may speed
 up takeover on scale-up systems, depending on how long HANA needs for stopping.
@@ -357,14 +359,22 @@ Could be done once a specific filter is not needed anymore.
 # SAPHanaSR-showAttr
 .RE
 .PP
-* Search for log entries of the resource agent. Show errors only:
+* Search for log entries of the resource agent. Show errors only.
 .PP
 .RS 4
 # grep "SAPHanaController.*RA.*rc=[1-7,9]" /var/log/messages
 .\" TODO: output
 .RE
 .PP
-* Search for log entries of the resource agent. Show date, time, return code, runtime:
+* Search for log entries of the resource agent. Show lss 0 and 124 only.
+.br
+Useful for checking ON_FAIL_ACTION=fence.
+.PP
+.RS 4
+# grep -e SAPHanaCon.*lssRc=0 -e SAPHanaCon.*lssRc=124 /var/log/messages
+.RE
+.PP
+* Search for log entries of the resource agent. Show date, time, return code, runtime.
 .PP
 .RS 4
 # grep "SAPHanaContoller.*end.action.monitor_clone.*rc=" /var/log/messages | awk '{print $1,$11,$13}' | colrm 20 32 | tr -d "=()rsc" | tr "T" " "
