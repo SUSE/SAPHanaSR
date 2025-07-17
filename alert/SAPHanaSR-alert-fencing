@@ -5,11 +5,17 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2024-2025 SUSE LLC
-# Version:	    2025-07-30-17:50
+# Version:      2025-10-01-13:42
+#
+# Configure the alert with crmsh:
 #
 # crm configure alert nodes-1 "/usr/bin/SAPHanaSR-alert-fencing" select nodes
 # crm configure alert fencing-1 "/usr/bin/SAPHanaSR-alert-fencing" select fencing attributes alert_uptime_threshold=300
 #
+# Configure the alert with pcs:
+#
+# pcs alert create id=alert-hana-1 path=/usr/bin/SAPHanaSR-alert-fencing options alert_uptime_threshold=300
+# cibadmin --modify --scope alerts --xml-text '<alert id="alert-hana-1"> <select> <select_nodes /> <select_fencing /> </select> </alert>'
 
 logger_tag="SAPHanaSR-alert-fencing"
 logger="/usr/bin/logger"
@@ -41,11 +47,10 @@ function process_fencing()
             if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
                 $logger  -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
                 sleep 10
-                sudo  /usr/sbin/crm --force node fence "${HOSTNAME}"; rc="$?"
-                # alternative option, needs crmsh fix #1229030
-                # /usr/sbin/crm_attribute -t status -n terminate -v true -N "${HOSTNAME}"; rc="$?"
+                /usr/sbin/crm_attribute -t status -N "${HOSTNAME}" -n terminate -v true
+                rc="$?"
                 if [[ "$rc" != "0" ]]; then
-                    $logger -t "$logger_tag" "ACT: sudo /usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
+                    $logger  -t "$logger_tag" "ACT: /usr/sbin/crm_attribute -t status -N \"${HOSTNAME}\" -n terminate -v true; rc=$?"
                 fi
             else
                 $logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
