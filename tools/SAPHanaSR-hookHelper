@@ -19,7 +19,15 @@
 
 # do not use '1' as return value, so we can distinguish between the return of
 # the helper script and an error of 'sudo'
+
+
+# Controlling the fence attributes:
+# - hana_fence_action: allowed settings are terminate (default), fence or reboot
+# - hana_fence_timeout: default is 120 seconds, only applies to 'fence' or 'reboot' actions
 #
+# Examples:
+# crm_attribute --name=hana_fence_action --update=reboot
+# crm_attribute --name=hana_fence_timeout --update=300
 
 ##### functions
 
@@ -30,6 +38,8 @@ usage() {
     echo -e "\\t--ino=<InstanceNumber>: instance number (like 10) of the SAP instance"
     echo -e "\\t--case=<use case>: the use case for the hook helper"
     echo -e "\\t                   at the moment only 'checkTakeover' and 'fenceMe' is supported"
+    echo -e "\\t                   fencing-behavior and timeout with 'fenceMe' can be configured via"
+    echo -e "\\t                   hana_fence_action & hana_fence_timeout attributes"
     echo -e "\\t--version: show script version"
     echo -e "\\t--help:    show help"
     exit 1
@@ -246,13 +256,30 @@ case "$USECASE" in
     ;;
 "fenceMe" )
      nodeName=$(/usr/sbin/crm_node -n)
-     #stonith_admin --reboot="$nodeName"
      # only 'activate' the /root/SAPHanaSR-hookHelper.log logging, if really needed for debugging
      #echo "$(date) SAPHanaSR-hookHelper fenceMe" >> /root/SAPHanaSR-hookHelper.log
      su - "${ASID}adm" -c "HDB kill-9" 
      #echo "$(date) SAPHanaSR-hookHelper fenceMe - killed, now fence" >> /root/SAPHanaSR-hookHelper.log
-     /usr/sbin/crm --force node fence "$nodeName"
-     rc=42 # if fence is working this rc should never been send back
+     #
+     # Check if hana_fence_action is set, if not use 'terminate'.
+     hana_fence_action="$(/usr/sbin/crm_attribute -n hana_fence_action -G -d terminate -q)"
+     case "${hana_fence_action}" in
+         terminate)
+             /usr/sbin/crm_attribute -t status -N "${nodeName}" -n terminate -v true
+             # Sleep until fencing takes us down or someone removes the 'terminate' attribute.
+             while [ "$(/usr/sbin/crm_attribute -t status -N "${nodeName}" -n terminate -G -d false -q)" == "true" ]; do
+                 sleep 10
+             done
+             rc=42
+             ;;
+         fence | reboot)
+             hana_fence_timeout="$(/usr/sbin/crm_attribute -n hana_fence_timeout -G -d 120 -q)"
+             /usr/sbin/stonith_admin --"${hana_fence_action}"="${nodeName}" --timeout="${hana_fence_timeout}" || rc=42
+             ;;
+         *)
+             rc=42
+             ;;
+     esac
      ;;
 "firstStopThenKill" )
      #
