@@ -249,6 +249,7 @@ class HanaStatus():
     def xml_import(self, filename):
         """
         xml_import - import a cluster CIB into object dictionaries
+            if filename is None, import the "life" cluster
         """
         if filename is None:
             # use cibadmin as input
