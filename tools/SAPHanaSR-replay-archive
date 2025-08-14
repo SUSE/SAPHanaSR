@@ -31,7 +31,9 @@ from saphana_sr_tools import HanaCluster,HanaStatus
 if __name__ == "__main__":
     myCluster = HanaCluster()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cib", nargs="*", help="specify the cibfile file")
+    parser.add_argument("--cib", nargs="+", help="specify the cibfile file(s) (alteranative for --dir)")
+    parser.add_argument("--dir", nargs="+", help="specify the directory where to search for cib files (alternative for --cib)")
+    parser.add_argument("--pattern", nargs="+", help="specify the search pattern(s) (optional in combination with --dir)")
     parser.add_argument("--format", help="output format ([table], path, script, json)")
     parser.add_argument("--from", help="select 'from' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--properties", help="specify the properties file")
@@ -44,6 +46,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.cib:
         myCluster.config['cib_file_list'] = args.cib
+    if args.dir:
+        myCluster.config['dir_list'] = args.dir
+    if args.pattern:
+        myCluster.config['pattern_list'] = args.pattern
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
     if 'from' in vars(args) and vars(args)['from']:
         dt = dateutil_parser.parse(vars(args)['from'])
@@ -69,13 +75,20 @@ if __name__ == "__main__":
         dt = dateutil_parser.parse(args.to)
         myCluster.config['to'] = int(dt.timestamp())
     myCluster.read_properties()
+    dir_list = myCluster.config.get('dir_list', None)
+    cib_file_list = myCluster.config.get('cib_file_list', [])
+    if dir_list:
+        for dir in dir_list:
+            file_list = myCluster.find(dir, pattern=myCluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
+            if file_list:
+                cib_file_list.extend(file_list)
     #
     # here the cib files iteration would begin
     #   - we need to read all given cib files
     #   - sort the found data dictionaries by cib-date
     #   - output all data dictionaries, filtered by from+to
     #
-    for cib_file in myCluster.config['cib_file_list']:
+    for cib_file in cib_file_list:
         myHana    = HanaStatus(myCluster.config)
         myHana.xml_import(cib_file)
         multi_sid = False
@@ -148,3 +161,6 @@ if __name__ == "__main__":
             myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"', ts=cib_time)
             myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"', ts=cib_time)
             myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"', ts=cib_time)
+    if len(cib_file_list) == 0:
+        print("ERROR: No cib files found")
+        sys.exit(2)

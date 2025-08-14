@@ -160,7 +160,7 @@ class HanaCluster():
         self.selection = 'test'
         self.config = {
             'cib_file': None,
-            'cib_file_list': [None],
+            'cib_file_list': [],
             'from': 0,
             'format': "table",
             'properties_file': None,
@@ -191,6 +191,7 @@ class HanaCluster():
         the selections hash for key 'cmdline' will be overwritten by the config sheme in self.config['show_attributes']
         show_attributes should look like: 'global:attrG1,... resource:attrR1,... site:attrS1,... host:attrH1,...'
         """
+        global selections
         show_attributes = self.config.get('show_attributes', None)
         if show_attributes:
             show_attributes_list = show_attributes.split(' ') # areas are separated by a single blank
@@ -208,6 +209,24 @@ class HanaCluster():
         else:
             print("show_attributes not found")
             sys.exit(2)
+
+    def find(self, dir, **kwargs):
+        """
+        find search for files in directory 'dir' - recursive search
+        """
+        default_pattern = ["pe-input-[0-9]+.bz2", "pe-warn-[0-9]+.bz2"]
+        pattern = kwargs.get('pattern', None)
+        if not pattern:
+            pattern = default_pattern
+        file_list = []
+        for root, dirs, files in os.walk(dir):
+            for name in files:
+                for patt in pattern:
+                    match_obj = re.match(patt,name)
+                    if match_obj:
+                        file_list.append(f"{root}/{name}")
+                        continue
+        return file_list
 
 class HanaStatus():
     """
