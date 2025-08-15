@@ -1,6 +1,6 @@
 .\" Version: 1.2 
 .\"
-.TH SAPHanaSR-showAttr 8 "06 Aug 2025" "" "SAPHanaSR"
+.TH SAPHanaSR-showAttr 8 "14 Aug 2025" "" "SAPHanaSR"
 .\"
 .SH NAME
 .\"
@@ -8,17 +8,24 @@ SAPHanaSR-showAttr \- Shows Linux cluster attributes for SAP HANA system replica
 .\"
 .SH SYNOPSIS
 .\"
-\fBSAPHanaSR-showAttr\fR [ --help | --version ]
+\fBSAPHanaSR-showAttr\fR [--help | --version]
 .br
-\fBSAPHanaSR-showAttr\fR [ --sid \fISID\fR ] [ --select \fISELECT\fR ]
-[ --sort \fISORT\fR ] [ --format \fIFORMAT\fR ] [ --cib \fIOFFLINE_CIB_FILE\fR [...] ] [ --from \fIDATE\fR ] [ --to \fIDATE\fR ] [ --properties \fIPROPERTIES_FILE\fR ]
-.PP
+\fBSAPHanaSR-showAttr\fR [--cib \fICIB\fR [...]]
+[--sid \fISID\fR]
+[--format \fIFORMAT\fR] [--select \fICOLUMN\fR] [--sort \fISORT\fR]
+[--properties \fIPROPERTIES\fR] [--from \fIFROM\fR] [--to \fITO\fR]
+.br
+\fBSAPHanaSR-replay-archive\fR --dir \fIDIR\fR
+[--sid \fISID\fR]
+[--format \fIFORMAT\fR] [--select \fICOLUMN\fR] [--sort \fISORT\fR]
+[--properties \fIPROPERTIES\fR] [--pattern\fR \fIPAT\fR [...]]
+[--from \fIFROM\fR] [--to \fITO\fR]
 .\"
 .SH DESCRIPTION
 .\"
-SAPHanaSR-showAttr shows Linux cluster attributes for SAP HANA system replication automation.
-The overall system replication (SR) state is shown as well as the HANA state 
-on each node.
+SAPHanaSR-showAttr shows Linux cluster attributes for SAP HANA system replication
+automation. The overall system replication (SR) state is shown as well as the HANA
+state on each node.
 Because the HANA srHook methods srConnectionChanged() and preTakeover() are
 used, respective information shows up as well.
 The information is fetched from the Linux cluster information base (CIB), not
@@ -107,7 +114,6 @@ Linux cluster node fence status (\fBterminate\fP)
 HANA version (\fBversion\fP)
 .br
 HANA virtual host name (\fBvhost\fP)
-.br
 .PP
 Some fields are generated dynamically from the CIB. That fields are missing,
 if no corresponding attribute exists, e.g. the standby field.
@@ -514,43 +520,50 @@ for setting up system replication.
 See also the fields Hosts and remoteHost. SAPHanaTopology needs the SAPHOSTAGENT
 to map from the local hostname to the HANA virtual hostname.
 .\" TODO details, see HANA global.ini
-.PP
 .\"
 .SH OPTIONS
 .\"
 .TP 4
 \fB--help\fR
-show help.
+show help
 .TP 4
 \fB--version\fR
-show version.
+show version
 .TP 4
-\fB--cib\fR \fIOFFLINE_CIB_FILE\fR
-read data from given offline CIB file(s).
+\fB--cib\fR \fICIB\fR [\fICIB\fR [...]]
+read data from given offline cib or pe-file(s) (alteranative to --dir)
 .TP 4
-\fB--format\fR \fIFORMAT\fR
-output format. Allowed values: [ script | tables | json | tester | csv | cache ]. Default is tables.
+\fB--dir\fR \fIDIR\fR
+specify the directory where to search for pe-files (alternative to --cib)
 .TP 4
-\fB--from\fR \fIFROM_DATE\fR
-point in time to show data from. Format: "YYYY-MM-DD HH:MM:SS".
+\fB--format\fR [ script | tables | json | tester | csv | cache ]
+output format, default is tables
 .TP 4
-\fB--properties\fR \fIPROPERTIES_FILE\fR
-specify a properties file, see also SAPHanaSR-showAttr_properties(5).
+\fB--experiemental_fields\fR \fISECTION:FIELD[,FIELD[,...]]\fR
+define which fields a section should show, experimental
 .TP 4
-\fB--select\fR \fISELECT\fR
+\fB--from\fR "\fIYYYY-MM-DD HH:MM:SS\fR"
+from which point in time to show
+.TP 4
+\fB--pattern\fR \fIPAT\fR [\fIPAT\fR [...]]
+pe-file name pattern to search for in \fIDIR\fR, default pe-input-[0-9].*xz2
+.TP 4
+\fB--properties\fR \fIPROPERTIES\fR
+specify a properties file, see also SAPHanaSR-showAttr_properties(5)
+.TP 4
+\fB--select\fR [ all | default | minimal | sr | cluster | cluster2 | cluster3 | sitelist | tester ]
 .\" TODO explain meaning of values
-show selected information only. Allowed values: [ all | default | minimal | sr | cluster | cluster2 | cluster3 | sitelist | tester ]. Default is default.
+show selected information only, default is default
 .TP 4
 \fB--sid\fR \fISID\fR
 use SAP system ID \fISID\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP system ID is a 3 alphanum string with a valid SAP system name like SLE, HAE, FH1, C11, or P42.
 \." Optional: Use SAP instance number \fIINO\fR. Should be autodetected, if there is only one SAP HANA instance installed on the local cluster node. The SAP instance number must be represented by a two digit numer like 00, 05 or 42. Some numbers ares not allowed, e.g. 98.
 .TP 4
-\fB--sort\fR \fIFIELD\fR
-sort Hosts section table by field. Allowed values: [ roles | site ]. Default is sort by hostnames.
+\fB--sort\fR [ host | roles | site ]
+specify the Host section column name to sort by, default is host
 .TP 4
-\fB--to\fR \fITO_DATE\fR
-point in time to show data up to. Format: "YYYY-MM-DD HH:MM:SS".
-.PP
+\fB--to\fR "\fIYYYY-MM-DD HH:MM:SS\fR"
+to which point in time to show
 .\"
 .SH RETURN CODES
 .\"
@@ -559,7 +572,6 @@ Successful program execution.
 .br
 .B >0
 Usage, syntax or execution errors.
-.PP
 .\"
 .SH EXAMPLES
 .\"
@@ -577,16 +589,12 @@ show all SAPHanaSR attributes for SAP System ID HA1 and instance number 10 from 
 .TP 4
 # SAPHanaSR-showAttr | grep -e master: -e worker: -e slave:
 show SAPHanaSR promotion scores on running nodes.
-.TP 4 
-# SAPHanaSR-showAttr --format script | egrep -v '/(version|op_mode|vhost|remoteHost|site)=' | SAPHanaSR-showAttr --path2table
-reduce output to selected fields.
 .TP 4
 # watch -n9 "crm_mon -1r --include=none,nodes,resources,failures;echo; \\
 .br
 SAPHanaSR-showAttr;cs_clusterstate -i|grep -v '#'"
 .br
 display comprehensive overview on Linux cluster and HANA resources, update every nine seconds.
-.PP
 .\"
 .SH FILES
 .\"
@@ -599,14 +607,12 @@ needed libraries.
 .TP
 /usr/sap/hostctrl/exe/saphostctrl
 the SAP host control command.
-.PP
 .\"
 .SH REQUIREMENTS
 .\"
 * Python 3.6 runtime environment or compatible.
 .PP
 * Attribute names shall not contain the underscore "_", except attribute name "clone_state".
-.PP
 .\"
 .SH BUGS
 .\"
@@ -616,7 +622,6 @@ is under development.
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
-.PP
 .\"
 .SH SEE ALSO
 .\"
@@ -625,20 +630,20 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-angi\fP(7) ,
 \fBSAPHanaSR-replay-archive\fP(8) ,
 \fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR-manageAttr\fP(8) ,
-\fBcrm_simulate\fP(8) , \fBcrm_report\fP(8) , \fBcibadmin\fP(8) , \fBcrm_mon\fP(8) , \fBcrm_attribute\fP(8) ,
-\fBcs_convert_time\fP(8) , \fBcs_clusterstate\fP(8) , \fBcs_show_hana_info\fP(8) , \fBcs_show_scores\fP(8) ,
+\fBcrm_simulate\fP(8) , \fBcrm_report\fP(8) , \fBcibadmin\fP(8) , \fBcrm_mon\fP(8) ,
+\fBcrm_attribute\fP(8) ,
+\fBcs_convert_time\fP(8) , \fBcs_clusterstate\fP(8) , \fBcs_show_hana_info\fP(8) ,
+\fBcs_show_scores\fP(8) ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
 .br
 https://documentation.suse.com/sles-sap/ ,
 .br
 https://www.susecon.com/archive-2020.html
-.PP
 .\"
 .SH AUTHORS
 .\"
 A.Briel, F.Herschel, L.Pinne.
-.PP
 .\"
 .SH COPYRIGHT
 .\"
