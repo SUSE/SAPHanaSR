@@ -82,7 +82,7 @@ if __name__ == "__main__":
         myCluster.config['to'] = int(dt.timestamp())
     if args.experimental_attributes:
         exp_attr = args.experimental_attributes
-        if type(exp_attr) is list:
+        if isinstance(exp_attr, list):
             exp_attr = " ".join(exp_attr)  # convert list to a string with each element
         myCluster.config['show_attributes'] = exp_attr
         myCluster.config['select'] = 'cmdline'
@@ -91,8 +91,8 @@ if __name__ == "__main__":
     dir_list = myCluster.config.get('dir_list', None)
     cib_file_list = myCluster.config.get('cib_file_list', [])
     if dir_list:
-        for dir in dir_list:
-            file_list = myCluster.find(dir, pattern=myCluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
+        for single_dir in dir_list:
+            file_list = myCluster.find(single_dir, pattern=myCluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
             if file_list:
                 cib_file_list.extend(file_list)
     #
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     #
     # SAPHanaSR-replay-archive will not call the 'life' cluster, if cib_file_list is empty
     for cib_file in cib_file_list:
-        myHana    = HanaStatus(myCluster.config)
+        myHana    = HanaStatus(myCluster.config, selections=myCluster.selections)
         myHana.xml_import(cib_file)
         multi_sid = False
         if myCluster.config['sid'] is None:
