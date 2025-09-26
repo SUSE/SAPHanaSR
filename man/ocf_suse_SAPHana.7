@@ -49,9 +49,13 @@ landscapeHostConfiguration.py has some detailed output about HANA system status
 and node roles. For our monitor the overall status is relevant. This overall
 status is reported by the return code of the script:
 0: Internal Fatal, 1: ERROR, 2: WARNING, 3: INFO, 4: OK
-The SAPHanaController resource agent will interpret return code 0 as FATAL, 1 as
-NOT-RUNNING
-(or ERROR) and return codes 2+3+4 as RUNNING.
+.br
+The SAPHanaController resource agent will interpret return code 0 as FATAL,
+1 as NOT-RUNNING (or ERROR) and return codes 2+3+4 as RUNNING. FATAL means the
+status can not be determined.
+.br
+Note: Some conditions cause HANA stopping to work, but not reporting an error.
+E.g. filesystem filled up. See also manual page ocf_suse_SAPHanaFilesystem(7).
 .PP
 3. \fBhdbnsutil\fR
 .br
@@ -88,12 +92,19 @@ This resource agent supports the following parameters:
 .PP
 \fBSID\fR
 .RS 4
-SAP System Identifier. Has to be same on both instances. Example "SID=SLE".
+SAP System Identifier. Has to be same on both instances.
+Example "SID=SLE".
+.br
+Required. No default.
 .RE
 .PP
 \fBInstanceNumber\fR
 .RS 4
-Number of the SAP HANA database. Has to be same on both instances. For system replication also Instance Number+1 is blocked. Example "InstanceNumber=00".
+Number of the SAP HANA database. Has to be same on both instances. For system
+replication also Instance Number+1 is blocked.
+Example "InstanceNumber=00".
+.br
+Required. No default.
 .RE
 .PP
 \fBDIR_EXECUTABLE\fR
@@ -116,9 +127,14 @@ Optional, well known directories will be searched by default.
 .PP
 \fBHANA_CALL_TIMEOUT\fR
 .RS 4
-Define timeout how long a call to HANA to receive information can take. This could be e.g. landscapeHostConfiguration.py. There are some specific calls to HANA which have their own timeout values. For example the sr_takeover command does not timeout (inf). If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts of your Linux cluster resources.
+Define timeout how long a call to HANA to receive information can take. This could
+be e.g. landscapeHostConfiguration.py. There are some specific calls to HANA which
+have their own timeout values. For example the sr_takeover command does not timeout
+(inf). If the timeout is reached, the return code will be 124. If you increase the
+timeouts for HANA calls you should also adjust the operation timeouts of your Linux
+cluster resources.
 .br
-Optional. Default value: 60.
+Optional. Default value: 120.
 .RE
 .PP
 \fBINSTANCE_PROFILE\fR
@@ -161,7 +177,7 @@ by the resource agent during cluster/resource start, if the DUPLICATE_PRIMARY_TI
 is expired.
 Example: "AUTOMATED_REGISTER=true".
 .br
-Default value: false\&.
+Optional. Default value: false\&.
 .RE
 .PP
 \fBSAPHanaFilter\fR

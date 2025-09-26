@@ -10,7 +10,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-# Copyright:    (c) 2015-2024 SUSE LLC
+# Copyright:    (c) 2015-2025 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -34,7 +34,7 @@
 #######################################################################
 # TODO PRIO2: NG - use SAPHanaControllerLibVersion=
 # shellcheck disable=SC2034
-SAPHanaControllerLibVersion="1.2.10"
+SAPHanaControllerLibVersion="1.2.12"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -1660,6 +1660,7 @@ function saphana_monitor_secondary() {
 function saphana_monitor_clone_not_msn() {
     # called by: saphana_monitor_clone
     local nState
+    local rc
     nState=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     # TODO: PRIO2: Check, if we need to (re) start a failed SAP HANA instance in a swarm
     if ! saphana_check_local_instance; then
@@ -1678,8 +1679,14 @@ function saphana_monitor_clone_not_msn() {
             super_ocf_log info "DEC: local instance AND landscape are down (lss=$lss)"
             case "$nState" in
                 DEMOTED )
-                            super_ocf_log info "DEC: DEMOTED => OCF_SUCCESS"
-                            rc="$OCF_SUCCESS";;          # landscape is down and local instance is down -> report SUCCESS
+                            if ! ocf_is_probe; then
+                                super_ocf_log info "DEC: DEMOTED => OCF_SUCCESS"
+                                rc="$OCF_SUCCESS"          # landscape is down and local instance is down -> report SUCCESS
+                            else
+                                super_ocf_log info "DEC: DEMOTED => OCF_NOT_RUNNING (Probe)"
+                                rc="$OCF_NOT_RUNNING"          # landscape is down and local instance is down -> report SUCCESS
+                            fi
+                            ;;
                 PROMOTED )
                             super_ocf_log info "DEC: PROMOTED => OCF_FAILED_MASTER"
                             rc="$OCF_FAILED_MASTER";;   # same, but for MASTER -> report FAILED_MASTER
@@ -1749,6 +1756,7 @@ function saphana_monitor_clone_not_msn() {
           esac
         fi
     fi
+    return "$rc"
 } # end function saphana_monitor_clone_not_msn
 
 function saphana_monitor_clone() {
@@ -1867,7 +1875,7 @@ function saphana_monitor_clone() {
         #
         # instance is not THE master nameserver
         #
-        saphana_monitor_clone_not_msn
+        saphana_monitor_clone_not_msn; rc=$?
     fi
     #
     # optional FAST-STOP - remove possible poison pill, if monitor is ok right now

@@ -21,12 +21,13 @@ import random
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
+# from paramiko import AutoAddPolicy
 
 class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.0.20250311"
+    version = "2.2.20250324"
 
     def message(self, msg, **kwargs):
         """
@@ -80,8 +81,11 @@ class SaphanasrTest:
                         'remote_nodes': [],
                         'printTestProperties': False,
                         'debug': False,
+                        'user': 'root',
                         'password': None,
-                        'on_fail_reaction': 'continue'
+                        'on_fail_reaction': 'continue',
+                        'check_host': True,
+                        'use_sudo': False,
                       }
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
@@ -173,6 +177,8 @@ class SaphanasrTest:
         """
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
+        if self.config['use_sudo']:
+            cmd = f"sudo -u root {cmd}"
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
@@ -194,7 +200,7 @@ class SaphanasrTest:
                     sr_out = local_sr.stdout.decode()
                     break
             else:
-                result_sr = self.__do_ssh__(remote_node, "root", cmd, timeout=15, password=self.config['password'])
+                result_sr = self.__do_ssh__(remote_node, self.config['user'], cmd, timeout=15, password=self.config['password'])
                 if result_sr[2] != 20000:
                     if switched_remote:
                         self.message(f"STATUS: get data from {remote_node}")
@@ -396,11 +402,19 @@ class SaphanasrTest:
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
         match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
         check_result = -1
+        c_key = "x"
+        c_comp = "x"
+        c_reg_exp = "x"
         list_of_failures = kwargs.get('list_of_failures', None)
         if match_obj is None:
             self.message(f"ERROR: step={step_step} unknown comperator in {single_check}")
             check_result = 2
-        c_key = match_obj.group(1)
+        try:
+            c_key = match_obj.group(1)
+            c_comp = match_obj.group(2)
+            c_reg_exp = match_obj.group(3)
+        except Exception:
+            self.message(f"ERROR: step={step_step} {single_check} does not match <key> <comp> <value>")   # TODO PRIO3: change from technical to user-friendly message
         l_sr = self.dict_sr
         # fail_msg = "MISSED"
         fatal_check = kwargs.get('fatal_check', False)
@@ -410,12 +424,14 @@ class SaphanasrTest:
         #
         #print(f"c_key={c_key}")
         match_obj_key = re.search("(.*)@@sid@@(.*)", c_key)
-        if match_obj_key is not None:
-            #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
-            c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
-            #print(f"rewrite c_key={c_key}")
-        c_comp = match_obj.group(2)
-        c_reg_exp = match_obj.group(3)
+        try:
+            if match_obj_key is not None:
+                #print(f"match c_key={c_key} group1={match_obj_key.group(1)} group2={match_obj_key.group(2)}")
+                c_key = match_obj_key.group(1) + self.test_data['sid'].lower() + match_obj_key.group(2)
+                #print(f"rewrite c_key={c_key}")
+        except Exception:
+            self.message(f"ERROR: step={step_step} c_comp and/or c_reg_exp not found in {single_check}")   # TODO PRIO3: change from technical to user-friendly message
+
         c_reg_exp_a = ""
         c_reg_exp_b = ""
         try:
@@ -540,7 +556,7 @@ class SaphanasrTest:
         
         return rc_checks
 
-    def __process_fatal_condition(self, step, **kwagrs):
+    def __process_fatal_condition(self, step, **kwargs):
         """ __process_fatal_conditions 
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
@@ -765,7 +781,7 @@ class SaphanasrTest:
                 self.message("ACTION: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
             else:
                 self.message("ACTION: {} REMOTE at {}: {}".format(action_name, remote, cmd))
-                a_result = self.__do_ssh__(remote, "root", cmd, password=self.config['password'])
+                a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
         return action_rc
@@ -774,46 +790,63 @@ class SaphanasrTest:
         """ perform a given action on SAP HANA primary or secondary """
         remote = self.config['remote_node']
         test_sid = self.test_data['sid']
+        test_ino = self.test_data['instNo']
         cmd = ""
+        sudo_cmd = ""
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_secn_worker_inst":
             remote = self.topolo['sWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_inst":
             remote = self.topolo['pHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_worker_inst":
             remote = self.topolo['pWorker']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_worker_indexserver":
             remote = self.topolo['pWorker']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
             cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_xsengine":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_secn_xsengine":
             remote = self.topolo['sHost']
             cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_prim_nameserver":
             remote = self.topolo['pHost']
             cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
         elif action_name == "kill_secn_nameserver":
             remote = self.topolo['sHost']
             cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
+            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
+        if self.config['use_sudo']:
+            cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
 
     def action_on_cluster(self, action_name):
@@ -822,38 +855,52 @@ class SaphanasrTest:
         resource = self.test_data['mstResource']
         cmd = ""
         if action_name == "ssn":
-            cmd = "crm node standby {}".format(self.topolo['sHost'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['sHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "osn":
-            cmd = "crm node online {}".format(self.topolo['sHost'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['sHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "spn":
-            cmd = "crm node standby {}".format(self.topolo['pHost'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['pHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "opn":
-            cmd = "crm node online {}".format(self.topolo['pHost'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['pHost'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_prim_worker_node":
-            cmd = "crm node standby {}".format(self.topolo['pWorker'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['pWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_prim_worker_node":
-            cmd = "crm node online {}".format(self.topolo['pWorker'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['pWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_secn_worker_node":
-            cmd = "crm node standby {}".format(self.topolo['sWorker'])
+            cmd = "/usr/sbin/crm node standby {}".format(self.topolo['sWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_secn_worker_node":
-            cmd = "crm node online {}".format(self.topolo['sWorker'])
+            cmd = "/usr/sbin/crm node online {}".format(self.topolo['sWorker'])
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "cleanup":
-            cmd = "crm resource cleanup {}".format(resource)
+            cmd = "/usr/sbin/crm resource cleanup {}".format(resource)
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_worker_node":
             remote = self.topolo['sWorker']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_node":
             remote = self.topolo['sHost']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_prim_worker_node":
             remote = self.topolo['pWorker']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_prim_node":
             remote = self.topolo['pHost']
-            cmd = "systemctl reboot --force"
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "simulate_split_brain":
             remote = self.topolo['sHost']
-            cmd = f"iptables -I INPUT -p udp -m multiport --ports 5405 -j DROP"
+            cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
+            sudo_cmd = f"sudo -u root {cmd}"
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
@@ -897,10 +944,13 @@ class SaphanasrTest:
         """
         ssh_timeout = kwargs.get('timeout', None)
         ssh_password = kwargs.get('password', None)
+        do_log = kwargs.get('log', False)
         if remote_host:
             ssh_client = paramiko.SSHClient()
             ssh_client.load_system_host_keys()
             try:
+                if not self.config ['check_host']:
+                    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 if ssh_password:
                     ssh_client.connect(remote_host, username=user, password=ssh_password, timeout=10)
                 else:
@@ -909,16 +959,31 @@ class SaphanasrTest:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)
             cmd_timeout=f"timeout={ssh_timeout}"
+            #
+            # "sudo-i-fy" the command to be able to call root command as deputy user
+            #
+            #if self.config['use_sudo']:
+            #    cmd = f"sudo {cmd}"
             #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
+            if do_log:
+                if ssh_timeout:
+                    self.message(f"CALL: ssh cmd '{cmd}' timeout={ssh_timeout}")
+                else:
+                    self.message(f"CALL: ssh cmd '{cmd}'")
             try:
-                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                if ssh_timeout:
+                    (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
+                else:
+                    (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
                 result_stderr = cmd_stderr.read().decode("utf8")
                 result_rc = cmd_stdout.channel.recv_exit_status()
                 check_result = (result_stdout, result_stderr, result_rc)
                 ssh_client.close()
                 self.debug(f"DEBUG: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
+                if do_log:
+                    self.message(f"CALL: ssh cmd '{cmd}' {user}@{remote_host}: return code {result_rc}")
             except Exception as e:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)

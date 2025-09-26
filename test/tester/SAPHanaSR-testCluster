@@ -45,8 +45,11 @@ parser.add_argument("--printTestProperties", help="print test properties and exi
                     action="store_true")
 parser.add_argument("--debug", help="output and log debug messages", action="store_true")
 parser.add_argument("--version", help="output version and exit", action="store_true")
-parser.add_argument("--password", help="optinal ssh password, if key based authentication is not used"),
-parser.add_argument("--onFail", help="tester reaction after a failed step. possible values: continue,exit; default continue"),
+parser.add_argument("--user", help="linux user to be used for ssh connection (default is root)")
+parser.add_argument("--password", help="optinal ssh password, if key based authentication is not used")
+parser.add_argument("--onFail", help="tester reaction after a failed step. possible values: continue,exit; default continue")
+parser.add_argument("--skip_hostcheck", help="only for private environments - skip check of known_hosts", action="store_true")
+parser.add_argument("--use_sudo", help="use ssh+sudo for remote commands", action="store_true")
 args = parser.parse_args()
 if args.version:
     print(f"SAPHanaSR-tester {test01.version}")
@@ -86,10 +89,16 @@ if args.printTestProperties:
 if args.debug:
     test01.config['debug'] = args.debug
     test01.message("PARAM: DEBUG activated")
+if args.user:
+    test01.config['user'] = args.user
 if args.password:
     test01.config['password' ]= args.password
 if args.onFail:
     test01.config['on_fail_reaction' ]= args.onFail
+if args.skip_hostcheck:
+    test01.config['check_host'] = False
+if args.use_sudo:
+    test01.config['use_sudo'] = True
 
 while test01.run['count'] <= test01.config['repeat']:
     # test01.message(f"count: {test01.run['count']}")

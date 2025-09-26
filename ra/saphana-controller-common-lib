@@ -10,7 +10,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-# Copyright:    (c) 2015-2024 SUSE LLC
+# Copyright:    (c) 2015-2025 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -32,7 +32,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-# SAPHanaControllerLibVersion="1.2.10"
+# SAPHanaControllerLibVersion="1.2.12"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -229,10 +229,14 @@ function scoring_crm_promote() {
               break;  # end scanning, best rule already found
         fi
     done
-    super_ocf_log debug "DBG: scoring_crm_promote adjust score $myScore"
-    # Do not score, if we did not found our role/sync at this moment - bsc#919925
-    if [ -n "$myScore" ]; then
-        set_crm_promote "$myScore"
+    if [[ "$myScore" == "NULL" ]]; then
+	    super_ocf_log info "DEC: scoring_crm_promote skip scoring because of value $myScore"
+    else
+	    super_ocf_log debug "DBG: scoring_crm_promote adjust score $myScore"
+	    # Do not score, if we did not found our role/sync at this moment - bsc#919925
+	    if [ -n "$myScore" ]; then
+            set_crm_promote "$myScore"
+	    fi
     fi
 } # end function scoring_crm_promote
 
@@ -316,6 +320,8 @@ function saphana_init_scoring_tables() {
        "[234]   P master[123]          .*       140             'primary - running, configured master nameserver role (failover candidate)'"
        "[015-9] P master[123]          .*        90             'primary - not running, but configured master nameserver role '"
        "[0-9]   P [^:]*:slave          .*        60             'primary - any running status, slave master nameserver role (should not happen for ScaleUp)'"
+       "0       P [^:]*:[?:-]          .*      NULL             'primary - lss=0 defect, keep scoring'"
+       "124     P [^:]*:[?:-]          .*      NULL             'primary - lss=124 defect, keep scoring'"
        "[234]   P [^:]*:[?:-]          .*         3             'primary - running, but nameserver role not detected'"
        "[015-9] P [^:]*:[?:-]          .*         2             'primary - not running and nameserver role not detected'"
        ".*      P [^:]*:[?:-]          .*         1             'primary - unknown lss'"
@@ -362,14 +368,16 @@ function saphana_init_scoring_tables() {
        "[015]   P master[123]:                  .*           70 'not described yet'"
        "[0-9]   P master[123]:*:standby         .*           60 'not described yet'"
        "[0-9]   P slave:                        .*       -10000 'not described yet'"
+       "0       P [^:]*:[?:-]                   .*         NULL 'primary - lss=0 defect, keep scoring'"
+       "124     P [^:]*:[?:-]                   .*         NULL 'primary - lss=124 defect, keep scoring'"
        "[234]   S master[123]:master            SOK         100 'not described yet'"
        "[234]   S master[123]:slave             SOK          80 'not described yet'"
        "[015]   S master[123]:                  SOK          70 'not described yet'"
-       "[0-9]   S master[124]:*:standby         SFAIL    -22100 'not described yet'"
+       "[0-9]   S master[123]:*:standby         SFAIL    -22100 'not described yet'"
        "[0-9]   S slave:                        SOK      -12200 'not described yet'"
        "[0-9]   S slave:                        SFAIL    -22200 'not described yet'"
-       "[0-9]   S .*                              .*       -32300 'not described yet'"
-       ".*      . .*                              .*       -33333 'not described yet'"
+       "[0-9]   S .*                            .*       -32300 'not described yet'"
+       ".*      . .*                            .*       -33333 'not described yet'"
     )
     # shellcheck disable=SC2034
     SCORING_TABLE_PREFERRED_LOCAL_RESTART_SO=(

@@ -6,7 +6,7 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
-# Version: 2025-02-25
+# Version: 2025-07-07
 #
 
 CASFILE=/usr/share/SAPHanaSR-tester/samples/runtests_angi-ScaleOut_conservative.txt
@@ -30,15 +30,19 @@ for TEST in $TCASES; do
     hana_fill=$(ssh $N "df --output=pcent $hana_fs | grep -v Use")
     echo "$(date +%Y-%m-%d\ %H:%M:%S) fill grade: $N $hana_fs $hana_fill"
   done
-  SAPHanaSR-testCluster --testFile "$ASTROOT/$TEST.json" --properties "$PROPERTIES" \
-                        --remoteNodes $REMOTENODES --defaultsFile "$ASTROOT/defaults.json" \
-                        --logFile "$TEST.log" --jsonOut "$TEST.json.out" --dumpFailures >&3; rc=$?
+  SAPHanaSR-testCluster \
+    --testFile "$ASTROOT/$TEST.json"
+    --properties "$PROPERTIES" \
+    --remoteNodes $REMOTENODES \
+    --defaultsFile "$ASTROOT/defaults.json" \
+    --logFile "$TEST.log" \
+    --jsonOut "$TEST.json.out" \
+    --dumpFailures >&3; rc=$?
   echo "#### $(date +%Y-%m-%d" "%H:%M:%S) end test: $TEST rc: $rc ####"
-  gzip -g "$TEST.json.out" 2>/dev/null
   if [[ "$rc" != "0" ]]; then
     exit 1
   else
-    sleep 10
+    sleep 120
   fi
 done
 exit 0

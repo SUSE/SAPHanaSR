@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH ocf_suse_SAPHanaController 7 "10 Mar 2025" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "23 Jun 2025" "" "OCF resource agents"
 .\"
 .SH NAME
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication (scale-out).
@@ -69,7 +69,9 @@ The SAPHanaController resource agent will interpret return code 0 as FATAL,
 1 as NOT-RUNNING (or ERROR) and return codes 2+3+4 as RUNNING. FATAL means the
 status can not be determined.
 .br
-Note: Some conditions cause HANA stopping to work, but not reporting an error. E.g. filesystem filled up. 
+Note: Some conditions cause HANA stopping to work, but not reporting an error.
+E.g. filesystem filled up. See also parameter ON_FAIL_ACTION below and manual page
+ocf_suse_SAPHanaFilesystem(7).
 .PP
 3. \fBhdbnsutil\fP
 .br
@@ -96,12 +98,19 @@ This resource agent supports the following parameters:
 .PP
 \fBSID\fR
 .RS 4
-SAP System Identifier. Has to be same on both instances. Required. Example "SID=SLE".
+SAP System Identifier. Has to be same on both instances.
+Example "SID=SLE".
+.br
+Required. No default.
 .RE
 .PP
 \fBInstanceNumber\fR
 .RS 4
-Number of the SAP HANA database. Has to be same on both instances. For system replication also Instance Number+1 is blocked. Required. Example "InstanceNumber=00".
+Number of the SAP HANA database. Has to be same on both instances. For system
+replication also Instance Number+1 is blocked.
+Example "InstanceNumber=00".
+.br
+Required. No default.
 .RE
 .PP
 \fBDIR_EXECUTABLE\fR
@@ -124,7 +133,12 @@ Optional, well known directories will be searched by default.
 .PP
 \fBHANA_CALL_TIMEOUT\fR
 .RS 4
-Define timeout how long a call to HANA to receive information can take. This could be e.g. landscapeHostConfiguration.py. There are some specific calls to HANA which have their own timeout values. For example the sr_takeover command does not timeout (inf). If the timeout is reached, the return code will be 124. If you increase the timeouts for HANA calls you should also adjust the operation timeouts of your Linux cluster resources.
+Define timeout how long a call to HANA to receive information can take. This could
+be e.g. landscapeHostConfiguration.py. There are some specific calls to HANA which
+have their own timeout values. For example the sr_takeover command does not timeout
+(inf). If the timeout is reached, the return code will be 124. If you increase the
+timeouts for HANA calls you should also adjust the operation timeouts of your Linux
+cluster resources.
 .br
 Optional. Default value: 120.
 .RE
@@ -142,6 +156,8 @@ Optional, well known directories will be searched by default.
 \fBON_FAIL_ACTION\fR
 .RS 4 
 Defines how the RA escalates monitor failures on an HANA primary node.
+It also defines whether HANA landscape status 0 and HANA call timeout are handled
+as resource failure.
 If srHook=SOK, in case of monitor failure an node fencing could be triggered. 
 For srHook=SFAIL, the restart will be proceeded as usual. This option may speed
 up takeover on scale-up systems, depending on how long HANA needs for stopping.
@@ -357,14 +373,22 @@ Could be done once a specific filter is not needed anymore.
 # SAPHanaSR-showAttr
 .RE
 .PP
-* Search for log entries of the resource agent. Show errors only:
+* Search for log entries of the resource agent. Show errors only.
 .PP
 .RS 4
 # grep "SAPHanaController.*RA.*rc=[1-7,9]" /var/log/messages
 .\" TODO: output
 .RE
 .PP
-* Search for log entries of the resource agent. Show date, time, return code, runtime:
+* Search for log entries of the resource agent. Show lss 0 and 124 only.
+.br
+Useful for checking ON_FAIL_ACTION=fence.
+.PP
+.RS 4
+# grep -e SAPHanaCon.*lssRc=0 -e SAPHanaCon.*lssRc=124 /var/log/messages
+.RE
+.PP
+* Search for log entries of the resource agent. Show date, time, return code, runtime.
 .PP
 .RS 4
 # grep "SAPHanaContoller.*end.action.monitor_clone.*rc=" /var/log/messages | awk '{print $1,$11,$13}' | colrm 20 32 | tr -d "=()rsc" | tr "T" " "
