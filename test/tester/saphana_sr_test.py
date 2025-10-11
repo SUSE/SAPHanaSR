@@ -191,6 +191,7 @@ class SaphanasrTest:
         for remote_node in l_remotes:
             # self.message(f"test now with host {remote_node}")
             if remote_node == "localhost":
+                # TODO PRIO3: capture_output is only available since python 3.8.20
                 local_sr = subprocess.run(cmd.split(), capture_output=True, check=False)
                 if local_sr.returncode != 20000:
                     if switched_remote:
