@@ -37,6 +37,7 @@ Test: rcnetwork stop
 .br
 Expect: Primary master node fenced. Standby node promoted to master.
 Rebooted node finally started as standby.
+HANA stays online degraded and finally recovers to lss=3.
 SR stays SOK.
 No takeover. One fencing. One failover.
 .br
@@ -63,8 +64,7 @@ Comment: Infrastructure failure, main cluster case.
 .PP
 \fBblock_secn_node_network\fP
 .RS 2
-Descr: Block all network at secondary node.
-On scale-out, block all network at secondary master node (not yet implemented).
+Descr: Block all network at secondary master node (not yet implemented).
 .br
 Topology: ScaleUp, ScaleOut.
 .br
@@ -74,6 +74,7 @@ Test: rcnetwork stop
 .br
 Expect: Secondary master node fenced. Standby node promoted to master.
 Rebooted node finally started as standby.
+HANA stays online degraded and finally recovers to lss=3.
 No takeover. One fencing. One failover.
 .br
 Comment: Infrastructure failure, host auto-failover.
@@ -81,7 +82,7 @@ Comment: Infrastructure failure, host auto-failover.
 .PP
 \fBblock_secn_site_network\fP
 .RS 2
-Descr: Block all network at secondary site nodes.
+Descr: Block all network at secondary site nodes (not yet implemented).
 .br
 Topology: ScaleOut.
 .br
@@ -96,9 +97,26 @@ No takeover. One fencing.
 Comment: Infrastructure failure, main cluster case.
 .RE
 .PP
+\fBkill_prim_indexserver\fP
+.RS 2
+Desc: Kill primary master indexserver, for susChkSrv.py (not yet implemented).
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Expect: Primary node stays online and finally started as standby.
+Standby node promoted to master.
+HANA stays online degraded and finally recovers to lss=3.
+SR SFAIL and finally SOK.
+No takeover. No fencing (action_on_lost=kill). One failover.
+.br
+Comment: Application failure, host auto-failover.
+.RE
+.PP
 \fBkill_prim_node\fP
 .RS 2
-Descr: Kill primary master node.
+Descr: Kill primary master node (not yet implemented).
 .br
 Topology: ScaleOut.
 .br
@@ -108,7 +126,7 @@ Test: systemctl reboot --force
 .br
 Expect: Primary master node fenced. Standby node promoted to master.
 Rebooted node finally started as standby.
-HANA stays online degraded and finally recovers.
+HANA stays online degraded and finally recovers to lss=3.
 SR stays SOK.
 No takeover. One fencing. One failover.
 .br
@@ -155,7 +173,7 @@ Comment: Node failure, main cluster case.
 .PP
 \fBkill_prim_worker_node\fP
 .RS 2
-Descr: Kill primary worker node.
+Descr: Kill primary worker node (not yet implemented).
 .br
 Topology: ScaleOut.
 .br
@@ -165,7 +183,7 @@ Test: systemctl reboot --force
 .br
 Expect: Primary worker node fenced. Standby node takes over.
 Rebooted node finally started as standby.
-HANA stays online degraded and finally recovers.
+HANA stays online degraded and finally recovers to lss=3.
 SR stays SOK.
 No takeover. One fencing. One failover.
 .br
@@ -174,7 +192,7 @@ Comment: Node failure, host auto-failover.
 .PP
 \fBkill_secn_node\fP
 .RS 2
-Descr: Kill secondary master node.
+Descr: Kill secondary master node (not yet implemented).
 .br
 Topology: ScaleOut.
 .br
@@ -184,6 +202,7 @@ Test: systemctl reboot --force
 .br
 Expect: Secondary master node fenced. Standby node promoted to master.
 Rebooted node finally started as standby.
+HANA stays online degraded and finally recovers to lss=3.
 SR SFAIL and finally SOK.
 One failover. One fencing. No takeover.
 .br
@@ -192,7 +211,7 @@ Comment: Node failure, host auto-failover.
 .PP
 \fBkill_secn_site_nodes\fP
 .RS 2
-Descr: Kill all nodes at secondary site.
+Descr: Kill all nodes at secondary site (not yet implemented).
 .br
 Topology: ScaleOut.
 .br
@@ -228,7 +247,7 @@ Comment: Node failure, main cluster case.
 .PP
 \fBkill_secn_worker_node\fP
 .RS 2
-Descr: Kill secondary worker node.
+Descr: Kill secondary worker node (not yet implemented).
 .br
 Topology: ScaleOut.
 .br
@@ -238,7 +257,7 @@ Test: systemctl reboot --force
 .br
 Expect: Secondary worker node fenced. Standby node takes over.
 Rebooted node finally started as standby.
-HANA primary stays online.
+HANA stays online degraded and finally recovers to lss=3.
 SR SFAIL and finally SOK.
 No takeover. One fencing. One failover.
 .br
@@ -270,28 +289,28 @@ Please refer to the product documentation.
 Further there are requirements specific to the SAPHanaSR-angi scale-out BW style
 scenario:
 .PP
-* The SAPHanaSR-tester currently supports three nodes per site with configured roles
-"master1::worker:", "master2::standby:", "master3::worker:".
+\fB*\fR The SAPHanaSR-tester currently supports three nodes per site with configured
+roles "master1::worker:", "master2::standby:", "master3::worker:".
 .PP
-* HANA database and Linux cluster are configured according to
+\fB*\fR HANA database and Linux cluster are configured according to
 .\" TODO: the SUSE setup guide for
 the scale-out BW style scenario. 
 .PP
-* The shared storage or NFS is configured according to HANA storage API for host
-auto-failover.
+\fB*\fR The shared storage or NFS is configured according to HANA storage API for
+host auto-failover.
 .PP
-* No immediate fencing is configured.
+\fB*\fR No immediate fencing is configured.
 .\" TODO: ? except for the SAPHanaFilesystem RA.
 Particularly SAPHanaSR-alert-agent has not to be used.
 .PP
-* After each test, all nodes have to be set back to their configured role. The
-landscape status of both sites needs to be 4.
+\fB*\fR After each test, all nodes have to be set back to their configured role.
+The landscape status of both sites needs to be 4.
 .PP
 .\"
 .SH BUGS
 .\"
-In case of any problem, please use your favourite SAP support process to open
-a request for the component BC-OP-LNX-SUSE.
+.\" In case of any problem, please use your favourite SAP support process to open
+.\" a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
