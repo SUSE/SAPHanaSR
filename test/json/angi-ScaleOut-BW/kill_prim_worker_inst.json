@@ -1,6 +1,15 @@
 {
     "test": "kill_prim_worker_inst",
     "name": "Kill primary worker instance",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "primary",
+        "kill",
+        "hana",
+        "worker",
+        "takeover"
+    ],
     "start": "prereq10",
     "steps": [
         {
@@ -10,12 +19,12 @@
             "loop": 1,
             "wait": 1,
             "post": "kill_prim_worker_inst",
-            "todo": "allow something like pSite=@@pSite@@ or pSite=%pSite",
-            "todo1": "allow something like lss>2, lpt>10000, score!=123",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
-            "sHost": "sHostUp"
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pWorker": "pWorkerUp"
         },
         {
             "step": "step20",
@@ -24,75 +33,75 @@
             "loop": 120,
             "wait": 2,
             "pSite": [
-                "lss=(1|2)",
-                "srr=P",
-                "lpt=(1[6-9]........|20)",
-                "srHook=(PRIM|SWAIT|SREG)",
-                "srPoll=PRIM"
-            ],
-            "sSite": [
-                "lpt=(1[6-9]........|30)",
-                "lss=4",
-                "srr=S",
-                "srHook=(PRIM|SOK)",
-                "srPoll=SOK"
+                "lss ~ (1|2)",
+                "srr == P",
+                "lpt >~ 1000000000:20",
+                "srHook == PRIM"
             ],
             "pHost": [
-                "clone_state=(PROMOTED|DEMOTED|UNDEFINED)",
-                "roles=master1::worker:",
-                "score=(90|5|0)"
-            ],
-            "sHost": [
-                "clone_state=(PROMOTED|DEMOTED)",
-                "roles=master1:master:worker:master",
-                "score=(100|145)"
+                "clone_state ~ (PROMOTED|DEMOTED|UNDEFINED)",
+                "score ~ (90|70|5|0)"
             ]
         },
         {
             "step": "step30",
-            "name": "begin recover",
-            "next": "final40",
+            "name": "takeover on secondary",
+            "next": "step40",
             "loop": 120,
             "wait": 2,
-            "todo": "pHost+sHost to check site-name",
-            "pSite": [
-                "lss=1",
-                "srr=P",
-                "lpt=(1[6-9]........|30|20|10)",
-                "srHook=(PRIM|SWAIT|SREG)",
-                "srPoll=PRIM"
-            ],
             "sSite": [
-                "lpt=(1[6-9]........|30)",
-                "lss=4",
-                "srr=(S|P)",
-                "srHook=PRIM",
-                "srPoll=SOK"
-            ],
-            "pHost": [
-                "clone_state=(UNDEFINED|DEMOTED)",
-                "roles=master1::worker:",
-                "score=(90|5)"
+                "lpt >~ 1000000000:30",
+                "lss == 4",
+                "srr ~ (S|P)",
+                "srHook ~ (PRIM|SOK|SFAIL)"
             ],
             "sHost": [
-                "clone_state=(DEMOTED|PROMOTED)",
-                "roles=master1:master:worker:master",
-                "score=(100|145)",
-                "srah=T"
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score ~ (145|150)",
+                "srah == T"
+            ],
+            "sWorker": [
+                "clone_state == DEMOTED",
+                "roles == slave:slave:worker:slave"
             ]
         },
         {
-            "step": "final40",
+            "step": "step40",
+            "name": "recover new secondary",
+            "next": "final50",
+            "loop": 120,
+            "wait": 2,
+            "pSite": [
+                "lss ~ (1|2)",
+                "srr ~ (S|P)",
+                "lpt ~ (20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles ~ (master1::worker:|master1:master:worker:worker)",
+                "score ~ (100|5|0)",
+                "srah == R"
+            ],
+            "pWorker": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles ~ (slave::worker:|slave:slave:worker:slave)"
+            ]
+        },
+        {
+            "step": "final50",
             "name": "end recover",
             "next": "END",
             "loop": 300,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
             "pSite": "sSiteUp",
-            "sSite": "pSiteUp",
             "pHost": "sHostUp",
-            "sHost": "pHostUp"
+            "pWorker": "sWorkerUp",
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
         }
     ]
 }

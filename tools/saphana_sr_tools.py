@@ -572,7 +572,7 @@ class HanaStatus():
         """
         time_string = ""
         quote = ''
-        fs = ';' # field separator
+        fs = kargs.get("fs", ';')
         short = False
         if 'quote' in kargs:
             quote = kargs['quote']
