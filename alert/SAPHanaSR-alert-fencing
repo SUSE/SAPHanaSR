@@ -5,7 +5,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2024-2025 SUSE LLC
-# Version:      2025-10-01-13:42
+# Version:      2025-10-30-13:50
 #
 # Configure the alert with crmsh:
 #
@@ -21,42 +21,37 @@ logger_tag="SAPHanaSR-alert-fencing"
 logger="/usr/bin/logger"
 
 # ON_FAIL_ACTION="${OCF_RESKEY_ON_FAIL_ACTION:-proceed}"
-CRM_alert_recipient="${CRM_alert_recipient:-/dev/null}"
+# CRM_alert_recipient="${CRM_alert_recipient:-/dev/null}"
 crm_alert_kind="${CRM_alert_kind:-manual call}"
 crm_alert_node="${CRM_alert_node:-$HOSTNAME}"
 crm_alert_desc="${CRM_alert_desc:-no description provided}"
 
-cache_file="/run/crm/SAPHanaSR_site_cache"
-
 alert_uptime_threshold="${alert_uptime_threshold:-300}"
+# Get the site name of the alerting node - value only
+fenced_site_name="$(crm_attribute --node "${crm_alert_node}" --query --pattern hana_..._site --quiet)"
+# Get the site name of the local cluster node - value only
+local_site_name="$(crm_attribute --type nodes --query --pattern hana_..._site --quiet)"
 
 IFS=. read -r sys_uptime REST </proc/uptime
 $logger -t "$logger_tag" "AH: begin event '$crm_alert_kind' (uptime=$sys_uptime, alert_uptime_threshold=$alert_uptime_threshold)"
 
 function process_fencing()
 {
-	# SAPHanaSR_site_cache has format (each line) host:site_name
-	# figure out fenced site
-
     if [[ "$sys_uptime" -ge "$alert_uptime_threshold" ]]; then
-        if [[ -e "$cache_file" ]]; then
-            fenced_site_name=$(awk -F: '$1 == host { print $2 }' host="${crm_alert_node}" "$cache_file")
-            local_site_name=$(awk -F: '$1 == host { print $2 }' host="${HOSTNAME}" "$cache_file")
-            $logger  -t "$logger_tag" "INFO: cache_file=$cache_file, crm_alert_node=$crm_alert_node"
-            $logger  -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
-            if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
-                $logger  -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
-                sleep 10
-                /usr/sbin/crm_attribute -t status -N "${HOSTNAME}" -n terminate -v true
-                rc="$?"
-                if [[ "$rc" != "0" ]]; then
-                    $logger  -t "$logger_tag" "ACT: /usr/sbin/crm_attribute -t status -N \"${HOSTNAME}\" -n terminate -v true; rc=$?"
-                fi
-            else
-                $logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
+        $logger  -t "$logger_tag" "INFO: crm_alert_node=$crm_alert_node"
+        $logger  -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
+        if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
+            $logger  -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
+            # Delay the fencing action to write logs first
+            sleep 10
+            # Set the 'terminate' status attribute for the current node
+            /usr/sbin/crm_attribute -t status -n terminate -v true
+            rc="$?"
+            if [[ "$rc" != "0" ]]; then
+                $logger  -t "$logger_tag" "ACT: /usr/sbin/crm_attribute -t status -n terminate -v true; rc=$rc"
             fi
         else
-            $logger -t "$logger_tag" "DEC: NO FENCE (no cache)"
+            $logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
         fi
     else
         $logger -t "$logger_tag" "DEC: NO FENCE (uptime < alert_uptime_threshold)"
@@ -65,27 +60,17 @@ function process_fencing()
 
 function check_fencing()
 {
-	# SAPHanaSR_site_cache has format (each line) host:site_name
-	# figure out fenced site
-
-	if [[ -e "$cache_file" ]]; then
-		fenced_site_name=$(awk -F: '$1 == host { print $2 }' host="${crm_alert_node}" "$cache_file")
-		local_site_name=$(awk -F: '$1 == host { print $2 }' host="${HOSTNAME}" "$cache_file")
-        	$logger -t "$logger_tag" "INFO: cache_file=$cache_file"
-        	$logger -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
-		if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
-			$logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
-		else
-			$logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
-		fi
-	else
-		$logger -t "$logger_tag" "DEC: NO FENCE (no cache)"
-	fi
+    $logger -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
+    if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
+        $logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
+    else
+        $logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"
+    fi
 }
 
 case "$crm_alert_kind" in
     node|nodes)
-	msg="Node '${crm_alert_node}' is now '${crm_alert_desc}'"
+        msg="Node '${crm_alert_node}' is now '${crm_alert_desc}'"
         $logger -t "$logger_tag" "INFO: $msg"
         ;;
     fencing)
@@ -99,7 +84,7 @@ case "$crm_alert_kind" in
         check_fencing
         ;;
     *)
-	msg="Unhandled '$crm_alert_kind' alert (${crm_alert_desc})"
+        msg="Unhandled '$crm_alert_kind' alert (${crm_alert_desc})"
         $logger -t "$logger_tag" "INFO: $msg"
         ;;
 esac
