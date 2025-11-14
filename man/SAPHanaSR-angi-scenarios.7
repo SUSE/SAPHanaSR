@@ -1,13 +1,14 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR-angi-scenarios 7 "08 May 2025" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-angi-scenarios 7 "27 Oct 2025" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
+.\"
 SAPHanaSR-angi-scenarios \- SAP HANA system replication scenarios.
 .PP
 .\"
 .SH DESCRIPTION
-.PP
+.\"
 SAPHanaSR-angi covers two topologies, scale-up and scale-out. On each topology,
 several scenarios are supported. Finally, for most scenarios, two variants are
 possible. 
@@ -123,12 +124,31 @@ SAPHanaSR-angi allows to define different variants of reaction on failures.
 \fBConservative\fR – default configuration
 .br
 The cluster is patient, it prefers stopping HANA over fencing nodes. It does
-not react on filesystem failures.
+not react on filesystem failures. The related settings are:
+.br
+- SAPHanaController monitor and stop timeout, ON_FAIL_ACTION=proceed
+.br
+- susChkSrv.py action_on_lost=stop (scale-up optional: kill)
+.br
+- Diskbased SBD msgwait
 .PP
 \fBProgressive\fR – alternative configuration
 .br
 The cluster reacts on failures of HANA or filesystem with fencing all nodes
-of the affected site. Takeover time might be further reduced by using diskless SBD.
+of the affected site. Also HANA landscape status FATAL and HANA call timeout
+will trigger a fencing.
+Takeover time might be further reduced by using diskless SBD.
+The related settings are:
+.br
+- SAPHanaController ON_FAIL_ACTION=fence
+.br
+- SAPHanaFilesystem ON_FAIL_ACTION=fence
+.br
+- susChkSrv.py action_on_lost=fence
+.br
+- SAPHanaSR-alert-fencing (scale-out)
+.br
+- Diskless SBD (optional, not for two-node cluster)
 .PP
 For details on configuration of the variants, please refer to manual pages
 ocf_suse_SAPHanaController(7), ocf_suse_SAPHana(7), ocf_suse_SAPHanaFilesystem(7),
@@ -137,7 +157,7 @@ SAPHanaSR-ScaleOut_basic_cluster(7).
 .PP
 .\"
 .SH EXAMPLES
-.PP
+.\"
 \fB* Examples for supported scenarios\fR
 .TP
 Scale-up performance-optimised multi-target
@@ -162,14 +182,14 @@ Scale-out performance-optimised two clusters connected
 .PP
 .\"
 .SH BUGS
-.PP
+.\"
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-.PP
+.\"
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
 \fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_suse_SAPHanaFilesystem\fP(7) , \fBSAPHanaSR-alert-fencing\fP(8) ,
@@ -182,12 +202,12 @@ https://documentation.suse.com/sbp/sap-15/
 .PP
 .\"
 .SH AUTHORS
-.PP
+.\"
 A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-.PP
+.\"
 (c) 2024-2025 SUSE LLC
 .br
 The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.

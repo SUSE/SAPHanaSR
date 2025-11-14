@@ -1,6 +1,15 @@
 {
     "test": "kill_prim_worker_node",
     "name": "Kill primary worker node",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "kill",
+        "primary",
+        "node",
+        "worker",
+        "takeover"
+    ],
     "start": "prereq10",
     "steps": [
         {
@@ -13,7 +22,9 @@
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
-            "sHost": "sHostUp"
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pWorker": "pWorkerUp"
         },
         {
             "step": "step20",
@@ -22,28 +33,27 @@
             "loop": 120,
             "wait": 2,
             "pSite": [
-                "lss=1",
-                "srr=P",
-                "lpt=(1[6-9]........|20|10)",
-                "srHook=(PRIM|SWAIT|SREG)",
-                "srPoll=PRIM"
+                "lss == 1",
+                "srr == P",
+                "lpt >~ 1000000000:(20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll == PRIM"
             ],
             "sSite": [
-                "lpt=(1[6-9]........|30)",
-                "lss=4",
-                "srr=(S|P)",
-                "srHook=(PRIM|SOK)",
-                "srPoll=(SOK|SFAIL)"
+                "lpt >~ 1000000000:30",
+                "lss == 4",
+                "srr ~ (S|P)",
+                "srHook ~ (PRIM|SOK)",
+                "srPoll ~ (SOK|SFAIL)"
             ],
             "pHost": [
-                "clone_state=(UNDEFINED|WAITING4NODES)",
-                "roles=master1::worker:",
-                "score=(70|5)"
+                "clone_state ~ (DEMOTED|UNDEFINED|WAITING4NODES)",
+                "score ~ (90|70|5)"
             ],
             "sHost": [
-                "clone_state=(PROMOTED|DEMOTED)",
-                "roles=master1:master:worker:master",
-                "score=(100|145)"
+                "clone_state ~ (PROMOTED|DEMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145)"
             ]
         },
         {
@@ -54,28 +64,27 @@
             "wait": 2,
             "todo": "pHost+sHost to check site-name",
             "pSite": [
-                "lss=(1|2)",
-                "srr=P",
-                "lpt=(1[6-9]........|30|20|10)",
-                "srHook=(PRIM|SWAIT|SREG)",
-                "srPoll=(PRIM|SFAIL)"
+                "lss ~ (1|2)",
+                "srr ~ (P|S)",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll ~ (PRIM|SFAIL)"
             ],
             "sSite": [
-                "lpt=(1[6-9]........|30)",
-                "lss=4",
-                "srr=(S|P)",
-                "srHook=PRIM",
-                "srPoll=(SOK|PRIM)"
+                "lpt >~ 1000000000:30",
+                "lss == 4",
+                "srr ~ (S|P)",
+                "srHook == PRIM",
+                "srPoll ~ (SOK|PRIM)"
             ],
             "pHost": [
-                "clone_state=(UNDEFINED|DEMOTED)",
-                "roles=master1::worker:"
+                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
+                "roles == master1::worker:"
             ],
             "sHost": [
-                "clone_state=(DEMOTED|PROMOTED)",
-                "roles=master1:master:worker:master",
-                "score=(100|145|150)",
-                "srah=T"
+                "clone_state ~ (DEMOTED|PROMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (100|145|150)"
             ]
         },
         {
@@ -89,7 +98,9 @@
             "pSite": "sSiteUp",
             "sSite": "pSiteUp",
             "pHost": "sHostUp",
-            "sHost": "pHostUp"
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp",
+            "pWorker": "sWorkerUp"
         }
     ]
 }
