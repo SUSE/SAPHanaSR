@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR-angi-scenarios 7 "27 Oct 2025" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-angi-scenarios 7 "17 Nov 2025" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 .\"
@@ -110,7 +110,6 @@ Symbol@Meaning
 '@primary IP address
 "@secondary (read-enabled) IP address
 .TE
-
 .PP
 The scale-up performance-optimised multi-target scenario can be noted as:
 .br
@@ -118,7 +117,6 @@ The scale-up performance-optimised multi-target scenario can be noted as:
 .PP
 \fB* Variants overview\fB
 .PP
-.\" TODO variants conservative, progressive
 SAPHanaSR-angi allows to define different variants of reaction on failures.
 .PP
 \fBConservative\fR – default configuration
@@ -128,7 +126,11 @@ not react on filesystem failures. The related settings are:
 .br
 - SAPHanaController monitor and stop timeout, ON_FAIL_ACTION=proceed
 .br
-- susChkSrv.py action_on_lost=stop (scale-up optional: kill)
+- susChkSrv.py action_on_lost=[stop|kill], for scale-up
+.br
+  susChkSrv.py action_on_lost=stop, for scale-out without standby node
+.br
+  susChkSrv.py action_on_lost=kill, for scale-out with standby node
 .br
 - Diskbased SBD msgwait
 .PP
@@ -138,15 +140,19 @@ The cluster reacts on failures of HANA or filesystem with fencing all nodes
 of the affected site. Also HANA landscape status FATAL and HANA call timeout
 will trigger a fencing.
 Takeover time might be further reduced by using diskless SBD.
-The related settings are:
+This variant primarily is meant for HANA scale-up and scale-out without standby
+nodes. For scale-out with standby nodes, the progressive variants must not use
+alert fencing. The related settings are:
 .br
-- SAPHanaController ON_FAIL_ACTION=fence
+- SAPHanaController ON_FAIL_ACTION=fence and stop action on-fail=fence
 .br
-- SAPHanaFilesystem ON_FAIL_ACTION=fence
+- SAPHanaFilesystem ON_FAIL_ACTION=fence and stop action on-fail=fence
 .br
 - susChkSrv.py action_on_lost=fence
 .br
-- SAPHanaSR-alert-fencing (scale-out)
+- SAPHanaSR-alert-fencing, for scale-out without standby node
+.br
+  no SAPHanaSR-alert-fencing, for scale-out with standby node
 .br
 - Diskless SBD (optional, not for two-node cluster)
 .PP
