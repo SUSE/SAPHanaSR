@@ -27,7 +27,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.2.20250324"
+    version = "2.2.20250818"
 
     def message(self, msg, **kwargs):
         """
@@ -902,6 +902,8 @@ class SaphanasrTest:
             remote = self.topolo['sHost']
             cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
             sudo_cmd = f"sudo -u root {cmd}"
+        if self.config['use_sudo']:
+            cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
