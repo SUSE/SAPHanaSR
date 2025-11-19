@@ -1,28 +1,37 @@
 .\" Version: 1.2 
 .\"
-.TH SAPHanaSR-hookHelper 8 "10 Jan 2025" "" "SAPHanaSR"
+.TH SAPHanaSR-hookHelper 8 "17 Nov 2025" "" "SAPHanaSR"
 .\"
 .SH NAME
-SAPHanaSR-hookHelper - generic helper for SAP HANA HADR provider hook scripts
+.\"
+SAPHanaSR-hookHelper - generic helper for SAP HANA HA/DR provider hook scripts
+.PP
 .\"
 .SH SYNOPSIS
+.\"
 \fBSAPHanaSR-hookHelper\fR [ --help | --version ]
 .br
 \fBSAPHanaSR-hookHelper\fR --sid=\fISID\fR --case=\fIuse_case\fR
+.PP
 .\"
 .SH DESCRIPTION
-\fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HADR provider hook scripts.
+.\"
+\fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HA/DR provider hook scripts.
 .br
-Currently two use cases are implemented:
+Currently three use cases are implemented:
 .br
 - Checking for maintenance mode of the multi-state resource, as described in manual
 page SAPHanaSR_maitenance_examples(7).
 .br
-- Fencing local node, see manual susChkSrv.py(7).
+- Fencing local node by cluster, see manual page susChkSrv.py(7).
+.br
+- Rebooting local node directly, see manual page SAPHanaSR-alert-fencing(8).
 .br
 For details, see SUPPORTED PARAMETERS below.
+.PP
 .\"
 .SH OPTIONS
+.\"
 .TP 4
 \fB --help\fR
 show help
@@ -35,22 +44,29 @@ run this use case
 .TP
 \fB --sid=\fISID\fR
 use this SID
+.PP
 .\"
 .SH SUPPORTED PARAMETERS
+.\"
 The script supports the following paramters:
 .TP 4
 \fBSID\fR SAP SID to handle.
 .br
 Required. No default.
 .TP 4
-\fBuse_case\fR  Use case to run. At the moment 'checkTakeover' and 'fenceMe' are supported.
+\fBuse_case\fR  Use case to run. At the moment 'checkTakeover', 'fenceMe' and 'echoBe' are supported.
+.br
 - checkTakeover : check whether a HANA takeover is running, allow or deny admin action.
 .br
-- fenceMe : fence local node by calling crm.
+- fenceMe : fence local node by calling 'crm_attribute ... terminate'.
+.br
+- echoBe : reboot local node by calling 'echo b >/proc/sysrq-trigger'.
 .br
 Required. No default.
+.PP
 .\"
 .SH RETURN CODES
+.\"
 .TP
 \fB0\fR
 takeover requested by cluster, permit takeover.
@@ -75,8 +91,10 @@ node fenced on request.
 .TP
 \fB99\fR
 unknown cluster command error, permit takeover.
+.PP
 .\"
 .SH EXAMPLES
+.\"
 * Example for checking the system log for when SAPHanaSR-hookHelper has been called.
 .PP
 .RS 2
@@ -89,7 +107,7 @@ Example SID is HA1. See also manual pages susTkOver.py(7), susChkSrv.py(7) and
 sudoers(5).
 .PP
 .RS 2
-# SAPHanaSR needs for HADR provider hook scripts
+# SAPHanaSR needs for HA/DR provider hook scripts
 .PP
 Cmnd_Alias HOOK_HELPER  = /usr/bin/SAPHanaSR-hookHelper --sid=HA1 --case=*
 .br
@@ -110,42 +128,58 @@ requests. See also manual pages stonith_admin(8) and susChkSrv.py(7).
 .br
 # grep Requesting.*fencing  /var/log/pacemaker/pacemaker.log
 .RE
+.PP
 .\"
 .SH FILES
+.\"
 .TP 4
 /usr/bin/SAPHanaSR-hookHelper
 the program itself
 .TP 4
 /usr/share/SAPHanaSR-angi/susTkOver.py , /usr/share/SAPHanaSR-angi/susChkSrv.py
-calling HADR provider hook scripts
+calling HA/DR provider hook scripts
+.TP 4
+/usr/bin/SAPHanaSR-alert-fencing
+calling alert handler
 .TP 4
 /tmp/SAPHanaSR_SRHhelper.XXXXXX
 temporary file, for internal use only
 .TP 4
 /etc/sudoers, /etc/sudoers.d/SAPHanaSR
 the sudo permissions configuration
+.PP
 .\"
 .SH BUGS
-\fB*\fR Command line options of this script will change, since this script is under development. This script is not intended to be called outside HA/DR provider hook scripts.
+.\"
+\fB*\fR Command line options of this script will change, since this script is
+under development. This script is not intended to be called outside HA/DR provider
+hook scripts or alert handlers.
 .PP
 \fB*\fR In case of any problem, please use your favourite SAP support process to
-open a request for the component BC-OP-LNX-SUSE. Please report any other feedback and suggestions to feedback@suse.com.
+open a request for the component BC-OP-LNX-SUSE. Please report any other feedback
+and suggestions to feedback@suse.com.
+.\"
+.PP
 .\"
 .SH SEE ALSO
+.\"
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) , 
-\fBsusHanaSR.py\fP(7) , \fBsusHanaSrMultiTarget.py\fP(7) ,
-\fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
+\fBsusHanaSR.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
-\fBSAPHanaSR-showAttr\fP(8) ,
+\fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-alert-fencing\fP(8) ,
 \fBcrm\fP(8) , \fBcrm_attribute\fP(8) , \fBstonith_admin\fP(8) ,
-\fBsudo\fP(8) , \fBsudoers\fP(5), 
+\fBsudo\fP(8) , \fBsudoers\fP(5) , 
 .br
 https://documentation.suse.com/sbp/sap/
+.PP
 .\"
 .SH AUTHORS
+.\"
 A.Briel, F.Herschel, L.Pinne
+.PP
 .\"
 .SH COPYRIGHT
+.\"
 (c) 2022-2025 SUSE LLC
 .br
 SAPHanaSR-hookHelper comes with ABSOLUTELY NO WARRANTY.
