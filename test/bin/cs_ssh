@@ -15,6 +15,7 @@ import re
 import sys
 import json
 import argparse
+import getpass
 # import random
 
 from paramiko import SSHClient
@@ -48,8 +49,8 @@ class SshMultiNode:
                         'hosts': [],
                         'quiet': False,
                         'report_hostname': False,
-                        'user': 'root',
-                        'keyfile': '/root/.ssh/id_rsa',
+                        'user': getpass.getuser(),
+                        'keyfile': None,
                         'check_host': True
                       }
 
@@ -69,7 +70,10 @@ class SshMultiNode:
                 try:
                     if not self.config ['check_host']:
                         ssh_client.set_missing_host_key_policy(AutoAddPolicy())
-                    ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
+                    if ssh_keyfile:
+                        ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
+                    else:
+                        ssh_client.connect(host, username=user)
                     if test01.config['quiet'] is not True:
                         self.message(f"INFO: on host {host} calling {cmd}")
                     (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
@@ -94,7 +98,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--hosts", nargs="*", help="hosts to connect to (stops after first successful command)")
 parser.add_argument("--command", help="command to be called on the hosts")
 parser.add_argument("--keyfile", help="ssh private key to be used")
-parser.add_argument("--user", help="linux user to be used for ssh connection (default is root)")
+parser.add_argument("--user", help="linux user to be used for ssh connection (default is current user)")
 parser.add_argument("--quiet", help="supress INFO messages", action="store_true")
 parser.add_argument("--report_hostname", help="report hostname of succesful ssh connection", action="store_true")
 parser.add_argument("--skip_hostcheck", help="only for private environments - skip check of known_hosts", action="store_true")
