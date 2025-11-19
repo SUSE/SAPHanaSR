@@ -352,6 +352,7 @@ class SaphanasrTest:
             test_prop_fh.write(f"instNr=\"{self.test_data.get('instNo','00')}\"\n")
             test_prop_fh.write(f"sidadm=\"{self.test_data.get('sid','C11').lower()}adm\"\n")
             test_prop_fh.write(f"userkey=\"{self.test_data.get('userKey','')}\"\n")
+            test_prop_fh.write(f"proxyUser=\"{self.config.get('user','')}\"\n")
             test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg, **kwargs):
