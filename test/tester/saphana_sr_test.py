@@ -908,7 +908,7 @@ class SaphanasrTest:
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
-        """ perform a given action on cluster node """
+        """ perform a given action on control node """
         remote = self.config['remote_node']
         action_array = action_name.split(" ")
         action_name_short = action_array[0]
