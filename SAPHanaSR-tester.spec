@@ -82,7 +82,7 @@ install -m 0755 test/bin/cs_* %{buildroot}/usr/bin
 #install -m 0755 test/bin/callTest* %{buildroot}/usr/bin
 #install -m 0755 test/bin/loopTests* %{buildroot}/usr/bin
 install -m 0755 test/bin/sct_* %{buildroot}/usr/bin
-install -m 0755 test/lib/sct_* %{buildroot}/usr/lib/%{name}
+install -m 0644 test/lib/sct_* %{buildroot}/usr/lib/%{name}
 
 # client files
 install -m 0755 tools/SAPHanaSR-showAttr %{buildroot}/usr/bin
