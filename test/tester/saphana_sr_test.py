@@ -27,7 +27,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.2.20250324"
+    version = "2.2.20251118"
 
     def message(self, msg, **kwargs):
         """
@@ -352,6 +352,8 @@ class SaphanasrTest:
             test_prop_fh.write(f"instNr=\"{self.test_data.get('instNo','00')}\"\n")
             test_prop_fh.write(f"sidadm=\"{self.test_data.get('sid','C11').lower()}adm\"\n")
             test_prop_fh.write(f"userkey=\"{self.test_data.get('userKey','')}\"\n")
+            test_prop_fh.write(f"proxyUser=\"{self.config.get('user','')}\"\n")
+            test_prop_fh.write(f"all_nodes=\"{self.config.get('all_nodes','')}\"\n")
             test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg, **kwargs):
@@ -812,36 +814,36 @@ class SaphanasrTest:
             sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
         elif action_name == "kill_prim_indexserver":
             remote = self.topolo['pHost']
-            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_indexserver":
             remote = self.topolo['sHost']
-            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_worker_indexserver":
             remote = self.topolo['pWorker']
-            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_secn_worker_indexserver":
             remote = self.topolo['sWorker']
-            cmd = "pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbindexserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
         elif action_name == "kill_prim_xsengine":
             remote = self.topolo['pHost']
-            cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_secn_xsengine":
             remote = self.topolo['sHost']
-            cmd = "pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbxsengine".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
         elif action_name == "kill_prim_nameserver":
             remote = self.topolo['pHost']
-            cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
         elif action_name == "kill_secn_nameserver":
             remote = self.topolo['sHost']
-            cmd = "pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm -11 hdbnameserver".format(test_sid.lower())
+            cmd = "pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
+            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
         elif action_name == "bmt":
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
@@ -902,10 +904,12 @@ class SaphanasrTest:
             remote = self.topolo['sHost']
             cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo['pHost']} -j DROP"
             sudo_cmd = f"sudo -u root {cmd}"
+        if self.config['use_sudo']:
+            cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
 
     def action_on_os(self, action_name):
-        """ perform a given action on cluster node """
+        """ perform a given action on control node """
         remote = self.config['remote_node']
         action_array = action_name.split(" ")
         action_name_short = action_array[0]
@@ -937,6 +941,41 @@ class SaphanasrTest:
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
         return action_rc
+
+    def query_call(self, action_name, cmd, remote):
+        """ do the query itself """
+        result = []
+        if cmd != "":
+            if remote == "localhost":
+                self.message("QUERY: {} LOCAL: {}".format(action_name, cmd))
+                local_call_result = subprocess.run(cmd.split(), check=False)
+                action_rc = local_call_result.returncode
+                action_stdout = local_call_result.stdout
+                self.message("QUERY: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
+            else:
+                self.message("QUERY: {} REMOTE at {}: {}".format(action_name, remote, cmd))
+                a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
+                action_rc = a_result[2]
+                action_stdout = a_result[0]
+                self.message("QUERY: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+        return [action_stdout, None, action_rc]
+
+    def query_on_cluster(self, action_name):
+        remote = self.config['remote_node']
+        cmd = ""
+        if action_name == "list_nodes":
+            cmd = "/usr/sbin/crm_node --list"
+            sudo_cmd = f"sudo -u root {cmd}"
+        if self.config['use_sudo']:
+            cmd = sudo_cmd
+        return self.query_call(action_name, cmd, remote)
+
+    def query(self, action_name):
+        """ perform a given query (also give-back stdout) query_result : [stdout, stdin, rc] """
+        query_result = None
+        if action_name in ("list_nodes"):
+            query_result = self.query_on_cluster(action_name)
+        return query_result
 
     def __do_ssh__(self, remote_host, user, cmd, **kwargs):
         """

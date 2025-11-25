@@ -36,16 +36,17 @@ function process_fencing()
         if [[ -e "$cache_file" ]]; then
             fenced_site_name=$(awk -F: '$1 == host { print $2 }' host="${crm_alert_node}" "$cache_file")
             local_site_name=$(awk -F: '$1 == host { print $2 }' host="${HOSTNAME}" "$cache_file")
-            $logger  -t "$logger_tag" "INFO: cache_file=$cache_file, crm_alert_node=$crm_alert_node"
-            $logger  -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
+            $logger -t "$logger_tag" "INFO: cache_file=$cache_file, crm_alert_node=$crm_alert_node"
+            $logger -t "$logger_tag" "INFO: fenced_site_name=$fenced_site_name, local_site_name=$local_site_name"
             if [[ "$local_site_name" != "" && "$fenced_site_name" == "$local_site_name" ]]; then
-                $logger  -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
+                $logger -t "$logger_tag" "DEC: FENCE ($fenced_site_name == $local_site_name)"
                 sleep 10
-                sudo  /usr/sbin/crm --force node fence "${HOSTNAME}"; rc="$?"
-                # alternative option, needs crmsh fix #1229030
-                # /usr/sbin/crm_attribute -t status -n terminate -v true -N "${HOSTNAME}"; rc="$?"
+                sudo /usr/bin/SAPHanaSR-hookHelper --sid=ANY --case=echoBe; rc=$? # --sid=ANY, because sid is irrelevant here
                 if [[ "$rc" != "0" ]]; then
-                    $logger -t "$logger_tag" "ACT: sudo /usr/sbin/crm --force node fence ${HOSTNAME}; rc=$rc"
+                    nodeName=$(/usr/sbin/crm_node -n)
+                    $logger -t "$logger_tag" "ACT: sudo /usr/bin/SAPHanaSR-hookHelper --sid=ANY --case=echoBe rc=$rc"
+                    $logger -t "$logger_tag" "ACT: fall back to /usr/sbin/crm_attribute -t status -n terminate -v true -N $nodeName"
+                    /usr/sbin/crm_attribute -t status -n terminate -v true -N "$nodeName" 
                 fi
             else
                 $logger -t "$logger_tag" "DEC: NO FENCE ($fenced_site_name != $local_site_name)"

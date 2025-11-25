@@ -1,17 +1,19 @@
 .\" Version: 1.2
 .\"
-.TH ocf_suse_SAPHanaController 7 "23 Jun 2025" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaController 7 "14 Nov 2025" "" "OCF resource agents"
 .\"
 .SH NAME
+.\"
 SAPHanaController \- Manages takeover between two SAP HANA databases with system replication (scale-out).
 .PP
 .\"
 .SH SYNOPSIS
+.\"
 \fBSAPHanaController\fP [ start | stop | status | monitor | promote | demote | meta\-data | validate\-all | reload | methods | usage ]
 .PP
 .\"
 .SH DESCRIPTION
-.PP
+.\"
 \fBSAPHanaController\fP is an resource agent (RA) for SAP HANA databases. It
 manages takeover for a SAP HANA database with system replication in an OCF
 promotable clone configuration. This manual page explains SAP HANA scale-out
@@ -35,15 +37,25 @@ SAPHanaController and SAPHanaTopology RAs, the SAPHanaSR solution uses an
 "HA/DR provider" API provided by HANA to get informed about the current state of
 the system replication.
 .PP
-On initial cluster start, the cluster needs to detect a valid HANA system replication setup, including system replication status (SOK) and last primary timestamp (LPT). This is necessary to ensure data integrity.
+On initial cluster start, the cluster needs to detect a valid HANA system replication
+setup, including system replication status (SOK) and last primary timestamp (LPT).
+This is necessary to ensure data integrity.
 .PP
 The SAPHanaController RA performs the actual check of the SAP HANA database instances
 and is configured as promoatble clone resource.
-The Linux cluster resources' promoted status will follow the HANA's active master name server role. Resources (e.g. IP address) that need to run on the same node with that HANA role should be co-located with the promoted target.
+The Linux cluster resources' promoted status will follow the HANA's active master
+name server role. Resources (e.g. IP address) that need to run on the same node with
+that HANA role should be co-located with the promoted target.
 Managing the two SAP HANA instances in scale-up or scale-out setup means that
 the resource agent controls the start/stop of the instances. 
-In addition the resource agent is able to monitor the SAP HANA databases on landscape host configuration level. For this monitoring the resource agent relies on interfaces provided by SAP.
-A third task of the resource agent is to also check the synchronisation status of the two SAP HANA databases. If the synchronisation is not "SOK", then the cluster avoids to takeover to the secondary side, if the primary fails. This is to improve the data consistency.
+In addition the resource agent is able to monitor the SAP HANA databases on landscape
+host configuration level. For this monitoring the resource agent relies on interfaces
+provided by SAP.
+.PP
+A third task of the resource agent is to also check the synchronisation status of
+the two SAP HANA databases. If the synchronisation is not "SOK", then the cluster
+avoids to takeover to the secondary side, if the primary fails. This is to ensure
+data consistency.
 .PP
 The resource agent uses the following five interfaces provided by SAP:
 .PP
@@ -93,7 +105,7 @@ Please see also the REQUIREMENTS section below and manual page SAPHanaSR-angi-sc
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
-.PP
+.\"
 This resource agent supports the following parameters:
 .PP
 \fBSID\fR
@@ -160,13 +172,13 @@ It also defines whether HANA landscape status 0 and HANA call timeout are handle
 as resource failure.
 If srHook=SOK, in case of monitor failure an node fencing could be triggered. 
 For srHook=SFAIL, the restart will be proceeded as usual. This option may speed
-up takeover on scale-up systems, depending on how long HANA needs for stopping.
+up takeover, depending on how long HANA needs for stopping.
 For scale-out see also SAPHanaSR-alert-fencing(8).
 Values: [ proceed | fence ].
 .br
-- proceed: proceed the failure as usual, i.e. initiate demote-stop sequence.
+- proceed: Proceed the failure as usual, i.e. initiate demote-stop sequence.
 .br
-- fence: trigger stop failure and node fencing, if conditions are matched.
+- fence: Trigger stop failure and node fencing, if conditions are matched. Needs stop on-fail=fence.
 .br
 Optional. Default value: proceed.
 .RE
@@ -196,7 +208,7 @@ Optional. Default value: false\&.
 .PP
 .\"
 .SH SUPPORTED PROPERTIES
-.PP
+.\"
 \fBhana_${sid}_glob_filter\fR
 .RS 4
 Global cluster property \fBhana_${sid}_glob_filter\fR . This property defines which messages are logged by the RA. It should only be set if requested by support engineers. The default is sufficient for normal operation. See also SAPHanaSR-showAttr(8).
@@ -229,16 +241,9 @@ TOP: Topology. Messages related to HANA SR topology, like site name and remote s
 Optional, advanced. Default value: ra-act-dec-lpa\&.
 .RE
 .PP
-\fBhana_${sid}_gra\fR
-.RS 4
-The node attribute \fBhana_${sid}_gra\fR identifies what generation of the RA is running. The generation should be same on all nodes. See also SAPHanaSR-showAttr(8) and SAPHanaSR-manageAttr(8).
-.br
-Optional.
-.RE
-.PP
 .\"
 .SH SUPPORTED ACTIONS
-.PP
+.\"
 This resource agent supports the following actions (operations):
 .PP
 \fBstart\fR
@@ -306,7 +311,7 @@ Changes parameters without forcing a recover of the resource. Suggested minimum 
 .PP
 .\"
 .SH RETURN CODES
-.PP
+.\"
 The return codes are defined by the OCF cluster framework. Please refer to the
 OCF definition on the website mentioned below. 
 In addition return code 124 will be logged if HANA_CALL_TIMEOUT has been exceeded.
@@ -315,11 +320,10 @@ In addition, log entries are written, which can be scanned by using a pattern li
 .PP
 .\"
 .SH EXAMPLES
-.PP
+.\"
 * Below is an example configuration for a SAPHanaController multi-state resource in an HANA scale-out performance-optimised scenario.
 .br
 The HANA consists of two sites with five nodes each. An additional cluster node is used as majority maker for split-brain situations. In addition, a SAPHanaTopology clone resource is needed to make this work.
-.RE
 .PP
 .RS 4
 primitive rsc_SAPHanaCon_SLE_HDB00 ocf:suse:SAPHanaController \\
@@ -516,6 +520,7 @@ nodeB: 1479202132
 .PP
 .\"
 .SH FILES
+.\"
 .TP
 /usr/lib/ocf/resource.d/suse/SAPHanaController
 the resource agent
@@ -539,18 +544,19 @@ default path for DIR_PROFILE
 .PP
 .\"
 .SH REQUIREMENTS
-.PP
+.\"
 For the current version of the SAPHanaController resource agent that comes with the software package SAPHanaSR-angi, the support is limited to the scenarios and parameters described in the manual pages SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
 .PP
 .\"
 .SH BUGS
-.\" TODO
+.\"
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+.\"
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaFilesystem\fP(7) ,
 \fBocf_heartbeat_IPaddr2\fP(8) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
@@ -571,10 +577,12 @@ http://scn.sap.com/docs/DOC-60334 ,
 .PP
 .\"
 .SH AUTHORS
+.\"
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
+.\"
 (c) 2014 SUSE Linux Products GmbH, Germany.
 .br
 (c) 2015-2017 SUSE Linux GmbH, Germany.

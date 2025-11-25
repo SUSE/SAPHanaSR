@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR-tester 7 "14 Mar 2025" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-tester 7 "18 Nov 2025" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 .\"
@@ -146,12 +146,34 @@ and manual pages sshd_config(5), crypto-policies(7).
 # systemctl restart sshd
 .RE
 .PP
+\fB*\fR Example for entry in sudo permissions /etc/sudoers.d/SAPHanaSR-tester.
+.PP
+A proxy user is needed on the cluster nodes, if user root does not have
+password-less ssh login. Proxy user is testproxy. All commands are allowed, this
+example is highly insecure. No one should have access to the proxy user login.
+.\" TODO more granular permissions
+.PP
+.RS 2
+# SAPHanaSR-tester needs for proxy user
+.br
+testproxy ALL=(ALL) NOPASSWD: ALL
+.RE
+.PP
+\fB*\fR Showing sudo permissions for proxy user.
+.PP
+This might be done before running tests the first time. All related files
+(/etc/sudoers and /etc/sudoers.d/*) are scanned. User is testproxy.
+.PP
+.RS 2
+# sudo -U testproxy -l
+.RE
+.PP
 \fB*\fR Creating an userkey for database access.
 .PP
 An userkey for user <sid>admin is created to allow password-less login as user
-SYSTEM to the HANA database. This is needed for some test cases, e.g. 
-free_log_backup. The example user is q42admin, key is TESTER, instance number
-is 85, database user SYSTEM´s password is SuSE12345. Do this on both nodes.
+SYSTEM to the HANA database. This is needed for some test cases, e.g. free_log_backup.
+The example user is q42admin, key is TESTER, instance number is 85, database user
+SYSTEM´s password is SuSE12345. Do this on both nodes.
 .br
 Refer to SAP HANA documentation for further information on database users,
 permissions and the user keystore.
@@ -224,6 +246,9 @@ SAPHanaSR-showAttr on all Linux cluster nodes, compatible to SAPHanaSR-angi and 
 .TP
 /etc/ssh/sshd_config.d/30-SAPHanaSR-tester-crypto.conf
 custom crypto policies on all Linux cluster nodes, for openssh-server and python3-paramiko.
+.TP
+/etc/sudoers.d/SAPHanaSR-tester
+sudo permissions, in case tests are done via proxy user.
 .PP
 .\"
 .SH REQUIREMENTS
@@ -242,7 +267,7 @@ with additional package SAPHanaSR-tester-client is supported.
 No multi-SID (MCOS) setups. No cost-optimised setup.
 .PP
 \fB*\fP Scale-out setups with or without multi-target replication.
-No HANA host auto-failover. No multi-SID (MCOS) setups. No cost-optimised setup.
+No HANA host auto-failover. No multi-SID (MCOS) setups.
 .PP
 \fB*\fP The SAPHanaSR-angi configuration variants conservative and progressive
 are supported.
@@ -254,6 +279,9 @@ cluster.
 detects an status represented by those attributes.
 .PP
 \fB*\fP User root needs password-less access to the Linux cluster nodes.
+If this is not possible, a proxy user with password-less access to the cluster
+nodes can be used. That proxy user needs sufficient sudo permissions. No one
+should have access to the proxy user login. 
 .PP
 \fB*\fP On the cluster nodes, user <sid>adm has a userkey for password-less
 login as database user SYSTEM into the HANA database. This is only needed for
