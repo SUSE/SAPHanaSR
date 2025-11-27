@@ -9,23 +9,26 @@ SAPHanaSR-ScaleOut-XSA \- Automating SAP HANA system replication for stand-alone
 .\"
 .SH DESCRIPTION
 .\"
-\fBThe SAP HANA SR scale-out stand-alone XSA scenario is a technology preview.\fP
-.PP
 This manual page provides information for setting up and managing automation of
 SAP HANA system replication (SR) in scale-out setups with a stand-alone eXtended
 application Services Advanced (XSA) server.
 For other scale-out scenarios, please refer to SAPHanaSR-ScaleOut(7).
 .PP
+.\" TODO HANA XSA is
+.\" .PP
 The scale-out stand-alone XSA scenario consists of two nodes per site.
 One node runs the HANA master namesever and an indexserver. The other node runs
 an HANA nameserver slave but no indexserver. Instead of the indexserver, an
 stand-alone XSA server is running.
-.\" TODO roles 
+.\" TODO roles
+.\" TODO NFS
+.PP
+\fBThe SAP HANA SR scale-out stand-alone XSA scenario is a technology preview.\fP
 .PP
 .\"
 .SH EXAMPLES
 .PP
-\fB*\fP Example Filesystem Storage entry.
+\fB*\fP Example XSA fss entry.
 .PP
 TODO . SID is HA1.
 .PP
@@ -37,13 +40,14 @@ TODO . SID is HA1.
 fss_storage_path = /hana/shared/HA1/xs/controller_data/ 
 .RE
 .PP
-\fB*\fP Example /etc/fstab
+\fB*\fP Example fss entry in /etc/fstab.
 .PP
 Below is an fstab example for a shared filesystem holding XSA fss TODO. 
 The filesystem is statically mounted on all HANA nodes of the cluster. The
 correct mount options are depending on the NFS server. However, client-side write
 caching has to be disabled in any case. The path has to match fss_storage_path
-in xscontroller.ini.
+in xscontroller.ini. Since the fss directory is mounted below /hana/shared, which
+also comes from outside, the fss entry should follow later.
 .PP
 .RS 2
 nfs1:/s/ha1/fss /hana/shared/HA1/xs/controller_data/ nfs4 rw,noac,sync,default 0 0
@@ -67,23 +71,25 @@ default Filesystem Storage directory.
 local users and groups definition files.
 .TP
 /etc/fstab
-TODO
+static information about the filesystems.
 .PP
 .\"
 .SH REQUIREMENTS
 .\"
-\fB*\fP The SAP HANA XSA service is installed for DNS wildcard based routing.
-.PP
-\fB*\fP NFS shared between sites for the XSA fss directory.
-.\" TODO fss
-.PP
-\fB*\fP Filesystem Storage (fss) is configured identically on both sites.
-.PP
-\fB*\fP Linux user <sid>adm same UID and GIDs on all cluster nodes.
-.PP
-\fB*\fP SAP HANA host auto-failover is not supported.
-.PP
-\fB*\fP See also REQUIREMENTS section in SAPHanaSR-ScaleOut(7).
+1. The SAP HANA XSA service is installed for DNS wildcard based routing.
+.br
+2. Filesystem Storage (fss) is configured identically on both sites.
+.br
+3. A highly available NFS service provides the shared XSA fss directory
+across sites.
+.br
+4. Linux user <sid>adm has same UID and GIDs on all cluster nodes.
+.br
+5. SAP HANA host auto-failover is not supported.
+.br
+6. Multi-target or multi-tier system replication is not supported.
+.br
+7. See also REQUIREMENTS section in SAPHanaSR-ScaleOut(7).
 .PP
 \"
 .SH BUGS
@@ -95,8 +101,9 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH SEE ALSO
 .\"
-SAPHanaSR-angi(7) , SAPHanaSR-ScaleOut(7) , SAPHanaSR-angi-scenarios(7) ,
-SAPHanaFilesystem(7) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBSAPHanaSR-angi-scenarios\fP(7) , \fBocf_suse_SAPHanaFilesystem\fP(7) ,
+\fBfstab\fP(5) , \fBnfs\fP(5) ,
 .br
 https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/99306be18a1f493b990cf9d8d90cd922.html?version=2.0.07 ,
 .br
