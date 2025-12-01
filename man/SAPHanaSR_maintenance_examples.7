@@ -1,23 +1,23 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR_maintenance_examples 7 "10 Jan 2025" "" "SAPHanaSR"
+.TH SAPHanaSR_maintenance_examples 7 "01 Dec 2025" "" "SAPHanaSR"
 .\"
 .SH NAME
+.\"
 SAPHanaSR_maintenance_examples \- maintenance examples for SAPHanaController.
 .PP
 .\"
 .SH DESCRIPTION
-.PP
+.\"
 Maintenance examples for SAPHanaController.
 Please see ocf_suse_SAPHanaController(7), susHanaSR.py(7),
 susHanaSrMultiTarget.py(7), susTkOver.py(7), susChkSrv.py(7),
 SAPHanaSR-manageAttr(8), for more examples and read the REQUIREMENTS section
 below.
-.RE
 .PP
 .\"
 .SH EXAMPLES
-.PP
+.\"
 \fB*\fR Check status of Linux cluster and HANA system replication pair.
 .PP
 This steps should be performed before doing anything with the cluster, and
@@ -38,10 +38,11 @@ REQUIREMENTS below.
 .PP
 \fB*\fR Watch status of HANA cluster resources and system replication.
 .PP
-This might be convenient when performing administrative actions or cluster tests. It does not replace the afore mentioned checks. See also cs_show_saphanasr_status(8).
+This might be convenient when performing administrative actions or cluster tests.
+It does not replace the afore mentioned checks. See also cs_show_saphanasr_status(8).
 .PP
 .RS 4
-# watch -n9 "crm_mon -1r --include=none,nodes,resources,failures;echo;SAPHanaSR-showAttr;cs_clusterstate -i|grep -v '#'"
+# watch -n9 "crm_mon -1r --exclude=summary;echo;SAPHanaSR-showAttr;cs_clusterstate -i|grep -v '#'"
 .RE
 .PP
 \fB*\fR Overview on stopping the HANA database at one site.
@@ -74,11 +75,17 @@ Note: Do not forget to end the resource maintenance after you have re-started th
 This procedure does not work for scale-out. On scale-up, it will stop the HANA primary.
 This might take a while. If you want to avoid waiting for the stopped primary,
 use the below procedure which suspends the primary.
-If the cluster should also register the former primary as secondary, AUTOMATED_REGISTER="true" is needed. Before the takeover will be initiated, the status of the Linux cluster and the HANA system replication has to be checked. The takeover should be initiated as forced migration of the multi-state SAPHanaController resource.
+If the cluster should also register the former primary as secondary, AUTOMATED_REGISTER="true"
+is needed. Before the takeover will be initiated, the status of the Linux cluster
+and the HANA system replication has to be checked. The takeover should be initiated
+as forced migration of the multi-state SAPHanaController resource.
 .br
-Not working: Regular migration, migration of IP address, migration of primitive SAPHanaController resource, setting primary node standby.
+Not working: Regular migration, migration of IP address, migration of primitive
+SAPHanaController resource, setting primary node standby.
 .br
-After takeover of the primary has been finished, the migration rule has to be deleted. If AUTOMATED_REGISTER="true" is set, finally the former primary will be registered as secondary, once the migration rule has been deleted.
+After takeover of the primary has been finished, the migration rule has to be deleted.
+If AUTOMATED_REGISTER="true" is set, finally the former primary will be registered as
+secondary, once the migration rule has been deleted.
 .PP
 .RS 4
 # crm_mon -1r
@@ -306,7 +313,7 @@ cluster should not start automatically. If the cluster is configure that way,
 some steps are needed to start the cluster after a node has been rebooted by
 STONITH. STONITH via SBD is used in this example. 
 .PP
-.RS 2
+.RS 4
 # cs_clear_sbd_devices --all
 .br
 # cs_show_sbd_devices
@@ -486,68 +493,23 @@ See above overview on maintenance procedures with running Linux cluster.
 # SAPHanaSR-showAttr
 .RE
 .PP
-\fB*\fR Manually update global site attribute.
+\fB*\fR Manually update HANA version attribute.
 .PP
-.\" TODO: attributes still used for angi?
-In rare cases the global site attribute hana_<sid>_glob_prim or
-hana_<sid>_glob_sec is not updated automatically after successful takeover,
-while all other attributes are updated correctly. The global site attribute
-stays outdated even after the Linux cluster has been idle for a while.
-In this case, that site attribute could be updated manually.
-Make sure everything else is fine and just the global site attribute has not
-been updated. Updating hana_<sid>_glob_sec for SID HA1 with site name VOLKACH:
+The node attribute "version" shows the HANA version on that node. The attribute is
+used by the YaST HANA update wizard. It is not used by SAPHanaSR-angi. If the attribute
+does not reflect the new HANA version after an HANA update, it can be refreshed
+manually.
 .PP
 .RS 4
-# crm configure show SAPHanaSR
-.br
-# crm_attribute --type crm_config --set-name SAPHanaSR --name hana_ha1_glob_sec --update VOLKACH
-.br
-# crm configure show SAPHanaSR
-.RE
-.PP
-\fB*\fR Upgrade scale-out srHook attribute from old-style to multi-target.
-.PP
-As final result of this upgrade, the RAs and hook script are upgraded from
-old-style to multi-target. Further the Linux cluster's old-style global srHook
-attribute hana_${sid}_glob_srHook is replaced by site-aware attributes
-hana_${sid}_site_srHook_${SITE}. New auxiliary attributes are introduced.
-The complete procedure and related requirements are described in detail in
-manual page SAPHanaSR-manageAttr(8).
-.br
-The procedure at a glance:
-.PP
-.RS 2
-a. Initially check if everything looks fine.
-.br
-b. Set Linux cluster resources SAPHanaController and SAPHanaTopology into maintenance.
-.br
-c. Install multi-target aware SAPHanaSR-ScaleOut package on all nodes.
-.br
-d. Adapt sudoers permission on all nodes.
-.br
-e. Replace HANA HADR provider configuration on both sites.
-.br
-f. Reload HANA HADR provider hook script on both sites.
-.br
-g. Check Linux cluster and HANA HADR provider for matching defined upgrade entry state.
-.br
-h. Migrate srHook attribute from old-style to multi-target.
-.br
-i. Check Linux cluster for matching defined upgrade target state.
-.br
-j. Set Linux cluster resources SAPHanaController and SAPHanaTopology from maintenance to managed. 
-.br
-k. Optionally connect third HANA site via system replication outside of the Linux cluster.
-.br
-l. Finally check if everything looks fine.
+# crm resource refresh cln_SAPHanaTop_HA1_HDB00
 .RE
 .PP
 .\"
-.SH FILES
-.PP
+\" .SH FILES
+\" .PP
 .\"
 .SH REQUIREMENTS
-.br
+.\"
 \fB*\fR For the current version of the resource agents that come with the software
 packages SAPHanaSR-angi, the support is limited to the scenarios and parameters
 described in the respective manual pages SAPHanaSR-angi(7), SAPHanaSR(7) and SAPHanaSR-ScaleOut(7).
@@ -584,14 +546,14 @@ scale-out clusters.
 .PP
 .\"
 .SH BUGS
-.\" TODO
+.\"
 In case of any problem, please use your favourite SAP support process to open a
 request for the component BC-OP-LNX-SUSE. Please report any other feedback and
 suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
-.br
+.\"
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBsusHanaSR.py\fP(7) , \fBsusHanaSrMultiTarget.py\fP(7) ,
 \fBsusCostOpt.py\fP(7) , \fBsusTkOver.py\fP(7) , \fBsusChkSrv.py\fP(7) ,
@@ -619,11 +581,12 @@ https://help.sap.com/doc/eb75509ab0fd1014a2c6ba9b6d252832/1.0.12/en-US/SAP_HANA_
 .PP
 .\"
 .SH AUTHORS
-.br
+.\"
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
+.\"
 (c) 2017-2018 SUSE Linux GmbH, Germany.
 .br
 (c) 2019-2025 SUSE LLC
