@@ -64,9 +64,7 @@ mount fss share from NFS on node22
 .br
 restore XSA fss, enable XSA on node22
 .PP
-copy secue store sfss from site1 to site2
-.br
-backup HANA on node21
+back-up HANA on node21
 .br
 enable HANA system replication on node21
 .PP
@@ -78,9 +76,9 @@ start HANA on site1
 .PP
 .\" TODO . SID is HA1.
 .PP
-# cat /hana/shared/HA1/global/hdb/custom/config/xscontroller.ini
-.PP
 .RS 2
+# cat /hana/shared/HA1/global/hdb/custom/config/xscontroller.ini
+.br
  ...
 .br
 [fss]
@@ -106,8 +104,66 @@ nfs1:/s/ha1/xsfss /hana/shared/HA1/xs/controller_data/xsfss nfs4 rw,noac,sync,de
 Note: The NFS share might be monitored, but not mounted/umounted by the HA cluster.
 See ocf_suse_SAPHanaFilesystem(7) for details.
 .RE
+.PP
+\fB*\fP Example for creating local mountpoint for XSA fss from remote NFS.
+.PP
+.RS 2
+# mkdir /hana/shared/HA1/xs/controller_data/xsfss
+.br
+# chown ha1adm:sapsys /hana/shared/HA1/xs/controller_data/xsfss
+.RE
+.PP
+\fB*\fP Example for copying the XSA ssfs keystore from site2 to site1.
+.PP
+.RS 2
+# cd hana/shared/HA1/global/xsa/security/
+.br
+# md5sum ssfs/*/*
+.br
+# rsync -va ssfs node11:$PWD/ 
+.br
+# ssh node11 "md5sum $PWD/ssfs/*/*"
+.RE
+.PP
+\fB*\fP Example for disabling XSA and backing up the fss.
+.PP
+.RS 2
+# su - ha1adm -c "XSA disable; XSA backup-fss"
+.RE
+.PP
+\fB*\fP Example for restoring the fss and enabling XSA.
+.PP
+.RS 2
+# su - ha1adm -c "XSA restore-fss; XSA enable"
+.RE
+.PP
+\fB*\fP Example for backing up HANA and enabling system replication as primary site.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbsql -i 00 -u SYSTEM -d SYSTEMDB \\
+.br
+ "BACKUP DATA FOR FULL SYSTEM USING FILE ('backup')"
+.br
+~> hdbnsutil -sr_enable --name=site2 
+.RE
+.PP
+\fB*\fP Example for registering and staring HANA as secondary site.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbnsutil -sr_register --name=site1 \\
+.br
+ --remoteHost=node21 --remoteInstance=00 \\
+.br
+ --replicationMode=sync --operationMode=logreplay
+.br
+~> sapcontrol -nr 00 -function StartSystem
+.RE
+.PP
 .\" .PP
-.\" 
 .\" # sudo ha1adm
 .\" ~> XSA ...
 .\"
