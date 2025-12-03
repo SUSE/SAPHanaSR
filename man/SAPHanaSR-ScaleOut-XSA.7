@@ -24,6 +24,23 @@ an HANA nameserver slave and the standalone XSA server, but no indexserver.
 HANA system replication is set up between the two sites. In addition, the XSA
 Filesystem Storage (fss) is shared across the sites.
 .PP
+The cluster resource configuration for HANA scale-out with standalone XSA is
+almost the same as for the scale-out ERP scenario, progressive variant.
+.br
+The differences are curently:
+.br
+- no 3rd replication site connected
+.br
++ additional IPaddr2 resource for the primary XSA worker
+.br
++ additional SAPHanaFilesystem resource for the XSA fss directory (optional)
+.PP
+For details, please refer to SAPHanaController-scale-out(7),
+ocf_suse_SAPHanaTopology(7), ocf_suse_SAPHanaFilesystem(7),
+susHanaSR.py(7), susChkSrv.py(7), susTkOver.py(7), 
+SAPHanaSR-alert-fencing(8), SAPHanaSR-hookHelper(8), 
+SAPHanaSR-ScaleOut_basic_cluster(7), and see IPaddr2 example below.
+.PP
 \fBThe SUSE HA for SAP HANA SR scale-out standalone XSA scenario is a technology preview.\fP
 .PP
 .\"
@@ -277,25 +294,6 @@ Make sure HANA database and XSA are not controlled by the Linux cluster.
 6. On both sites: Check everything is fine.
 .RE 
 .PP
-\fB*\fP Overview on Linux HA cluster resource configuration.
-.PP
-The cluster resource configuration for HANA scale-out with standalone XSA is
-almost the same as for the scale-out ERP scenario, progressive variant.
-.br
-The differences are curently:
-.br
-- no 3rd replication site connected
-.br
-+ additional IPaddr2 resource for the primary XSA worker
-.br
-+ additional SAPHanaFilesystem resource for the XSA fss directory (optional)
-.PP
-For details, please refer to SAPHanaController-scale-out(7),
-ocf_suse_SAPHanaTopology(7), ocf_suse_SAPHanaFilesystem(7),
-susHanaSR.py(7), susChkSrv.py(7), susTkOver.py(7), 
-SAPHanaSR-alert-fencing(8), SAPHanaSR-hookHelper(8), 
-SAPHanaSR-ScaleOut_basic_cluster(7), and see IPaddr2 example below.
-.PP
 \fB*\fP IPaddr2 resource for primary XSA.
 .PP
 Needs to run together with the primary XSA services. Is used by xscontroller
@@ -319,14 +317,43 @@ location loc_ip_HA1_XSA00 \\
  rule 2000: master-rsc_SAPHanaCon_HA1_HDB00 eq 101
 .PP
 See also ocf_hearbeat_IPAddr(2) and SAPHanaSR-ScaleOut_basic_cluster(7).
-.PP
 .RE
 .PP
-.\" .PP
-.\" # sudo ha1adm
-.\" ~> XSA ...
-.\"
-.\" ERROR: Authentication failed while trying to access the database 'HA1' as user 'SYS_XS_RUNTIME'
+\fB*\fP SAPHanaFilesystem resource for the shared XSA fss.
+.PP
+Optional resource to check the NFS sharing XSA fss across sites.
+.\" The HANA consists of two sites with two nodes each. An additional cluster node
+.\" is used as majority maker for split brain situations. One /hana/shared/... filesystem
+.\" is used per site. This filesystem is provided by an NFS server and shared across
+.\" sites. On both XSA worker nodes the NFS share is mounted statically. 
+See also ocf_suse_SAPHanaFilesystem(7).
+SID is HA1, instance number is 00, shared directory is
+/hana/shared/HA1/xs/controller_data/xsfss as defined in
+/etc/fstab, cluster nodes without fss are nodemm, node11 and node21.
+.PP
+.RS 2
+primitive rsc_SAPHanaFil_HA1_XSA00 ocf:suse:SAPHanaFilesystem \\
+.br
+  op start interval="0" timeout="10" \\
+.br
+  op stop interval="0" timeout="20" on-fail="fence" \\
+.br
+  op monitor interval="120" timeout="180" \\
+.br
+  params SID="HA1" InstanceNumber="00"\\
+.br
+  DIRECTORY="/hana/shared/HA1/xs/controller_data/xsfss"
+.PP
+clone cln_SAPHanaFil_HA1_XSA00 rsc_SAPHanaFil_HA1_XSA00 \\
+.br
+  meta clone-node-max="1" interleave="true"
+.PP
+location SAPHanaFil_XSA_not_nodemm cln_SAPHanaFil_HA1_XSA00 -inf: nodemm
+.br
+location SAPHanaFil_XSA_not_node11 cln_SAPHanaFil_HA1_XSA00 -inf: node11
+.br
+location SAPHanaFil_XSA_not_node21 cln_SAPHanaFil_HA1_XSA00 -inf: node21
+.RE
 .PP
 .\"
 .SH FILES
