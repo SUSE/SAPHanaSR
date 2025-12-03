@@ -26,14 +26,13 @@ Filesystem Storage (fss) is shared across the sites.
 .PP
 The cluster resource configuration for HANA scale-out with standalone XSA is
 almost the same as for the scale-out ERP scenario, progressive variant.
-.br
-The differences are curently:
-.br
-- no 3rd replication site connected
+The differences are currently:
 .br
 + additional IPaddr2 resource for the primary XSA worker
 .br
 + additional SAPHanaFilesystem resource for the XSA fss directory (optional)
+.br
+- no 3rd replication site connected
 .PP
 For details, please refer to SAPHanaController-scale-out(7),
 ocf_suse_SAPHanaTopology(7), ocf_suse_SAPHanaFilesystem(7),
@@ -48,57 +47,81 @@ SAPHanaSR-ScaleOut_basic_cluster(7), and see IPaddr2 example below.
 .\"
 \fB*\fP Overview on setting up SAP HANA with standalone XSA and system replication.
 .PP
-The site2 will become primary in this example, site1 will become secondary.
+On all cluster nodes OS, filesystem, etc. already is installed and configured
+appropriately for an HANA scale-out scenario.
+HANA at both sites will be installed using the same wildcard IP address for XSA,
+so they must not run as primary in parallel.
+The site1 will become primary, site2 will become secondary - after the final test (step 5.9).
 .PP
-collect needed information and prepare parameter sheet
+The installation procedure looks like:
 .PP
-install HANA with standalone XSA on site1 with node11 (master/worker) and node12 (xs_worker)
+.RS 2
+1.1 collect needed information and prepare parameter sheet
 .br
-install HANA with standalone XSA on site2 with node21 (master/worker) and node22 (xs_worker)
+1.2 export share with fss directory on NFS server
 .br
-export share with fss directory on NFS server
-.br
-prepare /etc/fstab on node12 and node22
-.br
-copy XSA ssfs keystore from site2 to site1
+1.3 prepare /etc/fstab on node12 and node22
 .PP
-disable XSA, back-up XSA fss on node12
+2.1 set XSA IP address on node12
 .br
-change fss to NFS in xscontroller.ini on site1
+2.2 install HANA with XSA on site1 with node11 (master/worker) and node12 (xs_worker)
 .br
-create mountpoint for fss share on node12
+2.3 disable XSA and back-up XSA fss on node12
 .br
-mount fss share from NFS on node12
+2.4 change fss to NFS in xscontroller.ini on site1
 .br
-restore XSA fss, enable XSA on node12
+2.5 create mountpoint for fss share on node12
 .br
-stop HANA on site1
+2.6 mount fss share from NFS on node12
+.br
+2.7 restore XSA fss and enable XSA on node12
+.br
+2.8 stop HANA on site1
+.br
+2.9 remove XSA IP address from node12
 .PP
-disable XSA, back-up XSA fss on node22
+3.1 set XSA IP address on node22
 .br
-change fss to NFS in xscontroller.ini on site2
+3.2 install HANA with XSA on site2 with node21 (master/worker) and node22 (xs_worker)
 .br
-mount fss share from NFS on node22
+3.3 disable XSA and back-up XSA fss on node22
 .br
-restore XSA fss, enable XSA on node22
+3.4 change fss to NFS in xscontroller.ini on site2
 .br
-copy xscontroller.ini from site2 to site1
+3.5 create mountpoint for fss share on node12
+.br
+3.6 mount fss share from NFS on node22
+.br
+3.7 restore XSA fss and enable XSA on node22
+.br
+3.8 copy XSA ssfs keystore from site2 to site1
+.br
+3.9 back-up HANA on node21
+.br
+3.10 enable HANA system replication on node21
 .PP
-back-up HANA on node21
+4.1 register HANA site1 as secondary to node21
 .br
-enable HANA system replication on node11
+4.2 start HANA on site1
 .PP
-register HANA site1 as secondary to node21
+5.1 check everything is fine at site1 and site2
 .br
-start HANA on site1
+5.2 stop HANA at site2
 .br
-check everything is fine at site1 and site2
+5.3 remove XSA IP address from node22
+.br
+5.4 do manual takeover at site1
+.br
+5.6 set XSA IP address on node12
+.br
+5.7 register HANA site2 as secondary to node11
+.br
+5.8 start HANA on site2
+.br
+5.9 check everything is fine at site1 and site2
+.RE
 .PP
-do manual takeover at site1
-.br
-register HANA site2 as secondary to node11
-.br
-check everything is fine at site1 and site2
+Detailled examples for most of the steps are given below.
 .PP
 \fB*\fP XSA fss entry in xscontroller.ini.
 .PP
