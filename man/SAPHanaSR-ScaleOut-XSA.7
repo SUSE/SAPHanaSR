@@ -263,9 +263,11 @@ The manual takeover can be done by following this procedure:
 1. On both sites: Check everything is fine.
 Make sure HANA database and XSA are not controlled by the Linux cluster.
 .br
-2. On primary site: Stop HANA database and XSA (sapcontrol ... StopSystem).
+2. On primary site: Stop HANA database and XSA
+(sapcontrol ... StopSystem).
 .br
-3. On secondary site: Do takeover (hdbnsutil -sr_takeover).
+3. On secondary site: Do takeover
+(hdbnsutil -sr_takeover).
 .br
 4. On new primaary site: Check everything is fine.
 .br
@@ -275,11 +277,33 @@ Make sure HANA database and XSA are not controlled by the Linux cluster.
 6. On both sites: Check everything is fine.
 .RE 
 .PP
+\fB*\fP Overview on Linux HA cluster resource configuration.
+.PP
+The cluster resource configuration for HANA scale-out with standalone XSA is
+almost the same as for the scale-out ERP scenario, progressive variant.
+.br
+The differences are curently:
+.br
+- no 3rd replication site connected
+.br
++ additional IPaddr2 resource for the primary XSA worker
+.br
++ additional SAPHanaFilesystem resource for the XSA fss directory (optional)
+.PP
+For details, please refer to SAPHanaController-scale-out(7),
+ocf_suse_SAPHanaTopology(7), ocf_suse_SAPHanaFilesystem(7),
+susHanaSR.py(7), susChkSrv.py(7), susTkOver.py(7), 
+SAPHanaSR-alert-fencing(8), SAPHanaSR-hookHelper(8), 
+SAPHanaSR-ScaleOut_basic_cluster(7), and see IPaddr2 example below.
+.PP
 \fB*\fP IPaddr2 resource for primary XSA.
 .PP
-Example SID is HA1, instance number is 00, IP address is 192.168.178.188.
+Needs to run together with the primary XSA services. Is used by xscontroller
+for connecting internally, and is used by external clients. Thus this IP address
+needs to be resolved as wildcard DNS entry. 
 .br
 The shown location constraint works for setups with two nodes per site.
+Example SID is HA1, instance number is 00, IP address is 192.168.178.188.
 .PP
 .RS 2
 primitive rsc_ip_HA1_XSA00 IPaddr2 \\
@@ -293,6 +317,8 @@ location loc_ip_HA1_XSA00 \\
  rsc_ip_HA1_XSA00 \\
 .br
  rule 2000: master-rsc_SAPHanaCon_HA1_HDB00 eq 101
+.PP
+See also ocf_hearbeat_IPAddr(2) and SAPHanaSR-ScaleOut_basic_cluster(7).
 .PP
 .RE
 .PP
