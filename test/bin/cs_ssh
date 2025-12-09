@@ -54,39 +54,38 @@ class SshMultiNode:
                         'check_host': True
                       }
 
-
     def do_ssh(self, host, user, cmd):
         """
         ssh remote cmd exectution
         returns a tuple ( stdout-string, stderr, string, rc )
         """
         if host:
-                #try:
-                ssh_client = SSHClient()
-                ssh_client.load_system_host_keys()
-                ssh_keyfile = self.config['keyfile']
-                #ssh_client.connect(host, username=user )
-                # optionally do not check against known_hosts - for labs only and for rapid changing host keys (redeployment)
-                try:
-                    if not self.config ['check_host']:
-                        ssh_client.set_missing_host_key_policy(AutoAddPolicy())
-                    if ssh_keyfile:
-                        ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
-                    else:
-                        ssh_client.connect(host, username=user)
-                    if test01.config['quiet'] is not True:
-                        self.message(f"INFO: on host {host} calling {cmd}")
-                    (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd)[1:]
-                    result_stdout = cmd_stdout.read().decode("utf8")
-                    result_stderr = cmd_stderr.read().decode("utf8")
-                    result_rc = cmd_stdout.channel.recv_exit_status()
-                    check_result = (result_stdout, result_stderr, result_rc)
-                    ssh_client.close()
-                except Exception as ssh_muell:
-                    if test01.config['quiet'] is not True:
-                        self.message(f"ERROR: ssh connection to {host} did not work ...")
-                        self.message(f"ERROR: exception {ssh_muell}")
-                    check_result=("", "", 20000)
+            #try:
+            ssh_client = SSHClient()
+            ssh_client.load_system_host_keys()
+            ssh_keyfile = self.config['keyfile']
+            #ssh_client.connect(host, username=user )
+            # optionally do not check against known_hosts - for labs only and for rapid changing host keys (redeployment)
+            try:
+                if not self.config ['check_host']:
+                    ssh_client.set_missing_host_key_policy(AutoAddPolicy())
+                if ssh_keyfile:
+                    ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
+                else:
+                    ssh_client.connect(host, username=user)
+                if test01.config['quiet'] is not True:
+                    self.message(f"INFO: on host {host} calling {cmd}")
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=300)[1:]
+                result_stdout = cmd_stdout.read().decode("utf8")
+                result_stderr = cmd_stderr.read().decode("utf8")
+                result_rc = cmd_stdout.channel.recv_exit_status()
+                check_result = (result_stdout, result_stderr, result_rc)
+                ssh_client.close()
+            except Exception as ssh_muell:
+                if test01.config['quiet'] is not True:
+                    self.message(f"ERROR: ssh connection to {host} did not work ...")
+                    self.message(f"ERROR: exception {ssh_muell}")
+                check_result=("", "", 20000)
         else:
             check_result=("", "", 20000)
         return check_result
