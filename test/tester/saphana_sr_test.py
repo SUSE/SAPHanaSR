@@ -949,6 +949,7 @@ class SaphanasrTest:
     def query_call(self, action_name, cmd, remote):
         """ do the query itself """
         result = []
+        action_stdout = ""
         if cmd != "":
             if remote == "localhost":
                 self.message("QUERY: {} LOCAL: {}".format(action_name, cmd))
