@@ -966,6 +966,7 @@ class SaphanasrTest:
         return [action_stdout, None, action_rc]
 
     def query_on_cluster(self, action_name):
+        """ query_on_cluster - do a query on cluster aspects (like list_nodes) """
         remote = self.config['remote_node']
         cmd = ""
         sudo_cmd = ""
