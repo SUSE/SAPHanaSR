@@ -266,9 +266,9 @@ class SaphanasrTest:
         return object_name
 
     def get_value(self, area_name, object_name, key):
-        """ 
-        method to query the value of a key (e.g. 'msn') for an object 
-        (e.g. site 'MAINZ' inside an area (e.g. 'Site') 
+        """
+        method to query the value of a key (e.g. 'msn') for an object
+        (e.g. site 'MAINZ' inside an area (e.g. 'Site')
         """
         # Query runs from area-level via object-level to key-level
         l_value = None
@@ -357,7 +357,7 @@ class SaphanasrTest:
             test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg, **kwargs):
-        """ __add_failed__ ocument failed checks 
+        """ __add_failed__ ocument failed checks
         params: area_object, key_val_reg
         kwargs: list_of_failures
         """
@@ -518,7 +518,7 @@ class SaphanasrTest:
         return check_result
 
     def run_checks(self, checks, area_name, object_name, step_step, **kwargs ):
-        """ run all checks for area and object 
+        """ run all checks for area and object
             params:
                    checks: list of checks to be run
                    area_name: attribute area to be checked (global, Site, Resource, Host)
@@ -540,7 +540,7 @@ class SaphanasrTest:
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name, **kwargs):
-        """ process_topology_object 
+        """ process_topology_object
             params: step, topology_object_name, area_name
             kwargs: step_loop_failures[]
         """
@@ -556,11 +556,10 @@ class SaphanasrTest:
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
                 rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''), list_of_failures=list_of_failures)
-        
         return rc_checks
 
     def __process_fatal_condition(self, step, **kwargs):
-        """ __process_fatal_conditions 
+        """ __process_fatal_conditions
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
             kwargs: step_loop_failures[]
@@ -677,7 +676,6 @@ class SaphanasrTest:
             self.__min_failed_role_counter__ = min(self.__min_failed_role_counter__, self.__failed_role_counter__)
             self.__max_failed_role_counter__ = max(self.__max_failed_role_counter__, self.__failed_role_counter__)
             self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})", stdout=False)
-            
             time.sleep(wait)
         if self.__min_failed_role_counter__ == 1000:
             self.__min_failed_role_counter__ = 0
