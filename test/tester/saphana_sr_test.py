@@ -366,7 +366,7 @@ class SaphanasrTest:
         fatal_name = ""
         fatal_check = kwargs.get("fatal_check", False)
         fatal_name = kwargs.get("fatal_name", "")
-        step_id = kwargs.get("step_id", "")
+        # step_id = kwargs.get("step_id", "")
         ( _area, _obj ) = area_object
         if 'failed' in self.run:
             _l_failed = self.run['failed']
