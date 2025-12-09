@@ -381,7 +381,7 @@ class SaphanasrTest:
         #
         # also fill the failures list, if given
         #
-        if type(list_of_failures) == type([]):
+        if isinstance(list_of_failures, list):
             #print(f"DBG: __add_failed__ list_of_failures.append()")
             list_of_failures.append({'area': _area, 'object_name': _obj, 'expect': {'var': _key, 'expr': _reg, 'comp': _comp }, 'have': {'var': _key, 'val': _val} })
         _l_failed += f'{_l_header} expect "{_key} {_comp} {_reg}", have "{_val}"; '
