@@ -1005,7 +1005,7 @@ class SaphanasrTest:
             except Exception as e:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)
-            cmd_timeout=f"timeout={ssh_timeout}"
+            #cmd_timeout=f"timeout={ssh_timeout}"
             #
             # "sudo-i-fy" the command to be able to call root command as deputy user
             #
@@ -1090,11 +1090,11 @@ if __name__ == "__main__":
         if test01.config['repeat'] != 1:
             test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
         test01.run['test_rc'] = test01.process_test()
-        MSG_TEMPL = "TEST: {} testNr={} {} successfully :) ######"
+        msg_templ = "TEST: {} testNr={} {} successfully :) ######"
         if test01.run['test_rc'] == 0:
-            test01.message(MSG_TEMPL.format(my_test_id, 'PASSED', test01.run['count']))
+            test01.message(msg_templ.format(my_test_id, 'PASSED', test01.run['count']))
         else:
-            test01.message(MSG_TEMPL.format(my_test_id, 'FAILED', test01.run['count']))
+            test01.message(msg_templ.format(my_test_id, 'FAILED', test01.run['count']))
         test01.run['count'] += 1
     if  test01.run['log_file_handle']:
         test01.run['log_file_handle'].close()
