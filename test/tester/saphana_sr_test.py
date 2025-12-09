@@ -860,6 +860,7 @@ class SaphanasrTest:
         remote = self.config['remote_node']
         resource = self.test_data['mstResource']
         cmd = ""
+        sudo_cmd = ""
         if action_name == "ssn":
             cmd = "/usr/sbin/crm node standby {}".format(self.topolo['sHost'])
             sudo_cmd = f"sudo -u root {cmd}"
@@ -966,6 +967,7 @@ class SaphanasrTest:
     def query_on_cluster(self, action_name):
         remote = self.config['remote_node']
         cmd = ""
+        sudo_cmd = ""
         if action_name == "list_nodes":
             cmd = "/usr/sbin/crm_node --list"
             sudo_cmd = f"sudo -u root {cmd}"
