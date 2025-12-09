@@ -728,13 +728,13 @@ class SaphanasrTest:
                 # (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
+                # in case there is no break, we continue with ...
+                if step_alternative:
+                    # process alternative test steps, so reset the failed test rc_code
+                    r_code = 0
+                    step=self.get_step(step_alternative)
                 else:
-                    if step_alternative:
-                        # process alternative test steps, so reset the failed test rc_code
-                        r_code = 0
-                        step=self.get_step(step_alternative)
-                    else:
-                        step=self.get_step(step_next)
+                    step=self.get_step(step_next)
             if step:
                 step_step = step['step']
             else:
