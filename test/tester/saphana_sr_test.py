@@ -688,9 +688,14 @@ class SaphanasrTest:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
-            self.action(step_action)
+            action_rc = self.action(step_action) # post-action is only called, if step checks have been passed
+            if action_rc != 0:
+                process_result = 1 # set step failed, if post-action failed
+
+        if process_result == 0:
             step_result.update({ 'status': 'passed' })
             step_result.update({ 'action': step_action })
+
         else:
             if step_alternative:
                 step_result.update({ 'status': 'alternative/on_fail' })
