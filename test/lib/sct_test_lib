@@ -57,6 +57,7 @@ function sctl_get_curr_secn()
     local target_host="$1"
     local rc=0
     # currSecondary="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"; rc=$?
+    # shellcheck disable=SC2029
     currSecondary="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"; rc=$?
     echo "$currSecondary"
     return $rc
@@ -70,6 +71,7 @@ function sctl_get_curr_prim_worker()
     local rc=0
     # currPrimWorker="$(ssh "${target_host}" "$G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"; rc=$?
     # TODO: For ScaleOut classic: currPrimWorker="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-10000"/ { print $2 }' )"; rc=$?
+    # shellcheck disable=SC2029
     currPrimWorker="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="101"/ { print $2 }' )"; rc=$?
     echo "$currPrimWorker"
     return $rc
@@ -81,6 +83,7 @@ function sctl_get_curr_secn_worker()
     local currSecnWorker
     local target_host="$1"
     local rc=0
+    # shellcheck disable=SC2029
     currSecnWorker="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"; rc=$?
     echo "$currSecnWorker"
     return $rc
@@ -93,6 +96,7 @@ function sctl_get_site()
     local target_host="$1"
     local hana_node="$2"
     local rc=0
+    # shellcheck disable=SC2029
     site=$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node"); rc=$?
     site="${site//\"/}"
     echo "$site"
@@ -106,6 +110,7 @@ function sctl_get_vhost()
     local target_host="$1"
     local hana_node="$2"
     local rc=0
+    # shellcheck disable=SC2029
     vhost=$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node"); rc=$?
     vhost="${vhost//\"/}"
     echo "$vhost"
@@ -122,9 +127,14 @@ function sctl_kill_process()
     local proc_user="$2"
     local proc_pattern="$3"
     local proc_signal="$4"
-    local rc=0
-    cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} -f ${proc_pattern}" && \
+    local rc=1
+    PID1=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} -f ${proc_pattern}")
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pkill -u ${proc_user} -f ${proc_pattern} --signal ${proc_signal}"; rc=$?
+    PID2=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} -f ${proc_pattern}")
+    if [[ "$PID1" == "$PID2" ]]; then
+       echo "Kill for PID $PID1 failed"
+       rc=1
+    fi
     return $rc
 }
 
@@ -318,6 +328,7 @@ function sctl_run_cat()
     local target_host="$1"
     local cat_cmd="$2"
     local rc=0
+    # shellcheck disable=SC2029
     ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_CAT $cat_cmd"; rc=$?
     return $rc
 }
@@ -328,6 +339,7 @@ function sctl_run_rm_file()
     local target_host="$1"
     local rm_file_cmd="$2"
     local rc=0
+    # shellcheck disable=SC2029
     ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_RM $rm_file_cmd"; rc=$?
     return $rc
 }
