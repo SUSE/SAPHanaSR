@@ -1005,13 +1005,6 @@ class SaphanasrTest:
             except Exception as e:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)
-            #cmd_timeout=f"timeout={ssh_timeout}"
-            #
-            # "sudo-i-fy" the command to be able to call root command as deputy user
-            #
-            #if self.config['use_sudo']:
-            #    cmd = f"sudo {cmd}"
-            #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
             if do_log:
                 if ssh_timeout:
