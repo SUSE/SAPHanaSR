@@ -118,6 +118,26 @@ function sctl_get_vhost()
 }
 
 #
+# list process either need root or process-owner user
+#
+function sctl_list_process()
+{
+    # sctl_kill_process <node> <proc-user> <proc-pattern> <flags>
+    local target_host="$1"
+    local proc_user="$2"
+    local proc_pattern="$3"
+    local flags="$4"
+    local p_flags=""
+    local rc=1
+    if [[ "$flags" =~ ":a:" ]]; then p_flags="$p_flags -a"; fi
+    if [[ "$flags" =~ ":f:" ]]; then p_flags="$p_flags -f"; fi
+    if [[ "$flags" =~ ":l:" ]]; then p_flags="$p_flags -l"; fi
+    if [[ "$flags" =~ ":o:" ]]; then p_flags="$p_flags -o"; fi
+    cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}"
+    return $rc
+}
+
+#
 # kill process either need root or process-owner user
 #
 function sctl_kill_process()
@@ -127,10 +147,15 @@ function sctl_kill_process()
     local proc_user="$2"
     local proc_pattern="$3"
     local proc_signal="$4"
+    local flags="$5"
+    local p_flags=""
     local rc=1
-    PID1=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} -f ${proc_pattern}")
-    cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pkill -u ${proc_user} -f ${proc_pattern} --signal ${proc_signal}"; rc=$?
-    PID2=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} -f ${proc_pattern}")
+    if [[ "$flags" =~ ":f:" ]]; then p_flags="$p_flags -f"; fi
+    if [[ "$flags" =~ ":o:" ]]; then p_flags="$p_flags -o"; fi
+    PID1=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}")
+    cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pkill -u ${proc_user} ${p_flags} ${proc_pattern} --signal ${proc_signal}"; rc=$?
+    PID2=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}")
+    echo "pid before and after the pkill action: PID1=$PID1 PID2=$PID2 (proc_pattern: $proc_pattern)"
     if [[ "$PID1" == "$PID2" ]]; then
        echo "Kill for PID $PID1 failed"
        rc=1
