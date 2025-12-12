@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# sct_test_kill_pacemakerd - kill pacemakerd on primary or secondary node
+#    TODO also handele worker variant in the future
+#
+# PARAM: prim | secn
+#
+# (c) 2025 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-kill_prim_pacemakerd: OK
+# used-in:
+#   angi-ScaleUp: kill_prim_pacemakerd
+#   angi-ScaleOut: kill_prim_pacemakerd
+#   classic-ScaleUp: kill_prim_pacemakerd
+#   classic-ScaleOut: kill_prim_pacemakerd
+#   - list-end
+#
+#
+set -u
+srRole="$1"  # should be prim or secn
+rc=1 # mark fail, by default
+source /usr/lib/SAPHanaSR-tester/sct_test_lib
+source .test_properties
+case "$srRole" in
+    prim ) killNode=$(sctl_get_curr_prim "$node01");;
+    secn ) killNode=$(sctl_get_curr_secn "$node01");;
+    * ) echo "Neither prim nor secn in cmd line"
+        exit 2;;
+esac
+
+echo "==== Kill pacemakerd ===="
+# TODO signal 9 ?
+sctl_kill_process "$killNode" "root" "pacemakerd" "11" "flags::" ; rc="$?"
+exit "$rc"
+#
