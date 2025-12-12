@@ -13,6 +13,14 @@
 #
 #
 set -u
+rc=1
+function kill_again
+{
+    for i in 1 2 3 4 5 6 7 8 9; do
+        sctl_kill_process "$currPrimWorker" "hacluster" "pacemaker-controld" "11" "flags:f:"
+        sleep 1
+    done
+}
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
@@ -22,5 +30,8 @@ currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
 
 echo "==== Kill pacemaker-controld ===="
 # TODO signal 9 ?
-sctl_kill_process "$currPrimWorker" "hacluster" "pacemaker-controld" "11" & exit
+sctl_kill_process "$currPrimWorker" "hacluster" "pacemaker-controld" "11" "flags:f:"; rc="$?"
+kill_again & # kill-again can run in backround
+
+exit "$rc"
 #
