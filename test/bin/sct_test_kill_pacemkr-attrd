@@ -2,6 +2,8 @@
 #
 # sct_test_kill_prim_pacemkr-attrd - kill pacemaker-attrd on primary node
 #
+# PARAM: prim[:master|worker] | secn[:master|worker]
+#
 # (c) 2025 SUSE LLC
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
@@ -14,17 +16,21 @@
 #   - list-end
 #
 set -u
+srRole="$1"  # should be prim or secn
 rc=1
-src=${BASH_SOURCE[0]}
-full_path=$(readlink -f "$src")
-dir_path=$(dirname "$full_path")
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
-currPrimary=$(sctl_get_curr_prim "$node01")
+case "$srRole" in
+    prim | prim:master ) killNode=$(sctl_get_curr_prim "$node01");;
+    secn | secn:master ) killNode=$(sctl_get_curr_secn "$node01");;
+    prim:worker        ) killNode=$(sctl_get_curr_prim_worker "$node01");;
+    secn:worker        ) killNode=$(sctl_get_curr_secn_worker "$node01");;
+    * ) echo "Neither prim nor secn in cmd line"
+        exit 2;;
+esac
 
 echo "==== Kill pacemaker-attrd ===="
 # TODO signal 9 ?
-sctl_kill_process "$currPrimary" "hacluster" "pacemaker-attrd" "11" "flags::"; rc="$?"
-
+sctl_kill_process "$killNode" "hacluster" "pacemaker-attrd" "11" "flags::"; rc="$?"
 exit "$rc"
 #
