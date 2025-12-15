@@ -64,6 +64,7 @@ class SshMultiNode:
             ssh_client = SSHClient()
             ssh_client.load_system_host_keys()
             ssh_keyfile = self.config['keyfile']
+            ssh_timeout = self.config.get('keyfile', 300)
             #ssh_client.connect(host, username=user )
             # optionally do not check against known_hosts - for labs only and for rapid changing host keys (redeployment)
             try:
@@ -75,7 +76,7 @@ class SshMultiNode:
                     ssh_client.connect(host, username=user)
                 if test01.config['quiet'] is not True:
                     self.message(f"INFO: on host {host} calling {cmd}")
-                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=300)[1:]
+                (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
                 result_stdout = cmd_stdout.read().decode("utf8")
                 result_stderr = cmd_stderr.read().decode("utf8")
                 result_rc = cmd_stdout.channel.recv_exit_status()
@@ -101,6 +102,8 @@ parser.add_argument("--user", help="linux user to be used for ssh connection (de
 parser.add_argument("--quiet", help="supress INFO messages", action="store_true")
 parser.add_argument("--report_hostname", help="report hostname of succesful ssh connection", action="store_true")
 parser.add_argument("--skip_hostcheck", help="only for private environments - skip check of known_hosts", action="store_true")
+parser.add_argument("--timeout", help="ssh comamnd timeout (in s)")
+
 args = parser.parse_args()
 if args.hosts:
     test01.config['hosts'] = args.hosts
@@ -116,6 +119,8 @@ if args.keyfile:
     test01.config['keyfile'] = args.keyfile
 if args.skip_hostcheck:
     test01.config['check_host'] = False
+if args.timeout:
+    test01.config['timeout'] = args.timeout
 
 for host in test01.config['hosts']:
     result = test01.do_ssh(host, test01.config['user'], test01.config['command'])
