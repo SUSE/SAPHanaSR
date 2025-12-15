@@ -133,7 +133,7 @@ function sctl_list_process()
     if [[ "$flags" =~ ":f:" ]]; then p_flags="$p_flags -f"; fi
     if [[ "$flags" =~ ":l:" ]]; then p_flags="$p_flags -l"; fi
     if [[ "$flags" =~ ":o:" ]]; then p_flags="$p_flags -o"; fi
-    cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}"
+    cs_ssh --user "$proxyUser" --hosts "${target_host}" --timeout=10 --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}"
     return $rc
 }
 
@@ -152,9 +152,12 @@ function sctl_kill_process()
     local rc=1
     if [[ "$flags" =~ ":f:" ]]; then p_flags="$p_flags -f"; fi
     if [[ "$flags" =~ ":o:" ]]; then p_flags="$p_flags -o"; fi
-    PID1=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}")
-    cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pkill -u ${proc_user} ${p_flags} ${proc_pattern} --signal ${proc_signal}"; rc=$?
-    PID2=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}")
+    #
+    # use short timeouts for kill and second PID-check, to alllow detecting node fences (otherwise ssh might hang to long)
+    #
+    PID1=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --timeout=10 --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}")
+    cs_ssh --user "$proxyUser" --hosts "${target_host}" --timeout=1 --command "sudo -u root pkill -u ${proc_user} ${p_flags} ${proc_pattern} --signal ${proc_signal}"; rc=$?
+    PID2=$(cs_ssh --user "$proxyUser" --hosts "${target_host}" --timeout=1 --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}")
     echo "pid before and after the pkill action: PID1=$PID1 PID2=$PID2 (proc_pattern: $proc_pattern)"
     if [[ "$PID1" == "$PID2" ]]; then
        echo "Kill for PID $PID1 failed"
