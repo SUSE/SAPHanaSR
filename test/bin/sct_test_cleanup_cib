@@ -14,7 +14,34 @@ dir_path=$(dirname "$full_path")
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
 
+currPrimary=$(sctl_get_curr_prim "$node01")
+currSecondary=$(sctl_get_curr_secn "$node01")
+
 echo "==== Clean up cib ===="
 
-TODO
+sctl_run_crm "$node01" "node $currPrim online" 
+sctl_run_crm "$node01" "node $currSecn online" 
+
+sctl_run_crm "$node01" "resource clear $clnResource"
+sctl_run_crm "$node01" "resource clear $mstResource"
+
+sctl_run_crm "$node01" "resource cleanup $clnResource"
+sctl_run_crm "$node01" "resource cleanup $mstResource"
+
+# TODO stonith_admin --unfence=$currPrim
+# TODO stonith_admin --unfence=$currSecn
+# TODO stonith_admin --cleanup --history $currPrim
+# TODO stonith_admin --cleanup --history $currSecn
+# TODO ... stonith-enabled=true
+
+sctl_run_crm "$node01" "maintenance off"
+
+sctl_run_crm "$node01" "resource refresh $clnResource"
+sctl_run_crm "$node01" "resource refresh $mstResource"
+
+sctl_run_crm "$node01" "resource manage $clnResource"
+sctl_run_crm "$node01" "resource manage $mstResource"
+
+sctl_run_crm "$node01" "resource maintenance $clnResource off"
+sctl_run_crm "$node01" "resource maintenance $mstResource off"
 #
