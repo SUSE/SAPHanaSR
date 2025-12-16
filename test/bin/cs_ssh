@@ -27,9 +27,7 @@ class SshMultiNode:
         """
         message with formatted timestamp
         """
-        stderr = True
-        if 'stderr' in kwargs:
-            stderr = kwargs['stderr']
+        stderr = kwargs.get('stderr', True)
         # TODO: specify, if message should be written to stderr and/or log file
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
         r_id = ""
@@ -63,17 +61,18 @@ class SshMultiNode:
             #try:
             ssh_client = SSHClient()
             ssh_client.load_system_host_keys()
-            ssh_keyfile = self.config['keyfile']
-            ssh_timeout = self.config.get('keyfile', 300)
+            ssh_keyfile = self.config.get('keyfile', None)
+            ssh_timeout = int(self.config.get('timeout', 300))
+            self.message(f"INFO: ssh_keyfile={ssh_keyfile} ssh_timeout={ssh_timeout}")
             #ssh_client.connect(host, username=user )
             # optionally do not check against known_hosts - for labs only and for rapid changing host keys (redeployment)
             try:
                 if not self.config ['check_host']:
                     ssh_client.set_missing_host_key_policy(AutoAddPolicy())
                 if ssh_keyfile:
-                    ssh_client.connect(host, username=user, key_filename=ssh_keyfile)
+                    ssh_client.connect(host, username=user, key_filename=ssh_keyfile, timeout=10)
                 else:
-                    ssh_client.connect(host, username=user)
+                    ssh_client.connect(host, username=user, timeout=10)
                 if test01.config['quiet'] is not True:
                     self.message(f"INFO: on host {host} calling {cmd}")
                 (cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, timeout=ssh_timeout)[1:]
@@ -85,7 +84,7 @@ class SshMultiNode:
             except Exception as ssh_muell:
                 if test01.config['quiet'] is not True:
                     self.message(f"ERROR: ssh connection to {host} did not work ...")
-                    self.message(f"ERROR: exception {ssh_muell}")
+                    self.message(f"ERROR: x exception {ssh_muell}")
                 check_result=("", "", 20000)
         else:
             check_result=("", "", 20000)
