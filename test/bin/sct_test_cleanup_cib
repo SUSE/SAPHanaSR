@@ -14,6 +14,7 @@ dir_path=$(dirname "$full_path")
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
 
+# TODO get scale-up/scale-out as parameter from calling definiton file
 currPrimary=$(sctl_get_curr_prim "$node01")
 currSecondary=$(sctl_get_curr_secn "$node01")
 currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
@@ -46,10 +47,14 @@ sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource cleanup"
 sctl_run_cs_wf_idle "$node01" "-s 5"
 
-# TODO stonith_admin --unfence $currPrim
-# TODO stonith_admin --unfence $currSecn
-# TODO stonith_admin --cleanup --history $currPrim
-# TODO stonith_admin --cleanup --history $currSecn
+sctl_run_stonithadm "$node01" "--unfence $currPrim"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_stonithadm "$node01" "--unfence $currSecn"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_stonithadm "$node01" "--cleanup --history $currPrim"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_stonithadm "$node01" "--cleanup --history $currSecn"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 # TODO ... stonith-enabled=true
 
 sctl_run_crm "$node01" "maintenance off"
