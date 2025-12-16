@@ -49,7 +49,7 @@ function sctl_get_curr_prim()
     # shellcheck disable=SC2154,SC2029
     currPrimary="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="150"/ { print $2 }' )"; rc=$?
     echo "$currPrimary"
-    return $rc
+    return "$rc"
 }
 
 function sctl_get_curr_secn()
@@ -62,7 +62,7 @@ function sctl_get_curr_secn()
     # shellcheck disable=SC2029
     currSecondary="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="100"/ { print $2 }' )"; rc=$?
     echo "$currSecondary"
-    return $rc
+    return "$rc"
 }
 
 function sctl_get_curr_prim_worker()
@@ -76,7 +76,7 @@ function sctl_get_curr_prim_worker()
     # shellcheck disable=SC2029
     currPrimWorker="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="101"/ { print $2 }' )"; rc=$?
     echo "$currPrimWorker"
-    return $rc
+    return "$rc"
 }
 
 function sctl_get_curr_secn_worker()
@@ -88,7 +88,7 @@ function sctl_get_curr_secn_worker()
     # shellcheck disable=SC2029
     currSecnWorker="$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'/' '/score="-12200"/ { print $2 }' )"; rc=$?
     echo "$currSecnWorker"
-    return $rc
+    return "$rc"
 }
 
 function sctl_get_site()
@@ -102,7 +102,7 @@ function sctl_get_site()
     site=$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".site" { print $2 }' node="$hana_node"); rc=$?
     site="${site//\"/}"
     echo "$site"
-    return $rc
+    return "$rc"
 }
 
 function sctl_get_vhost()
@@ -116,7 +116,7 @@ function sctl_get_vhost()
     vhost=$(ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_SHOWATTR --format=tester" | awk -F'=' '$0 ~ node".*vhost=" { print $2 }' node="$hana_node"); rc=$?
     vhost="${vhost//\"/}"
     echo "$vhost"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -136,7 +136,7 @@ function sctl_list_process()
     if [[ "$flags" =~ ":l:" ]]; then p_flags="$p_flags -l"; fi
     if [[ "$flags" =~ ":o:" ]]; then p_flags="$p_flags -o"; fi
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --timeout=10 --command "sudo -u root pgrep -u ${proc_user} ${p_flags} ${proc_pattern}"
-    return $rc
+    return "$rc"
 }
 
 #
@@ -165,7 +165,7 @@ function sctl_kill_process()
        echo "Kill for PID $PID1 failed"
        rc=1
     fi
-    return $rc
+    return "$rc"
 }
 
 #
@@ -178,7 +178,7 @@ function sctl_run_iptables()
     local iptables_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_IPTABLES $iptables_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 #
@@ -191,7 +191,7 @@ function sctl_run_crm()
     local crm_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_CRM $crm_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_crmattr()
@@ -201,7 +201,7 @@ function sctl_run_crmattr()
     local crm_attribute_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_CRMATTR $crm_attribute_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_crmnode()
@@ -211,7 +211,7 @@ function sctl_run_crmnode()
     local crm_node_params="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_CRMNODE $crm_node_params"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_cibadmin()
@@ -221,7 +221,7 @@ function sctl_run_cibadmin()
     local crm_cibadmin_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_CIBADMIN $crm_cibadmin_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_cs_wf_idle()
@@ -231,7 +231,7 @@ function sctl_run_cs_wf_idle()
     local cs_wf_idle_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_CS_WFIDLE $cs_wf_idle_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_stonithadm()
@@ -241,7 +241,7 @@ function sctl_run_stonithadm()
     local stonithadm_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_STONITHADM $stonithadm_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 #
@@ -254,7 +254,7 @@ function sctl_run_systemctl()
     local systemctl_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_SYSTEMCTL $systemctl_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_fsfreeze()
@@ -264,7 +264,7 @@ function sctl_run_fsfreeze()
     local fsfreeze_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_FSFREEZE $fsfreeze_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_rcnetwork()
@@ -274,7 +274,7 @@ function sctl_run_rcnetwork()
     local rcnetwork_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_RCNETWORK $rcnetwork_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_ip()
@@ -284,7 +284,7 @@ function sctl_run_ip()
     local ip_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_IP $ip_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_supportcfg()
@@ -294,7 +294,7 @@ function sctl_run_supportcfg()
     local sc_cmd="$2"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u root $G_CMD_SUPPORTCFG $sc_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 #
@@ -308,7 +308,7 @@ function sctl_run_sapcontrol()
     local sapcontrol_cmd="$3"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_SAPCONTROL $sapcontrol_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_sap_python3()
@@ -319,7 +319,7 @@ function sctl_run_sap_python3()
     local python3_cmd="$3"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_SAP_PYTHON3 $python3_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_hdbsql()
@@ -334,7 +334,7 @@ function sctl_run_hdbsql()
     local hdbsql_query="$4"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBSQL -U $userkey $hdbsql_query"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_hdbnsutil()
@@ -345,7 +345,7 @@ function sctl_run_hdbnsutil()
     local hdbnsutil_cmd="$3"
     local rc=0
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDBNSUTIL $hdbnsutil_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_hdb()
@@ -356,7 +356,7 @@ function sctl_run_hdb()
     local hdb_cmd="$3"
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_HDB $hdb_cmd"; rc=$?
     local rc=0
-    return $rc
+    return "$rc"
 }
 
 #
@@ -370,7 +370,7 @@ function sctl_run_cat()
     local rc=0
     # shellcheck disable=SC2029
     ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_CAT $cat_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_rm_file()
@@ -381,7 +381,7 @@ function sctl_run_rm_file()
     local rc=0
     # shellcheck disable=SC2029
     ssh "${proxyUser}@${target_host}" "sudo -u root $G_CMD_RM $rm_file_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_run_find_action()
@@ -393,7 +393,7 @@ function sctl_run_find_action()
     local rc=0
     # echo cs_ssh --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_FIND $find_cmd"; rc=$?
     cs_ssh --user "$proxyUser" --hosts "${target_host}" --command "sudo -u $sidadm --login $G_CMD_FIND $find_cmd"; rc=$?
-    return $rc
+    return "$rc"
 }
 
 function sctl_push_file()
