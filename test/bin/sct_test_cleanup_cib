@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sct_test_cleanup_cib - clean up failures, constraints, maintenance etc.
+# sct_test_cleanup_cib - clean up failures, constraints, maintenance, etc.
 #
 # (c) 2025 SUSE LLC
 # Author: F.Herschel, L.Pinne.
@@ -16,32 +16,60 @@ source .test_properties
 
 currPrimary=$(sctl_get_curr_prim "$node01")
 currSecondary=$(sctl_get_curr_secn "$node01")
+currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
+currSecnWorker=$(sctl_get_curr_secn_worker "$node01")
 
-echo "==== Clean up cib ===="
+echo "==== Clean up CIB ===="
+
+sctl_run_crm "$node01" "cluster start --all"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_crm "$node01" "node $currPrim online" 
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "node $currPrimWorker online" 
+sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "node $currSecn online" 
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "node $currSecnWorker online" 
+sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_crm "$node01" "resource clear $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource clear $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO clear IPaddr
 
 sctl_run_crm "$node01" "resource cleanup $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource cleanup"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 
-# TODO stonith_admin --unfence=$currPrim
-# TODO stonith_admin --unfence=$currSecn
+# TODO stonith_admin --unfence $currPrim
+# TODO stonith_admin --unfence $currSecn
 # TODO stonith_admin --cleanup --history $currPrim
 # TODO stonith_admin --cleanup --history $currSecn
 # TODO ... stonith-enabled=true
 
 sctl_run_crm "$node01" "maintenance off"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_crm "$node01" "resource refresh $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_crm "$node01" "resource manage $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource manage $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_crm "$node01" "resource maintenance $clnResource off"
+sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource maintenance $mstResource off"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+
+sctl_run_crm "$node01" "status full"
+# TODO status detail ? 
 #
