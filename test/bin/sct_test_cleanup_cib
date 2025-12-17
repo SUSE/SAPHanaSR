@@ -10,12 +10,14 @@
 set -u
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
+TOPO=${1:ScaleUp}
 
-# TODO get scale-up/scale-out as parameter from calling definiton file
 currPrim=$(sctl_get_curr_prim "$node01")
 currSecn=$(sctl_get_curr_secn "$node01")
-currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
-currSecnWorker=$(sctl_get_curr_secn_worker "$node01")
+if $TOPO="ScaleOut"; then
+    currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
+    currSecnWorker=$(sctl_get_curr_secn_worker "$node01")
+fi
 
 echo "==== Clean up CIB ===="
 
@@ -26,12 +28,16 @@ sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_crm "$node01" "node $currPrim online" 
 sctl_run_cs_wf_idle "$node01" "-s 5"
-sctl_run_crm "$node01" "node $currPrimWorker online" 
-sctl_run_cs_wf_idle "$node01" "-s 5"
+if $TOPO="ScaleOut"; then
+    sctl_run_crm "$node01" "node $currPrimWorker online" 
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
 sctl_run_crm "$node01" "node $currSecn online" 
 sctl_run_cs_wf_idle "$node01" "-s 5"
-sctl_run_crm "$node01" "node $currSecnWorker online" 
-sctl_run_cs_wf_idle "$node01" "-s 5"
+if $Topo="ScaleUp"; then
+    sctl_run_crm "$node01" "node $currSecnWorker online" 
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
 
 sctl_run_crm "$node01" "resource clear $clnResource"
 sctl_run_cs_wf_idle "$node01" "-s 5"
@@ -48,12 +54,16 @@ sctl_run_cs_wf_idle "$node01" "-s 5"
 
 sctl_run_stonithadm "$node01" "--unfence $currPrim"
 sctl_run_cs_wf_idle "$node01" "-s 5"
-sctl_run_stonithadm "$node01" "--unfence $currPrimWorker"
-sctl_run_cs_wf_idle "$node01" "-s 5"
+if $TOPO="ScaleOut"; then
+    sctl_run_stonithadm "$node01" "--unfence $currPrimWorker"
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
 sctl_run_stonithadm "$node01" "--unfence $currSecn"
 sctl_run_cs_wf_idle "$node01" "-s 5"
-sctl_run_stonithadm "$node01" "--unfence $currSecnWorker"
-sctl_run_cs_wf_idle "$node01" "-s 5"
+if $TOPO="ScaleOut"; then
+    sctl_run_stonithadm "$node01" "--unfence $currSecnWorker"
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
 #sctl_run_stonithadm "$node01" "--cleanup --history $currPrim"
 #sctl_run_cs_wf_idle "$node01" "-s 5"
 #sctl_run_stonithadm "$node01" "--cleanup --history $currSecn"
