@@ -776,8 +776,9 @@ class SaphanasrTest:
                 break
         return step
 
-    def action_call(self, action_name, cmd, remote):
+    def action_call(self, action_name, cmd, remote, **kargs):
         """ do the action itself """
+        ignore = kargs.get('ignore', False) # optionally "ignore" a rc!=0 and translate the rc to 0 (zero)
         action_rc = 0
         if cmd != "":
             if remote == "localhost":
@@ -790,6 +791,9 @@ class SaphanasrTest:
                 a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+        if ignore:
+            self.message(f"INFO: ignore rc={action_rc} (ignore=True)")
+            action_rc = 0
         return action_rc
 
     def action_on_hana(self, action_name):
@@ -799,6 +803,7 @@ class SaphanasrTest:
         test_ino = self.test_data['instNo']
         cmd = ""
         sudo_cmd = ""
+        ignore = False
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
@@ -851,9 +856,10 @@ class SaphanasrTest:
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
             sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
+            ignore = True  # ignore rc!=0, because this is intended for this case
         if self.config['use_sudo']:
             cmd = sudo_cmd
-        return self.action_call(action_name, cmd, remote)
+        return self.action_call(action_name, cmd, remote, ignore=ignore)
 
     def action_on_cluster(self, action_name):
         """ perform a given action on cluster node """
