@@ -551,7 +551,11 @@ class SaphanasrTest:
             if isinstance(checks,str):
                 check_ptr = checks
                 self.debug(f"DEBUG: check_ptr {check_ptr}", stdout=False)
-                checks = self.test_data["checkPtr"][check_ptr]
+                try:
+                    checks = self.test_data["checkPtr"][check_ptr]
+                except KeyError as ke:
+                    self.message(f"ERROR: Pointer {check_ptr} for {area_name} is not defined")
+                    return 1
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
