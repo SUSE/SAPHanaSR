@@ -1,0 +1,79 @@
+#!/usr/bin/python3
+"""
+ SAPHanaSR-testCluster
+ Author:       Fabian Herschel, Dec 2025
+ License:      GNU General Public License (GPL)
+ Copyright:    (c) 2025 SUSE LLC
+"""
+
+import json
+import argparse
+
+# json_file="kill_prim_indexserver_fencing_alert.json.out"
+json_file=""
+step=""
+
+def analyze_failures(json_step_step, step):
+
+    #j_steps = json.get('steps',None)
+    #j_step_step = j_steps.get(step, None)
+    #
+    # get min and max failures in this steps
+    #
+    if j_step_step:
+        j_step_min = j_step_step.get('min_fail',None)
+        j_step_max = j_step_step.get('max_fail',None)
+ 
+    print(f"MSG: step {step}: min_fail={j_step_min}, max_fail={j_step_max}")
+    #
+    # print failures with min failures
+    #
+    j_loops = j_step_step.get('loops',None)
+    if j_loops:
+        f_short = None
+        f_count = 0
+        for loop in j_loops:
+            (l_nr, failures) = loop.keys()
+            l_failures = loop.get(failures, None)
+            f_len = len(l_failures)
+            if f_len == j_step_min:
+                if f_short != l_failures:
+                    f_short = l_failures
+                    if f_count != 0:
+                        f_count = 0
+                        print(f"{l_nr} {f_short} (last failure occured in {f_count} loops")	
+                    else:
+                        print(f"{l_nr} {f_short}")	
+                else:
+                    f_count = f_count + 1
+        if f_count != 0:
+            print(f"last failure occured in {f_count} loops")	
+                
+parser = argparse.ArgumentParser()
+parser.add_argument("--file", help="specify the json-out file")
+args = parser.parse_args()
+if args.file:
+    json_file = args.file
+    
+try:
+    with open(json_file, encoding="utf-8") as json_fh:
+        try:
+            json_data = (json.load(json_fh))
+        except json.decoder.JSONDecodeError as e_jerr:
+            print(f"json error in file {json_file}: ({e_jerr})")
+            if reverse_logic:
+                exit(0)
+            else:
+                exit(1)
+except FileNotFoundError as e_ferr:
+    print(f"file not found ({e_ferr})")
+    exit(1)
+except PermissionError as e_ferr:
+    print(f"permisson error ({e_ferr})")
+    exit(1)
+
+
+j_steps = json_data.get('steps',None)
+for step in j_steps.keys():
+    j_step_step = j_steps.get(step, None)
+    analyze_failures(j_step_step, step)
