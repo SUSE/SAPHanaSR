@@ -105,7 +105,7 @@ class susCostOpt(HADRBase):
         method = "postTakeover"
         self.tracer.info(f"{self.__class__.__name__}.{method}() method called with rc={rc}")
         # TODO PRIO4: How to handle return code (rc) not equal to 0 or 1?
-        # And to we need to differ rc==0 and rc==1
+        # And do we need to differ rc==0 and rc==1
         if rc in (0, 1):
             # takeover finished with returnocde 0 or 1
             # open database connection
