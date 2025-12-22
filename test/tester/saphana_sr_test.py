@@ -27,7 +27,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.2.20251118"
+    version = "2.2.20251224"
 
     def message(self, msg, **kwargs):
         """
@@ -45,7 +45,9 @@ class SaphanasrTest:
         if stdout:
             if pre_cr:
                 print()
-            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])), flush=True)
+            message_type = msg_arr[0]
+            core_message = " ".join(msg_arr[1:])
+            print("{}{} {:<9s} {}".format(date_time, r_id, message_type, core_message), flush=True)
         try:
             if self.run['log_file_handle']:
                 _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
@@ -53,7 +55,8 @@ class SaphanasrTest:
                 self.run['log_file_handle'].write(_l_msg + "\n")
                 self.run['log_file_handle'].flush()
         except OSError:
-            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"), flush=True)
+            core_message = "Could not write log log file"
+            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", core_message), flush=True)
 
     def debug(self, msg, **kwargs):
         """
@@ -403,7 +406,7 @@ class SaphanasrTest:
     def __run_check__(self, single_check, area_name, object_name, step_step, **kwargs):
         # match <key> <comp> <regExp>
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
-        match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+        match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is|is not) (.*)", single_check)
         check_result = -1
         c_key = "x"
         c_comp = "x"
@@ -445,7 +448,7 @@ class SaphanasrTest:
         except (IndexError, AttributeError):
             pass
         self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-        found = False
+        found = False   # found is True, if the attribute has been FOUND (for all 'normal' compares) or is MISSING for compare "is None"
         if area_name in l_sr:
             l_area = l_sr[area_name]
             c_err = 1
@@ -453,7 +456,7 @@ class SaphanasrTest:
                 l_obj = l_area[object_name]
                 if c_key in l_obj:
                     l_val = l_obj[c_key]
-                    found = True
+                    found = True  # atttribute has been found for a compare (attribute is available)
                     # TODO '==' must be exact match, '~' is for regexp
                     if c_comp == "==":
                         if l_val == c_reg_exp:
@@ -487,15 +490,17 @@ class SaphanasrTest:
                         # TODO check l_val and c_reg_exp if they could transformed into int
                         if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
                             c_err = 0
+                    elif c_comp == "is not" and c_reg_exp == "None":
+                        c_err = 0
                 else:
                     if c_comp == "is" and c_reg_exp == "None":
-                        found = 1
+                        found = True   # found set True (here negative logig, so missing attribute is matching 'None', means the missing attribute has been found :)
                         c_err = 0
                         check_result = max(check_result, 0)
             else:
                 # if object does not even exist, the 'None' clause is true
                 if c_comp == "is" and c_reg_exp == "None":
-                    found = 1
+                    found = True
                     c_err = 0
                     check_result = max(check_result, 0)
             if c_err == 1:
@@ -510,10 +515,10 @@ class SaphanasrTest:
                 self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
         if c_comp == "is" and c_reg_exp == "None":
             # if area does not even exist, the 'None' clause is true
-            found = 1
+            found = True
             c_err = 0
             check_result = max(check_result, 0)
-        if (found == 0) and (check_result < 2):
+        if (found is False) and (check_result < 2):
             check_result = 2
         return check_result
 
@@ -553,7 +558,7 @@ class SaphanasrTest:
                 self.debug(f"DEBUG: check_ptr {check_ptr}", stdout=False)
                 try:
                     checks = self.test_data["checkPtr"][check_ptr]
-                except KeyError as ke:
+                except KeyError:
                     self.message(f"ERROR: Pointer {check_ptr} for {area_name} is not defined")
                     return 1
             topolo = self.topolo
