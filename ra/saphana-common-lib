@@ -473,16 +473,12 @@ function HANA_CALL() {
                   cmd_out_log="${runDir}/HANA_CALL_CMD_${raType}OUT_${errExt}"
                   cmd_err_log="${runDir}/HANA_CALL_CMD_${raType}ERR_${errExt}"
 
-                  # TODO PRIO2: NG - ScaleUp had 'timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log)'
-                  #                  'output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
-                  #                  ScaleOut has
-                  #                  'output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"'
                   case "$pre_cmd_type" in
                       bash )
-                            output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
+                            output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
                             ;;
                       su )
-                            output=$(timeout --foreground -s 9 "$timeOut" su - "${sid}adm" -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
+                            output=$(timeout --foreground -s 9 "$timeOut" su - "${sid}adm" -c "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
                             ;;
                   esac
                   if [[ -f "$cmd_out_log" ]]; then output=$(<"$cmd_out_log"); rm -f "$cmd_out_log"; fi
@@ -492,14 +488,6 @@ function HANA_CALL() {
                   # on rc=1 - retry to improve the behavior in AD environments
                   # fh 20230127 deactivate this part. rc=1 could also be the valid rc of the called command
                   # TODO PRIO2: NG - to improve handling of su-errors we need to catch this errors and differ them from the cmd rc
-                  #if [ "$rc" == "1" ]; then
-                  #    super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd_type' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
-                  #    if [ "$cmdErr" == "NA" ]; then
-                  #        # seems something was going wrong with the 'pre_cmd_type' (su)
-                  #        super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd_type'. Retry once."
-                  #        output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc="$?"
-                  #    fi
-                  #fi
                  ;;
     esac
     super_ocf_log info "RUNTIME HANA_CALL '$cmd' stack:${FUNCNAME[*]}rc=$rc"
