@@ -6,7 +6,7 @@
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023-2025 SUSE LLC
+ Copyright:    (c) 2023-2026 SUSE LLC
 """
 
 import time
