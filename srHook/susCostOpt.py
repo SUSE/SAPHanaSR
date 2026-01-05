@@ -2,7 +2,7 @@
 # susCostOpt.py
 # Authors:      Angela Briel, Fabian Herschel, June 2022
 # License:      GNU General Public License (GPL)
-# Copyright:    (c) 2022 SUSE LLC
+# Copyright:    (c) 2022-2026 SUSE LLC
 
 susCostOpt
 purpose: reconfigures the SAP HANA instance during the postTakeover event to allow the
