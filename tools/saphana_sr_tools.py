@@ -14,7 +14,7 @@
  saphana_sr_tools.py
  Author:       Fabian Herschel, May 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023-2025 SUSE LLC
+ Copyright:    (c) 2023-2026 SUSE LLC
 
 # TODO: STEP01: SID-autodetection - get SID from query for SAPHanaController/SAPHanaTopologyResource - warn, if there are no or more than one SIDs found.
 # TODO: STEP02: Think also about multi SID implementation - maybe by using multiple HanaCluster objects (one per SID)
