@@ -61,12 +61,12 @@ sctl_run_crm "${node02}" "cluster stop --all"
 
 echo "==== SUSE Cluster Stopped ===="
 
-logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $node01"
-sctl_run_sapcontrol "$node01" "$sidadm" "-nr $instNr -function StartSystem"
-logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $node02"
-sctl_run_sapcontrol "$node02" "$sidadm" "-nr $instNr -function StartSystem"
-sctl_run_sapcontrol "$node01" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
-sctl_run_sapcontrol "$node02" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currPrimary"
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function StartSystem"
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currSecondary"
+sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function StartSystem"
+sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
 
 while true; do
     sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
@@ -119,7 +119,7 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currPrima
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 sctl_run_crm "$node01" "cluster start --all"
-sleep 30
+sleep 90
 sctl_run_crm "$node01" "cluster wait_for_startup 60"
 sctl_run_cs_wf_idle "$node01" "-s 10"
 

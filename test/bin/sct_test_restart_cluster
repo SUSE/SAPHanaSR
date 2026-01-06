@@ -43,10 +43,10 @@ sctl_run_crm "$node02" "cluster stop --all"
 
 echo "==== SUSE Cluster Stopped ===="
 
-sctl_run_sapcontrol "$node01" "$sidadm" "-nr $instNr -function StartSystem"
-sctl_run_sapcontrol "$node02" "$sidadm" "-nr $instNr -function StartSystem"
-sctl_run_sapcontrol "$node01" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
-sctl_run_sapcontrol "$node02" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function StartSystem"
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function StartSystem"
+sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
 
 while true; do
     sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
@@ -60,7 +60,7 @@ done
 echo "==== SAP HANA DBs started ===="
 
 sctl_run_crm "$node01" "cluster start --all"
-sleep 30
+sleep 90
 sctl_run_crm "$node01" "cluster wait_for_startup 60"
 sctl_run_cs_wf_idle "$node01" "-s 10"
 echo "==== SUSE Cluster Started ===="
