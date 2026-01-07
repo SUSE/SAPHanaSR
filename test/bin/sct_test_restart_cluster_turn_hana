@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sct_test_restart_cluster_turn_hana
+# sct_test_restart_cluster_turn_hana - variant for NON XSA standalone worker
 #
 # (c) 2025-2026 SUSE LLC
 # Author: F.Herschel, L.Pinne.
@@ -44,10 +44,10 @@ sctl_run_cs_wf_idle "${node01}" "-s 2"
 
 vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
 vhostSecn=$(sctl_get_vhost "${node01}" "$currSecondary")
-if [[ -z "$vhostPrim ]]; then
+if [[ -z "$vhostPrim" ]]; then
     vhostPrim="$currPrimary"
 fi
-if [[ -z "$vhostSecn ]]; then
+if [[ -z "$vhostSecn" ]]; then
     vhostPrim="$currSecondary"
 fi
 
@@ -99,14 +99,17 @@ cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$sitePrimary"
 srHookCache=$( sctl_run_cat "$currSecondary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currSecondary: $cacheFile: $srHookCache"
 
+#
+# First check for the SR-Status on the new primary
+#
 while true; do
     sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
-    if [[ "$rc" != 15 ]]; then
-        echo "DBG: fail - rc is $rc"
-        sleep 60
-    else
-        echo "DBG: ok - rc is $rc"
+    if [[ "$rc" == "15" ]]; then
+        echo "DBG: sRS ok - rc is $rc"
         break
+    else
+        echo "DBG: sRS fail (srs!=15) - rc is $rc"
+        sleep 60
     fi
 done
 
