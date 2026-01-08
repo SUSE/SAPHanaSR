@@ -23,13 +23,38 @@
 #   angi-ScaleUp: restart_cluster_turn_hana
 #
 set -u
-src=${BASH_SOURCE[0]}
-full_path=$(readlink -f "$src")
-dir_path=$(dirname "$full_path")
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
 currPrimary=$(sctl_get_curr_prim "$node01")
 currSecondary=$(sctl_get_curr_secn "${node01}")
+
+function wait_for_lss4()
+{
+    local remote="$1"
+    while true; do
+        sctl_run_sap_python3 "$remote" "$sidadm" "exe/python_support/landscapeHostConfiguration.py 1>/dev/null"; rc=$?
+        if [[ "$rc" == "4" ]]; then
+            echo "DBG: lHC ok - rc is $rc"
+            break
+        else
+            echo "DBG: lHC fail (lss!=4) - rc is $rc"
+            sleep 60
+        fi
+    done
+}
+
+function wait_for_srr15()
+{
+    local remote="$1"
+    while true; do
+        sctl_run_sap_python3 "$remote" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
+        if [[ "$rc" != 15 ]]; then
+            sleep 60
+        else
+            break
+        fi
+    done
+}
 
 # shellcheck disable=SC2029
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resource"
@@ -64,34 +89,43 @@ echo "==== SUSE Cluster Stopped ===="
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currPrimary"
 sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function StartSystem"
 sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+wait_for_lss4 "$currPrimary"
+#
+# and now the secondary
+#
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currSecondary"
 sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function StartSystem"
 sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+wait_for_lss4 "$currSecondary"
 
-while true; do
-    sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
-    if [[ "$rc" != 15 ]]; then
-        sleep 60
-    else
-        break
-    fi
-done
+wait_for_srr15 "$currPrimary" 
 
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( sctl_run_cat "$currPrimary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
 
+#
+# Process the hand-shake-takeover
+#
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "SAP HANA DBs started"
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currSecondary: sr_takeover suspendPrimary"
-
 sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
+wait_for_lss4 "$currSecondary"  # wait, because XSA-services needs to be re-started on the new primary
+sleep 60
+wait_for_lss4 "$currSecondary"
 
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( sctl_run_cat "$currPrimary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
 
+#
+# Now register old primary as new secondary in online mode
+#
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
 sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode --online"
+wait_for_lss4 "$currPrimary"  # wait, because XSA-services needs to be re-started on the new primary
+sleep 60
+wait_for_lss4 "$currSecondary"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currSecondary ($siteSecondary), s=$currPrimary"
 
@@ -100,46 +134,19 @@ srHookCache=$( sctl_run_cat "$currSecondary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currSecondary: $cacheFile: $srHookCache"
 
 #
-# First check for the SR-Status on the new primary
+# Wait till SR is back again (ACTIVE)
 #
-while true; do
-    sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
-    if [[ "$rc" == "15" ]]; then
-        echo "DBG: sRS ok - rc is $rc"
-        break
-    else
-        echo "DBG: sRS fail (srs!=15) - rc is $rc"
-        sleep 60
-    fi
-done
+wait_for_srr15 "$currSecondary"
 
 #
 # XSA might take longer to start, so SR-Status is not sufficient, also check LSS-Status on new primary
 #
-while true; do
-    sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/landscapeHostConfiguration.py 1>/dev/null"; rc=$?
-    if [[ "$rc" == "4" ]]; then
-        echo "DBG: lHC ok - rc is $rc"
-        break
-    else
-        echo "DBG: lHC fail (lss!=4) - rc is $rc"
-        sleep 60
-    fi
-done
+wait_for_lss4 "$currSecondary"
 
 #
-# XSA might take longer to start, so SR-Status is not sufficient, also check LSS-Status on new secondarsecondary
+# XSA might take longer to start, so SR-Status is not sufficient, also check LSS-Status on new secondary
 #
-while true; do
-    sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/landscapeHostConfiguration.py 1>/dev/null"; rc=$?
-    if [[ "$rc" == "4" ]]; then
-        echo "DBG: lHC ok - rc is $rc"
-        break
-    else
-        echo "DBG: lHC fail (lss!=4) - rc is $rc"
-        sleep 60
-    fi
-done
+wait_for_lss4 "$currPrimary"
 
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$sitePrimary"
 srHookCache=$( sctl_run_cat "$currSecondary" "$cacheFile" )
