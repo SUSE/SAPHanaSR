@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# pylint: disable=line-too-long
+# pylint: disable=broad-exception-caught
+# pylint: disable=too-many-lines,too-many-statements,too-many-instance-attributes,too-many-public-methods,too-many-branches,too-many-locals,too-many-nested-blocks,
 # TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
 """
  saphanasrtest.py
@@ -27,7 +30,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.2.20251224"
+    version = "2.2.20260106"
 
     def message(self, msg, **kwargs):
         """
@@ -695,13 +698,15 @@ class SaphanasrTest:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
-            action_rc = self.action(step_action) # post-action is only called, if step checks have been passed
-            if action_rc != 0:
-                process_result = 1 # set step failed, if post-action failed
+            if len(step_action) != 0:
+                action_rc = self.action(step_action) # post-action is only called, if step checks have been passed
+                step_result.update({'action': step_action})
+                step_result.update({'action_rc': action_rc})
+                if action_rc != 0:
+                    process_result = 1 # set step failed, if post-action failed
 
         if process_result == 0:
             step_result.update({ 'status': 'passed' })
-            step_result.update({ 'action': step_action })
 
         else:
             if step_alternative:
