@@ -11,7 +11,6 @@
         "storage",
         "nfs"
     ],
-    "todo": "please correct this file",
     "start": "prereq10",
     "steps": [
         {
@@ -30,57 +29,71 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
+            "name": "failure detected + wait with frozen nfs",
             "next": "step30",
-            "loop": 120,
+            "loop": 30,
             "wait": 2,
+            "post": "sleep 120",
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "pWorker": "pWorkerUp",
             "sSite": [
-                "lpt ~ (20|10)",
-                "lss == 1",
+                "srr == S",
+                "srHook == SFAIL"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "failure detected + unfreeze nfs",
+            "next": "step40",
+            "loop": 90,
+            "wait": 2,
+            "post": "shell sct_test_unfreeze_secn_site_nfs",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 4",
                 "srr == S",
                 "srHook == SFAIL",
                 "srPoll == SFAIL"
             ]
         },
-        {
-            "step": "step30",
+       {
+            "step": "step40",
             "name": "begin recover",
-            "next": "final40",
-            "loop": 300,
+            "next": "final50",
+            "loop": 120,
             "wait": 2,
             "pSite": "pSiteUp",
             "pHost": "pHostUp",
             "pWorker": "pWorkerUp",
-            "sSite": [
-                "lpt ~ (20|10)",
-                "lss == 4",
-                "srr == S",
-                "srHook ~ (SOK|SWAIT)",
-                "srPoll ~ (SOK|SFAIL)"
-            ],
             "sHost": [
                 "clone_state ~ (DEMOTED|UNDEFINED)",
-                "roles == master1::worker:",
-                "score ~ (100|145|150)"
+                "score == 100"
+            ],
+            "sSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|4)",
+                "srr == S",
+                "srHook ~ (SOK|SFAIL)",
+                "srPoll ~ (SOK|SFAIL)"
             ]
         },
         {
-            "step": "final40",
+            "step": "final50",
             "name": "end recover",
             "next": "END",
             "loop": 300,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
-            "pSite": "sSiteUp",
-            "sSite": "pSiteUp",
-            "pHost": "sHostUp",
-            "sHost": "pHostUp",
-            "pWorker": "sWorkerUp",
-            "sWorker": "pWorkerUp"
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
         }
     ]
 }
