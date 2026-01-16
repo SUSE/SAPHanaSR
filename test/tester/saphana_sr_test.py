@@ -460,12 +460,11 @@ class SaphanasrTest:
                 if c_key in l_obj:
                     l_val = l_obj[c_key]
                     found = True  # atttribute has been found for a compare (attribute is available)
-                    # TODO '==' must be exact match, '~' is for regexp
+                    # DONE '==' must be exact match, '~' is for regexp
                     if c_comp == "==":
                         if l_val == c_reg_exp:
                             c_err = 0
                     elif c_comp == "!=":
-                        # TODO Should this also be true, if one of the values are None?
                         if l_val != c_reg_exp:
                             c_err = 0
                     elif c_comp == "~":
@@ -497,8 +496,13 @@ class SaphanasrTest:
                     elif c_comp == "is not" and c_reg_exp == "None":
                         c_err = 0
                 else:
+                    # l_val is None
                     if c_comp == "is" and c_reg_exp == "None":
-                        found = True   # found set True (here negative logig, so missing attribute is matching 'None', means the missing attribute has been found :)
+                        found = True   # found set True (here negative logic, so missing attribute is matching 'None', means the missing attribute has been found :)
+                        c_err = 0
+                        check_result = max(check_result, 0)
+                    elif c_comp == "!=" and c_reg_exp != "None":
+                        found = True   # found set True (here negative logic, so missing attribute is not matching c_reg_exp and c_reg_exp is not None, means the missing attribute has been found :)
                         c_err = 0
                         check_result = max(check_result, 0)
             else:
