@@ -30,7 +30,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.2.20260106"
+    version = "2.3.20260115"
 
     def message(self, msg, **kwargs):
         """
@@ -465,6 +465,7 @@ class SaphanasrTest:
                         if l_val == c_reg_exp:
                             c_err = 0
                     elif c_comp == "!=":
+                        # TODO Should this also be true, if one of the values are None?
                         if l_val != c_reg_exp:
                             c_err = 0
                     elif c_comp == "~":
@@ -676,6 +677,7 @@ class SaphanasrTest:
                     break
             process_result = max (
                                   self.process_topology_object(step, 'global', 'Global', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'mstRsc', 'Resource', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'sSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pHost', 'Host', list_of_failures=list_of_failures),
@@ -1086,6 +1088,11 @@ if __name__ == "__main__":
             l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
             l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
             l_top.update({'sSite': test01.get_value('Host', l_top['sHost'], 'site')})
+
+        #
+        # now add special resources to topology for later use in process_step
+        #
+        l_top.update({'mstRsc': test01.get_value('Host', l_top['sHost'], 'site')})
 
         # TODO: do we need the old method as fallback, if msn is empty or misleading?
         #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
