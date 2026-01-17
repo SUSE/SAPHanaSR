@@ -19,7 +19,7 @@ if [ $TOPO == "ScaleOut" ]; then
     currSecnWorker=$(sctl_get_curr_secn_worker "$node01")
 fi
 
-echo "==== Clean up CIB ===="
+echo "==== Cleaning up CIB ===="
 
 # clear SBD devices
 # TODO cs_clear_sbd_devices --all
@@ -63,7 +63,7 @@ if [ $TOPO == "ScaleOut" ]; then
 fi
 sctl_run_crm "$node01" "node $currSecn online" 
 sctl_run_cs_wf_idle "$node01" "-s 5"
-if [ $TOPO == "ScaleUp" ]; then
+if [ $TOPO == "ScaleOut" ]; then
     sctl_run_crm "$node01" "node $currSecnWorker online" 
     sctl_run_cs_wf_idle "$node01" "-s 5"
 fi
@@ -92,6 +92,8 @@ sctl_run_crm "$node01" "resource refresh $clnResource"
 sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource refresh $mstResource"
 sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO refresh SAPHanaFilesystem
+# TODO refresh IPaddr2
 
 # remove resource unmanage and maintenance
 sctl_run_crm "$node01" "resource manage $clnResource"
@@ -102,16 +104,18 @@ sctl_run_crm "$node01" "resource maintenance $clnResource off"
 sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource maintenance $mstResource off"
 sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO unmanage SAPHanaFilesystem
+# TODO unamage IPaddr2
 
 # start resources
 sctl_run_crm "$node01" "resource start $clnResource"
 sctl_run_cs_wf_idle "$node01" "-s 5"
 sctl_run_crm "$node01" "resource start $mstResource"
 sctl_run_cs_wf_idle "$node01" "-s 5"
-# TODO start SAPFilesystem
+# TODO start SAPHanaFilesystem
 # TODO start IPaddr2
 
 # show cluster status
-sctl_run_crm "$node01" "status full"
+sctl_run_crm "$node01" "status"
 # TODO crm_mon -1r ... SAPHanaSR-showAttr ... cs_clusterstate -i 
 #
