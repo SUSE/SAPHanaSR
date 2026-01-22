@@ -30,7 +30,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.3.20260115"
+    version = "2.3.20260120"
 
     def message(self, msg, **kwargs):
         """
@@ -494,6 +494,8 @@ class SaphanasrTest:
                         if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
                             c_err = 0
                     elif c_comp == "is not" and c_reg_exp == "None":
+                        c_err = 0
+                    elif c_comp == "is" and c_reg_exp == "Any":
                         c_err = 0
                 else:
                     # l_val is None
