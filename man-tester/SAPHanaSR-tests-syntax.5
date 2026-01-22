@@ -189,10 +189,10 @@ test on HANA worker node
 \fB*\fP Test step status <status>
 .PP
 Each step contains an expectation for SAPHanaSR attributes, which need to match.
-The attributes are arranged along the CIB and SAPHanaSR-showAttr sections. 
-The 
+The attributes are arranged along the CIB and SAPHanaSR-showAttr sections. There must be at least one expectation per step.
+The object is one of
 .PP
-[ pHost | sHost | pWorker | sWorker | pSite | sSite | pGlobal | sGlobal ]
+[ pHost | sHost | pWorker | sWorker | pSite | sSite | global | mstRsc ]
 .RS 2
 .TP
 pHost, sHost, pWorker, sWorker
@@ -201,8 +201,11 @@ node attributes
 pSite, sSite
 site attributes
 .TP
-pGlobal, sGlobal
-global attributes, not yet implmented
+global
+global attributes
+.TP
+mstRsc
+multi state resource attributes
 .PP
 See manual page SAPHanaSR-showAttr(8) for details on that attributes.
 .PP
@@ -283,29 +286,29 @@ contain logical "OR". A status with two conditions looks like this:
 A set of comparators is implemented. Some take integers, some take regular
 expression. In addition the "None" TODO. 
 .\" saphana_sr_test.py
-.\" re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+.\" re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is|is not) (.*)", single_check)
 .RS 2
 .TP
 ==
-equal, integer
+equal, integer or string
 .TP
 !=
-not equal, integer
+not equal, integer or string
 .TP
 >=
-greater or equal, integer
+greater or equal, integer or string
 .TP
 <=
-less or equal, interger
+less or equal, interger or string
 .TP
 >
-greater, integer
+greater, integer or string
 .TP
 <
-less
+less, integer or string
 .TP
 >~
-greater or like, first field integer and second field regular expression
+greater or like, first field integer or string and second field regular expression
 ( <\fIINTEGER\fP>:<\fIREGULAR_EXPRESSION\fP> )
 .TP
 ~
@@ -314,8 +317,9 @@ like, regular expression
 !~
 not like, regular expression
 .TP
-is
-TODO, the string "None"
+is None | Any - Term '\fBis None\fP' checks, if the left side (attribute) is not even available. Term '\fBis Any\fP' checks, if the left side (attribute) is available and has a value.
+.TP
+is not None - Equivalent to '\fBis Any\fP'.
 .RE
 .PP
 \fB*\fP Test step action "post"
