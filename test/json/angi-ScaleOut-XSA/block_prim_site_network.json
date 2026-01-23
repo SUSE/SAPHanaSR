@@ -1,12 +1,14 @@
 {
-    "test": "kill_prim_pacemkr-attrd_fencing",
-    "name": "kill pacemaker-attrd on primary node",
+    "test": "block_prim_site_network",
+    "name": "Block all network on primary site nodes",
     "purpose": [
         "angi",
-        "ScaleUp",
+        "ScaleOut",
+        "block",
         "primary",
-        "kill",
-        "cluster",
+        "node",
+        "site",
+        "network",
         "fencing"
     ],
     "start": "prereq10",
@@ -17,67 +19,86 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "shell sct_test_kill_pacemkr-attrd prim",
+            "post": "shell sct_test_block_prim_site_network",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
-            "sHost": "sHostUp"
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
         },
         {
             "step": "step20",
-            "name": "failure detected + primary fenced",
+            "name": "failure detected + nodes fenced",
             "next": "step30",
-            "loop": 120,
+            "loop": 90,
             "wait": 2,
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pSite": [
+                "srr == P",
+                "srHook == PRIM"
+            ],
             "pHost": [
                 "clone_state is None",
-                "roles is None",
-                "score is None"
+                "score is None",
+                "roles is None"
             ],
-            "sHost": "sHostUp"
+            "pWorker": [
+                "clone_state is None",
+                "score is None",
+                "roles is None"
+            ]
         },
         {
-            "step": "step30",
             "step": "step30",
             "name": "takeover on secondary",
             "next": "step40",
             "loop": 240,
             "wait": 2,
             "sSite": "pSiteUp",
-            "sHost": "pHostUp"
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
         },
         {
             "step": "step40",
             "name": "begin recover new secondary",
             "next": "final50",
-            "loop": 120,
+            "loop": 240,
             "wait": 2,
             "pSite": [
-                "lss == 1",
-                "srr == P",
+                "lss ~ (1|2)",
+                "srr ~ (P|S)",
                 "lpt >~ 1000000000:(30|20|10)",
-                "srHook ~ (PRIM|SWAIT|SREG)",
-                "srPoll == SFAIL"
+                "srHook ~ (PRIM|SWAIT|SREF)"
             ],
             "pHost": [
                 "clone_state ~ (UNDEFINED|DEMOTED)",
                 "roles == master1::worker:",
-                "score ~ (0|90|70|5)"
+                "srah == R"
+            ],
+            "pWorker": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == slave::none:"
             ],
             "sSite": "pSiteUp",
-            "sHost": "pHostUp"
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
         },
         {
             "step": "final50",
             "name": "end recover",
             "next": "END",
-            "loop": 150,
+            "loop": 300,
             "wait": 2,
             "post": "cleanup",
             "pSite": "sSiteUp",
-            "sSite": "pSiteUp",
             "pHost": "sHostUp",
-            "sHost": "pHostUp"
+            "pWorker": "sWorkerUp",
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
         }
     ]
 }
