@@ -17,11 +17,6 @@
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles are exchanged
 #
-#
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-restart_cluster_turn_hana: OK
-# used-in:
-#   angi-ScaleUp: restart_cluster_turn_hana
-#
 set -u
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
@@ -38,6 +33,7 @@ function wait_for_lss4()
             break
         else
             echo "DBG: lHC fail (lss!=4) - rc is $rc"
+            echo "sleep 60s"
             sleep 60
         fi
     done
@@ -49,6 +45,7 @@ function wait_for_srr15()
     while true; do
         sctl_run_sap_python3 "$remote" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
         if [[ "$rc" != 15 ]]; then
+            echo "sleep 60s"
             sleep 60
         else
             break
@@ -61,12 +58,7 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resou
 sctl_run_crm "${node01}" "resource cleanup $mstResource"
 sctl_run_cs_wf_idle "${node01}" "-s 2"
 
-
-#########################################
-# VHOSTS
 # get vhosts from node names
-#########################################
-
 vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
 vhostSecn=$(sctl_get_vhost "${node01}" "$currSecondary")
 if [[ -z "$vhostPrim" ]]; then
@@ -78,12 +70,9 @@ fi
 
 sitePrimary=$(sctl_get_site "${node01}" "$currPrimary")
 siteSecondary=$(sctl_get_site "${node01}" "$currSecondary")
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary, vhostPrim=$vhostPrim, vhostSecn=$vhostSecn"
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Stop Cluster"
 sctl_run_crm "${node02}" "cluster stop --all" "360"
-
 echo "==== SUSE Cluster Stopped ===="
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currPrimary"
@@ -111,6 +100,7 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "SAP HANA DBs started"
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currSecondary: sr_takeover suspendPrimary"
 sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
 wait_for_lss4 "$currSecondary"  # wait, because XSA-services needs to be re-started on the new primary
+echo "sleep 60s"
 sleep 60
 wait_for_lss4 "$currSecondary"
 
@@ -124,9 +114,9 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
 sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode --online"
 wait_for_lss4 "$currPrimary"  # wait, because XSA-services needs to be re-started on the new primary
+echo "sleep 60s"
 sleep 60
 wait_for_lss4 "$currSecondary"
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currSecondary ($siteSecondary), s=$currPrimary"
 
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$sitePrimary"
@@ -157,9 +147,9 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currPrima
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 sctl_run_crm "$node01" "cluster start --all"
+echo "sleep 90s"
 sleep 90
 sctl_run_crm "$node01" "cluster wait_for_startup 60"
 sctl_run_cs_wf_idle "$node01" "-s 10"
-
 echo "==== SUSE Cluster Started ===="
 #

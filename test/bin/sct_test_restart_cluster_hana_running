@@ -21,10 +21,6 @@
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles NOT exchanged
 #
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-restart_cluster_hana_running: OK
-# used-in:
-#   angi-ScaleUp: restart_cluster_hana_running
-#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -38,10 +34,11 @@ sctl_run_cs_wf_idle "$node01" "-s 2"
 sctl_run_crm "$node01" "maintenance on"
 
 sctl_run_crm "$node02" "cluster stop --all"
-
 echo "==== SUSE Cluster Stopped ===="
+echo "sleep 60s"
 sleep 60
 sctl_run_crm "$node01" "cluster start --all"
+echo "sleep 90s"
 sleep 90
 sctl_run_crm "$node01" "cluster wait_for_startup 60"
 sctl_run_cs_wf_idle "$node01" "-s 10"
@@ -52,6 +49,5 @@ sctl_run_crm "$node01" "resource refresh $mstResource"
 sctl_run_cs_wf_idle "$node01" "-s 10"
 
 sctl_run_crm "$node01" "maintenance off"
-
 echo "==== SUSE Cluster Started ===="
 #

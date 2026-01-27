@@ -7,10 +7,6 @@
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
 #
-# used-in:
-#   angi-ScaleOut-XSA: kill_prim_worker_ipaddr
-#   - list-end
-#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -20,7 +16,6 @@ source .test_properties
 currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
 
 echo "==== Kill primary HANA worker XSA IP address on $currPrimWorker ===="
-
 # TODO could property ipAddr be used? or get all data by one call
 IP=$( sctl_run_crm "$currPrimWorker" "configure show" |\
     grep -A4 primitive.*IPaddr2 | grep params.ip= | awk -F'=' '{print $2}' |\
@@ -36,6 +31,7 @@ NIC=${IP_BRF%% *}
 
 sctl_run_ip "$currPrimWorker" "a d ${IPNM} dev ${NIC}"
 # TODO sleep twice the monitor interval
+echo "sleep 60s"
 sleep 60
 # TODO specify cleanup rsc_ip_
 sctl_run_crm "$currPrimWorker" "resource cleanup"

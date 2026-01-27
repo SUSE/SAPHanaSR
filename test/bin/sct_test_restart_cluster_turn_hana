@@ -17,11 +17,6 @@
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles are exchanged
 #
-#
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-restart_cluster_turn_hana: OK
-# used-in:
-#   angi-ScaleUp: restart_cluster_turn_hana
-#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -36,12 +31,7 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "Cleanup promotable resou
 sctl_run_crm "${node01}" "resource cleanup $mstResource"
 sctl_run_cs_wf_idle "${node01}" "-s 2"
 
-
-#########################################
-# VHOSTS
 # get vhosts from node names
-#########################################
-
 vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
 vhostSecn=$(sctl_get_vhost "${node01}" "$currSecondary")
 if [[ -z "$vhostPrim" ]]; then
@@ -53,12 +43,10 @@ fi
 
 sitePrimary=$(sctl_get_site "${node01}" "$currPrimary")
 siteSecondary=$(sctl_get_site "${node01}" "$currSecondary")
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currPrimary ($sitePrimary), s=$currSecondary, vhostPrim=$vhostPrim, vhostSecn=$vhostSecn"
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Stop Cluster"
 sctl_run_crm "${node02}" "cluster stop --all" "360"
-
 echo "==== SUSE Cluster Stopped ===="
 
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currPrimary"
@@ -67,10 +55,10 @@ sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function WaitforStart
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start HANA on $currSecondary"
 sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function StartSystem"
 sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
-
 while true; do
     sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
     if [[ "$rc" != 15 ]]; then
+        echo "sleep 60s"
         sleep 60
     else
         break
@@ -80,7 +68,6 @@ done
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( sctl_run_cat "$currPrimary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "SAP HANA DBs started"
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currSecondary: sr_takeover suspendPrimary"
 
@@ -89,19 +76,15 @@ sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( sctl_run_cat "$currPrimary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: $cacheFile: $srHookCache"
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currPrimary: sr_register online remoteHost=$vhostSecn"
 sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode --online"
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "p=$currSecondary ($siteSecondary), s=$currPrimary"
 
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$sitePrimary"
 srHookCache=$( sctl_run_cat "$currSecondary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currSecondary: $cacheFile: $srHookCache"
 
-#
-# First check for the SR-Status on the new primary
-#
+# check for the SR-Status on the new primary
 while true; do
     sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
     if [[ "$rc" == "15" ]]; then
@@ -109,6 +92,7 @@ while true; do
         break
     else
         echo "DBG: sRS fail (srs!=15) - rc is $rc"
+        echo "sleep 60s"
         sleep 60
     fi
 done
@@ -119,12 +103,11 @@ logger --id -t "sct_test_restart_cluster_turn_hana" -s "currPrimary=$currSeconda
 cacheFile="/hana/shared/$SID/HDB$instNr/.crm_attribute.$siteSecondary"
 srHookCache=$( sctl_run_cat "$currPrimary" "$cacheFile" )
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "currSecondary=$currPrimary: $cacheFile: $srHookCache"
-
 logger --id -t "sct_test_restart_cluster_turn_hana" -s "Start Cluster"
 sctl_run_crm "$node01" "cluster start --all"
+echo "sleep 90s"
 sleep 90
 sctl_run_crm "$node01" "cluster wait_for_startup 60"
 sctl_run_cs_wf_idle "$node01" "-s 10"
-
 echo "==== SUSE Cluster Started ===="
 #

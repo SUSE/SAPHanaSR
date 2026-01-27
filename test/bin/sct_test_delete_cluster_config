@@ -12,12 +12,6 @@
 #
 # expected outcome: cluster config (CIB) empty, HANA still running
 #
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-maintenance_cluster_bootstrap: OK
-# used-in:
-#   angi-ScaleUp: maintenance_cluster_bootstrap
-#   - list-end
-#
-#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -37,11 +31,13 @@ sctl_run_crm "${node01}" "maintenance on" 1>/dev/null 2>/dev/null
 # restart the cluster - this deletes transient attributes from the cluster
 #
 sctl_run_crm "${node01}" "cluster stop --all" 1>/dev/null 2>/dev/null
+echo "sleep 5s"
 sleep 5
 sctl_run_crm "${node01}" "cluster start --all" 1>/dev/null 2>/dev/null
+echo "sleep 90s"
 sleep 90
 sctl_run_crm "${node01}" "cluster wait_for_startup 60" 1>/dev/null 2>/dev/null
-sctl_run_cs_wf_idle "${node01}" "-s 10" 1>/dev/null 2>/dev/null
+sctl_run_cs_wf_idle "${node01}" "-s 5" 1>/dev/null 2>/dev/null
 
 #
 # delete persistent node attributes
