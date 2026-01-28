@@ -41,14 +41,16 @@
                 "roles is None",
                 "score is None"
             ],
-            "pWorker": [
-                "roles ~ (slave::worker:|slave:slave:worker:slave)"
-            ]
+            "pWorker": "pWorkerUp",
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp"
         },
         {
             "step": "step30",
-            "name": "takeover on secondary",
+            "name": "takeover on secondary - or jump to alternative (local restart)",
             "next": "step40",
+            "onfail": "alt120",
             "loop": 240,
             "wait": 2,
             "sSite": "pSiteUp",
@@ -59,7 +61,7 @@
             "step": "step40",
             "name": "begin recover new secondary",
             "next": "final60",
-            "loop": 300,
+            "loop": 240,
             "wait": 2,
             "pSite": [
                 "lss ~ (1|2)",
@@ -81,7 +83,21 @@
         },
         {
             "step": "final60",
-            "name": "end recover",
+            "name": "end recover (takeover)",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "alt120",
+            "name": "end recover (local restart)",
             "next": "END",
             "loop": 300,
             "wait": 2,
