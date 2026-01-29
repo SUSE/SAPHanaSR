@@ -1,6 +1,8 @@
 #!/usr/bin/python3
+# pylint: disable=invalid-name
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# pylint: disable=line-too-long
 """
  SAPHanaSR-replay-archive
  Author:       Fabian Herschel, June 2023
@@ -18,6 +20,7 @@ TOOL_VERSION = "1.0.20250815"
 
 # pylint: disable=wrong-import-position
 # pylint: disable=unused-import
+# pylint: enable=invalid-name
 import argparse
 import json
 import os
@@ -30,7 +33,7 @@ from saphana_sr_tools import HanaCluster,HanaStatus
 # pylint: enable=unused-import
 
 if __name__ == "__main__":
-    myCluster = HanaCluster()
+    my_cluster = HanaCluster()
     parser = argparse.ArgumentParser()
     parser.add_argument("--cib", nargs="+", help="specify the cibfile file(s) (alteranative for --dir)")
     parser.add_argument("--dir", nargs="+", help="specify the directory where to search for cib files (alternative for --cib)")
@@ -44,55 +47,62 @@ if __name__ == "__main__":
     parser.add_argument("--sort", help="specify the column name to sort by")
     parser.add_argument("--to", help="select 'to' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--version", help="output version and exit", action="store_true")
+    parser.add_argument("--verbose", help="print cib file names and time filter", action="store_true")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
     #                    action="store_true")
     args = parser.parse_args()
     if args.version:
         print(f"{TOOL_VERSION}")
         sys.exit(0)
+    if args.verbose:
+        my_cluster.config['verbose'] = True
+    else:
+        my_cluster.config['verbose'] = False
     if args.cib:
-        myCluster.config['cib_file_list'] = args.cib
+        my_cluster.config['cib_file_list'] = args.cib
     if args.dir:
-        myCluster.config['dir_list'] = args.dir
+        my_cluster.config['dir_list'] = args.dir
     if args.pattern:
-        myCluster.config['pattern_list'] = args.pattern
+        my_cluster.config['pattern_list'] = args.pattern
     # args.from would create a namespace conflict so extracting 'from' using vars(args)
     if 'from' in vars(args) and vars(args)['from']:
         dt = dateutil_parser.parse(vars(args)['from'])
-        myCluster.config['from'] = int(dt.timestamp())
+        my_cluster.config['from'] = int(dt.timestamp())
     if args.format:
-        myCluster.config['format'] = args.format
+        my_cluster.config['format'] = args.format
     if args.properties:
-        myCluster.config['properties_file'] = args.properties
+        my_cluster.config['properties_file'] = args.properties
     if args.select:
-        myCluster.config['select'] = args.select
+        my_cluster.config['select'] = args.select
     if args.sid:
-        myCluster.config['sid'] = args.sid.lower()
+        my_cluster.config['sid'] = args.sid.lower()
     if args.sort:
         if args.sort[0] == '-':
-            myCluster.config['sort-reverse'] = True
-            myCluster.config['sort'] = args.sort[1:]
+            my_cluster.config['sort-reverse'] = True
+            my_cluster.config['sort'] = args.sort[1:]
         elif args.sort[0] == '+':
-            myCluster.config['sort-reverse'] = False
-            myCluster.config['sort'] = args.sort[1:]
+            my_cluster.config['sort-reverse'] = False
+            my_cluster.config['sort'] = args.sort[1:]
         else:
-            myCluster.config['sort'] = args.sort
+            my_cluster.config['sort'] = args.sort
     if args.to:
         dt = dateutil_parser.parse(args.to)
-        myCluster.config['to'] = int(dt.timestamp())
+        my_cluster.config['to'] = int(dt.timestamp())
     if args.experimental_attributes:
         exp_attr = args.experimental_attributes
         if isinstance(exp_attr, list):
             exp_attr = " ".join(exp_attr)  # convert list to a string with each element
-        myCluster.config['show_attributes'] = exp_attr
-        myCluster.config['select'] = 'cmdline'
-        myCluster.set_selections()
-    myCluster.read_properties()
-    dir_list = myCluster.config.get('dir_list', None)
-    cib_file_list = myCluster.config.get('cib_file_list', [])
+        my_cluster.config['show_attributes'] = exp_attr
+        my_cluster.config['select'] = 'cmdline'
+        my_cluster.set_selections()
+    my_cluster.read_properties()
+    dir_list = my_cluster.config.get('dir_list', None)
+    cib_file_list = my_cluster.config.get('cib_file_list', [])
+    if dir_list is None and cib_file_list != []:
+        pass
     if dir_list:
         for single_dir in dir_list:
-            file_list = myCluster.find(single_dir, pattern=myCluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
+            file_list = my_cluster.find(single_dir, pattern=my_cluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
             if file_list:
                 cib_file_list.extend(file_list)
     #
@@ -103,78 +113,79 @@ if __name__ == "__main__":
     #
     # SAPHanaSR-replay-archive will not call the 'life' cluster, if cib_file_list is empty
     for cib_file in cib_file_list:
-        myHana    = HanaStatus(myCluster.config, selections=myCluster.selections)
-        myHana.xml_import(cib_file)
+        my_hana    = HanaStatus(my_cluster.config, selections=my_cluster.selections)
+        my_hana.xml_import(cib_file, verbose=my_cluster.config['verbose'])
         multi_sid = False
-        if myCluster.config['sid'] is None:
-            myHana.get_sids()
-            if len(myHana.sids) == 0:
+        if my_cluster.config['sid'] is None:
+            my_hana.get_sids()
+            if len(my_hana.sids) == 0:
                 print("ERR: No SID found in cluster config")
                 sys.exit(1)
-            elif len(myHana.sids) > 1:
-                print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+            elif len(my_hana.sids) > 1:
+                print(f"WARN: Multiple SIDs found in cluster config: {str(my_cluster.sids)} Please specify SID using --sid <SID>")
                 multi_sid = False
                 sys.exit(1)
             else:
-                myHana.config['sid'] = myHana.sids[0].lower()
-                myCluster.config['sid'] = myHana.sids[0].lower()
-        myHana.fill_glob_dict()
-        if 'cib-time' in myHana.glob_dict['global']:
+                my_hana.config['sid'] = my_hana.sids[0].lower()
+                my_cluster.config['sid'] = my_hana.sids[0].lower()
+        my_hana.fill_glob_dict()
+        if 'cib-time' in my_hana.glob_dict['global']:
             #print(f"dbg: test time filter")
-            dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
+            dt = dateutil_parser.parse(my_hana.glob_dict['global']['cib-time'])
             cibtime = int(dt.timestamp())
-            myHana.ts = cibtime
-            if myCluster.config['from'] <= cibtime <= myCluster.config['to']:
+            my_hana.ts = cibtime
+            if my_cluster.config['from'] <= cibtime <= my_cluster.config['to']:
                 pass
             else:
-                print(f"Filter cib-time {myHana.glob_dict['global']['cib-time']}")
+                if my_cluster.config['verbose']:
+                    print(f"Filter cib-time {my_hana.glob_dict['global']['cib-time']}")
                 continue
-        if len(myCluster.multi_status) == 0:
-            myCluster.multi_status.insert(0, myHana)
+        if len(my_cluster.multi_status) == 0:
+            my_cluster.multi_status.insert(0, my_hana)
         else:
             # search position where to insert the new hana_status
             pos = 0
             inserted = 0
-            for hana_status in myCluster.multi_status:
-                if myHana.ts < hana_status.ts:
-                    myCluster.multi_status.insert(pos, myHana)
+            for hana_status in my_cluster.multi_status:
+                if my_hana.ts < hana_status.ts:
+                    my_cluster.multi_status.insert(pos, my_hana)
                     inserted = 1
                     break
                 pos += 1
             if inserted == 0:
-                myCluster.multi_status.insert(pos, myHana)  # insert at the end, if it is not inserted before
-        myHana.fill_res_dict()
-        myHana.fill_site_dict()
-        myHana.fill_host_dict()
+                my_cluster.multi_status.insert(pos, my_hana)  # insert at the end, if it is not inserted before
+        my_hana.fill_res_dict()
+        my_hana.fill_site_dict()
+        my_hana.fill_host_dict()
 
-    for myHana in myCluster.multi_status:
+    for my_hana in my_cluster.multi_status:
         oformat = "table"
-        if 'format' in myCluster.config:
-            oformat = myCluster.config['format']
+        if 'format' in my_cluster.config:
+            oformat = my_cluster.config['format']
         if oformat == "table":
-            index = myCluster.config['sort']
+            index = my_cluster.config['sort']
             index_type = 'str'
-            index_reverse = myCluster.config['sort-reverse']
+            index_reverse = my_cluster.config['sort-reverse']
             if index is None:
-                myHana.print_dic_as_table(myHana.glob_dict, "global", "Global")
-                myHana.print_dic_as_table(myHana.res_dict, "resource", "Resource")
-                myHana.print_dic_as_table(myHana.site_dict, "site", "Site")
-                myHana.print_dic_as_table(myHana.host_dict, "host", "Host")
+                my_hana.print_dic_as_table(my_hana.glob_dict, "global", "Global")
+                my_hana.print_dic_as_table(my_hana.res_dict, "resource", "Resource")
+                my_hana.print_dic_as_table(my_hana.site_dict, "site", "Site")
+                my_hana.print_dic_as_table(my_hana.host_dict, "host", "Host")
             else:
-                myHana.print_dic_as_table_sort_by(myHana.glob_dict, index, index_type, index_reverse, "global",   "Global")
-                myHana.print_dic_as_table_sort_by(myHana.res_dict, index, index_type, index_reverse, "resource", "Resource")
-                myHana.print_dic_as_table_sort_by(myHana.site_dict, index, index_type, index_reverse, "site",     "Site")
-                myHana.print_dic_as_table_sort_by(myHana.host_dict, index, index_type, index_reverse, "host",     "Host")
+                my_hana.print_dic_as_table_sort_by(my_hana.glob_dict, index, index_type, index_reverse, "global",   "Global")
+                my_hana.print_dic_as_table_sort_by(my_hana.res_dict, index, index_type, index_reverse, "resource", "Resource")
+                my_hana.print_dic_as_table_sort_by(my_hana.site_dict, index, index_type, index_reverse, "site",     "Site")
+                my_hana.print_dic_as_table_sort_by(my_hana.host_dict, index, index_type, index_reverse, "host",     "Host")
         elif oformat == "json":
-            myHana.print_all_as_json()
+            my_hana.print_all_as_json()
         elif oformat in {"path", "script"}:
             cib_time=0
-            if 'cib-time' in myHana.glob_dict["global"]:
-                cib_time = myHana.glob_dict["global"]['cib-time']
-            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"', ts=cib_time)
-            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"', ts=cib_time)
-            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"', ts=cib_time)
-            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"', ts=cib_time)
+            if 'cib-time' in my_hana.glob_dict["global"]:
+                cib_time = my_hana.glob_dict["global"]['cib-time']
+            my_hana.print_dic_as_path(my_hana.glob_dict, "global", "Global", quote='"', ts=cib_time)
+            my_hana.print_dic_as_path(my_hana.res_dict, "resource", "Resource", quote='"', ts=cib_time)
+            my_hana.print_dic_as_path(my_hana.site_dict, "site", "Site", quote='"', ts=cib_time)
+            my_hana.print_dic_as_path(my_hana.host_dict, "host", "Host", quote='"', ts=cib_time)
     if len(cib_file_list) == 0:
         print("ERROR: No cib files found")
         sys.exit(2)
