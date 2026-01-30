@@ -248,11 +248,12 @@ class HanaStatus():
         self.host_dict = None
         self.sids = None
 
-    def xml_import(self, filename):
+    def xml_import(self, filename, **kargs):
         """
         xml_import - import a cluster CIB into object dictionaries
             if filename is None, import the "life" cluster
         """
+        verbose = kargs.get('verbose', False)
         if filename is None:
             # use cibadmin as input
             cmd = "cibadmin -Ql"
@@ -271,7 +272,8 @@ class HanaStatus():
                 # bz2 ?
                 match_obj = re.search(r"\.bz2$", filename)
                 if match_obj:
-                    print(f"File {filename} ending with .bz2 is assumed to be compressed with bzip2 - try to uncompress")
+                    if verbose:
+                        print(f"File {filename} ending with .bz2 is assumed to be compressed with bzip2 - try to uncompress")
                     with bz2.open(filename, "rb") as f:
                         content = f.read()
                     self.root = ET.fromstring(content.decode())
