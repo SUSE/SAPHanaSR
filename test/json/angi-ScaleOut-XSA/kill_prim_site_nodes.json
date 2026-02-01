@@ -1,0 +1,101 @@
+{
+    "test": "kill_prim_site_nodes",
+    "name": "Kill all nodes of primary site",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "kill",
+        "primary",
+        "node",
+        "site",
+        "takeover",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_prim_site_nodes",
+            "global": "globalUp",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 90,
+            "wait": 2,
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pSite": [
+                "srr == P"
+            ],
+            "pHost": [
+                "roles is None",
+                "score is None",
+                "roles is None"
+            ],
+            "pWorker": [
+                "roles is None",
+                "score is None",
+                "roles is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "takeover on secondary",
+            "next": "step50",
+            "loop": 240,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "step50",
+            "name": "begin recover new secondary",
+            "next": "final60",
+            "loop": 300,
+            "wait": 2,
+            "pSite": [
+                "lss ~ (1|2)",
+                "srr ~ (P|S)",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll ~ (PRIM|SFAIL)"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:"
+            ],
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "final60",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "global": "globalUp",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        }
+    ]
+}
