@@ -3,7 +3,7 @@
 # SAPHana
 # Author:       Fabian Herschel, June 2020
 # License:      GNU General Public License (GPL)
-# Copyright:    (c) 2022 SUSE LLC
+# Copyright:    (c) 2022-2026 SUSE LLC
 
 susTkOver needs SAP HANA 2.0 SPS4 (2.00.040.00) as minimum version
 

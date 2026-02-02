@@ -10,7 +10,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-# Copyright:    (c) 2015-2025 SUSE LLC
+# Copyright:    (c) 2015-2026 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -32,7 +32,7 @@
 #     systemReplicationStatus.py (>= SPS090)
 #
 #######################################################################
-# SAPHanaControllerLibVersion="1.2.12"
+# SAPHanaControllerLibVersion="1.3.0"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -997,6 +997,7 @@ function recover_site_attributes_from_file() {
     if [ -f "$srHookAttributeFile" ]; then
         #
         # need to read attribute from the file
+        # e.g.: hana_ha1_site_srHook_S2 = SOK
         #
         mapfile -t mapLines <"$srHookAttributeFile"
         for mapLine in "${mapLines[@]}"; do
@@ -1034,7 +1035,10 @@ function recover_site_attributes_from_file() {
                     ;;
             esac
         done
-        rm "$srHookAttributeFile"
+        # DONE PRIO0: Do not delete file during probe-only
+        if ! ocf_is_probe; then
+            rm "$srHookAttributeFile"
+        fi
     fi
 } # end function recover_site_attributes_from_file
 

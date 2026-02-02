@@ -5,8 +5,9 @@
         "angi",
         "ScaleOut",
         "secondary",
-        "kill",
         "cluster",
+        "master",
+        "kill",
         "fencing"
     ],
     "start": "prereq10",
@@ -17,7 +18,7 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "shell sct_test_kill_secn_pacemkr-based",
+            "post": "shell sct_test_kill_pacemkr-based secn",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
@@ -27,7 +28,7 @@
         },
         {
             "step": "step20",
-            "name": "failure detected - node down (SFAIL)",
+            "name": "failure detected + smaster fenced",
             "next": "step30",
             "loop": 120,
             "wait": 2,
@@ -55,14 +56,13 @@
             "pHost": "pHostUp",
             "sSite": [
                 "lpt == 10",
-                "lss ~ (1|2)",
                 "srr == S",
                 "srHook ~ (SFAIL|SWAIT)",
                 "srPoll ~ (SFAIL|SOK)"
             ],
             "sHost": [
                 "clone_state ~ (UNDEFINED|DEMOTED)",
-                "roles == master1::worker:",
+                "roles ~ (master1::worker:|master1:master:worker:master)",
                 "score ~ (-INFINITY|0|-1)"
             ]
         },

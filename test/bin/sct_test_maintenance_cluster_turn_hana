@@ -2,7 +2,7 @@
 #
 # sct_test_maintenance_cluster_turn_hana - with resource in maintenace: exchange primary/secondary
 #
-# (c) 2025 SUSE LLC
+# (c) 2025-2026 SUSE LLC
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
@@ -17,14 +17,6 @@
 #
 # expected outcome: cluster running, SAP HANA instanes running, SR roles exchanged
 #
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-sct_test_maintenance_cluster_turn_hana: OK
-# used-in:
-#   angi-ScaleUp: maintenance_cluster_turn_hana
-#   angi-ScaleOut: maintenance_cluster_turn_hana
-#   classic-ScaleUp: maintenance_cluster_turn_hana
-#   classic-ScaleOut: maintenance_cluster_turn_hana
-#   - list-end
-#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -38,11 +30,7 @@ currSecondary=$(sctl_get_curr_secn "${node01}")
 sctl_run_crm "${node01}" "resource cleanup $mstResource"
 sctl_run_cs_wf_idle "${node01}" "-s 2"
 
-#########################################
-# VHOSTS
 # get vhosts from node names
-#########################################
-
 vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
 vhostSecn=$(sctl_get_vhost "${node01}" "$currSecondary")
 if [[ -z "$vhostPrim" ]]; then
@@ -51,11 +39,8 @@ fi
 if [[ -z "$vhostSecn" ]]; then
     vhostSecn="$currSecondary"
 fi
-
 echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
-
 sitePrimary=$(sctl_get_site "${node01}" "$currPrimary")
-
 echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
 echo "==== SUSE Resource Maintenance Begin ===="
@@ -66,8 +51,9 @@ sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
 sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode --online"
 
 while true; do
-    sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
+    sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
     if [[ "$rc" != 15 ]]; then
+        echo "sleep 60"
         sleep 60
     else
         break
@@ -78,6 +64,5 @@ sctl_run_cs_wf_idle "${node02}" "-s 2"
 sctl_run_crm "${node02}" "resource refresh $mstResource"
 sctl_run_cs_wf_idle "${node02}" "-s 2"
 sctl_run_crm "${node02}" "resource maintenance $mstResource off"
-
 echo "==== SUSE Resource Maintenance End ===="
 #

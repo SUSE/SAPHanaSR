@@ -2,15 +2,10 @@
 #
 # sct_test_freeze_prim_master_nfs - freeze nfs on primary master
 #
-# (c) 2025 SUSE LLC
+# (c) 2025-2026 SUSE LLC
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
-#
-# lib-mig-status: CHECK
-# used-in:
-#   angi-ScaleOut: freeze_prim_master_nfs_fencing_alert, block_sr_and_freeze_prim_master_nfs
-#   - list-end
 #
 set -u
 src=${BASH_SOURCE[0]}
@@ -18,10 +13,10 @@ full_path=$(readlink -f "$src")
 dir_path=$(dirname "$full_path")
 source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
-currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
+currPrimary=$(sctl_get_curr_prim "$node01")
 
-echo "==== Freeze SAP HANA NFS ===="
-
-sctl_run_iptables "$currPrimWorker" '-I OUTPUT -p tcp -m multiport --ports 2049 -j DROP &'
+echo "==== Freeze SAP HANA NFS on $currPrimary ===="
+sctl_run_iptables "$currPrimary" '-I OUTPUT -p tcp -m multiport --ports 2049 -j DROP &'
+echo "sleep 60"
 sleep 60
 #

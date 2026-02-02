@@ -1,0 +1,101 @@
+{
+    "test": "kill_prim_pacemkr-ctrld_fencing_alert",
+    "name": "Kill primary master pacemaker-controld with fencing alert agent",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "kill",
+        "primary",
+        "master",
+        "cluster",
+        "alert",
+        "fencing",
+        "takeover"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_pacemkr-ctrld prim",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected + pmaster fenced",
+            "next": "step30",
+            "loop": 240,
+            "wait": 2,
+            "pHost": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "pworker fenced",
+            "next": "step40",
+            "loop": 240,
+            "wait": 2,
+            "pWorker": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "takeover on secondary",
+            "next": "step50",
+            "loop": 240,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "step50",
+            "name": "begin recover new secondary",
+            "next": "final60",
+            "loop": 180,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp",
+            "pSite": [
+                "lss == 1",
+                "srr ~ (P|S)",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll ~ (PRIM|SFAIL)"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
+                "roles == master1::worker:"
+            ]
+        },
+        {
+            "step": "final60",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        }
+    ]
+}

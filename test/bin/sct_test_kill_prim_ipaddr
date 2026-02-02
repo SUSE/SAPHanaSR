@@ -2,19 +2,10 @@
 #
 # sct_test_kill_prim_ipaddr - kill primary HANA IP address once
 #
-# (c) 2025 SUSE LLC
+# (c) 2025-2026 SUSE LLC
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
-#
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-kill_prim_ipaddr: OK
-# used-in:
-#   angi-ScaleUp: kill_prim_ipaddr
-#   angi-ScaleOut: kill_prim_ipaddr
-#   classic-ScaleUp: kill_prim_ipaddr
-#   classic-ScaleOut: kill_prim_ipaddr
-#   - list-end
-#
 #
 set -u
 src=${BASH_SOURCE[0]}
@@ -24,9 +15,7 @@ source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
 currPrimary=$(sctl_get_curr_prim "$node01")
 
-
-echo "==== Kill primary HANA IP address ===="
-
+echo "==== Kill primary HANA IP address on $currPrimary ===="
 # TODO could property ipAddr be used? or get all data by one call
 IP=$( sctl_run_crm "$currPrimary" "configure show" |\
     grep -A4 primitive.*IPaddr2 | grep params.ip= | awk -F'=' '{print $2}' |\
@@ -42,6 +31,7 @@ NIC=${IP_BRF%% *}
 
 sctl_run_ip "$currPrimary" "a d ${IPNM} dev ${NIC}"
 # TODO sleep twice the monitor interval
+echo "sleep 60"
 sleep 60
 # TODO specify cleanup rsc_ip_
 sctl_run_crm "$currPrimary" "resource cleanup"

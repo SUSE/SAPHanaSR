@@ -1,0 +1,112 @@
+{
+    "test": "freeze_prim_site_nfs",
+    "name": "freeze nfs on primary site",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "primary",
+        "freeze",
+        "site",
+        "network",
+        "storage",
+        "nfs",
+        "alert",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_freeze_prim_site_nfs",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pWorker": "pWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected + phosts fenced",
+            "next": "step40",
+            "loop": 240,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ],
+            "pWorker": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "takeover on secondary",
+            "next": "step50",
+            "loop": 240,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "step40",
+            "name": "begin recover new secondary",
+            "next": "step50",
+            "loop": 300,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp",
+            "pSite": [
+                "lss ~ (1|2)",
+                "lpt == 10",
+                "srHook ~ (SFAIL|SWAIT)"
+            ],
+            "pHost": [
+                "clone_state ~ (WAITING4NODES|DEMOTED)",
+                "roles == master1::worker:"
+            ],
+            "pWorker": [
+                "clone_state == DEMOTED",
+                "roles == slave::none:"
+            ]
+        },
+        {
+            "step": "step50",
+            "name": "wait for stable new secondary",
+            "next": "final60",
+            "loop": 240,
+            "wait": 2,
+            "post": "sleep 240",
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp",
+            "pSite": "sSiteUp",
+            "pHost": "sHostUp",
+            "pWorker": "sWorkerUp"
+        },
+        {
+            "step": "final60",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp",
+            "pWorker": "sWorkerUp"
+        }
+    ]
+}

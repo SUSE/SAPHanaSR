@@ -1,16 +1,19 @@
-.\" Version: 1.001 
+.\" Version: 1.2
 .\"
-.TH ocf_suse_SAPHanaFilesystem 7 "24 Jun 2024" "" "OCF resource agents"
+.TH ocf_suse_SAPHanaFilesystem 7 "03 Dec 2025" "" "OCF resource agents"
 .\"
 .SH NAME
+.\"
 SAPHanaFilesystem \- Monitors mounted SAP HANA filesystems.
 .PP
 .\"
 .SH SYNOPSIS
+.\ "
 \fBSAPHanaFilesystem\fP [ start | stop | status | monitor | meta\-data | validate\-all | reload | methods | usage ]
 .PP
 .\"
 .SH DESCRIPTION
+.\"
 SAPHanaFilesystem is a resource agent (RA) that monitors mounted SAP HANA filesystems
 by checking read/write access. This RA does neither mount nor umount any filesystem.
 .\" TODO stop failure conditional?
@@ -59,6 +62,7 @@ Please see also the REQUIREMENTS section below.
 .PP
 .\"
 .SH SUPPORTED PARAMETERS
+.\"
 This resource agent supports the following parameters:
 .PP
 \fBSID\fR
@@ -99,6 +103,7 @@ Optional. Default: "ON_FAIL_ACTION=fence".
 .PP
 .\"
 .SH SUPPORTED PROPERTIES
+.\"
 \fBhana_${sid}_glob_filter\fR
 .RS 4
 Global cluster property \fBhana_${sid}_glob_filter\fR . This property defines which messages are logged by the RA. It should only be set if requested by support engineers. The default is sufficient for normal operation.
@@ -118,7 +123,7 @@ FLOW: Function calls and the respective return codes.
 .PP
 .\"
 .SH SUPPORTED ACTIONS
-.br
+.\"
 This resource agent supports the following actions (operations):
 .\" TODO aligne with timeouts in saphana-filesystem-lib
 .PP
@@ -174,6 +179,7 @@ Changes parameters without forcing a recover of the resource. Suggested minimum 
 .PP
 .\"
 .SH RETURN CODES
+.\"
 The return codes are defined by the OCF cluster framework.
 Please refer to the OCF definition on the website mentioned below.
 .br
@@ -181,14 +187,15 @@ In addition the internal return code 124 is logged, if the timeout has been exce
 .PP
 .\"
 .SH EXAMPLES
-* Example configuration for a SAPHanaFilesystem resource on HANA scale-up.
+.\"
+\fB*\fP Example configuration for a SAPHanaFilesystem resource on HANA scale-up.
 .PP
 Might be useful if NFS is used for the /hana/shared/ filesystem instead of classical
 block devices. One NFS share is used per node. The NFS is not shared across sites.
 On each cluster node the NFS share is mounted statically. SID is SLE, instance number
 is 00.
 .PP
-.RS 4
+.RS 2
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
 .br
 op start interval="0" timeout="10" \\
@@ -204,14 +211,14 @@ clone cln_SAPHanaFil_SLE_HDB00 rsc_SAPHanaFil_SLE_HDB00 \\
 meta clone-node-max="1" interleave="true"
 .RE
 .PP
-* Example configuration for a SAPHanaFilesystem resource on HANA scale-up that does nothing.
+\fB*\fP Example configuration for a SAPHanaFilesystem resource on HANA scale-up that does nothing.
 .PP
 Might be useful for logging issues with accessing the /hana/shared/ filesystem.
 The RA does nothing except logging monitor failures. SID is SLE, instance number
 is 00.
 See also example on showing monitor failures in system logs.
 .PP
-.RS 4
+.RS 2
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
 .br
 op start interval="0" timeout="10" \\
@@ -227,7 +234,7 @@ clone cln_SAPHanaFil_SLE_HDB00 rsc_SAPHanaFil_SLE_HDB00 \\
 meta clone-node-max="1" interleave="true"
 .RE
 .PP
-* Example configuration for a SAPHanaFilesystem resource for HANA scale-out.
+\fB*\fP Example configuration for a SAPHanaFilesystem resource for HANA scale-out.
 .PP
 The HANA consists of two sites with several nodes each. An additional cluster node
 is used as majority maker for split brain situations. One /hana/shared/ filesystem
@@ -235,7 +242,7 @@ is used per site. This filesystem is provided by an NFS server and shared among
 all cluster nodes of that site. The NFS is not shared across sites. On each cluster
 node the NFS share is mounted statically. SID is SLE, instance number is 00.
 .PP
-.RS 4
+.RS 2
 primitive rsc_SAPHanaFil_SLE_HDB00 ocf:suse:SAPHanaFilesystem \\
 .br
 op start interval="0" timeout="10" \\
@@ -253,13 +260,12 @@ meta clone-node-max="1" interleave="true"
 location SAPHanaFil_not_on_majority_maker cln_SAPHanaFil_SLE_HDB00 -inf: vm-majority
 .RE
 .PP
-* Example on showing the current SAPHanaFilesystem rescource configuration on scale-out.
+\fB*\fP Example on showing the current SAPHanaFilesystem rescource configuration on scale-out.
 .PP
 The primitive is "rsc_SAPHanaFil_SLE_HDB00" and clone is "cln_SAPHanaFil_SLE_HDB00".
 The constraints´ names are starting with "SAPHanaFil".
-.RE
 .PP
-.RS 4
+.RS 2
 # crm configure show | grep SAPHanaFil_
 .br
 # crm configure show rsc_SAPHanaFil_SLE_HDB00
@@ -269,53 +275,53 @@ The constraints´ names are starting with "SAPHanaFil".
 # crm configure show SAPHanaFil_not_on_majority_maker
 .RE
 .PP
-* Search for log entries of the resource agent. Show errors only.
+\fB*\fP Search for log entries of the resource agent. Show errors only.
 .PP
-.RS 4
+.RS 2
 # grep "SAPHanaFilesystem.*RA.*rc=[1-7,9]" /var/log/messages
 .RE
 .PP
-* Search for log entries of the resource agent.  Show date, time, return code, runtime.
+\fB*\fP Search for log entries of the resource agent.  Show date, time, return code, runtime.
 .PP
-.RS 4
+.RS 2
 # grep "SAPHanaFilesystem.*end.action.monitor_clone.*rc=" /var/log/messages | awk '{print $1,$11,$13}' | colrm 20 32 | tr -d "=()rsc" | tr "T" " "
 .RE
 .PP
-* Search for log entries of the resource agent. Show poison pill only.
+\fB*\fP Search for log entries of the resource agent. Show poison pill only.
 .PP
-.RS 4
+.RS 2
 # grep "SAPHanaFilesystem.*RA.*poison.pill.detected" /var/log/messages
 .RE
 .PP
-* Search for node fence actions caused by resource stop failure.
+\fB*\fP Search for node fence actions caused by resource stop failure.
 .PP
-.RS 4
+.RS 2
 # grep "Stop.of.failed.*is.fenced" /var/log/messages
 .RE
 .PP
-* Show and delete failcount for resource.
+\fB*\fP Show and delete failcount for resource.
 .PP
 Resource is rsc_SAPHanaFil_HA1_HDB00, node is node22. Useful after a failure
 has been fixed and for testing.
 See also cluster properties migration-threshold and failure-timeout.
 .PP
-.RS 4
+.RS 2
 # crm resource failcount rsc_SAPHanaFil_HA1_HDB00 show node22
 .br
 # crm resource failcount rsc_SAPHanaFil_HA1_HDB00 delete node22
 .RE
 .PP
-* Example for static NFS mount.
+\fB*\fP Example for static NFS mount.
 .PP
 This is an example line in /etc/fstab. NFS server is nfs1, SID is SLE. The NFS share will
 be mounted at OS boot time. The shown export path and mount options need to be adjusted
 for the NFS server in use. See manual pages nfs(5) and fstab(5) for details.
 .PP
-.RS 4
+.RS 2
 nfs1:/export/SLE/shared/ /hana/shared/SLE/ auto defaults,rw,hard,proto=tcp,intr,noatime,vers=4,lock 0 0
 .RE
 .PP
-* Example for temporarily blocking HANA access to local filesystems.
+\fB*\fP Example for temporarily blocking HANA access to local filesystems.
 .PP
 This could be done for testing the SAPHanaFilesystem RA integration.
 Blocking the HANA filesystem is dangerous. This test should not be done on production
@@ -344,7 +350,7 @@ Note: Understand the impact before trying.
 5. Check HANA and Linux cluster for clean idle state.
 .RE
 .PP
-* Example for temporarily blocking HANA access to NFS filesystems.
+\fB*\fP Example for temporarily blocking HANA access to NFS filesystems.
 .PP
 This could be done for testing the SAPHanaFilesystem RA integration.
 Blocking the HANA filesystem is dangerous. This test should not be done on production
@@ -377,6 +383,7 @@ Note: The ACCEPT needs to be replaced by appropriate action.
 .PP
 .\"
 .SH FILES
+.\"
 .TP
 /usr/lib/ocf/resource.d/suse/SAPHanaController
 the controller resource agent
@@ -406,9 +413,10 @@ the resource poison pill file, do not touch this
 .TP
 /etc/fstab
 the static information about the filesystems
-.\"
 .PP
+.\"
 .SH REQUIREMENTS
+.\"
 For the current version of the SAPHanaFilesystem resource agent that comes with
 the software package SAPHanaSR-angi, the support is limited
 to the scenarios and parameters described in the respective manual page
@@ -433,16 +441,18 @@ page SAPHanaSR-alert-fencing(8) for details.
 .PP
 .\"
 .SH BUGS
+.\"
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
 Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
+.\"
 \fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHanaTopology\fP(7) ,
 \fBsusHanaSR.py\fP(7) , \fBSAPHanaSR-showAttr\fP(8) ,
 \fBSAPHanaSR-alert-fencing\fP(8) , \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) ,
-\fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBSAPHanaSR-ScaleOut\fP(7) , \fBSAPHanaSR-ScaleOut-XSA\fP(7) ,
 \fBfstab\fP(5) , \fBmount\fP(8) , \fBnfs\fP(5) ,
 .br
 https://documentation.suse.com/sbp/sap/ ,
@@ -453,12 +463,13 @@ https://www.suse.com/support/kb/doc/?id=000016649
 .PP
 .\"
 .SH AUTHORS
+.\"
 F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
-.br
-(c) 2023-2024 SUSE LLC
+.\"
+(c) 2023-2026 SUSE LLC
 .br
 SAPHanaFilesystem comes with ABSOLUTELY NO WARRANTY.
 .br

@@ -1,13 +1,16 @@
 {
     "test": "kill_prim_pacemkr-attrd",
-    "name": "kill pacemaker-attrd on primary master node",
+    "name": "Kill primary master pacemaker-attrd",
     "purpose": [
         "angi",
-        "ScaleOu",
-        "primary",
-        "master",
+        "ScaleOut",
         "kill",
-        "cluster"
+        "primary",
+        "cluster",
+        "master",
+        "takeover",
+        "fencing",
+        "onfail"
     ],
     "start": "prereq10",
     "steps": [
@@ -17,7 +20,7 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "shell sct_test_kill_prim_pacemkr-attrd",
+            "post": "shell sct_test_kill_pacemkr-attrd prim",
             "pSite": "pSiteUp",
             "sSite": "sSiteUp",
             "pHost": "pHostUp",
@@ -27,25 +30,98 @@
         },
         {
             "step": "step20",
-            "name": "failure detected - expect node to stay (SOK)",
-            "next": "step40",
-            "loop": 180,
-            "wait": 1,
-            "post": "sleep 90",
+            "name": "pmaster fenced + failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pSite": [
+                "srr == P",
+            "lss ~ (1|4)"
+            ],
+             "pHost": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
+            ],
+            "pWorker": "pWorkerUp",
             "sSite": "sSiteUp",
             "sHost": "sHostUp",
-            "sWorker": "sWorkerUp",
-            "pSite": "pSiteUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step30",
+            "name": "takeover on secondary - or jump to alternative (local restart)",
+            "next": "step40",
+            "onfail": "alt120",
+            "loop": 240,
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "step40",
+            "name": "begin recover new secondary",
+            "next": "final60",
+            "loop": 240,
+            "wait": 2,
+            "pSite": [
+                "lss ~ (1|2)",
+                "srr ~ (P|S)",
+                "lpt >~ 1000000000:(30|20|10)",
+                "srHook ~ (PRIM|SWAIT|SREG)",
+                "srPoll ~ (PRIM|SFAIL)"
+            ],
             "pHost": [
-                "clone_state is None",
-                "roles is None"
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:"
+            ],
+            "pWorker": [
+                "roles ~ (:::|slave::worker:|slave:slave:worker:slave)"
+            ],
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "final60",
+            "name": "end recover (takeover)",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "alt110",
+            "name": "recover primary (local restart)",
+            "next": "alt120",
+            "loop": "240",
+            "wait": "2",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp",
+            "pSite": [
+                "srr == P"
+            ],
+            "pHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles ~ (master::worker:|master1:master:worker:master)"
+            ],
+            "pWorker": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles ~ (slave::worker:|slave:slave:worker:slave)"
             ]
         },
         {
-            "step": "final40",
-            "name": "end recover",
+            "step": "alt120",
+            "name": "end recover (local restart)",
             "next": "END",
-            "loop": 120,
+            "loop": 300,
             "wait": 2,
             "post": "cleanup",
             "pSite": "pSiteUp",

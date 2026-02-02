@@ -2,7 +2,7 @@
 #
 # sct_test_restart_cluster - restart cluster, start SAP HANA instances while cluster is down
 #
-# (c) 2025 SUSE LLC
+# (c) 2025-2026 SUSE LLC
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
@@ -14,12 +14,6 @@
 #
 # expected outcome: cluster running, SAP HANA instances running, SR roles NOT exchanged
 #
-# lib-mig-status: PASSED Script:OK Test-angi_ScaleUp-restart_cluster: OK
-# used-in:
-#   angi-ScaleUp: restart_cluster
-#   angi-ScaleOut: restart_cluster
-#   - list-end
-#
 set -u
 src=${BASH_SOURCE[0]}
 full_path=$(readlink -f "$src")
@@ -28,39 +22,36 @@ source /usr/lib/SAPHanaSR-tester/sct_test_lib
 source .test_properties
 currPrimary=$(sctl_get_curr_prim "$node01")
 currSecondary=$(sctl_get_curr_secn "$node01")
-
 echo "p=$currPrimary, s=$currSecondary"
 
 sitePrimary=$(sctl_get_site "${node01}" "$currPrimary")
-
 echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
 
 # shellcheck disable=SC2029
 sctl_run_crm "$node01" "resource cleanup $mstResource"
 sctl_run_cs_wf_idle "$node01" "-s 2"
 
-sctl_run_crm "$node02" "cluster stop --all"
-
+sctl_run_crm "$node02" "cluster stop --all" "360"
 echo "==== SUSE Cluster Stopped ===="
 
-sctl_run_sapcontrol "$node01" "$sidadm" "-nr $instNr -function StartSystem"
-sctl_run_sapcontrol "$node02" "$sidadm" "-nr $instNr -function StartSystem"
-sctl_run_sapcontrol "$node01" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
-sctl_run_sapcontrol "$node02" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
-
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function StartSystem"
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
+sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function StartSystem"
+sctl_run_sapcontrol "$currSecondary" "$sidadm" "-nr $instNr -function WaitforStarted 300 10"
 while true; do
-    sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc=$?
+    sctl_run_sap_python3 "$currPrimary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
     if [[ "$rc" != 15 ]]; then
+        echo "sleep 60"
         sleep 60
     else
         break
     fi
 done
-
 echo "==== SAP HANA DBs started ===="
 
 sctl_run_crm "$node01" "cluster start --all"
-sleep 30
+echo "sleep 90"
+sleep 90
 sctl_run_crm "$node01" "cluster wait_for_startup 60"
 sctl_run_cs_wf_idle "$node01" "-s 10"
 echo "==== SUSE Cluster Started ===="

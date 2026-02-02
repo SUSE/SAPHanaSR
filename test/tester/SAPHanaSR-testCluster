@@ -1,16 +1,18 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# pylint: disable=line-too-long
+# pylint: disable=broad-exception-caught
 # TODO: check which imports could be removed in the future (time, re, json)?
 # TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
 """
  SAPHanaSR-testCluster
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023-2025 SUSE LLC
+ Copyright:    (c) 2023-2026 SUSE LLC
 """
 
-# Version: 1.6.20251118
+# Version: 2.3.20260115
 # pylint: disable=unused-import
 import time
 import re
@@ -49,7 +51,7 @@ parser.add_argument("--user", help="linux user to be used for ssh connection (de
 parser.add_argument("--password", help="optinal ssh password, if key based authentication is not used")
 parser.add_argument("--onFail", help="tester reaction after a failed step. possible values: continue,exit; default continue")
 parser.add_argument("--skip_hostcheck", help="only for private environments - skip check of known_hosts", action="store_true")
-parser.add_argument("--use_sudo", help="use ssh+sudo for remote commands", action="store_true")
+parser.add_argument("--sudo", help="use ssh+sudo for remote commands", action="store_true")
 args = parser.parse_args()
 if args.version:
     print(f"SAPHanaSR-tester {test01.version}")
@@ -97,7 +99,7 @@ if args.onFail:
     test01.config['on_fail_reaction' ]= args.onFail
 if args.skip_hostcheck:
     test01.config['check_host'] = False
-if args.use_sudo:
+if args.sudo:
     test01.config['use_sudo'] = True
 
 while test01.run['count'] <= test01.config['repeat']:
@@ -164,6 +166,7 @@ while test01.run['count'] <= test01.config['repeat']:
         l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
         l_top.update({'sSite': test01.get_value('Host', l_top['sHost'], 'site')})
 
+
     # TODO: do we need the old method as fallback, if msn is empty or misleading?
     #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
     #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
@@ -202,6 +205,12 @@ while test01.run['count'] <= test01.config['repeat']:
 
     if test01.read_test_file() != 0:
         sys.exit (1)
+
+    #
+    # adding mst / promotable resource to the topology dictionary
+    #
+    test_resource = test01.test_data['mstResource']
+    l_top.update({'mstRsc': test_resource})
     ### debug exit after printing test properties
     a_nodes = []
     r_list_nodes = test01.query_on_cluster("list_nodes")
@@ -214,7 +223,7 @@ while test01.run['count'] <= test01.config['repeat']:
     test01.config['all_nodes'] = ' '.join(a_nodes)
     if test01.config['printTestProperties'] is True:
         p_msg = (
-                    f"test_properties:" 
+                    f"test_properties:"
                     f" node01={l_top.get('pHost','node01')}"
                     f" node02={l_top.get('sHost','node02')}"
                     f" mstResource={test01.test_data.get('mstResource','')}"
@@ -241,15 +250,15 @@ while test01.run['count'] <= test01.config['repeat']:
             if test01.step_loops:
                 test01.result.update({'loops': test01.step_loops})
         except Exception:
-                test01.result.update({'loops': "step_loops missing"})
+            test01.result.update({'loops': "step_loops missing"})
     test01.end_time = time.time()
     test01.result.update({'runtime': int(test01.end_time - test01.start_time)})
-    MSG_TEMPL = "TEST: {} testNr={} testRc={} {} successfully {} ######"
+    msg_templ = "TEST: {} testNr={} testRc={} {} successfully {} ######"
     if test01.run['test_rc'] == 0:
-        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'PASSED',':)'))
+        test01.message(msg_templ.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'PASSED',':)'))
         test01.result.update({'status': 'passed'})
     else:
-        test01.message(MSG_TEMPL.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'FAILED',';)'))
+        test01.message(msg_templ.format(my_test_id, test01.run['count'], test01.run['test_rc'], 'FAILED',';)'))
         test01.result.update({'status': 'failed'})
     test01.run['count'] += 1
     #print(json.dumps(test01.result, indent=4))

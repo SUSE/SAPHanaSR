@@ -47,7 +47,7 @@ Comment: Infrastructure failure, main cluster case.
 .PP
 \fBfreeze_prim_master_nfs_fencing_alert\fP
 .RS 2
-Descr: Freeze HANA NFS on primary master node, for SAPHanaFilesystem (ON_FAIL_ACTION=fence) and SAPHanaSR-alert-fencing.
+Descr: Freeze NFS on primary master node, for SAPHanaFilesystem (ON_FAIL_ACTION=fence) and SAPHanaSR-alert-fencing.
 .br
 Topology: ScaleOut (angi only).
 .br
@@ -55,7 +55,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: See ocf_suse_SAPHanaFilesystem(7) and SAPHanaSR-alert-fencing(8).
 .br
-Expect: Primary nodes fenced.
+Expect: Primary master and worker node fenced.
 HANA primary killed and finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
@@ -75,10 +75,29 @@ Prereq: Cluster and HANA are up and running, all good.
 Test: See ocf_suse_SAPHanaFilesystem(7) and SAPHanaSR-alert-fencing(8).
 .br
 Expect: Primary master and worker node fenced.
-HANA finally started as secondary.
+HANA primary killed and finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
-One takeover. One fence.
+One takeover. All primary nodes fenced.
+.br
+Comment: Infrastructure failure, main cluster case.
+.RE
+.PP
+\fBfreeze_prim_worker_nfs_fencing_alert\fP
+.RS 2
+Descr: Freeze NFS on primary worker node, for SAPHanaFilesystem (ON_FAIL_ACTION=fence) and SAPHanaSR-alert-fencing.
+.br
+Topology: ScaleOut (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See ocf_suse_SAPHanaFilesystem(7) and SAPHanaSR-alert-fencing(8).
+.br
+Expect: Primary worker and master node fenced.
+HANA primary killed and finally started as secondary.
+HANA secondary becomes finally primary.
+SR SFAIL and finally SOK.
+One takeover. All primary nodes fenced.
 .br
 Comment: Infrastructure failure, main cluster case.
 .RE
@@ -246,7 +265,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-attrd -11
 .br
-Expect: Primary master node fenced (PCMK_fast_fail=yes).
+Expect: Primary nodes fenced (PCMK_fast_fail=yes).
 HANA primary finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
@@ -265,7 +284,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-based -11
 .br
-Expect: Primary nodes fenced (PCMK_fail_fast=no).
+Expect: Primary nodes fenced (PCMK_fail_fast=yes).
 HANA primary killed and finally started as secondary.
 HANA secondary becomes finally primary. SR SFAIL and finally SOK.
 One takeover. All primary nodes fenced.
@@ -284,7 +303,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-controld -11
 .br
-Expect: Primary master node fenced (PCMK_fast_fail=yes).
+Expect: Primary nodes fenced (PCMK_fast_fail=yes).
 HANA primary finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
@@ -357,7 +376,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-controld -11
 .br
-Expect: Primary worker node fenced (PCMK_fail_fast=yes).
+Expect: Primary nodes fenced (PCMK_fail_fast=yes).
 HANA primary killed and finally started as secondary.
 HANA secondary becomes finally primary.
 SR SFAIL and finally SOK.
@@ -384,21 +403,20 @@ No takeover. All secondary nodes fenced (action_on_lost=fence).
 Comment: Application failure, main cluster case
 .RE
 .PP
-\fBkill_secn_pacemkr-attrd_fencing\fP
+\fBkill_secn_pacemkr-attrd_fencing_alert\fP
 .RS 2
-Descr: Kill secondary pacemaker-attrd.
-On scale-out, kill secondary master node´s pacemaker-attrd.
+Descr: Kill secondary master node´s pacemaker-attrd.
 .br
-Topology: ScaleUp, ScaleOut (classic only).
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-attrd -11
 .br
-Expect: Secondary (master) node fenced (PCMK_fast_fail=yes).
-HANA primary stays online.
+Expect: Secondary nodes fenced (PCMK_fail_fast=yes).
+HANA secondary finally started.
 SR SFAIL and finally SOK.
-No takeover. One fencing.
+No takeover. All secondary nodes fenced.
 .br
 Comment: Cluster failure.
 .RE
@@ -413,7 +431,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-based -11
 .br
-Expect: Secondary nodes fenced (PCMK_fail_fast=no).
+Expect: Secondary nodes fenced (PCMK_fail_fast=yes).
 HANA secondary finally started.
 SR SFAIL and finally SOK.
 No takeover. All secondary nodes fenced.
@@ -421,21 +439,20 @@ No takeover. All secondary nodes fenced.
 Comment: Cluster failure.
 .RE
 .PP
-\fBkill_secn_pacemkr-ctrld_fencing\fP
+\fBkill_secn_pacemkr-ctrld_fencing_alert\fP
 .RS 2
-Descr: Kill secondary pacemaker-controld.
-On scale-out, kill secondary master node´s pacemaker-controld.
+Descr: Kill secondary master node´s pacemaker-controld.
 .br
-Topology: ScaleUp, ScaleOut (classic only).
+Topology: ScaleOut (angi only).
 .br
 Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-controld -11
 .br
-Expect: Secondary (master) node fenced (PCMK_fast_fail=yes).
-HANA primary stays online.
+Expect: Secondary nodes fenced (PCMK_fail_fast=yes).
+HANA secondary finally started.
 SR SFAIL and finally SOK.
-No takeover. One fencing.
+No takeover. All secondary nodes fenced.
 .br
 Comment: Cluster failure.
 .RE
@@ -468,7 +485,7 @@ Prereq: Cluster and HANA are up and running, all good.
 .br
 Test: pkill -u hacluster -f pacemaker-based -11
 .br
-Expect: Secondary nodes fenced (PCMK_fail_fast=no).
+Expect: Secondary nodes fenced (PCMK_fail_fast=yes).
 HANA secondary finally started.
 SR SFAIL and finally SOK.
 No takeover. All secondary nodes fenced.
@@ -533,7 +550,7 @@ F.Herschel, L.Pinne.
 .\"
 .SH COPYRIGHT
 .\"
-(c) 2024-2025 SUSE LLC
+(c) 2024-2026 SUSE LLC
 .br
 The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
 .br

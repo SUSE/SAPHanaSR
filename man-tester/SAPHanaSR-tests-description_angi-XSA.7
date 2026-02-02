@@ -1,0 +1,274 @@
+.\" Version: 1.2 
+.\"
+.TH SAPHanaSR-tests-description_angi-XSA 7 "12 Oct 2025" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+.\"
+SAPHanaSR-tests-description_angi-XSA \- Functional tests for SAPHanaSR-angi scale-out XSA.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+Functional test are shipped for different scenarios. This tests could be run
+out-of-the-box. The test cases are defined in dedicated files.
+See manual page SAPHanaSR-tests-syntax(5) for syntax details. Tests for
+SAPHanaSR-angi scale-out BW scenario are listed in
+SAPHanaSR-tests-angi-XSA(7). 
+.PP
+Entry point for all predefined tests is a clean and idle Linux cluster and a
+clean HANA pair in sync. 
+See manual page SAPHanaSR_maintenance_examples(7) for detecting the correct
+status and watching changes near real-time.
+.PP
+Each test can be executed by running the command SAPHanaSR-testCluster with
+appropriate parameters. See manual page SAPHanaSR-testCluster(8).
+.PP
+Predefined functional tests specific for the SAPHanaSR-angi scale-out XSA scenario:
+.PP
+.TP
+\fBkill_prim_worker_ipaddr\fP
+.RS 2
+Desc: Kill primary HANA worker XSA IP address once.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: ip a d <vIP> dev <nic>
+.br
+Expect: IP address is recovered.
+All nodes stay online.
+Primary and secondary HANA stay online.  No takeover. No fencing.
+.br
+Comment:
+.RE
+.PP
+\fBkill_prim_worker_xscontrl\fP
+.RS 2
+Descr: Kill primary worker xscontroller.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: kill -11 ../xscontroller
+.br
+Expect: HANA primary stays online degraded and finally recovers.
+HANA secondary stays online.
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_prim_worker_xsexecagnt\fP
+.RS 2
+Descr: Kill primary worker xsexecagent.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: kill -11 ../xsexecagent
+.br
+Expect: HANA primary stays online degraded and finally recovers.
+HANA secondary stays online.
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_prim_worker_xsuaasrvr\fP
+.RS 2
+Descr: Kill primary worker xsuaaserver.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: kill -11 ../xsuaaserver
+.br
+Expect: HANA primary stays online degraded and finally recovers.
+HANA secondary stays online.
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_secn_worker_xscontrl\fP
+.RS 2
+Descr: Kill secondary worker xscontroller.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: kill -11 ../xsconntroller
+.br
+Expect: HANA primary stays online.
+HANA secondary stays online degraded and finally recovers.
+No takeover. No fencing.
+.\" TODO SOK?
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_secn_worker_xsexecagnt\fP
+.RS 2
+Descr: Kill secondary worker xsexecagent.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: kill -11 ../xsexecagent
+.br
+Expect: HANA primary stays online.
+HANA secondary stays online degraded and finally recovers.
+No takeover. No fencing.
+.\" TODO SOK?
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_secn_worker_xsuaasrvr\fP
+.RS 2
+Descr: Kill secondary worker xsuaaserver.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: kill -11 ../xsuaaserver
+.br
+Expect: HANA primary stays online.
+HANA secondary stays online degraded and finally recovers.
+No takeover. No fencing.
+.\" TODO SOK?
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBrestart_cluster_turn_hana\fP
+.RS 2
+Descr: Stop cluster and HANA, manually start and takeover HANA, start cluster.
+.br
+Topology: ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Stop cluster and HANA, manually do HANA takeover and register, restart cluster.
+No resource maintenance, no resource refresh.
+.br
+Expect: All nodes stay online.
+Both HANA stopped.
+HANA primary finally started as secondary.
+HANA secondary becomes finally primary by manual takeover.
+SR SFAIL and finally SOK. 
+One takeover. No takeover by cluster. No fencing.
+.br
+Comment: Sub-optimal admin procedure.
+.\"TODO suspend primary and register online not supported for XSA?
+.RE
+.PP
+Descriptions of functional tests not specific for the SAPHanaSR-angi scale-out
+XSA scenario can be found in manual page SAPHanaSR-tests-description_on-fail-fence(7):
+.br
+freeze_prim_master_nfs_fencing_alert,
+freeze_prim_worker_nfs_fencing_alert,
+freeze_prim_site_nfs_fencing_alert,
+freeze_secn_site_nfs,
+kill_prim_indexserver_fencing_alert,
+kill_prim_inst_fencing_alert,
+kill_prim_node_fencing_alert,
+kill_prim_pacemkr-based_fencing_alert,
+kill_prim_worker_indexserver_fencing_alert,
+kill_prim_worker_inst_fencing_alert,
+kill_prim_worker_node_fencing_alert,
+kill_prim_worker_pacemkr-ctrld_fencing,
+kill_secn_pacemkr-based_fencing_alert,
+kill_secn_worker_indexserver_fencing_alert,
+kill_secn_worker_pacemkr-based_fencing_alert,
+.PP
+More Descriptions of functional tests not specific for the SAPHanaSR-angi scale-out
+XSA scenario can be found in manual page SAPHanaSR-tests-description(7):
+.br
+block_manual_takeover,
+block_sr,
+block_sr_and_freeze_prim_master_nfs,
+block_sr_and_freeze_prim_worker_nfs,
+flup,
+free_log_area,
+kill_prim_ipaddr, 
+kill_prim_pacemakerd,
+kill_prim_saphostexec,
+kill_prim_worker_pacemakerd,
+kill_secn_inst,
+kill_secn_pacemakerd,
+kill_secn_site_nodes, 
+kill_secn_worker_pacemakerd, 
+maintenance_cluster_hana_running,
+maintenance_cluster_turn_hana, 
+maintenance_prim_crmreport,
+maintenance_prim_supportconfig,
+maintenance_secn_crmreport,
+maintenance_secn_supportconfig,
+nop,
+restart_cluster,
+restart_cluster_hana_running,
+restart_cluster_turn_hana,
+standby_primary_node,
+standby_secondary_node,
+standby_secondary_worker_node.
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleOut-XSA/
+functional tests for SAPHanaSR-angi scale-out XSA scenarios.
+.TP
+/usr/bin/sct_test_*
+shell scripts for un-easy tasks on the cluster nodes.
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-ScaleOut-XSA(7).
+Of course, HANA database and Linux cluster have certain requirements.
+Please refer to the product documentation.
+.PP
+.\"
+.SH BUGS
+.\"
+.\" In case of any problem, please use your favourite SAP support process to open
+.\" a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tests-syntax\fP(5) ,
+\fBSAPHanaSR-tests-angi-XSA\fP(7) ,
+\fBSAPHanaSR-tests-description\fP(7) ,
+\fBSAPHanaSR-tests-description_on-fail-fence\fP(7) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-showAttr\fP(8),
+\fBSAPHanaSR-ScaleOut-XSA\fP(7)
+.PP
+.\"
+.SH AUTHORS
+.\"
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2025-2026 SUSE LLC
+.br
+The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
+
+

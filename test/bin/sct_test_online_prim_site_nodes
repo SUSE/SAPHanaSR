@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# sct_test_online_prim_site_nodes - set cluster online on all nodes of primary site
+#
+# (c) 2025-2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+set -u
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source /usr/lib/SAPHanaSR-tester/sct_test_lib
+source .test_properties
+currPrimary=$(sctl_get_curr_prim "${node01}")
+currPrimWorker=$(sctl_get_curr_prim_worker "${node01}")
+
+# shellcheck disable=SC2029
+sctl_run_crm "${node01}" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "${node01}" "-s 2"
+
+echo "==== SUSE cluster online on primary site node ${currPrimary} ===="
+# shellcheck disable=SC2029
+sctl_run_crm "${currPrimary}" "node online" &
+echo "==== SUSE cluster online on primary site node ${currPrimWorker} ===="
+sctl_run_crm "${currPrimWorker}" "node online" &
+#

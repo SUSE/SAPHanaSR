@@ -1,12 +1,15 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
+# pylint: disable=line-too-long
+# pylint: disable=broad-exception-caught
+# pylint: disable=too-many-lines,too-many-statements,too-many-instance-attributes,too-many-public-methods,too-many-branches,too-many-locals,too-many-nested-blocks,
 # TODO: legacy (classic) has "Sites" instead of "Site" (angi) and "Hosts" (classic/legacy) instead of "Host" (angi) --> could we set that via json files?
 """
  saphanasrtest.py
  Author:       Fabian Herschel, Mar 2023
  License:      GNU General Public License (GPL)
- Copyright:    (c) 2023-2025 SUSE LLC
+ Copyright:    (c) 2023-2026 SUSE LLC
 """
 
 import time
@@ -27,7 +30,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.2.20251118"
+    version = "2.3.20260120"
 
     def message(self, msg, **kwargs):
         """
@@ -45,7 +48,9 @@ class SaphanasrTest:
         if stdout:
             if pre_cr:
                 print()
-            print("{}{} {:<9s} {}".format(date_time, r_id, msg_arr[0], " ".join(msg_arr[1:])), flush=True)
+            message_type = msg_arr[0]
+            core_message = " ".join(msg_arr[1:])
+            print("{}{} {:<9s} {}".format(date_time, r_id, message_type, core_message), flush=True)
         try:
             if self.run['log_file_handle']:
                 _l_msg = f"{date_time}{r_id} {msg_arr[0]:9}"
@@ -53,7 +58,8 @@ class SaphanasrTest:
                 self.run['log_file_handle'].write(_l_msg + "\n")
                 self.run['log_file_handle'].flush()
         except OSError:
-            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", "Could not write log log file"), flush=True)
+            core_message = "Could not write log log file"
+            print("{0} {1:<9s} {2}".format(date_time, "ERROR:", core_message), flush=True)
 
     def debug(self, msg, **kwargs):
         """
@@ -266,9 +272,9 @@ class SaphanasrTest:
         return object_name
 
     def get_value(self, area_name, object_name, key):
-        """ 
-        method to query the value of a key (e.g. 'msn') for an object 
-        (e.g. site 'MAINZ' inside an area (e.g. 'Site') 
+        """
+        method to query the value of a key (e.g. 'msn') for an object
+        (e.g. site 'MAINZ' inside an area (e.g. 'Site')
         """
         # Query runs from area-level via object-level to key-level
         l_value = None
@@ -357,7 +363,7 @@ class SaphanasrTest:
             test_prop_fh.flush()
 
     def __add_failed__(self, area_object, key_val_reg, **kwargs):
-        """ __add_failed__ ocument failed checks 
+        """ __add_failed__ ocument failed checks
         params: area_object, key_val_reg
         kwargs: list_of_failures
         """
@@ -366,7 +372,7 @@ class SaphanasrTest:
         fatal_name = ""
         fatal_check = kwargs.get("fatal_check", False)
         fatal_name = kwargs.get("fatal_name", "")
-        step_id = kwargs.get("step_id", "")
+        # step_id = kwargs.get("step_id", "")
         ( _area, _obj ) = area_object
         if 'failed' in self.run:
             _l_failed = self.run['failed']
@@ -381,7 +387,7 @@ class SaphanasrTest:
         #
         # also fill the failures list, if given
         #
-        if type(list_of_failures) == type([]):
+        if isinstance(list_of_failures, list):
             #print(f"DBG: __add_failed__ list_of_failures.append()")
             list_of_failures.append({'area': _area, 'object_name': _obj, 'expect': {'var': _key, 'expr': _reg, 'comp': _comp }, 'have': {'var': _key, 'val': _val} })
         _l_failed += f'{_l_header} expect "{_key} {_comp} {_reg}", have "{_val}"; '
@@ -403,7 +409,7 @@ class SaphanasrTest:
     def __run_check__(self, single_check, area_name, object_name, step_step, **kwargs):
         # match <key> <comp> <regExp>
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
-        match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is) (.*)", single_check)
+        match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is|is not) (.*)", single_check)
         check_result = -1
         c_key = "x"
         c_comp = "x"
@@ -445,7 +451,7 @@ class SaphanasrTest:
         except (IndexError, AttributeError):
             pass
         self.debug(f"DEBUG: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
-        found = False
+        found = False   # found is True, if the attribute has been FOUND (for all 'normal' compares) or is MISSING for compare "is None"
         if area_name in l_sr:
             l_area = l_sr[area_name]
             c_err = 1
@@ -453,8 +459,8 @@ class SaphanasrTest:
                 l_obj = l_area[object_name]
                 if c_key in l_obj:
                     l_val = l_obj[c_key]
-                    found = True
-                    # TODO '==' must be exact match, '~' is for regexp
+                    found = True  # atttribute has been found for a compare (attribute is available)
+                    # DONE '==' must be exact match, '~' is for regexp
                     if c_comp == "==":
                         if l_val == c_reg_exp:
                             c_err = 0
@@ -487,15 +493,24 @@ class SaphanasrTest:
                         # TODO check l_val and c_reg_exp if they could transformed into int
                         if int(l_val) > int(c_reg_exp_a) or re.search(c_reg_exp_b, l_val):
                             c_err = 0
+                    elif c_comp == "is not" and c_reg_exp == "None":
+                        c_err = 0
+                    elif c_comp == "is" and c_reg_exp == "Any":
+                        c_err = 0
                 else:
+                    # l_val is None
                     if c_comp == "is" and c_reg_exp == "None":
-                        found = 1
+                        found = True   # found set True (here negative logic, so missing attribute is matching 'None', means the missing attribute has been found :)
+                        c_err = 0
+                        check_result = max(check_result, 0)
+                    elif c_comp == "!=" and c_reg_exp != "None":
+                        found = True   # found set True (here negative logic, so missing attribute is not matching c_reg_exp and c_reg_exp is not None, means the missing attribute has been found :)
                         c_err = 0
                         check_result = max(check_result, 0)
             else:
                 # if object does not even exist, the 'None' clause is true
                 if c_comp == "is" and c_reg_exp == "None":
-                    found = 1
+                    found = True
                     c_err = 0
                     check_result = max(check_result, 0)
             if c_err == 1:
@@ -510,15 +525,15 @@ class SaphanasrTest:
                 self.debug(f"DEBUG: PASSED: ckey:{c_key} c_comp:{c_comp} c_reg_exp:{c_reg_exp} c_reg_exp_a:{c_reg_exp_a} c_reg_exp_b:{c_reg_exp_b}")
         if c_comp == "is" and c_reg_exp == "None":
             # if area does not even exist, the 'None' clause is true
-            found = 1
+            found = True
             c_err = 0
             check_result = max(check_result, 0)
-        if (found == 0) and (check_result < 2):
+        if (found is False) and (check_result < 2):
             check_result = 2
         return check_result
 
     def run_checks(self, checks, area_name, object_name, step_step, **kwargs ):
-        """ run all checks for area and object 
+        """ run all checks for area and object
             params:
                    checks: list of checks to be run
                    area_name: attribute area to be checked (global, Site, Resource, Host)
@@ -540,7 +555,7 @@ class SaphanasrTest:
         return check_result
 
     def process_topology_object(self, step, topology_object_name, area_name, **kwargs):
-        """ process_topology_object 
+        """ process_topology_object
             params: step, topology_object_name, area_name
             kwargs: step_loop_failures[]
         """
@@ -551,16 +566,19 @@ class SaphanasrTest:
             if isinstance(checks,str):
                 check_ptr = checks
                 self.debug(f"DEBUG: check_ptr {check_ptr}", stdout=False)
-                checks = self.test_data["checkPtr"][check_ptr]
+                try:
+                    checks = self.test_data["checkPtr"][check_ptr]
+                except KeyError:
+                    self.message(f"ERROR: Pointer {check_ptr} for {area_name} is not defined")
+                    return 1
             topolo = self.topolo
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
                 rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''), list_of_failures=list_of_failures)
-        
         return rc_checks
 
     def __process_fatal_condition(self, step, **kwargs):
-        """ __process_fatal_conditions 
+        """ __process_fatal_conditions
             rc == 0 : no fatal condition matched
             rc != 0 : at least one of the fatal packages (childs) mathed
             kwargs: step_loop_failures[]
@@ -665,6 +683,7 @@ class SaphanasrTest:
                     break
             process_result = max (
                                   self.process_topology_object(step, 'global', 'Global', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'mstRsc', 'Resource', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'sSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pHost', 'Host', list_of_failures=list_of_failures),
@@ -677,7 +696,6 @@ class SaphanasrTest:
             self.__min_failed_role_counter__ = min(self.__min_failed_role_counter__, self.__failed_role_counter__)
             self.__max_failed_role_counter__ = max(self.__max_failed_role_counter__, self.__failed_role_counter__)
             self.message(f"MISSED: step {step_id} role-fail-counter: {self.__failed_role_counter__} (min: {self.__min_failed_role_counter__} max: {self.__max_failed_role_counter__})", stdout=False)
-            
             time.sleep(wait)
         if self.__min_failed_role_counter__ == 1000:
             self.__min_failed_role_counter__ = 0
@@ -688,9 +706,16 @@ class SaphanasrTest:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
         if process_result == 0:
-            self.action(step_action)
+            if len(step_action) != 0:
+                action_rc = self.action(step_action) # post-action is only called, if step checks have been passed
+                step_result.update({'action': step_action})
+                step_result.update({'action_rc': action_rc})
+                if action_rc != 0:
+                    process_result = 1 # set step failed, if post-action failed
+
+        if process_result == 0:
             step_result.update({ 'status': 'passed' })
-            step_result.update({ 'action': step_action })
+
         else:
             if step_alternative:
                 step_result.update({ 'status': 'alternative/on_fail' })
@@ -725,13 +750,13 @@ class SaphanasrTest:
                 # (curently only break for first step and continue for others)
                 if onfail == 'break':
                     break
+                # in case there is no break, we continue with ...
+                if step_alternative:
+                    # process alternative test steps, so reset the failed test rc_code
+                    r_code = 0
+                    step=self.get_step(step_alternative)
                 else:
-                    if step_alternative:
-                        # process alternative test steps, so reset the failed test rc_code
-                        r_code = 0
-                        step=self.get_step(step_alternative)
-                    else:
-                        step=self.get_step(step_next)
+                    step=self.get_step(step_next)
             if step:
                 step_step = step['step']
             else:
@@ -773,8 +798,9 @@ class SaphanasrTest:
                 break
         return step
 
-    def action_call(self, action_name, cmd, remote):
+    def action_call(self, action_name, cmd, remote, **kargs):
         """ do the action itself """
+        ignore = kargs.get('ignore', False) # optionally "ignore" a rc!=0 and translate the rc to 0 (zero)
         action_rc = 0
         if cmd != "":
             if remote == "localhost":
@@ -787,6 +813,9 @@ class SaphanasrTest:
                 a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
                 action_rc = a_result[2]
                 self.message("ACTION: {} REMOTE at {}: {} rc={}".format(action_name, remote, cmd, action_rc))
+        if ignore:
+            self.message(f"INFO: ignore rc={action_rc} (ignore=True)")
+            action_rc = 0
         return action_rc
 
     def action_on_hana(self, action_name):
@@ -796,6 +825,7 @@ class SaphanasrTest:
         test_ino = self.test_data['instNo']
         cmd = ""
         sudo_cmd = ""
+        ignore = False
         if action_name == "kill_secn_inst":
             remote = self.topolo['sHost']
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
@@ -848,15 +878,17 @@ class SaphanasrTest:
             remote = self.topolo['sHost']
             cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
             sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
+            ignore = True  # ignore rc!=0, because this is intended for this case
         if self.config['use_sudo']:
             cmd = sudo_cmd
-        return self.action_call(action_name, cmd, remote)
+        return self.action_call(action_name, cmd, remote, ignore=ignore)
 
     def action_on_cluster(self, action_name):
         """ perform a given action on cluster node """
         remote = self.config['remote_node']
         resource = self.test_data['mstResource']
         cmd = ""
+        sudo_cmd = ""
         if action_name == "ssn":
             cmd = "/usr/sbin/crm node standby {}".format(self.topolo['sHost'])
             sudo_cmd = f"sudo -u root {cmd}"
@@ -944,7 +976,8 @@ class SaphanasrTest:
 
     def query_call(self, action_name, cmd, remote):
         """ do the query itself """
-        result = []
+        # result = []
+        action_stdout = ""
         if cmd != "":
             if remote == "localhost":
                 self.message("QUERY: {} LOCAL: {}".format(action_name, cmd))
@@ -961,8 +994,10 @@ class SaphanasrTest:
         return [action_stdout, None, action_rc]
 
     def query_on_cluster(self, action_name):
+        """ query_on_cluster - do a query on cluster aspects (like list_nodes) """
         remote = self.config['remote_node']
         cmd = ""
+        sudo_cmd = ""
         if action_name == "list_nodes":
             cmd = "/usr/sbin/crm_node --list"
             sudo_cmd = f"sudo -u root {cmd}"
@@ -998,13 +1033,6 @@ class SaphanasrTest:
             except Exception as e:
                 self.message(f"FAILURE: ssh connection to failed - ({e})")
                 check_result=("", "", 20000)
-            cmd_timeout=f"timeout={ssh_timeout}"
-            #
-            # "sudo-i-fy" the command to be able to call root command as deputy user
-            #
-            #if self.config['use_sudo']:
-            #    cmd = f"sudo {cmd}"
-            #(cmd_stdout, cmd_stderr) = ssh_client.exec_command(cmd, cmd_timeout)[1:]
             self.debug(f"DEBUG: ssh cmd '{cmd}' timeout={ssh_timeout}")
             if do_log:
                 if ssh_timeout:
@@ -1067,6 +1095,11 @@ if __name__ == "__main__":
             l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
             l_top.update({'sSite': test01.get_value('Host', l_top['sHost'], 'site')})
 
+        #
+        # now add special resources to topology for later use in process_step
+        #
+        l_top.update({'mstRsc': test01.get_value('Host', l_top['sHost'], 'site')})
+
         # TODO: do we need the old method as fallback, if msn is empty or misleading?
         #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
         #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
@@ -1083,11 +1116,11 @@ if __name__ == "__main__":
         if test01.config['repeat'] != 1:
             test01.message("TEST: {} testNr={} ######".format(my_test_id, test01.run['count']))
         test01.run['test_rc'] = test01.process_test()
-        MSG_TEMPL = "TEST: {} testNr={} {} successfully :) ######"
+        msg_templ = "TEST: {} testNr={} {} successfully :) ######"
         if test01.run['test_rc'] == 0:
-            test01.message(MSG_TEMPL.format(my_test_id, 'PASSED', test01.run['count']))
+            test01.message(msg_templ.format(my_test_id, 'PASSED', test01.run['count']))
         else:
-            test01.message(MSG_TEMPL.format(my_test_id, 'FAILED', test01.run['count']))
+            test01.message(msg_templ.format(my_test_id, 'FAILED', test01.run['count']))
         test01.run['count'] += 1
     if  test01.run['log_file_handle']:
         test01.run['log_file_handle'].close()

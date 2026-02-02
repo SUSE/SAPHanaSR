@@ -10,7 +10,7 @@
 # Support:      linux@sap.com
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2013,2014 SUSE Linux Products GmbH
-# Copyright:    (c) 2015-2025 SUSE LLC
+# Copyright:    (c) 2015-2026 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -34,7 +34,7 @@
 #######################################################################
 # TODO PRIO2: NG - use SAPHanaControllerLibVersion=
 # shellcheck disable=SC2034
-SAPHanaControllerLibVersion="1.2.12"
+SAPHanaControllerLibVersion="1.3.0"
 #######################################################################
 #
 # KNOWN PROBLEMS TO BE FIXED:
@@ -580,6 +580,7 @@ function saphana_start() {
             lastSrHook=$(get_SRHOOK_plain "$gSite")
             if [ -n "$lastSrHook" ]; then
                 # reset old srHook attribute to SWAIT as we are starting right now
+                super_ocf_log info "ACT: SAP HANA START: MARK SECONDARY AS SWAIT"
                 set_SRHOOK "$gSite" "SWAIT"
             fi
             output=$("$SAPCONTROL" -nr "$InstanceNr" -function StartSystem); rc="$?"
@@ -637,9 +638,10 @@ function saphana_stopSystem() {
     if [ "$rc" == "$OCF_SUCCESS" ]; then
         ## TODO: PRIO 1: Only stop System, if I am the last master!
         ## TODO: PRIO 2: Do we need a "last-man-switch-off-the-light" detection?
+        super_ocf_log info "ACT: SAP HANA STOP: Stopping System $SID-$InstanceName: (function $stopMode)"
         output=$("$SAPCONTROL" -nr "$InstanceNr" -function "$stopMode")
         rc=$?
-         super_ocf_log info "ACT: SAP HANA STOP: Stopping System $SID-$InstanceName: $output"
+        super_ocf_log info "ACT: SAP HANA STOP: Stopping System $SID-$InstanceName: $output"
     fi
     if [ "$rc" == 0 ]; then
         HANA_ACTION_TIMEOUT=$(get_action_timeout WaitforStopped)
@@ -678,6 +680,11 @@ function saphana_stopSystem() {
 	    # DONE PRIO1: RC restore!!
         if [ "$rcWfS" == 0 ]; then
             super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName stopped: $output"
+            hanarole="$(get_role_by_landscape "${NODENAME}" "${gVirtName}")"; lssRc="$?"
+            set_hana_site_attribute "$gSite" "${lssRc}" "${ATTR_NAME_HANA_SITE_LSS[@]}"
+            gFullRole="${lssRc}:${gSrr}:${gRole}"
+            scoring_crm_promote "$gFullRole" "$my_sync"
+            super_ocf_log info "ACT: SAP HANA: System $SID-$InstanceName stopped: $output => scoring and set LSS"
             rc="$OCF_SUCCESS"
         else
             super_ocf_log err "ACT: SAP HANA: System $SID-$InstanceName stop failed: $output, rc=$rc"
@@ -719,7 +726,7 @@ function saphana_stop() {
         elif is_lost_nameserver_slave && [ -z "$gTheMaster" ]; then
             super_ocf_log info "ACT: saphana_stop: is_lost_nameserver_slave and no master nameserver is available"
             # Stop ONLY the local SAP HANA instance to avoid an isolated SAP HANA nameserver slave does shutdown the entire site
-            saphana_stopSystem Stop rc=$?
+            saphana_stopSystem Stop; rc=$?
         else
             is_active_nameserver_slave; is_slave_rc=$?
             super_ocf_log info "ACT: saphana_stop: NEITHER is_active_nameserver_slave (rc=$is_slave_rc) NOR is_the_master_nameserver debug: ($gTheMaster) NOR is_lost_nameserver_slave"
@@ -1110,7 +1117,7 @@ function saphana_start_clone() {
         primary_status="$(check_for_primary "live")";
         # gNrSiteNode vs. landscape-workers?
         get_hana_landscape_status ""; lss=$?
-        lss_worker=$(echo "$hana_LSS_Out" | awk '/indexServerConfigRole=worker/ { w++; } END { print w; }')
+        lss_worker=$(echo "$hana_LSS_Out" | awk '/indexServerConfigRole=worker/ { w++; } /hostConfigRoles=xs_worker/ { w++; } END { print w; }')
         #
         # Only start HANA, if there are enough nodes in the cluster to fulfill the landscape:
         # $gNrSiteNode -ge $lss_worker means that we count all nodes (worker and standby) in the
@@ -1635,7 +1642,6 @@ function saphana_monitor_secondary() {
     #   these files needs to be removed to avoid applying very old values after a takeover (to be new primary)
     #
     for rFile in "/hana/shared/$SID/$InstanceName/.crm_attribute."*; do
-        # recover_site_attributes_from_file "$rFile"
         rm "$rFile"
     done
     case "$lss" in

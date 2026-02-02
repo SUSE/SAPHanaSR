@@ -5,7 +5,7 @@
 # Author:       Fabian Herschel, 2015
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2015-2016 SUSE Linux GmbH
-# Copyright:    (c) 2017-2022 SUSE LLC
+# Copyright:    (c) 2017-2026 SUSE LLC
 """
 # pylint: enable=invalid-name
 # remark: switch-on now name checking

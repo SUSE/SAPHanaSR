@@ -2,15 +2,10 @@
 #
 # sct_test_freeze_prim_site_nfs - freeze nfs on primary site
 #
-# (c) 2025 SUSE LLC
+# (c) 2025-2026 SUSE LLC
 # Author: F.Herschel, L.Pinne.
 # GNU General Public License v2. No warranty.
 # http://www.gnu.org/licenses/gpl.html
-#
-# lib-mig-status: CHECK
-# used-in:
-#   angi-ScaleOut: kill_secn_site_nodes, freeze_prim_site_nfs, freeze_prim_site_nfs_fencing_alert
-#   - list-end
 #
 set -u
 src=${BASH_SOURCE[0]}
@@ -21,9 +16,10 @@ source .test_properties
 currPrimary=$(sctl_get_curr_prim "$node01")
 currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
 
-echo "==== Freeze SAP HANA NFS ===="
-
+echo "==== Freeze all NFS on $currPrimary ===="
 sctl_run_iptables "$currPrimary" '-I OUTPUT -p tcp -m multiport --ports 2049 -j DROP &'
+echo "==== Freeze all NFS on $currPrimWorker ===="
 sctl_run_iptables "$currPrimWorker" '-I OUTPUT -p tcp -m multiport --ports 2049 -j DROP'
+echo "sleep 60"
 sleep 60
 #

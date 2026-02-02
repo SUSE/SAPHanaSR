@@ -1,0 +1,603 @@
+.\" Version: 1.2 
+.\"
+.TH SAPHanaSR-ScaleOut-XSA 7 "26 Nov 2025" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+.\"
+SAPHanaSR-ScaleOut-XSA \- Automating SAP HANA system replication for standalone XSA setups.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+This manual page provides information for setting up and managing automation of
+SAP HANA system replication (SR) in scale-out setups with a standalone eXtended
+application Services Advanced (XSA) server.
+For other scale-out scenarios, please refer to SAPHanaSR-ScaleOut(7).
+.PP
+SAP HANA XSA provides a platform for the development and execution of micro-service
+oriented applications.
+.PP
+The scale-out standalone XSA scenario consists of two nodes per site.
+One node runs the HANA master namesever and an indexserver. The other node runs
+an HANA nameserver slave and the standalone XSA server, but no indexserver.
+.\" TODO roles  slave:slave:none:none
+HANA system replication is set up between the two sites. In addition, the XSA
+Filesystem Storage (fss) is shared across the sites.
+.PP
+The cluster resource configuration for HANA scale-out with standalone XSA is
+almost the same as for the scale-out ERP scenario, progressive variant.
+The differences are currently:
+.br
++ additional IPaddr2 resource for the primary XSA worker
+.br
++ additional SAPHanaFilesystem resource for the XSA fss directory (optional)
+.br
+- no 3rd replication site connected
+.PP
+For details, please refer to SAPHanaController-scale-out(7),
+ocf_suse_SAPHanaTopology(7), ocf_suse_SAPHanaFilesystem(7),
+susHanaSR.py(7), susChkSrv.py(7), susTkOver.py(7), 
+SAPHanaSR-alert-fencing(8), SAPHanaSR-hookHelper(8), 
+SAPHanaSR-ScaleOut_basic_cluster(7), and see IPaddr2 example below.
+.PP
+\fBThe SUSE HA for SAP HANA SR scale-out standalone XSA scenario is a technology preview.\fP
+.PP
+.\"
+.SH EXAMPLES
+.\"
+\fB*\fP Overview on setting up SAP HANA with standalone XSA and system replication.
+.PP
+On all cluster nodes OS, filesystem, etc. already is installed and configured
+appropriately for an HANA scale-out scenario. Installation sources for SAP HANA
+and XSA are prepared.
+HANA at both sites will be installed using the same wildcard IP address for XSA,
+so they must not run as primary in parallel.
+The site1 will become primary, site2 will become secondary - after the final test
+(step 5.9).
+.PP
+The installation procedure looks like:
+.PP
+.RS 2
+1.1 collect information and prepare parameter sheet
+.br
+1.2 provide wildcard DNS entry for the XSA IP address 
+.br
+1.3 export share with XSA fss directory on NFS server
+.br
+1.4 prepare /etc/fstab on node12 and node22
+.PP
+2.1 set XSA IP address on node12
+.br
+2.2 install HANA with XSA on site1 with node11 (master/worker) and node12 (xs_worker)
+.br
+2.3 disable XSA and back-up XSA fss on node12
+.br
+2.4 change fss to NFS in xscontroller.ini on site1
+.br
+2.5 create mountpoint for fss share and mount fss from NFS on node12
+.br
+2.6 restore XSA fss and enable XSA on node12
+.br
+2.7 stop HANA on site1
+.br
+2.8 remove XSA IP address from node12
+.PP
+3.1 set XSA IP address on node22
+.br
+3.2 install HANA with XSA on site2 with node21 (master/worker) and node22 (xs_worker)
+.br
+3.3 disable XSA and back-up XSA fss on node22
+.br
+3.4 change fss to NFS in xscontroller.ini on site2
+.br
+3.5 create mountpoint for fss share and mount fss from NFS on node22
+.br
+3.6 restore XSA fss and enable XSA on node22
+.br
+3.7 copy XSA ssfs keystore from site2 to site1
+.br
+3.8 copy HANA ssfs keystore from site2 to site1
+.br
+3.9 back-up HANA on node21
+.br
+3.10 enable HANA system replication on node21
+.PP
+4.1 register HANA site1 as secondary to node21
+.br
+4.2 start HANA on site1
+.PP
+5.1 check everything is fine at site1 and site2
+.br
+5.2 stop HANA at site2
+.br
+5.3 remove XSA IP address from node22
+.br
+5.4 do manual takeover at site1
+.br
+5.6 set XSA IP address on node12
+.br
+5.7 register HANA site2 as secondary to node11
+.br
+5.8 start HANA on site2
+.br
+5.9 check everything is fine at site1 and site2
+.RE
+.PP
+Detailled examples for most of the steps are given below.
+.PP
+\fB*\fP Creating XSA fss entry in /etc/fstab.
+.PP
+Needs to be done before the NFS share with XSA fss is mounted locally.
+This filesystem is needed on both XSA standalone nodes, not on the HANA
+master nodes.
+.br
+The correct mount options are depending on the NFS server. However, client-side
+write caching has to be disabled. The path has to match fss_storage_path in
+xscontroller.ini. Since the fss directory is mounted below /hana/shared, which
+also comes from outside, the fss entry should follow later.
+.PP
+.RS 2
+nfs1:/s/ha1/xsfss /hana/shared/HA1/xs/controller_data/xsfss nfs4 rw,noac,sync,default 0 0
+.RE
+.PP
+Note: The NFS share might be monitored, but not mounted/umounted by the HA cluster.
+See ocf_suse_SAPHanaFilesystem(7) for details.
+.RE
+.PP
+\fB*\fP Adapting XSA fss entry in xscontroller.ini.
+.PP
+Needs to be adapted after XSA fss has been backed-up and before fss will be restored. 
+Example SID is HA1, directory is xsfss.
+.PP
+.RS 2
+# cat /hana/shared/HA1/global/hdb/custom/config/xscontroller.ini
+.br
+ ...
+.br
+[fss]
+.br
+fss_storage_path = /hana/shared/HA1/xs/controller_data/xsfss 
+.RE
+.PP
+\fB*\fP Creating local mountpoint for XSA fss and mounting it from remote NFS.
+.PP
+Needs to be done at both sites before restoring the fss.
+As above, SID is HA1 and directory is xsfss.
+.PP
+.RS 2
+# mkdir /hana/shared/HA1/xs/controller_data/xsfss
+.br
+# mount /hana/shared/HA1/xs/controller_data/xsfss
+.br
+# chown ha1adm:sapsys /hana/shared/HA1/xs/controller_data/xsfss
+.RE
+.PP
+\fB*\fP Copying the XSA secure keystore from primary site to secondary.
+.PP
+Needs to be done before registering the secondary site.
+Primary site is site2, secondary site is site1, SID is HA1.
+.PP
+.RS 2
+# cd /hana/shared/HA1/global/xsa/security/
+.br
+# md5sum ssfs/*/*
+.br
+# rsync -va ssfs node11:$PWD/ 
+.br
+# ssh node11 "md5sum $PWD/ssfs/*/*"
+.RE
+.PP
+.PP
+\fB*\fP Copying the HANA secure keystore from primary site to secondary.
+.PP
+Needs to be done before registering the secondary site.
+Secondary site node is node11, SID is HA1.
+.PP
+.RS 2
+# /usr/sap/HA1/SYS/global/security/rsecssfs
+.br
+# md5sum */*
+.br
+# rsync -va * node11:$PWD/
+.br
+# ssh node11 "md5sum $PWD/*/*"
+.RE
+.PP
+\fB*\fP Disabling XSA and backing up the fss.
+.PP
+Needs to be done at both sites before changing the fss from local to NFS.
+SID is HA1.
+.PP
+.RS 2
+# su - ha1adm -c "XSA disable; XSA backup-fss"
+.RE
+.PP
+\fB*\fP Restoring the fss and enabling XSA.
+.PP
+Needs to be done at both sites after the fss has been changed from local to NFS.
+SID is HA1.
+.br
+Make sure not both active XSA sites will access the shared fss directory at the
+same time.
+.PP
+.RS 2
+# su - ha1adm -c "XSA restore-fss; XSA enable"
+.RE
+.PP
+\fB*\fP Stopping HANA, including XSA.
+.PP
+Needs to be done at the site that should become secondary, before the fss at the
+other site is changed from local to NFS.
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> sapcontrol -nr 00 -function StopSystem
+.br
+.\" TODO 30 60?
+~> sapcontrol -nr 00 -function WaitforStopped 30 60
+.br
+~> sapcontrol -nr 00 -function GetSystemInstanceList
+.RE
+.PP
+\fB*\fP Backing up HANA and enabling system replication as primary site.
+.PP
+Needs to be done at future primary site, before registering the other site as
+secondary.
+SID is HA1, primary site is site2, instance number is 00.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbsql -i 00 -u SYSTEM -d SYSTEMDB \\
+.br
+ "BACKUP DATA FOR FULL SYSTEM USING FILE ('backup')"
+.br
+~> hdbnsutil -sr_enable --name=site2 
+.RE
+.PP
+\fB*\fP Registering and starting HANA as secondary site.
+.PP
+SID is HA1, secondary site is site1, primary master is node21, instance number
+is 00.
+Needs primary site up and running.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbnsutil -sr_register --name=site1 \\
+.br
+ --remoteHost=node21 --remoteInstance=00 \\
+.br
+ --replicationMode=sync --operationMode=logreplay
+.br
+~> sapcontrol -nr 00 -function StartSystem
+.br
+~> sapcontrol -nr 00 -function WaitforStarted 30 60
+.br
+~> sapcontrol -nr 00 -function GetSystemInstanceList
+.RE
+.PP
+\fB*\fP Checking that HANA database and XSA are fine.
+.PP
+Should be done at both sites, before anything will be done and after having done
+anything on HANA database and XSA.
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbnsutil -sr_state
+.br
+~> sapcontrol -nr 00 -function GetSystemInstanceList
+.br
+~> cdpy; python landscapeHostConfiguration.py
+.br
+~> cdpy; python systemReplicationStatus.py
+.br
+~> XSA info
+.RE
+.PP
+Note: Older HANA versions do not support systemReplicationStatus.py at secondary
+site.
+.PP
+\fB*\fP Overview on manual takeover for HANA database and XSA, without Linux cluster.
+.PP
+A manual takeover should be done for testing HANA database and XSA setup, before
+integrating with the Linux cluster.
+.br
+Once HANA database and XSA are controlled by the Linux cluster, the cluster
+resource has to be set into maintenance before doing a manual takeover. See
+SAPHanaSR_maintenance_examples(7).
+.br
+If there is no Linux cluster, a manual takeover can be done by following this
+procedure:
+.PP
+.RS 2
+1. On both sites: Check everything is fine.
+.br
+2. On primary site: Stop HANA database and XSA
+(sapcontrol ... StopSystem).
+.br
+3. On primary site: Remove XSA IP address from XSA node and remove HANA IP address
+from HANA master node.
+.br
+4. On secondary site: Set XSA IP address on XSA node and set HANA IP address
+on HANA master node.
+.br
+5. On secondary site: Do takeover
+(hdbnsutil -sr_takeover).
+.br
+6. On new primaary site: Check everything is fine.
+.br
+7. On former primary site: Register as new secondary and start
+(hdbnsutil -sr_register ... ; sapcontrol ... StartSystem).
+.br
+8. On both sites: Check everything is fine.
+.RE 
+.\" .PP
+.\" \fB*\fP Overview on manual takeover for HANA database and XSA, with Linux cluster.
+.\" TODO how to update score to 101 ?
+.\" TODO how to update score to 150 ?
+.PP
+\fB*\fP IPaddr2 resource for primary XSA.
+.PP
+Needs to run together with the primary XSA services. Is used by xscontroller
+for connecting internally, and is used by external clients. Thus this IP address
+needs to be resolved as wildcard DNS entry. 
+.br
+The shown location constraint works for setups with two nodes per site.
+Example SID is HA1, instance number is 00, IP address is 192.168.178.188.
+.PP
+.RS 2
+primitive rsc_ip_HA1_XSA00 IPaddr2 \\
+.br
+ op monitor interval=20s timeout=20s \\
+.br
+ params ip=192.168.178.188
+.PP
+location loc_ip_HA1_XSA00 \\
+.br
+ rsc_ip_HA1_XSA00 \\
+.br
+ rule 2000: master-rsc_SAPHanaCon_HA1_HDB00 eq 101
+.RE
+.PP
+See also ocf_hearbeat_IPAddr(2) and SAPHanaSR-ScaleOut_basic_cluster(7).
+.PP
+\fB*\fP Alternative IPaddr2 resource for HANA primary master.
+.PP
+Alternative resource configuration for the HANA primary master virtual IP
+address. Instead of following the SAPHanaController resource PROMOTED role
+by colocation rule, the IPaddr2 resource follows the node score by location
+rule directly.
+Example SID is HA1, instance number is 00, IP address is 192.168.178.1.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+primitive rsc_ip_HA1_HDB00 IPaddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.1
+.PP
+location loc_ip_HA1_HDB00 \\
+.br
+ rsc_ip_HA1_HDB00 \\
+.br
+ rule 2000: master-rsc_SAPHanaCon_HA1_HDB00 eq 150
+.RE
+.PP
+See also ocf_hearbeat_IPAddr(2) and SAPHanaSR-ScaleOut_basic_cluster(7).
+.PP
+\fB*\fP SAPHanaFilesystem resource for the shared XSA fss.
+.PP
+Optional resource to check the NFS sharing XSA fss across sites.
+The HANA consists of two sites with two nodes each. An additional cluster node
+is used as majority maker for split brain situations. One filesystem holds the
+XSA fss, provided by an NFS server and shared across sites. On both XSA worker
+nodes the NFS share is mounted statically. The SAPHanaFilesystem RA is used for
+monitoring that filesystem, but not for mounting/umounting.
+SID is HA1, instance number is 00, shared directory is
+/hana/shared/HA1/xs/controller_data/xsfss as defined in
+/etc/fstab, cluster nodes without fss are nodeMM, node11 and node21.
+.PP
+.RS 2
+primitive rsc_SAPHanaFil_HA1_XSA00 ocf:suse:SAPHanaFilesystem \\
+.br
+  op start interval="0" timeout="10" \\
+.br
+  op stop interval="0" timeout="20" on-fail="fence" \\
+.br
+  op monitor interval="120" timeout="180" \\
+.br
+  params SID="HA1" InstanceNumber="00"\\
+.br
+  DIRECTORY="/hana/shared/HA1/xs/controller_data/xsfss"
+.PP
+clone cln_SAPHanaFil_HA1_XSA00 rsc_SAPHanaFil_HA1_XSA00 \\
+.br
+  meta clone-node-max="1" interleave="true"
+.PP
+location SAPHanaFil_XSA_not_nodeMM cln_SAPHanaFil_HA1_XSA00 -inf: nodeMM
+.br
+location SAPHanaFil_XSA_not_node11 cln_SAPHanaFil_HA1_XSA00 -inf: node11
+.br
+location SAPHanaFil_XSA_not_node21 cln_SAPHanaFil_HA1_XSA00 -inf: node21
+.RE
+.PP
+See also ocf_suse_SAPHanaFilesystem(7).
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/hana/shared/<SID>/global/hdb/custom/config/xscontroller.ini
+XSA controller configuration.
+.TP
+/hana/shared/<SID>/xs/controller_data/fss/
+default Filesystem Storage directory.
+.TP
+/hana/shared/<SID>/global/xsa/security/ssfs/
+XSA secure keystore.
+.TP
+/etc/passwd , /etc/groups
+local users and groups definition files.
+.TP
+/etc/fstab
+static information about the filesystems.
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+.\" TODO check minimal version once RPM is going to be build
+\fB*\fP SAPHanaSR-angi version 1.3 or later.
+.PP
+.\" TODO check for landscapeHostConfiguration.py
+\fB*\fP SAP HANA 2.0 SPS07 rev.79.
+.PP
+\fB*\fP Currently two nodes per site are supported. One HANA master/worker and
+one standalone XSA worker.
+.PP
+\fB*\fP The SAP HANA XSA service is installed for hostname based routing. This needs
+DNS wildcard support at DNS server side.
+.PP
+\fB*\fP Both sites are using the same XSA default domain and API URL. 
+.PP
+\fB*\fP The XSA service IP address is configured as cluster resource and is moved
+together with the primary XSA.
+.PP
+\fB*\fP A highly available NFS service provides the shared XSA Filesystem Storage
+(fss) directory across sites. The fss is configured identically on both sites.
+.PP
+\fB*\fP Linux user <sid>adm has same UID and GIDs on all cluster nodes.
+.PP
+\fB*\fP Linux user <sid>adm has sudo permission ALL for Linux users <sid>xsa and
+sap<sid>xsa.
+.PP
+\fB*\fP The XSA secure keystore (ssfs) is copied from primary to secondary site.
+.PP
+\fB*\fP SAP HANA host auto-failover is not supported.
+.PP
+\fB*\fP Multi-target or multi-tier system replication is not supported for
+continous operation. However, it might be enabled temporarily for specific purpose.
+In that case, the XSA Filesystem Storage has to be transfered as well.
+.PP
+\fB*\fP SAPHanaController relies on HANA landscape status. Takeover will not be
+initiated for landscape status 2, 3 and 4. See SAPHanaController-scale-out(7).
+.PP
+\fB*\fP When recovering the srHook attribute from cache file at cluster start,
+SAPHanaController relies on HANA landscape status at both sites going to okay
+before system replication status. This is not guaranteed for the standalone XSA.
+So, any maintrenance procedure needs to take care for that.
+.PP
+\fB*\fP The sapcontrol function WaitforStopped might return befor the XSA is
+stopped completely. Thus the landscape status needs to be checked explicitely.
+.PP
+\fB*\fP The XSA scenario should be configured as progressive variant. See
+SAPHanaSR-angi-scenarios(7).
+.PP
+\fB*\fP For requirements of the overall scale-out setup, see also the REQUIREMENTS
+section in SAPHanaSR-ScaleOut(7).
+.PP
+\fB*\fP For requirements of SAP HANA XSA, please refer to the SAP product documentation.
+.PP
+\"
+.SH BUGS
+.\"
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+.\" Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-ScaleOut\fP(7) ,
+\fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaController-scale-out\fP(7) ,
+\fBocf_suse_SAPHanaFilesystem\fP(7) , \fBsusChkSrv.py\fP(7) ,
+\fBSAPHanaSR-alert-fencing\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) ,
+\fBfstab\fP(5) , \fBnfs\fP(5) ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/5bc11f2ca7744bfd9d23d09e5b616433.html?version=2.0.07 ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/6b94445c94ae495c83a19646e7c3fd56/99306be18a1f493b990cf9d8d90cd922.html?version=2.0.07 ,
+.br
+1999880 - FAQ: SAP HANA System Replication
+.br
+1999997 - FAQ: SAP HANA Memory
+.br
+2183363 - Configuration of SAP HANA internal network
+.br
+2243019 - Providing SSL certificates for domains defined in SAP HANA extended application services, advanced model
+.br
+2243156 - Secure user setup for SAP HANA extended application services, advanced model
+.br
+2245631 - Domains and routing configuration for SAP HANA extended application services, advanced model
+.br
+2303772 - SAP HANA XS Advanced Model SPS12 Release Note
+.br
+2300936 - Failover & High Availability with SAP HANA extended application services, advanced model
+.br
+2300937 - Backup and restore for SAP HANA extended application services, advanced model then notice XSA can't start up with error:
+.br
+2300943 - Enabling JDBC SSL encryption for SAP HANA extended application services, advanced model
+.br
+2507070 - Multiple XSA Systems on the same host
+.br
+2509043 - Standard Sizing Profiles for SAP HANA extended application services, advanced model
+.br
+2511224 - How to activate a XSA technical user
+.br
+2564474 - Installation of SAP HANA XS Advanced Runtime fails with error "Assigning Additional Roles to the Local Host failed".
+.br
+2596466 - FAQ: SAP HANA XS Advanced Information published on SAP
+.br
+2741459 - VA32 dump: DBSQL_DUPLICATE_KEY_ERROR
+.br
+2749450 - XSA technical user is frequently locked - authentication failed
+.br
+2752384 - HANA XS Advanced does not start - Unable to read the SID from the SL config store - authentication failed
+.br
+2866031 - Web IDE fails to start with "Request to UAA failed: certificate has expired"
+.br
+2949526 - XS controller is crashing with OutOfMemory Error
+.br
+3014176 - Applying System Size Dependent Resource Limits During Installation or Upgrade
+.br
+3083089 - Java heap space: failed to allocate. XSA execution agent error
+.br
+3110553 - XSA Installation failed due to diserver can't start up
+.br
+3114270 - How to change the port used by existing application on XSA(XS advanced)
+.br
+3224631 - Hana is unavailable with message: "process is terminating, because lockfile '/usr/sap/.../../../lock/hdbindexserver@....pid' is missing/wrong."
+.br
+3234663 - XSA can't start up after system refresh due to error "Unable to locate XSA persistence within tenant db '<DB name>'"
+.br
+3335637 - Installation of SAP HANA XS Advanced Runtime stucks in adding the role xs_worker
+.br
+3380973 - Resolving Port Conflicts with SAP HANA XS Advanced
+.br
+3433435 - How to check XSA memory settings
+.br
+3449644 - Not able to change the XSA default_domain with xscontroller.ini
+.br
+3601962 - xscontroller crashes with an out-of-memory error when restaging many applications in parallel
+.PP
+.\"
+.SH AUTHORS
+.\"
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2025-2026 SUSE LLC
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

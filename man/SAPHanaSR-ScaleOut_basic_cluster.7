@@ -338,13 +338,12 @@ setting the cluster into maintenance.
 .PP
 Let the Linux cluster manage an additional IP address and move that address
 along with the HANA secondary master nameserver. Example SID is SLE, instance
-number 00.
+number 00. The name of the node attribute is all lowercase, e.g. hana_sle_roles.
 .br
 Note: This example works for two-node HANA scale-out.
 .\" TODO multi-node see below
 .PP
 .RS 2
-.br
 primitive rsc_ip_ro_SLE_HDB00 IPaddr2 \\
 .br
  op monitor interval=10s timeout=20s \\
@@ -360,7 +359,20 @@ location loc_ip_ro_master_SLE_HDB00 \\
  rsc_ip_ro_SLE_HDB00 \\
 .br
  rule -inf: hana_sle_roles ne master1:master:worker:master
-.\" TODO works this for multi-node:  rule 8000: score eq 100
+.\" TODO since 1.2.12 works for multi-node:  rule 8000: score eq 100   ?
+.RE
+.PP
+\fB* Alternative location constraint for active/active read-enabled configuration, SAPHanaSR-angi 1.2.12 and newer\fR
+.PP
+Same use case as example above. No colocation nedeed and location constraint
+simplified. 
+.PP
+.RS 2
+location loc_ip_ro_HA1_HDB00 \\
+.br
+ rsc_ip_ro_SLE_HDB00 \\
+.br
+ rule 2000: master-rsc_SAPHanaCon_SLE_HDB00 eq 100
 .RE
 .PP
 \fB* crm grouped IP address resource configuration\fR
@@ -516,6 +528,22 @@ No output means default. See /etc/sysconfig/sbd for details.
 .RE
 .PP
 .\"
+.SH FILES
+\"
+.TP
+/var/lib/pacemaker/pengine/pe-*.bz
+pacemaker CIB snapshot files
+.TP
+/var/log/crmsh/crmsh.log
+crm shell log
+.TP
+/var/log/messages
+general system log
+.TP
+/var/log/pacemaker/pacemaker.log
+pacemaker log
+.PP
+.\"
 .SH BUGS
 .\"
 In case of any problem, please use your favourite SAP support process to open
@@ -553,7 +581,7 @@ F.Herschel, L.Pinne.
 .\"
 (c) 2018 SUSE Linux GmbH, Germany.
 .br
-(c) 2019-2025 SUSE LLC
+(c) 2019-2026 SUSE LLC
 .br
 For details see the GNU General Public License at
 http://www.gnu.org/licenses/gpl.html

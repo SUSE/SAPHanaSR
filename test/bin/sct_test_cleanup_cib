@@ -1,0 +1,122 @@
+#!/bin/bash
+#
+# sct_test_cleanup_cib - clean up failures, constraints, maintenance, etc.
+#
+# (c) 2025-2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+set -u
+source /usr/lib/SAPHanaSR-tester/sct_test_lib
+source .test_properties
+TOPO=${1:-"ScaleUp"}
+
+currPrim=$(sctl_get_curr_prim "$node01")
+currSecn=$(sctl_get_curr_secn "$node01")
+if [ $TOPO == "ScaleOut" ]; then
+    currPrimWorker=$(sctl_get_curr_prim_worker "$node01")
+    currSecnWorker=$(sctl_get_curr_secn_worker "$node01")
+fi
+
+echo "==== Cleaning up CIB ===="
+
+# clear SBD devices
+# TODO cs_clear_sbd_devices --all
+
+# start cluster
+sctl_run_crm "$node01" "cluster start --all"
+echo "sleep 90"
+sleep 90
+sctl_run_crm "$node01" "cluster wait_for_startup 60"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+
+# unfence nodes
+# TODO possible before cluster start?
+sctl_run_stonithadm "$node01" "--unfence $currPrim"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_stonithadm "$node01" "--cleanup --history $currPrim"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+if [ $TOPO == "ScaleOut" ]; then
+    sctl_run_stonithadm "$node01" "--unfence $currPrimWorker"
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+    sctl_run_stonithadm "$node01" "--cleanup --history $currPrimWorker"
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
+sctl_run_stonithadm "$node01" "--unfence $currSecn"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_stonithadm "$node01" "--cleanup --history $currSecn"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+if [ $TOPO == "ScaleOut" ]; then
+    sctl_run_stonithadm "$node01" "--unfence $currSecnWorker"
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+    sctl_run_stonithadm "$node01" "--cleanup --history $currSecnWorker"
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
+# TODO ... stonith-enabled=true
+
+# set nodes online (out of standby)
+sctl_run_crm "$node01" "node $currPrim online" 
+sctl_run_cs_wf_idle "$node01" "-s 5"
+if [ $TOPO == "ScaleOut" ]; then
+    sctl_run_crm "$node01" "node $currPrimWorker online" 
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
+sctl_run_crm "$node01" "node $currSecn online" 
+sctl_run_cs_wf_idle "$node01" "-s 5"
+if [ $TOPO == "ScaleOut" ]; then
+    sctl_run_crm "$node01" "node $currSecnWorker online" 
+    sctl_run_cs_wf_idle "$node01" "-s 5"
+fi
+
+# clear resources (remove migration constraints)
+sctl_run_crm "$node01" "resource clear $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource clear $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO clear IPaddr2
+
+# cleanup resources (remove fail-count)
+sctl_run_crm "$node01" "resource cleanup $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource cleanup"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+
+# remove cluster maintenance
+sctl_run_crm "$node01" "maintenance off"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+
+# refresh resources
+sctl_run_crm "$node01" "resource refresh $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO refresh SAPHanaFilesystem
+# TODO refresh IPaddr2
+
+# remove resource unmanage and maintenance
+sctl_run_crm "$node01" "resource manage $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource manage $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource maintenance $clnResource off"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource maintenance $mstResource off"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO unmanage SAPHanaFilesystem
+# TODO unamage IPaddr2
+
+# start resources
+sctl_run_crm "$node01" "resource start $clnResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+sctl_run_crm "$node01" "resource start $mstResource"
+sctl_run_cs_wf_idle "$node01" "-s 5"
+# TODO start SAPHanaFilesystem
+# TODO start IPaddr2
+
+# show cluster status
+sctl_run_crm "$node01" "status"
+# TODO crm_mon -1r ... SAPHanaSR-showAttr ... cs_clusterstate -i 
+#

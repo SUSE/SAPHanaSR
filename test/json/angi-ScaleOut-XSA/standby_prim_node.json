@@ -1,0 +1,96 @@
+{
+    "test": "standby_prim_node",
+    "name": "standby primary master node (and online again)",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "standby",
+        "maintenance",
+        "primary",
+        "node",
+        "master",
+        "takeover"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "spn",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "phost is standby",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "pSite": [
+                "lss == 1",
+                "srr == P",
+                "lpt > 1000000000",
+                "srHook == PRIM",
+                "srPoll == PRIM"
+            ],
+            "pHost": "pHostStandby",
+            "pWorker": [
+                "clone_state == DEMOTED",
+                "roles == slave::none:"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "takeover on secondary",
+            "next": "step40",
+            "loop": 240,
+            "post": "opn",
+            "wait": 2,
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "step40",
+            "name": "begin recover new secondary",
+            "next": "final60",
+            "loop": 240,
+            "wait": 2,
+            "pSite": [
+                "lss ~ (1|2)",
+                "lpt == 10",
+                "srHook ~ (SFAIL|SWAIT)"
+            ],
+            "pHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "standby == off"
+            ],
+            "pWorker": [
+                "clone_state == DEMOTED",
+                "roles == slave::none:"
+            ]
+        },
+        {
+            "step": "final60",
+            "name": "end recover",
+            "next": "END",
+            "loop": 240,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "sSiteUp",
+            "sSite": "pSiteUp",
+            "pHost": "sHostUp",
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
+        }
+    ]
+}

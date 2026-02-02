@@ -8,7 +8,9 @@
         "primary",
         "node",
         "master",
-        "takeover"
+        "takeover",
+        "fencing",
+        "onfail"
     ],
     "start": "prereq10",
     "steps": [
@@ -28,38 +30,40 @@
         },
         {
             "step": "step20",
-            "name": "failure detected",
+            "name": "pmaster fencend + failure detected",
             "next": "step30",
             "loop": 120,
             "wait": 2,
             "pSite": [
-                "lss == 1",
-                "srr == P",
-                "lpt >~ 1000000000:(20|10)",
-                "srHook ~ (PRIM|SWAIT|SREG)",
-                "srPoll == PRIM"
+                "srr == P"
             ],
-            "sSite": [
-                "lpt >~ 1000000000:30",
-                "lss == 4",
-                "srr ~ (S|P)",
-                "srHook ~ (PRIM|SOK)",
-                "srPoll ~ (SOK|SFAIL)"
+             "pHost": [
+                "clone_state is None",
+                "roles is None",
+                "score is None"
             ],
-            "pHost": [],
-            "sHost": [
-                "clone_state ~ (PROMOTED|DEMOTED)",
-                "roles == master1:master:worker:master",
-                "score ~ (100|145)"
-            ]
+            "pWorker": "pWorkerUp",
+            "sSite": "sSiteUp",
+            "sHost": "sHostUp",
+            "sWorker": "sWorkerUp"
         },
         {
             "step": "step30",
-            "name": "begin recover",
-            "next": "final40",
-            "loop": 300,
+            "name": "takeover on secondary - or jump to alternative (local restart)",
+            "next": "step40",
+            "onfail": "alt120",
+            "loop": 240,
             "wait": 2,
-            "todo": "pHost+sHost to check site-name",
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "step40",
+            "name": "begin recover new secondary",
+            "next": "final60",
+            "loop": 240,
+            "wait": 2,
             "pSite": [
                 "lss ~ (1|2)",
                 "srr ~ (P|S)",
@@ -67,37 +71,44 @@
                 "srHook ~ (PRIM|SWAIT|SREG)",
                 "srPoll ~ (PRIM|SFAIL)"
             ],
-            "sSite": [
-                "lpt >~ 1000000000:30",
-                "lss == 4",
-                "srr ~ (S|P)",
-                "srHook == PRIM",
-                "srPoll ~ (SOK|PRIM)"
-            ],
             "pHost": [
-                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
+                "clone_state ~ (UNDEFINED|DEMOTED)",
                 "roles == master1::worker:"
             ],
-            "sHost": [
-                "clone_state ~ (DEMOTED|PROMOTED)",
-                "roles == master1:master:worker:master",
-                "score ~ (100|145|150)"
-            ]
+            "pWorker": [
+                "roles ~ (:::|slave::worker:|slave:slave:worker:slave)"
+            ],
+            "sSite": "pSiteUp",
+            "sHost": "pHostUp",
+            "sWorker": "pWorkerUp"
         },
         {
-            "step": "final40",
-            "name": "end recover",
+            "step": "final60",
+            "name": "end recover (takeover)",
             "next": "END",
             "loop": 300,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
             "pSite": "sSiteUp",
             "sSite": "pSiteUp",
             "pHost": "sHostUp",
             "sHost": "pHostUp",
             "pWorker": "sWorkerUp",
             "sWorker": "pWorkerUp"
+        },
+        {
+            "step": "alt120",
+            "name": "end recover (local restart)",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
         }
     ]
 }

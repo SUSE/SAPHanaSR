@@ -11,7 +11,7 @@
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2014 SUSE Linux Products GmbH
 #               (c) 2015-2016 SUSE Linux GmbH
-#               (c) 2017-2025 SUSE LLC
+#               (c) 2017-2026 SUSE LLC
 #
 # An example usage:
 #      See usage() function below for more details...
@@ -23,7 +23,7 @@
 #
 #######################################################################
 #
-saphana_common_lib_version="1.2.12"
+saphana_common_lib_version="1.3.0"
 #
 #######################################################################
 
@@ -315,7 +315,11 @@ function set_hana_site_attribute() {
     local attr_value="$2"
     local attr_name="${3}_${attr_obj}"
     local attr_store="${4:-props}" # site attributes are always props, non node attributes
-    set_hana_attribute "$attr_obj" "$attr_value" "$attr_name" "$attr_store"
+    if [[ -z "$attr_obj" ]]; then
+        super_ocf_log warn "ACT: set_hana_site_attribute: 'attr_obj' is empty (attr_value=$attr_value; attr_name=$attr_name)"
+    else
+        set_hana_attribute "$attr_obj" "$attr_value" "$attr_name" "$attr_store"
+    fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return 0
 } # end function set_hana_site_attribute
@@ -473,16 +477,12 @@ function HANA_CALL() {
                   cmd_out_log="${runDir}/HANA_CALL_CMD_${raType}OUT_${errExt}"
                   cmd_err_log="${runDir}/HANA_CALL_CMD_${raType}ERR_${errExt}"
 
-                  # TODO PRIO2: NG - ScaleUp had 'timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log)'
-                  #                  'output=$(timeout "$timeOut" $pre_cmd "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc=$?
-                  #                  ScaleOut has
-                  #                  'output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"'
                   case "$pre_cmd_type" in
                       bash )
-                            output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
+                            output=$(timeout --foreground -s 9 "$timeOut" bash -c "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
                             ;;
                       su )
-                            output=$(timeout --foreground -s 9 "$timeOut" su - "${sid}adm" -c "($pre_script; timeout -s 9 $timeOut $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
+                            output=$(timeout --foreground -s 9 "$timeOut" su - "${sid}adm" -c "($pre_script; $cmd > $cmd_out_log) >& $cmd_err_log" 2>"$su_err_log"); rc="$?"
                             ;;
                   esac
                   if [[ -f "$cmd_out_log" ]]; then output=$(<"$cmd_out_log"); rm -f "$cmd_out_log"; fi
@@ -492,14 +492,6 @@ function HANA_CALL() {
                   # on rc=1 - retry to improve the behavior in AD environments
                   # fh 20230127 deactivate this part. rc=1 could also be the valid rc of the called command
                   # TODO PRIO2: NG - to improve handling of su-errors we need to catch this errors and differ them from the cmd rc
-                  #if [ "$rc" == "1" ]; then
-                  #    super_ocf_log warn "RA: HANA_CALL stderr from command '$pre_cmd_type' is '$suErr', stderr from command '$cmd' is '$cmdErr'"
-                  #    if [ "$cmdErr" == "NA" ]; then
-                  #        # seems something was going wrong with the 'pre_cmd_type' (su)
-                  #        super_ocf_log warn "DEC: HANA_CALL returned '1' for command '$pre_cmd_type'. Retry once."
-                  #        output=$(timeout --foreground -s 9 "$timeOut" $pre_cmd "$pre_script; timeout -s 9 $timeOut $cmd"); rc="$?"
-                  #    fi
-                  #fi
                  ;;
     esac
     super_ocf_log info "RUNTIME HANA_CALL '$cmd' stack:${FUNCNAME[*]}rc=$rc"
@@ -980,7 +972,6 @@ function node_role_walk() {
                 super_ocf_log info "DEC: Filter node $node by cluster node standby mode"
             else
                # TODO PRIO1: NG - Topology might always use landsscapeHostConfiguration here
-               # TODO PRIO0: NG
                 #nodeRole=$(get_role_by_cluster_or_landscape "${NODENAME}" "$gVirtName")"
                 nodeRole="$(get_hana_attribute "${node}" "${ATTR_NAME_HANA_ROLES[@]}")"
                 #super_ocf_log info "DEC: HUGO-FLIPS-BIENE nodeRole=$nodeRole; gNodeRole=$gNodeRole gVirtName=$gVirtName"
@@ -1015,9 +1006,11 @@ function node_role_walk() {
                                         ;;
                 esac
                 # TODO PRIO4: NG - XSA/NSE/... for SAP workloads with indexserver roles 'none' - how to handle that here?
+                #      ==> do we need to differ typed of 'node'-nodes by the hostConfigRoles ?
                 case "$nodeRole" in
                     *:*:worker:* )  (( nr_site_worker++ ));  (( gNrSiteNode++ ));;
                     *:*:standby:* ) (( nr_site_standby++ )); (( gNrSiteNode++ ));;
+                    *:*:none:* )    (( nr_site_standby++ )); (( gNrSiteNode++ ));;
                 esac
                 super_ocf_log debug "DBG: $gSite: $nodeRole"
             fi
