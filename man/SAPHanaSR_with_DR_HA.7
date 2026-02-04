@@ -1,0 +1,169 @@
+.\" Version: 1.2 
+.\"
+.TH SAPHanaSR_with_DR_HA 7 "12 Feb 2026" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+. \"
+SAPHanaSR_with_DR_HA \- SAPHanaSR with standby HA cluster at DR site.
+.\"
+.SH DESCRIPTION
+.\"
+.PP
+\fB*\fP Overview
+.PP
+TODO
+.br
+[ B <= A' ] -> C => D
+.PP
+\fB*\fP Setup procedure
+.PP
+TODO
+.PP
+.\"
+.SH EXAMPLES
+.\"
+\fB*\fP Entry in gobal.ini to register secondaries on takeover.
+.PP
+This entry is needed at all HANA nodes to allow ocf_suse_SAPHanaController(7)
+parameter AUTOMATED_REGISTER=true in multi-target environments. The HANA has to
+be stopped before the files can be edited. Do not copy the file between
+nodes. Please check SAP HANA documentation for details.
+.PP
+.R2 2
+[system_replication]
+.br
+ ...
+.br
+register_secondaries_on_takeover = true
+ ...
+.RE
+.PP
+\fB*\fP Copying HANA secure keystore from primary to secondaries at DR site.
+.PP
+Needs to be done at production primary before registering the DR secondaries.
+DR secondary nodes are node3 and node4, SID is HA1.
+.PP
+.RS 2
+# cd /usr/sap/HA1/SYS/global/security/rsecssfs
+.br
+# md5sum */*
+.br
+# rsync -va * node3:$PWD/
+.br
+# rsync -va * node4:$PWD/
+.br
+# ssh node3 "md5sum $PWD/*/*"
+.br
+# ssh node4 "md5sum $PWD/*/*"
+.RE
+.PP
+\fB*\fP Registering first DR node as secondary to production primary.
+.PP
+Needs to be done at first DR node.
+DR site is site3, production primary is node1, SID is HA1, instance numner is 00.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> HDB info
+.br
+~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+.br
+ --replicationMode=async --operationMode=logreplay --name=site3 \\
+.br
+ --online
+.br
+~> hdbnsutil -sr_state
+.br
+.RE
+.PP
+\fB*\fP Backing up first DR node and enabling system replication.
+.PP
+Needs to be done at first DR node.
+DR site is site3, SID is HA1
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbsql -i 00 -u SYSTEM -d SYSTEMDB \\
+.br
+ "BACKUP DATA FOR FULL SYSTEM USING FILE ('backup')"
+.br
+~> hdbnsutil -sr_enable --name=site3
+.br
+~> hdbnsutil -sr_state
+.RE
+.PP
+\fB*\fP Registering second DR node to first one.
+.PP
+Nees to be done at second DR node.
+SID is HA1, site is site4, first DR node is node3, instance number is 00.
+Needs first DR node up and running.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> HDB info
+.br
+~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
+.br
+ --replicationMode=sync --operationMode=logreplay --name=site4 \\
+.br
+ --online
+.br
+~> hdbnsutil -sr_state
+.RE
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+the on-disk representation of HANA global system configuration
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+\fB*\fP Before connecting the DR site to the production site, the production
+SAPHanaSR-angi scale-up performance-optimized cluster needs to be up and running.
+.br
+\fB*\fP Before connecting the DR site to the production site, the DR site has been
+set up as SAPHanaSR-angi scale-up performance-optimized cluster and the whole
+cluster has been set into maintenance.
+.br
+\fB*\fP Production HA cluster and DR site HA cluster must never be active at
+the same time.
+.br
+\fB*\fP The HA cluster moves an IP address with the HANA primary between the two
+production nodes. The IP address will not be moved from production to DR site. 
+.PP
+See also the REQUIREMENTS section in manual pages SAPHanaSR(7) and susHanaSR.py(7). 
+.\"
+.SH BUGS
+.\"
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaSR\fP(7) , 
+\fBsusHanaSR.py\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
+\fBha_related_acronyms\fP(7) ,
+.PP
+.\"
+.SH AUTHORS
+.\"
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2026 SUSE LLC
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
