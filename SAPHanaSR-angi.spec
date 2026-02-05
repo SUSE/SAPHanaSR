@@ -37,7 +37,7 @@ Requires:       resource-agents
 Requires:       perl
 
 # Require crmsh-scripts for the HAWK2 wizards
-Requires:       crmsh >= 4.4.0
+Requires:       crmsh >= 4.4.2+20250526.46896f4
 Requires:       crmsh-scripts >= 4.4.0
 Requires:       python3
 Requires:       /usr/bin/xmllint
