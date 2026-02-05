@@ -4,7 +4,7 @@
 .\"
 .SH NAME
 . \"
-SAPHanaSR_multi-target \- SAPHanaSR multi-target replication support.
+SAPHanaSR_multi-target \- SAPHanaSR multi-target system replication scenarios.
 .\"
 .SH DESCRIPTION
 .\"
@@ -13,37 +13,63 @@ TODO
 maximum one additional replication
 .br
 only on replication controlled by HA cluster
+.br
+third site often is used as Disaster Recovery (DR) site, larger distance away
+.br
+often replication mode is async
 .PP
-Supported scenarios:
+Common possible scenarios:
 .TP
 Scale-up perf-opt with multi-target replication
-[ B <= A' ] -> C
+[ A <= B' ] -> C
 .TP
 Scale-up perf-opt with multi-tier replication (directed replication chain), sub-case of multi-target
 [ A' => B ] -> C
+.\" .TP
+.\" TODO Scale-up cost-opt with multi-target replication
+.\" [ "Q,A <= B' ] -> C
 .TP
-Scale-up cost-opt with multi-target replication
-[ 'Q,B <= A' ] -> C
-.TP
-Scale-up perf-opt with multi-target replication, additional replication
-[ B <= A' ] -> C => D
+Scale-up perf-opt with multi-target replication and fourth site
+[ A <= B' ] -> C => D
 .TP
 Scale-out perf-opt ERP-style with multi-target replication
-[ Bb <= Aa' ] -> Cc
+[ Aa <= Bb' ] -> Cc
 .TP
-
+Scale-out perf-opt ERP-style with multi-target replication and fourth site
+[ Aa <= Bb' ] -> Cc => Dd
 .PP
-TODO
+Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notation.
 .PP
 .\"
 .SH EXAMPLES
 .\"
+\fB*\fP Procedure for connecting a third site by replication to a cluster-controlled HANA pair.
+.PP
+TODO
+.RS 2
+1. Collecting information and preparing sheet
+.br
+2. Setting up the third site
+.br
+3. Adding the register secondaries setting to the cluster-controlled HANA databases
+.\" TODO without restart?
+.br
+4. Copying HANA secure keystore from current primary to third site
+.br
+5. Registering the third HANA database to the current primary
+.\" TODO --online?
+.br
+6. Checking the new replication
+.br
+7. Checking if cluster takeover still works, and third site follows
+.RE
+.PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
 .PP
-This entry is needed at all HANA nodes to allow ocf_suse_SAPHanaController(7)
-parameter AUTOMATED_REGISTER=true in multi-target environments. The HANA has to
-be stopped before the files can be edited. Do not copy the file between
-nodes. Please check SAP HANA documentation for details.
+This entry is needed at all HANA nodes of the Linux clsuter to allow the 
+SAPHanaController parameter AUTOMATED_REGISTER=true in multi-target environments.
+The HANA has to be stopped before the files can be edited. Do not copy the file
+between nodes. Please check SAP HANA documentation for details.
 .PP
 .R2 2
 [system_replication]
@@ -54,29 +80,11 @@ register_secondaries_on_takeover = true
  ...
 .RE
 .PP
-\fB*\fP Copying HANA secure keystore from primary to secondaries at DR site.
+\fB*\fP Registering third (DR) node as secondary to production primary.
 .PP
-Needs to be done at production primary before registering the DR secondaries.
-DR secondary nodes are node3 and node4, SID is HA1.
-.PP
-.RS 2
-# cd /usr/sap/HA1/SYS/global/security/rsecssfs
-.br
-# md5sum */*
-.br
-# rsync -va * node3:$PWD/
-.br
-# rsync -va * node4:$PWD/
-.br
-# ssh node3 "md5sum $PWD/*/*"
-.br
-# ssh node4 "md5sum $PWD/*/*"
-.RE
-.PP
-\fB*\fP Registering first DR node as secondary to production primary.
-.PP
-Needs to be done at first DR node.
-DR site is site3, production primary is node1, SID is HA1, instance numner is 00.
+Needs to be done at third (DR) node.
+Third (DR) site is site3, production primary is node1, SID is HA1, instance number
+is 00.
 .PP
 .RS 2
 # su - ha1adm
@@ -93,43 +101,6 @@ DR site is site3, production primary is node1, SID is HA1, instance numner is 00
 .br
 .RE
 .PP
-\fB*\fP Backing up first DR node and enabling system replication.
-.PP
-Needs to be done at first DR node.
-DR site is site3, SID is HA1
-.PP
-.RS 2
-# su - ha1adm
-.br
-~> hdbsql -i 00 -u SYSTEM -d SYSTEMDB \\
-.br
- "BACKUP DATA FOR FULL SYSTEM USING FILE ('backup')"
-.br
-~> hdbnsutil -sr_enable --name=site3
-.br
-~> hdbnsutil -sr_state
-.RE
-.PP
-\fB*\fP Registering second DR node to first one.
-.PP
-Nees to be done at second DR node.
-SID is HA1, site is site4, first DR node is node3, instance number is 00.
-Needs first DR node up and running.
-.PP
-.RS 2
-# su - ha1adm
-.br
-~> HDB info
-.br
-~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
-.br
- --replicationMode=sync --operationMode=logreplay --name=site4 \\
-.br
- --online
-.br
-~> hdbnsutil -sr_state
-.RE
-.PP
 .\"
 .SH FILES
 .\"
@@ -140,18 +111,12 @@ the on-disk representation of HANA global system configuration
 .\"
 .SH REQUIREMENTS
 .\"
-\fB*\fP Before connecting the DR site to the production site, the production
-SAPHanaSR-angi scale-up performance-optimized cluster needs to be up and running.
-.br
-\fB*\fP Before connecting the DR site to the production site, the DR site has been
-set up as SAPHanaSR-angi scale-up performance-optimized cluster and the whole
-cluster has been set into maintenance.
-.br
-\fB*\fP Production HA cluster and DR site HA cluster must never be active at
-the same time.
-.br
-\fB*\fP The HA cluster moves an IP address with the HANA primary between the two
-production nodes. The IP address will not be moved from production to DR site. 
+.PP
+\fB*\fP Only one system replication between the two SAP HANA databases in the Linux
+cluster. Maximum one system replication to an HANA database outside the Linux cluster.
+.PP 
+\fB*\fP The replication mode is either sync or syncmem for the controlled replication.
+Replication mode async is not supported inside the Linux cluster.
 .PP
 See also the REQUIREMENTS section in manual pages SAPHanaSR(7) and susHanaSR.py(7). 
 .\"
@@ -171,7 +136,7 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 .SH AUTHORS
 .\"
-F.Herschel, L.Pinne.
+A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
