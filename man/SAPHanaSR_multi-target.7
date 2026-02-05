@@ -9,7 +9,7 @@ SAPHanaSR_multi-target \- SAPHanaSR multi-target system replication scenarios.
 .SH DESCRIPTION
 .\"
 .PP
-TODO
+.\" TODO
 maximum one additional replication
 .br
 only on replication controlled by HA cluster
@@ -45,7 +45,8 @@ Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notatio
 .\"
 \fB*\fP Procedure for connecting a third site by replication to a cluster-controlled HANA pair.
 .PP
-TODO
+.\" TODO
+.PP
 .RS 2
 1. Collecting information and preparing sheet
 .br
@@ -64,6 +65,24 @@ TODO
 7. Checking if cluster takeover still works, and third site follows
 .RE
 .PP
+\fB*\fP Procedure for connecting a fourth site by replication to a third site.
+.PP
+.\" TODO
+.PP
+.RS 2
+1. Collecting information and preparing sheet
+.br
+2. Setting up the fourth site
+.br
+3. Copying HANA secure keystore from current primary to fourth site
+.br
+4. Backing up the third HANA database and enabling system replication
+.br
+5. Registering the fourth HANA database to the third
+.br
+6. Checking the new replication
+.RE
+.PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
 .PP
 This entry is needed at all HANA nodes of the Linux clsuter to allow the 
@@ -80,11 +99,26 @@ register_secondaries_on_takeover = true
  ...
 .RE
 .PP
-\fB*\fP Registering third (DR) node as secondary to production primary.
+\fB*\fP Copying the HANA secure keystore from primary to third site.
 .PP
-Needs to be done at third (DR) node.
-Third (DR) site is site3, production primary is node1, SID is HA1, instance number
-is 00.
+Needs to be done before registering the third site.
+Third site node is node3, SID is HA1.
+.PP
+.RS 2
+# cd /usr/sap/HA1/SYS/global/security/rsecssfs
+.br
+# md5sum */*
+.br
+# rsync -va * node3:$PWD/
+.br
+# ssh node3 "md5sum $PWD/*/*"
+.RE
+.PP
+\fB*\fP Registering third site as additional secondary to production primary.
+.PP
+Needs to be done at third site (master) node.
+Third site is site3, production primary is node1, SID is HA1, instance number
+is 00, replication mode is async, operation mode is logreplay.
 .PP
 .RS 2
 # su - ha1adm
@@ -98,7 +132,23 @@ is 00.
  --online
 .br
 ~> hdbnsutil -sr_state
+.RE
+.PP
+\fB*\fP Backing up third site HANA and enabling system replication.
+.PP
+Needs to be done at third (master) node before registering fourth site.
+SID is HA1, instance numbr is 00, site name is site3.
+.PP
+.RS 2
+# su - ha1adm
 .br
+~> hdbsql -i 00 -u SYSTEM -d SYSTEMDB \\
+.br
+ "BACKUP DATA FOR FULL SYSTEM USING FILE ('backup')"
+.br
+~> hdbnsutil -sr_enable --name=site3
+.br
+~> hdbnsutil -sr_state
 .RE
 .PP
 .\"
@@ -106,7 +156,10 @@ is 00.
 .\"
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
-the on-disk representation of HANA global system configuration
+on-disk representation of HANA global system configuration.
+.TP
+/usr/sap/$SID/SYS/global/security/rsecssfs/
+HANA database secure keystore directory.
 .PP
 .\"
 .SH REQUIREMENTS
