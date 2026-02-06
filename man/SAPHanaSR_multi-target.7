@@ -152,6 +152,8 @@ Note: Understand the impact before trying.
 1. Register former production primary as secondary to current primary at DR site.
 .\" hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 --name=site1 --replicationMode=async --operationMode=logreplay --force_full_replica
 .br
+.B The next step will overwrite all HANA data at fomer primary site.
+.br
 2. Start former production primary as secondary.
 .\" HDB start
 .br
@@ -164,37 +166,42 @@ Note: Understand the impact before trying.
 5. Start former production secondary.
 .\" HDB start
 .br
-6. Takeover at former production primary, suspend primary at DR site.
-.\" hdbnsutil -sr_takeover --suspendPrimary
+6. Stop fourth site (if existing).
 .br
-7. Remove IP address from current primary at DR site.
+7. Takeover at former production primary, suspend primary at DR site.
+.\" hdbnsutil -sr_takeover --suspendPrimary
+.\" TODO site4 registers to site1 due to register_secondaries_on_takeover
+.br
+8. Remove IP address from current primary at DR site.
 .\" ip a r ...
 .br
-8. Set IP address at new production primary.
+9. Set IP address at new production primary.
 .\" ip a a ...
 .br
-9. Start Linux cluster at new production primary only.
+10. Start Linux cluster at new production primary only.
 .\" crm cluster start
 .br
-10. Set multi-state SAPHanaController resource into maintenance.
+11. Set multi-state SAPHanaController resource into maintenance.
 .\" crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .br
-11. Start Linux cluster at production secondary.
+12. Start Linux cluster at production secondary.
 .\" crm cluster start
 .br
-12. Refresh multi-state SAPHanaController resource.
+13. Refresh multi-state SAPHanaController resource.
 .\" crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .br
-13. Get multi-state SAPHanaController resource out of maintenance.
+14. Get multi-state SAPHanaController resource out of maintenance.
 .\" crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .br
-14. Check everything is fine.
+15. Check everything is fine.
 .\" ...
 .br
-15. Register third site as DR again.
+.B The next step will overwrite all HANA data at third site.
+.br
+16. Register third site as DR again.
 .\" 
 .br
-16. Check everything is fine.
+17. Check everything is fine.
 .\" ...
 .RE
 .PP
