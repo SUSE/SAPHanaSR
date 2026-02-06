@@ -8,19 +8,15 @@ SAPHanaSR_multi-target \- SAPHanaSR multi-target system replication scenarios.
 .\"
 .SH DESCRIPTION
 .\"
-.\" TODO
-Two HANA sites, connected with one system replication are controlled by the
-Linux cluster.
-A third HANA site, outside the cluster, is connected by a second system replication
-to one of the cluster sites.
+If more than one HANA secondary site is connected by system replication to one
+same primary, it is HANA multi-target system replication.
+.\" TODO multi-tier
 .PP
-The third site often is used as Disaster Recovery (DR) site, a longer distance
-away. So the replication mode might be async. The decision and procedure for takeover
-in DR case have to be prepared carefully and should be trained on regular base.  
-.PP
-Another case is a temporary replication, e.g. for filling test databases or performing
-an upgrade. 
-.PP
+In any case, only two HANA sites, connected with one system replication, are
+controlled by one Linux cluster.
+A third HANA site, outside the cluster, might be connected by a second system
+replication to one of the cluster sites.
+And to that third site, a fourth one might be connected.
 So, common possible scenarios are:
 .TP
 Scale-up perf-opt with multi-target replication
@@ -43,9 +39,17 @@ Scale-out perf-opt ERP-style with multi-target replication and fourth site
 .PP
 Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notation.
 .PP
+The third site often is used as Disaster Recovery (DR) site, a longer distance
+away. So the replication mode might be async. The decision and procedure for takeover
+in DR case have to be prepared carefully and should be trained on regular base.  
+.PP
+Another case is a temporary replication, e.g. for filling test databases or performing
+an upgrade. 
+.PP
 The Linux cluster recognises the status of the second replication by HANA HA/DR
 provider hook event srConnectionChanged() on the primary node. See susChkSrv.py(7)
-for details.
+for details. The third replication link is invisible for the Linux cluster.
+However, it is shown by systemReplicationStatus.py at the primary site. 
 .PP
 .\"
 .SH EXAMPLES
@@ -85,7 +89,7 @@ Details on how to perform the steps can be found in examples below.
 .br
 3. Copy HANA secure keystore from current primary to fourth site.
 .br
-4. Back up the third HANA database and enabling system replication.
+4. Back up the third HANA database and enable system replication.
 .br
 5. Register the fourth HANA database to the third.
 .br
@@ -189,6 +193,7 @@ is 00, replication mode is async, operation mode is logreplay.
 .PP
 \fB*\fP Checking srHook attribute for third site.
 .PP
+Could be done at any cluster node once a tihrd site has been connected.
 The susHanaSR.py HA/DR provider hook script of the cluster-controlled HANA databases
 will detect the outer system replication and write a related srHook attribute into
 CIB. The srHook attributes have to be distinguished by site names.
@@ -251,9 +256,8 @@ replication source needs to be up and running
 .PP
 \fB*\fP Removing orphaned srHook attribute from CIB.
 .PP
-.\" TODO srPoll and others?
-Might be done once a temporary replication has been finally disabled.
-To be removed srHook´s SID is ICE, site is BERG.
+Might be done at any cluster node once once a temporary replication has been
+finally disabled. To be removed srHook´s SID is ICE, site is BERG.
 .br
 Note: Understand the impact before trying.
 .PP
@@ -265,6 +269,17 @@ Note: Understand the impact before trying.
  -s SAPHanaSR --delete
 .br
 # crm configure show SAPHanaSR | grep _srHook_BERG=
+.RE
+.PP
+\fB*\fP Checking status of all system replication connections.
+.PP
+Could be done at primary site (master) node. SID is HA1.
+See also SAPHanaSR_maintenance_examples(7) and susHanaSR.py(7).
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
 .RE
 .PP
 .\"
