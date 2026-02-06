@@ -123,7 +123,7 @@ Note: Understand the impact before trying.
 .br
 2. Take decision for takeover.
 .br
-3. Disable system replication at third site.
+3. Perform takeover at third site.
 .br
 4. Activate IP adress at third node.
 .\" TODO
@@ -132,6 +132,7 @@ Note: Understand the impact before trying.
 \fB*\fP Procedure for taking back from third site to cluster.
 .PP
 .\" TODO
+Automatic start-up of cluster has to be disabled at production site nodes.
 Details on how to perform the steps can be found below.
 .br
 Note: Understand the impact before trying.
@@ -227,6 +228,7 @@ SID is HA1, instance numbr is 00, site name is site3.
 .PP
 \fB*\fP Disabling system replication at third site while source is available.
 .PP
+.\" TODO
 To be done at third site (master) node.
 Replication source needs to be up and running.
 In case fourth is connected to third, that replication will be removed as well.
@@ -242,22 +244,24 @@ SID is HA1.
 ~> hdbnsutil -sr_state
 .RE
 .PP
-\fB*\fP Disabling system replication at third site when source is not available.
+\fB*\fP Taking over at third site when source is not available.
 .PP
-.\" TODO
 To be done at third site (master) node.
 Replication source is not available.
-In case fourth is connected to third, that replication will be removed as well.
+In case fourth is connected to third, that replication will stay.
+
 SID is HA1.
 .PP
 .RS 2
 # su - ha1adm
 .br
+~> hdbnsutil -sr_stateConfiguration
+.br
+~> hdbnsutil -sr_takeover
+.br
 ~> hdbnsutil -sr_state
 .br
-~> hdbnsutil ...
-.br
-~> hdbnsutil -sr_state
+~> cdpy; python3 ./systemReplicationStatus.py; echo "RC: $?"
 .RE
 .PP
 \fB*\fP Removing orphaned srHook attribute from CIB.
@@ -321,6 +325,9 @@ landscape status outside the cluster.
 .PP
 \fB*\fP If the third site is used as DR site, decision and procedure for takeover
 are in customer´s responsibility. All need to comply to SAP HANA requirements.
+.PP
+\fB*\fP If the third site is used as DR site, at production site nodes the automatic
+start of cluster at boot has to be disabled.
 .PP
 \fB*\fP Any manual procedure has to be tested, documented and trained before applied
 on production systems.
