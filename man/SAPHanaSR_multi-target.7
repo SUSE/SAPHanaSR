@@ -8,17 +8,20 @@ SAPHanaSR_multi-target \- SAPHanaSR multi-target system replication scenarios.
 .\"
 .SH DESCRIPTION
 .\"
-.PP
 .\" TODO
-only on replication controlled by Linux cluster
-.br
-third site often is used as Disaster Recovery (DR) site, longer distance away
-.br
-often replication mode is async
-.br
-temporary replication, e.g. for filling test database or upgrade procedure 
+Two HANA sites, connected with one system replication are controlled by the
+Linux cluster.
+A third HANA site, outside the cluster, is connected by a second system replication
+to one of the cluster sites.
 .PP
-Common possible scenarios:
+The third site often is used as Disaster Recovery (DR) site, a longer distance
+away. So the replication mode might be async. The decision and procedure for takeover
+in DR case have to be prepared carefully and should be trained on regular base.  
+.PP
+Another case is a temporary replication, e.g. for filling test databases or performing
+an upgrade. 
+.PP
+So, common possible scenarios are:
 .TP
 Scale-up perf-opt with multi-target replication
 [ A <= B' ] -> C
@@ -33,12 +36,16 @@ Scale-up perf-opt with multi-target replication and fourth site
 [ A <= B' ] -> C => D
 .TP
 Scale-out perf-opt ERP-style with multi-target replication
-[ Aa <= Bb' ] -> Cc
+[ Aa <= 'Bb ] -> Cc
 .TP
 Scale-out perf-opt ERP-style with multi-target replication and fourth site
-[ Aa <= Bb' ] -> Cc => Dd
+[ Aa <= 'Bb ] -> Cc => Dd
 .PP
 Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notation.
+.PP
+The Linux cluster recognises the status of the second replication by HANA HA/DR
+provider hook event srConnectionChanged() on the primary node. See susChkSrv.py(7)
+for details.
 .PP
 .\"
 .SH EXAMPLES
@@ -46,55 +53,87 @@ Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notatio
 \fB*\fP Procedure for connecting a third site by replication to a cluster-controlled HANA pair.
 .PP
 .\" TODO
+Details on how to perform the steps can be found in examples below.
 .PP
 .RS 2
-1. Collecting information and preparing parameter sheet
+1. Collect information and prepare parameter sheet.
 .br
-2. Setting up the third site
+2. Set up the third site.
 .br
-3. Adding the register secondaries setting to the cluster-controlled HANA databases
+3. Add the register secondaries setting to the cluster-controlled HANA databases.
 .\" TODO without restart?
 .br
-4. Copying HANA secure keystore from current primary to third site
+4. Copy HANA secure keystore from current primary to third site.
 .br
-5. Registering the third HANA database to the current primary
+5. Register the third HANA database to the current primary.
 .\" TODO --online?
 .br
-6. Checking the new replication
+6. Check the new replication.
 .br
-7. Checking if cluster takeover still works, and third site follows
+7. Check if cluster takeover still works, and third site follows.
 .RE
 .PP
 \fB*\fP Procedure for connecting a fourth site by replication to a third site.
 .PP
 .\" TODO
+Details on how to perform the steps can be found in examples below.
 .PP
 .RS 2
-1. Collecting information and preparing parameter sheet
+1. Collect information and prepare parameter sheet.
 .br
-2. Setting up the fourth site
+2. Set up the fourth site.
 .br
-3. Copying HANA secure keystore from current primary to fourth site
+3. Copy HANA secure keystore from current primary to fourth site.
 .br
-4. Backing up the third HANA database and enabling system replication
+4. Back up the third HANA database and enabling system replication.
 .br
-5. Registering the fourth HANA database to the third
+5. Register the fourth HANA database to the third.
 .br
-6. Checking the new replication
+6. Check the new replication.
 .RE
 .PP
-\fB*\fP Procedure for disconnecting a temporarily connected third site.
+\fB*\fP Procedure for disconnecting a temporarily connected third site while primary is available.
 .PP
-\." TODO
+.\" TODO
+Details on how to perform the steps can be found below.
 .PP
 .RS 2
-1. Collecting information and preparing parameter sheet
+1. Collect information and prepare parameter sheet.
 .br
-2. Disabling system replication at third site
+2. Disable system replication at third site.
 .br 
-3. Removing orphaned attributes from CIB
+3. Remove orphaned attributes from CIB.
 .br
-4. Checking if cluster-controlled replication still works
+4. Check if cluster-controlled replication still works.
+.RE
+.PP
+\fB*\fP Procedure for taking over to third site in DR case.
+.PP
+.\" TODO
+Details on how to perform the steps can be found below.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+1. Make sure both sites of the Linux cluster are not running.
+.br
+2. Take decision for takeover.
+.br
+3. Disable system replication at third site.
+.br
+4. Activate IP adress at third node.
+.\" TODO
+.RE
+.PP
+\fB*\fP Procedure for taking back from third site to cluster.
+.PP
+.\" TODO
+Details on how to perform the steps can be found below.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+.\" TODO
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
@@ -104,7 +143,7 @@ SAPHanaController parameter AUTOMATED_REGISTER=true in multi-target environments
 The HANA has to be stopped before the files can be edited. Do not copy the file
 between nodes. Please check SAP HANA documentation for details.
 .PP
-.R2 2
+.RS 2
 [system_replication]
 .br
  ...
@@ -161,13 +200,12 @@ See also susHanaSR.py(7) and SAPHanaSR-showAttr(8).
 .br 
  grep -e _srHook_site1= -e _srHook_site2= -e _srHook_site3=
 .br
-.\" TODO SAPHanaSR-showAttr --?
 # SAPHanaSR-showAttr
 .RE
 .PP
 \fB*\fP Backing up third site HANA and enabling system replication.
 .PP
-Needs to be done at third (master) node before registering fourth site.
+Needs to be done at third site (master) node before registering fourth site.
 SID is HA1, instance numbr is 00, site name is site3.
 .PP
 .RS 2
@@ -182,9 +220,12 @@ SID is HA1, instance numbr is 00, site name is site3.
 ~> hdbnsutil -sr_state
 .RE
 .PP
-\fB*\fP Disabling system replication at third site.
-.\" TODO
+\fB*\fP Disabling system replication at third site while source is available.
 .PP
+.\" TODO
+replication source needs to be up and running
+.PP
+.RS 2
 # su - ha1adm
 .br
 ~> hdbnsutil -sr_state
@@ -192,6 +233,21 @@ SID is HA1, instance numbr is 00, site name is site3.
 ~> hdbnsutil -sr_disable
 .br
 ~> hdbnsutil -sr_state
+.RE
+.PP
+\fB*\fP Disabling system replication at third site when source is not available.
+.PP
+.\" TODO
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbnsutil -sr_state
+.br
+~> hdbnsutil ...
+.br
+~> hdbnsutil -sr_state
+.RE
 .PP
 \fB*\fP Removing orphaned srHook attribute from CIB.
 .PP
@@ -224,7 +280,6 @@ HANA database secure keystore directory.
 .\"
 .SH REQUIREMENTS
 .\"
-.PP
 \fB*\fP Only one system replication between the two SAP HANA databases in the Linux
 cluster. Maximum one system replication to an HANA database outside the Linux cluster.
 .PP 
@@ -239,6 +294,15 @@ time only one site is configured as primary replication source.
 .PP
 \fB*\fP Sufficient disk space for transaction logs and log backup at each potential
 replication source. Housekeeping might also help.
+.PP
+\fB*\fP The Linux cluster has no control over HANA system replication and HANA
+landscape status outside the cluster.
+.PP
+\fB*\fP If the third site is used as DR site, decision and procedure for takeover
+are in customer´s responsibility.
+.PP
+\fB*\fP Any manual procedure has to be tested, documented and trained before applied
+on production systems.
 .PP
 See also the REQUIREMENTS section in manual pages SAPHanaSR(7) and susHanaSR.py(7). 
 .\"
