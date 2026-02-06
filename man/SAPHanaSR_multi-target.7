@@ -133,9 +133,10 @@ Note: Understand the impact before trying.
 .PP
 .\" TODO
 Automatic start-up of cluster has to be disabled at production site nodes.
+Example for scale-up.
+All site names have to be same as already known to the cluster.
 Details on how to perform the steps can be found below and in manual page
 SAPHanaSR_maintenance_examples(7).
-Example for scale-up.
 .PP
 site1: former production primary, currently down
 .br
@@ -149,32 +150,52 @@ Note: Understand the impact before trying.
 .PP
 .RS 2
 1. Register former production primary as secondary to current primary at DR site.
+.\" hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 --name=site1 --replicationMode=async --operationMode=logreplay --force_full_replica
 .br
 2. Start former production primary as secondary.
+.\" HDB start
 .br
-3. Start former production secondary.
+3. Enable system replication at former production primary.
+.\" hdbnsutil -sr_enable
 .br
-4. Takeover at former production primary, suspend primary at DR site.
+4. Register former production secondary as to former production primary again.
+.\" hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 --name=site2 --replicationMode=async --operationMode=logreplay --force_full_replica
 .br
-5. Remove IP address from current primary at DR site.
+5. Start former production secondary.
+.\" HDB start
 .br
-6. Set IP address at new production primary.
+6. Takeover at former production primary, suspend primary at DR site.
+.\" hdbnsutil -sr_takeover --suspendPrimary
 .br
-7. Start Linux cluster at new production primary only.
+7. Remove IP address from current primary at DR site.
+.\" ip a r ...
 .br
-8. Set multi-state SAPHanaController resource into maintenance.
+8. Set IP address at new production primary.
+.\" ip a a ...
 .br
-9. Start Linux cluster at production secondary.
+9. Start Linux cluster at new production primary only.
+.\" crm cluster start
 .br
-10. Refresh multi-state SAPHanaController resource.
+10. Set multi-state SAPHanaController resource into maintenance.
+.\" crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .br
-11. Get multi-state SAPHanaController resource out of maintenance.
+11. Start Linux cluster at production secondary.
+.\" crm cluster start
 .br
-12. Check everything is fine.
+12. Refresh multi-state SAPHanaController resource.
+.\" crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .br
-13. Register third site as DR again.
+13. Get multi-state SAPHanaController resource out of maintenance.
+.\" crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .br
 14. Check everything is fine.
+.\" ...
+.br
+15. Register third site as DR again.
+.\" 
+.br
+16. Check everything is fine.
+.\" ...
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
