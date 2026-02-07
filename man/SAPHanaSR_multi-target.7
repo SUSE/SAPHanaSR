@@ -54,6 +54,11 @@ cluster. However, it is shown by systemReplicationStatus.py at the primary site.
 .\"
 .SH EXAMPLES
 .\"
+The examples are outlining highlevel procedures as well as describing basic tasks.
+Detailled runbooks can be created by using the appropriate tasks for addind details
+to the procedures.     
+.\" TODO disclaimer, particularly on takeover decision for async replication.
+.PP
 \fB*\fP Procedure for connecting a third site by replication to a cluster-controlled HANA pair.
 .PP
 .\" TODO
@@ -115,7 +120,7 @@ Details on how to perform the steps can be found in additional examples below.
 .PP
 .\" TODO
 Details on how to perform the steps can be found in additional examples below
-and in manual page SAPHanaSR_maintenance_examples(7).
+and in manual page SAPHanaSR_maintenance_examples(7). See also SAP note 2517805.
 .br
 Note: Understand the impact before trying.
 .PP
@@ -123,6 +128,8 @@ Note: Understand the impact before trying.
 1. Make sure both sites of the Linux cluster are not running.
 .br
 2. Take decision for takeover to third site.
+.PP
+.B The next steps will invalidate all HANA data at fomer primary site.
 .br
 3. Perform takeover at third site.
 .br
@@ -130,95 +137,99 @@ Note: Understand the impact before trying.
 .\" TODO
 .RE
 .PP
-\fB*\fP Procedure for taking back from third site to cluster.
+\fB*\fP Procedure for taking back from third site to Linux cluster.
 .PP
 .\" TODO
-Automatic start-up of cluster has to be disabled at production site nodes.
-Nodes are up and OS is running at former production site, Linux cluster and HANA
-are down. Third site is up and running with system replication enabled.
+Automatic start-up of cluster has to be disabled at production site nodes. Nodes
+are up and OS is running at former production site, Linux cluster and HANA are
+down. Third site is up and running with system replication enabled.
 All site names have to be same as already known to the cluster.
 Example for scale-up.
 Details on how to perform the steps can be found in additional examples below
 and in manual page SAPHanaSR_maintenance_examples(7).
 .PP
-site1: former production primary, currently down
+.RS 2
+site1, node1: former production primary, currently down
 .br
-site2: former production secondary, currently down
+site2, node2: former production secondary, currently down
 .br
-site3: currennt primary, with production IP address
+site3, node3: currennt primary, with production IP address
 .br
-site4: current secondary (optional)
+site4, node4: current secondary (optional)
+.RE
 .PP
 Note: Understand the impact before trying.
 .PP
 .RS 2
+1. Collect information and prepare parameter sheet.
+.PP
 .B The next steps will overwrite all HANA data at fomer primary site.
 .br
-1. Register former production primary as secondary to current primary at DR site.
+2. Register former production primary as secondary to current primary at DR site.
 .\" hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 --name=site1 --replicationMode=async --operationMode=logreplay --force_full_replica
 .br
-2. Start former production primary as secondary.
+3. Start former production primary as secondary.
 .\" HDB start
 .br
-3. Enable system replication at former production primary.
+4. Enable system replication at former production primary.
 .\" hdbnsutil -sr_enable
 .br
-4. Register former production secondary to former production primary again.
+5. Register former production secondary to former production primary again.
 .\" TODO really needed?
 .\" hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 --name=site2 --replicationMode=async --operationMode=logreplay --force_full_replica
 .br
-5. Start former production secondary.
+6. Start former production secondary.
 .\" HDB start
 .br
-6. Stop and unregister fourth site (if existing).
+7. Stop and unregister fourth site (if existing).
 .\" HDB stop
 .\" hdbnsutil -sr_unregister
 .br
-7. Takeover at former production primary, suspend primary at DR site.
+8. Takeover at former production primary, suspend primary at DR site.
 .\" hdbnsutil -sr_takeover --suspendPrimary
 .br
-8. Remove IP address from current primary at DR site.
+9. Remove IP address from current primary at DR site.
 .\" ip a r ...
 .br
-9. Set IP address at new production primary.
+10. Set IP address at new production primary.
 .\" ip a a ...
 .br
-10. Start Linux cluster at new production primary only.
+11. Start Linux cluster at new production primary only.
 .\" crm cluster start
 .br
-11. Set multi-state SAPHanaController resource into maintenance.
+12. Set multi-state SAPHanaController resource into maintenance.
 .\" crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .br
-12. Start Linux cluster at production secondary.
+13. Start Linux cluster at production secondary.
 .\" crm cluster start
 .br
-13. Refresh multi-state SAPHanaController resource.
+14. Refresh multi-state SAPHanaController resource.
 .\" crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .br
-14. Get multi-state SAPHanaController resource out of maintenance.
+15. Get multi-state SAPHanaController resource out of maintenance.
 .\" crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .br
-15. Check everything is fine.
+16. Check everything is fine.
 .\" ...
 .PP
 .B The next steps will overwrite all HANA data at third site.
 .br
-16. Register online the third site to primary.
+17. Register online the third site to primary.
 .\" ...
 .br
-17. Enable system replication at third site (if needed for fourth site).
+18. Enable system replication at third site (if needed for fourth site).
 .\" hdbnsutil -sr_enable --name=site3
 .br
-18. Register fourth site to third and start site (if needed).
+19. Register fourth site to third and start site (if needed).
 .\" ...
 .br
-19. Check everything is fine.
+20. Check everything is fine.
 .\" ...
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
 .PP
-This entry is needed at all HANA nodes of the Linux clsuter to allow the 
+This entry is needed at all HANA nodes of the Linux cluster to allow the 
 SAPHanaController parameter AUTOMATED_REGISTER=true in multi-target environments.
 The HANA has to be stopped before the files can be edited. Do not copy the file
 between nodes. Please check SAP HANA documentation for details.
@@ -260,9 +271,8 @@ is 00, replication mode is async, operation mode is logreplay.
 .br
 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 .br
- --replicationMode=async --operationMode=logreplay --force_full_replica \\
-.br
- --online --name=site3
+ --replicationMode=async --operationMode=logreplay \\
+ --force_full_replica --online --name=site3
 .br
 ~> hdbnsutil -sr_state
 .RE
@@ -330,6 +340,7 @@ SID is HA1.
 # su - ha1adm
 .br
 ~> hdbnsutil -sr_stateConfiguration
+.\" TODO cdpy; python3 ./getTakeoverRecommendation.py 
 .br
 ~> hdbnsutil -sr_takeover
 .br
@@ -391,6 +402,12 @@ time only one site is configured as primary replication source.
 .PP
 \fB*\fP No Multi-SID scenario.
 .PP
+\fB*\fP "register_secondaries_on_takeover = yes" is needed at all HANA sites of
+the Linux cluster.
+.PP
+\fB*\fP All HANA sites inside and outside the Linux cluster need to have the same
+content in their HANA secure keystore. 
+.PP
 \fB*\fP Sufficient disk space for transaction logs and log backup at each potential
 replication source. Housekeeping might also help.
 .PP
@@ -398,7 +415,8 @@ replication source. Housekeeping might also help.
 landscape status outside the cluster.
 .PP
 \fB*\fP If the third site is used as DR site, decision and procedure for takeover
-are in customer´s responsibility. All need to comply to SAP HANA requirements.
+are in customer´s responsibility. All need to comply to SAP HANA requirements,
+please refer to SAP documentation for details.
 .PP
 \fB*\fP If the third site is used as DR site, at production site nodes the automatic
 start of cluster at boot has to be disabled.
@@ -420,7 +438,11 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .\"
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaSR\fP(7) , 
 \fBsusHanaSR.py\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) ,
-\fBha_related_acronyms\fP(7)
+\fBha_related_acronyms\fP(7) , \fBha_related_sap_notes\fP(7)  ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/4e9b18c116aa42fc84c7dbfd02111aba/74418e86b48542ffb38b54072e0b66ce.html ,
+.br
+2517805 - How-to check if SAP HANA System Replication is in Sync or not
 .PP
 .\"
 .SH AUTHORS
