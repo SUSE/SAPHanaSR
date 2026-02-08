@@ -22,11 +22,11 @@ So, common possible scenarios are:
 Scale-up perf-opt with multi-target replication
 [ A <= B' ] -> C
 .TP
-Scale-up perf-opt with multi-tier replication (directed replication chain), sub-case of multi-target
+Scale-up perf-opt with multi-tier replication (directed replication chain)
 [ A' => B ] -> C
-.\" .TP
-.\" TODO Scale-up cost-opt with multi-target replication
-.\" [ "Q,A <= B' ] -> C
+.TP
+Scale-up cost-opt with multi-target replication
+[ "Q,A <= B' ] -> C
 .TP
 Scale-up perf-opt with multi-target replication and fourth site
 [ A <= B' ] -> C => D
@@ -40,11 +40,15 @@ Scale-out perf-opt ERP-style with multi-target replication and fourth site
 Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notation.
 .PP
 The third site often is used as Disaster Recovery (DR) site, a longer distance
-away. So the replication mode might be async. The decision and procedure for takeover
-in DR case have to be prepared carefully and should be trained on regular base.  
+away. So the replication mode might be async. The third site needs to be registered
+to the HANA primary site inside the Linux cluster. The decision and procedure for
+takeover to outside of the Linux cluster in DR case have to be prepared carefully
+and should be trained on regular base.  
 .PP
-Another case is a temporary replication, e.g. for filling test databases or performing
-an upgrade. 
+Another case is a temporary replication, e.g. for filling test databases or
+performing an upgrade. The third site might be registered to either site of the
+Linux cluster. If the third site is registered to the secondary site of the Linux
+cluster and that site fails, manual intervention is necessary at third site.
 .PP
 The Linux cluster recognises the status of the second replication by HANA HA/DR
 provider hook event srConnectionChanged() on the primary site (master) node. See
@@ -182,7 +186,7 @@ Note: Understand the impact before trying.
 .\" HDB start
 .br
 7. Stop and unregister fourth site (if existing).
-.\" HDB stop
+.\" TODO HDB stop : really needed?
 .\" hdbnsutil -sr_unregister
 .br
 8. Takeover at former production primary, suspend primary at DR site.
@@ -414,12 +418,15 @@ replication source. Housekeeping might also help.
 \fB*\fP The Linux cluster has no control over HANA system replication and HANA
 landscape status outside the cluster.
 .PP
+\fB*\fP If the third site is used as DR site, it needs to be registered to the
+HANA primary site inside the Linux cluster.
+.PP
+\fB*\fP If the third site is used as DR site, at all production site nodes the
+automatic start of cluster at boot has to be disabled.
+.PP
 \fB*\fP If the third site is used as DR site, decision and procedure for takeover
 are in customer´s responsibility. All need to comply to SAP HANA requirements,
 please refer to SAP documentation for details.
-.PP
-\fB*\fP If the third site is used as DR site, at production site nodes the automatic
-start of cluster at boot has to be disabled.
 .PP
 \fB*\fP Any manual procedure has to be tested, documented and trained before applied
 on production systems.
