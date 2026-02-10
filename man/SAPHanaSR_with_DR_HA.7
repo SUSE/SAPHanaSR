@@ -13,7 +13,7 @@ SAPHanaSR_with_DR_HA \- SAPHanaSR with standby HA cluster at DR site.
 .PP
 TODO
 .br
-[ B <= A' ] -> C => D
+[ A <= B' ] -> / C => D /
 .PP
 \fB*\fP Setup procedure
 .PP
@@ -38,7 +38,7 @@ register_secondaries_on_takeover = true
  ...
 .RE
 .PP
-\fB*\fP Copying HANA secure keystore from primary to secondaries at DR site.
+\fB*\fP Copying HANA secure keystore from primary to secondaries at DR zone.
 .PP
 Needs to be done at production primary before registering the DR secondaries.
 DR secondary nodes are node3 and node4, SID is HA1.
@@ -80,7 +80,7 @@ DR site is site3, production primary is node1, SID is HA1, instance numner is 00
 \fB*\fP Backing up first DR node and enabling system replication.
 .PP
 Needs to be done at first DR node.
-DR site is site3, SID is HA1, instance number is 00.
+First DR site is site3, SID is HA1, instance number is 00.
 .PP
 .RS 2
 # su - ha1adm
@@ -119,23 +119,66 @@ Needs first DR node up and running.
 .\"
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
-the on-disk representation of HANA global system configuration
+on-disk representation of HANA global system configuration.
+.TP
+/usr/sap/$SID/SYS/global/security/rsecssfs/
+HANA database secure keystore directory.
 .PP
 .\"
 .SH REQUIREMENTS
 .\"
-\fB*\fP Before connecting the DR site to the production site, the production
+\fB*\fP Only one system replication between the two SAP HANA databases in the Linux
+cluster. Maximum one system replication to an HANA database outside the Linux cluster.
+.PP 
+\fB*\fP The replication mode is either sync or syncmem for the controlled replication.
+Replication mode async is not supported inside the Linux cluster.
+.PP
+\fB*\fP Once an HANA system replication site is known to the Linux cluster, that
+exact site name has to be used whenever the site is registered manually. At any
+time only one site is configured as primary replication source.
+.PP
+\fB*\fP No Multi-SID scenario.
+.PP
+\fB*\fP "register_secondaries_on_takeover = yes" is needed at all HANA sites at
+production zone and DR zone.
+.PP
+\fB*\fP All HANA sites inside and outside the Linux cluster need to have the same
+content in their HANA secure keystore.
+.PP
+\fB*\fP Sufficient disk space for transaction logs and log backup at each potential
+replication source. Housekeeping might also help.
+.PP
+\fB*\fP The Linux clusters have no control over HANA system replication between the
+production zone and the DR zone.
+.PP
+\fB*\fP Before connecting the DR zone to the production zone, the production
 SAPHanaSR-angi scale-up performance-optimized cluster needs to be up and running.
-.br
-\fB*\fP Before connecting the DR site to the production site, the DR site has been
+.PP
+\fB*\fP Before connecting the DR zone to the production zone, the DR site has been
 set up as SAPHanaSR-angi scale-up performance-optimized cluster and the whole
 cluster has been set into maintenance.
+.PP
+\fB*\fP The first site of the DR zone is registered to the primary of the production
+zone. Replication mode is sync, syncmem or async.
+The second site of the DR zone is registered to the first site of the DR zone.
+Replication mode is sync or syncmem. 
 .br
-\fB*\fP Production HA cluster and DR site HA cluster must never be active at
+[ A <= B' ] -> / C => D /
+.PP
+\fB*\fP Production HA cluster and DR HA cluster must never be active at
 the same time.
-.br
+.PP
+\fB*\fP At all nodes the automatic start of cluster at boot has to be disabled.
+.PP
 \fB*\fP The HA cluster moves an IP address with the HANA primary between the two
-production nodes. The IP address will not be moved from production to DR site. 
+production nodes. The IP address will not be moved from production zone to DR zone. 
+.PP
+\fB*\fP Decision and procedure for takeover are in customer´s responsibility.
+All need to comply to SAP HANA requirements, please refer to SAP documentation
+for details.
+.PP
+\fB*\fP Any manual procedure has to be tested, documented and trained before applied
+on production systems.
 .PP
 See also the REQUIREMENTS section in manual pages SAPHanaSR(7) and susHanaSR.py(7). 
 .\"
@@ -149,13 +192,18 @@ Please report any other feedback and suggestions to feedback@suse.com.
 .SH SEE ALSO
 .\"
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaSR\fP(7) , 
-\fBSAPHanaSR_multi-target\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
-\fBsusHanaSR.py\fP(7) , \fBha_related_acronyms\fP(7) ,
+\fBSAPHanaSR_multi-target\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBsusHanaSR.py\fP(7) ,
+\fBha_related_acronyms\fP(7) , \fBha_related_sap_notes\fP(7) ,
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/4e9b18c116aa42fc84c7dbfd02111aba/74418e86b48542ffb38b54072e0b66ce.html ,
+.br
+2517805 - How-to check if SAP HANA System Replication is in Sync or not
 .PP
 .\"
 .SH AUTHORS
 .\"
-F.Herschel, L.Pinne.
+A.Briel, F.Herschel, L.Pinne.
 .PP
 .\"
 .SH COPYRIGHT
