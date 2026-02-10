@@ -57,7 +57,7 @@ function saphana_usage() {
 
     $0 manages two SAP HANA databases in system replication.
 
-    The 'start'        operation starts the HANA instance or bring the "clone instance" to a WAITING status
+    The 'start'        operation starts the HANA instance or bring the 'clone instance' to a WAITING status
     The 'stop'         operation stops the HANA instance
     The 'status'       operation reports whether the HANA instance is running
     The 'monitor'      operation reports whether the HANA instance seems to be working in multi-state it also needs to check the system replication status
@@ -1591,12 +1591,35 @@ function saphana_monitor_secondary() {
     #
     super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
     local rc="$OCF_NOT_RUNNING" promote_attr promoted=0 init_attribute=0 lss
+    local dr_prim="x" dr_src="u"  # dr_prim must contain a different value as dr_src as init value
     #
     # OK, we are running as HANA SECONDARY
     #
     if ! lpa_get_lpt "${gSite}"; then
         lpa_set_lpt  10 "$gSite"
         lpa_push_lpt 10
+    fi
+    #
+    # for DR case handle global attributes "prim" and "sec"
+    #
+    if [[ "$PreferSiteTakeover" == "DR" ]]; then
+        hdbMap="hdbnsutil -sr_stateHostMapping --sapcontrol=1"
+        hdbANSWER=$(HANA_CALL --timeout "$HANA_CALL_TIMEOUT" --cmd "$hdbMap --sapcontrol=1" 2>/dev/null)
+        #
+        # get primary of the other DC (set dr_prim)
+        #
+        if [[ "$hdbANSWER" =~ "siteOperationMode/"(.*)"=primary" ]]; then dr_prim="${BASH_REMATCH[1]}"; fi
+        #
+        # get source of the local (own) site (set dr_src)
+        #
+        if [[ "$hdbANSWER" =~ "siteMapping/"(.*)"=${gSite}" ]]; then dr_src="${BASH_REMATCH[1]}"; fi
+        #
+        # if dr_prim ==dr_src the local (own) site is directly attached to the primary so set the attributes
+        #
+        if [[ "$dr_prim" == "$dr_src" ]]; then
+            set_hana_attribute "$NODENAME" "${gSite}" "${ATTR_NAME_HANA_SEC[@]}"
+            set_hana_attribute "$NODENAME" "${dr_prim}" "${ATTR_NAME_HANA_PRIM[@]}"
+        fi
     fi
     promote_attr=$(get_hana_attribute "${NODENAME}" "${ATTR_NAME_HANA_CLONE_STATE[@]}")
     super_ocf_log debug "DBG: saphana_monitor_secondary: ${ATTR_NAME_HANA_CLONE_STATE[0]}=$promote_attr"
@@ -1622,7 +1645,7 @@ function saphana_monitor_secondary() {
                 if check_for_primary_master; then
                     super_ocf_log info "ACT: SECONDARY still in status WAITING - Primary now available - try a new start"
                     saphana_start_clone; rc="$?"
-        elif [[ "$PreferSiteTakeover" == "DR" ]]; then
+                elif [[ "$PreferSiteTakeover" == "DR" ]]; then
                     super_ocf_log info "ACT: SITE still in status WAITING - DR Mode detected - just starting"
                     saphana_start_clone; rc="$?"
                 else
