@@ -84,16 +84,16 @@ node3 ~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
 .RS 4
 node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00
 .br
-.\" TODO PREFER_SITE_TAKEOVER = DR -> yes
-.br
-node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | \\
-.br
- sed s/PREFER_SITE_TAKEOVER=DR/PREFER_SITE_TAKEOVER=yes/g > \\
- rsc_SAPHanaCon_HA1_HDB00.txt
-.br
-node3 # cat rsc_SAPHanaCon_HA1_HDB00.txt
-.br
-node3 # crm configure load update rsc_SAPHanaCon_HA1_HDB00.txt
+node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
+.\" .br
+.\" node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | \\
+.\" .br
+.\" sed s/PREFER_SITE_TAKEOVER=DR/PREFER_SITE_TAKEOVER=yes/g > \\
+.\" rsc_SAPHanaCon_HA1_HDB00.txt
+.\" .br
+.\" node3 # cat rsc_SAPHanaCon_HA1_HDB00.txt
+.\" .br
+.\" node3 # crm configure load update rsc_SAPHanaCon_HA1_HDB00.txt
 .br
 node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 
 .RE
@@ -155,8 +155,14 @@ node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 node1 # crm resource maintenance rsc_ip_HA1_HDB00
 .RE
 .PP
-4. 
-.\" yes -> DR
+4. Change SAPHanaController "PREFER_SITE_TAKEOVER=yes" to "PREFER_SITE_TAKEOVER=DR". 
+.RS 4
+node1 # crm configure show rsc_SAPHanaCon_HA1_HDB00
+.br
+node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
+.br
+node1 # crm configure show rsc_SAPHanaCon_HA1_HDB00
+.RE
 .PP
 5. Start Linux cluster on second DR node (node2).
 .RS 4
@@ -173,7 +179,7 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 .br
  --replicationMode=async --operationMode=logreplay \\
 .br
---force_full_replica --name=site1
+ --force_full_replica --name=site1
 .RE
 .PP
 7. Enable system repliation at first DR node (node1).
@@ -191,7 +197,7 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 .br
  --replicationMode=syncmem --operationMode=logreplay \\
 .br
---force_full_replica --name=site2
+ --force_full_replica --name=site2
 .RE
 .PP
 9. Refresh SAPHanaController multi-state resource.
@@ -264,7 +270,7 @@ DR site is site3, production primary is node1, SID is HA1, instance numner is 00
 .PP
 \fB*\fP Backing up first DR node and enabling system replication.
 .PP
-Needs to be done at first DR node, before the very first replication.
+Needs to be done at first DR node, before registering another node.
 First DR site is site3, SID is HA1, instance number is 00.
 .PP
 .RS 2
