@@ -111,7 +111,7 @@ node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 9. Activate IPaddr2 resource.
 .RS 4
 .\" TODO check how to handle IP address
-node3 # crm resource maintenance rsc_ip_HA1 off
+node3 # crm resource maintenance rsc_ip_HA1_HDB00 off
 .RE
 .PP
 10. Check that everything looks fine.
@@ -143,27 +143,68 @@ Note: Understand the impact before trying.
 .RS 2
 1. Collect information and prepare parameter sheet.
 .PP
-2. Start Linux cluster on first node only (node1).
-.\" HA: 1. Knoten starten (nix beide :) 
+2. Start Linux cluster on first DR node only (node1).
+.RS 4
+node1 # crm cluster start 
+.RE 
 .PP
-3. Set SAPHanaController and IPaddr2 resources into maintenance.  
-.\" mst  maintenance, ip maintenace  
+3. Set SAPHanaController multi-state and IPaddr2 resources into maintenance.  
+.RS 4
+node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.br
+node1 # crm resource maintenance rsc_ip_HA1_HDB00
+.RE
 .PP
 4. 
 .\" yes -> DR
 .PP
-
-.\" 2. Knoten starten
-.PP Register former production primary as secondary to current primary (node3).
-.\" S1 register, enable
+5. Start Linux cluster on second DR node (node2).
+.RS 4
+node2 # crm cluster start
+.RE
 .PP
-.\" S2 register 
+.B The next steps will overwrite all HANA data at site1 and site2.
 .PP
-\" mst refresh
+6. Register first DR node (node1) as secondary to current primary (node3).
+.RS 4
+node1 # su - ha1adm
+.br
+node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
+.br
+ --replicationMode=async --operationMode=logreplay \\
+.br
+--force_full_replica --name=site1
+.RE
 .PP
-.\" mst  maintenance off
+7. Enable system repliation at first DR node (node1).
+.RS 4 
+node1 # su - ha1adm
+.br
+node1 ~> hdbnsutil -sr_enable --name=site1
+.RE
 .PP
-Check that everything looks fine.
+8. Register second DR node (node2) as secondary to first DR node (node1).
+.RS 4
+node1 # su - ha1adm
+.br
+node1 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+.br
+ --replicationMode=syncmem --operationMode=logreplay \\
+.br
+--force_full_replica --name=site2
+.RE
+.PP
+9. Refresh SAPHanaController multi-state resource.
+.RS 4
+node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+10. Get SAPHanaController multi-state and IPaddr2 resources out of maintenance.
+.RS 4
+node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+.RE
+.PP
+11. Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
@@ -223,7 +264,7 @@ DR site is site3, production primary is node1, SID is HA1, instance numner is 00
 .PP
 \fB*\fP Backing up first DR node and enabling system replication.
 .PP
-Needs to be done at first DR node.
+Needs to be done at first DR node, before the very first replication.
 First DR site is site3, SID is HA1, instance number is 00.
 .PP
 .RS 2
@@ -251,7 +292,7 @@ Needs first DR node up and running.
 .br
 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 .br
- --replicationMode=sync --operationMode=logreplay --name=site4 \\
+ --replicationMode=syncmem --operationMode=logreplay --name=site4 \\
 .br
  --online
 .br
