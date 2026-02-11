@@ -238,7 +238,7 @@ class SaphanasrTest:
 
     def get_area_object_by_key_val(self, area_name, search_criteria, **kwargs):
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
-        # sloppy might be need to set per search-criteria (e.g. True for roles nut False for site)
+        # sloppy might be need to set per search-criteria (e.g. True for roles not False for site)
         # Query runs from area-level via object-level. Then search for key=value.
         l_sloppy = False
         if 'sloppy' in kwargs:
@@ -690,6 +690,10 @@ class SaphanasrTest:
                                   self.process_topology_object(step, 'sHost', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pWorker', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'sWorker', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'tSite', 'Site', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'fSite', 'Site', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'tHost', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'fHost', 'Host', list_of_failures=list_of_failures),
                                  )
             if process_result == 0:
                 break
