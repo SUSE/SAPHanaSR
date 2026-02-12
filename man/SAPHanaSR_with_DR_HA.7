@@ -4,7 +4,7 @@
 .\"
 .SH NAME
 . \"
-SAPHanaSR_with_DR_HA \- SAPHanaSR with HA cluster at DR site.
+SAPHanaSR_with_DR_HA \- SAPHanaSR with HA cluster at DR region.
 .PP
 - DRAFT -
 .PP
@@ -33,10 +33,9 @@ Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notatio
 The Linux clusters have no control over HANA system replication between the
 production region and the DR region. The takeover from production region to
 the DR region has to be decided and carried out manually.
-.\" TODO RPO 
+.\" TODO RPO ?
+.\" TODO IP address ?
 Please see also the REQUIREMENTS section.
-Examples for performing a takeover to DR region, or re-registering a site are given
-in the EXAMPLES section.
 .PP
 .B The SAPHanaSR with HA cluster at DR site scenario is a technology preview.
 .PP
@@ -57,7 +56,7 @@ is able to recover from certain failures by restoring the former state.
 .PP
 Further, the Linux cluster in DR mode allows manual procedures for DR takeover
 in case of disaster at production region and regular switch of roles between
-regions.
+regions. Details are given in the EXAMPLES section below.
 .PP
 \fB*\fP Setup
 .PP
@@ -72,8 +71,13 @@ The examples are outlining highlevel procedures as well as describing basic task
 Detailled runbooks can be created by using the appropriate tasks for adding details
 to the procedures.
 .\" TODO disclaimer, particularly on takeover decision for async replication.
+More examples, not specific to HA cluster at DR region, can be found in manual
+page SAPHanaSR_maintenance_examples(7).
 .PP
-\fB*\fP Procedure for taking over to DR region in DR case.
+\fB*\fP Procedure for taking over HANA to DR region in DR case.
+.PP
+This might be done if both sites of the production region went down and not
+expected to recover in time. It will re-establish production service.
 .PP
 .\" TODO
 Cluster is up and running in DR mode on DR region nodes, HANA is up and running
@@ -83,6 +87,7 @@ All site names have to be same as already known to the cluster.
 Example for scale-up.
 Make sure to check for sane and idle status of Linux cluster and HANA before and
 after each step.
+.\" TODO RPO RTO ?
 Details on how to perform the steps can be found in additional examples below
 and in manual page SAPHanaSR_maintenance_examples(7). See also SAP note 2517805.
 SID is HA1, instance number is 00.
@@ -102,9 +107,9 @@ Note: Understand the impact before trying.
 .RS 2
 1. Collect information and prepare parameter sheet.
 .PP
-2. Make sure both sites of the production region (site1, site2) are not running.
+2. Ensure both sites of the production region (site1, site2) are not running.
 .PP
-3. Take decision for takeover to third site (site3).
+3. Decide to takeover HANA primary to third site (site3).
 .PP
 .B The next steps will invalidate all HANA data at former production sites.
 .PP
@@ -113,7 +118,7 @@ Note: Understand the impact before trying.
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-5. Perform takeover at third site (site3).
+5. Perform HANA takeover at third site (site3).
 .RS 4
 node3 # su - ha1adm -c "hdbnsutil -sr_takeover"
 .br
@@ -146,7 +151,10 @@ node3 # crm resource start rsc_ip_HA1_HDB00
 10. Check that everything looks fine.
 .RE
 .PP
-\fB*\fP Procedure for registering former production as new DR to new production region.
+\fB*\fP Procedure for registering former production HANA as new DR.
+.PP
+This might be done, if both sites (or at least one) of the former production
+sites have been recoverd after an outage. It will re-establish DR redundancy.
 .PP
 \" TODO
 At all nodes the automatic start of cluster at boot has to be disabled.
@@ -242,7 +250,9 @@ node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 12. Check that everything looks fine.
 .RE
 .PP
-\fB*\fP Procedure for taking over to third site and registering first one while all sites keep running.
+\fB*\fP Procedure for switching HANA production and DR region, keep all running.
+.PP
+This might be done for regular maintenance procedures.
 .PP
 \" TODO
 Third site is up and running with system replication enabled.
