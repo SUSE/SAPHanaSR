@@ -65,21 +65,44 @@ regions. Details are given in the EXAMPLES section below.
 .RS 2
 1. Collect information and prepare parameter sheet.
 .PP
-2. Install scale-up performance-optimised cluster at production region (site1, site2).
+2. Install SAPHanaSR-angi scale-up performance-optimised scenario at production
+region (site1, site2).
+.RS 4
+See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
+SAPHanaSR_basic_cluster(7), et al.
+.RE
 .PP
-3. Check that everyihing looks fine at production region.
+3. Check that everyihing looks fine at production region (site1, site2).
 .PP
-4. Install scale-up performance-optimised cluster at DR region (site3, site4).
+4. Install SAPHanaSR-angi scale-up performance-optimised scenario at DR region
+(site3, site4).
+.RS 4
+See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
+SAPHanaSR_basic_cluster(7), et al.
+Please do not use the same IP address at both regions during installation. 
+.RE
 .PP
-5. Check that everything looks fine at DR region.
+5. Check that everything looks fine at DR region (site3, site4).
 .PP
-6. Copy HANA secure keystore from production HANA primary (site1) to all other sites.
+6. Copy HANA secure keystore from production primary (site1) to DR nodes.
+(site3, site4).
+.RS 4
+See example "Copying HANA secure keystore from production primary to nodes at DR region."
+.RE
 .PP
 7. Add DR specific location constraint for IPaddr2 to both clusters.
+.RS 4
+See example "Preventing IPaddr2 from starting at DR sites."
+.RE
 .PP
 8. Stop Linux cluster and HANA at DR region (site3, site4).
 .PP
-9. Register DR region to production region. See below: Procedure for registering former production HANA as new DR. Do not forget to switch sites and nodes.
+9. Register DR region (site3, site4) to production region (site1, site2).
+.RS 4
+See example "Procedure for registering former production HANA as new DR."
+Of course, in that example the regions are exchanged. So, make sure to use
+(site1, site2) instead of (site3, site4) and vice versa. 
+.RE
 .PP
 10. Check that everything looks fine.
 .RE
@@ -394,26 +417,26 @@ register_secondaries_on_takeover = true
  ...
 .RE
 .PP
-\fB*\fP Copying HANA secure keystore from primary to secondaries at DR region.
+\fB*\fP Copying HANA secure keystore from production primary to nodes at DR region.
 .PP
 Needs to be done at production primary before registering the DR secondaries.
-DR secondary nodes are node3 and node4, SID is HA1.
+Production primary is node2. DR secondary nodes are node3 and node4, SID is HA1.
 .PP
 .RS 2
-# cd /usr/sap/HA1/SYS/global/security/rsecssfs
+node1 # cd /usr/sap/HA1/SYS/global/security/rsecssfs
 .br
-# md5sum */*
+node1 # md5sum */*
 .br
-# rsync -va * node3:$PWD/
+node1 # rsync -va * node3:$PWD/
 .br
-# rsync -va * node4:$PWD/
+node1 # rsync -va * node4:$PWD/
 .br
-# ssh node3 "md5sum $PWD/*/*"
+node1 # ssh node3 "md5sum $PWD/*/*"
 .br
-# ssh node4 "md5sum $PWD/*/*"
+node1 # ssh node4 "md5sum $PWD/*/*"
 .RE
 .PP
-\fB*\fP Prevent IPaddr2 from starting at DR sites.
+\fB*\fP Preventing IPaddr2 from starting at DR sites.
 .PP
 The prodution HANA database might be accessed by the same IP address at both
 regions. In that case the IP address must not run on the current DR sites.
