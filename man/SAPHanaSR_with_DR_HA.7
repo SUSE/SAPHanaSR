@@ -223,34 +223,29 @@ Note: Understand the impact before trying.
 .RS 2
 1. Collect information and prepare parameter sheet.
 .PP
-2. Start Linux cluster on first DR site only (node1).
+2. Start Linux cluster on first DR site \fBonly\fP (node1).
 .RS 4
 node1 # crm cluster start
 .RE
 .PP
-3. Set IPaddr2 resource into maintenance.
-.RS 4
-node1 # crm resource maintenance rsc_ip_HA1_HDB00
-.RE
-.PP
-4. Set SAPHanaController multi-state resource into maintenance.
+3. Set SAPHanaController multi-state resource into maintenance.
 .RS 4
 node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-5. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
+4. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
 .RS 4
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
 .PP
-6. Start Linux cluster on second DR site (node2).
+5. Start Linux cluster on second DR site (node2).
 .RS 4
-node2 # crm cluster start
+node1 # crm cluster start --all
 .RE
 .PP
 .B The next steps will overwrite all HANA data at former production sites (site1, site2).
 .PP
-7. Register first DR site (node1) as secondary to current primary (node3).
+6. Register first DR site (node1) as secondary to current primary (node3).
 .RS 4
 node1 # su - ha1adm
 .br
@@ -261,18 +256,25 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
  --force_full_replica --name=site1
 .RE
 .PP
+7. Start HANA at first DR site (node1).
+.RS 4
+# su - ha1adm
+.br
+~> HDB start
+.RE
+.PP
 8. Enable system replication at first DR site (node1).
 .RS 4
 node1 # su - ha1adm
 .br
-node1 ~> hdbnsutil -sr_enable --name=site1
+node1 ~> hdbnsutil -sr_enable
 .RE
 .PP
 9. Register second DR site (node2) as secondary to first DR site (node1).
 .RS 4
-node1 # su - ha1adm
+node2 # su - ha1adm
 .br
-node1 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 .br
  --replicationMode=syncmem --operationMode=logreplay \\
 .br
@@ -289,12 +291,7 @@ node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-11. Get IPaddr2 resources out of maintenance.
-.RS 4
-node1 # crm resource maintenance rsc_ip_HA1_HDB00 off
-.RE
-.PP
-13. Check that everything looks fine.
+12. Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Procedure for switching HANA production and DR region, keep all running.
