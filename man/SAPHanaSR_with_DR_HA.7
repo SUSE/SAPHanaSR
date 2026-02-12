@@ -523,6 +523,24 @@ Needs first DR node up and running.
 ~> hdbnsutil -sr_state
 .RE
 .PP
+\fB*\fP Removing orphaned srHook attribute from CIB.
+.PP
+Might be done after a former production region site has been registered as
+new DR region site to the new HANA production primary site.
+SID is HA1, site is site1.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+# crm configure show SAPHanaSR | grep _srHook_site1=
+.br
+# crm_attribute -n hana_ha1_site_srHook_site1 -t crm_config \\
+.br
+ -s SAPHanaSR --delete
+.br
+# crm configure show SAPHanaSR | grep _srHook_site1=
+.RE
+.PP
 .\"
 .SH FILES
 .\"
@@ -579,17 +597,20 @@ this replication is sync or syncmem.
 at the DR standby cluster. In case of manual DR takeover, this parameter needs to
 be changed. See manual page ocf_suse_SAPHanaController(7).
 .PP
-.\" TODO \fB*\fP Production HA cluster and DR HA cluster must never be active at the same time.
-.PP
 \fB*\fP At all nodes the automatic start of cluster at boot has to be disabled.
 .PP
 \fB*\fP The HA cluster moves an IP address with the HANA primary between the two
 production nodes. The IP address will not be moved from production region to DR
-region. 
+region. However, the same IP address can be used in both regions, if the infrastructure
+allows that. 
 .PP
 \fB*\fP Decision and procedure for takeover to DR region are in customer´s
 responsibility. All need to comply to SAP HANA requirements, please refer to SAP
 documentation for details.
+.PP
+\fB*\fP The third site´s srHook attribute is stored in the production clsuter CIB.
+The attribute stays, even if a former production has been registered as DR after
+takeover. The attribute might be deleted manually to avoid confusion.
 .PP
 \fB*\fP Any manual procedure has to be tested, documented and trained before applied
 on production systems.
