@@ -72,7 +72,7 @@ See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
 SAPHanaSR_basic_cluster(7), et al.
 .RE
 .PP
-3. Check that everyihing looks fine at production region (site1, site2).
+3. Check that everyihing works fine at production region (site1, site2).
 .PP
 4. Install SAPHanaSR-angi scale-up performance-optimised scenario at DR region
 (site3, site4).
@@ -82,7 +82,7 @@ SAPHanaSR_basic_cluster(7), et al.
 Please do not use the same IP address at both regions during installation. 
 .RE
 .PP
-5. Check that everything looks fine at DR region (site3, site4).
+5. Check that everything works fine at DR region (site3, site4).
 .PP
 6. Copy HANA secure keystore from production primary (site1) to DR nodes.
 (site3, site4).
@@ -104,7 +104,9 @@ Of course, in that example the regions are exchanged. So, make sure to use
 (site1, site2) instead of (site3, site4) and vice versa. 
 .RE
 .PP
-10. Check that everything looks fine.
+10. Change IP address at DR region (site3, site4) to match production - optional.
+.PP
+11. Check that everything works fine.
 .RE
 .PP
 Please see also the REQUIREMENTS section below.
@@ -329,12 +331,14 @@ Note: Understand the impact before trying.
 node1 # crm resource stop rsc_ip_HA1_HDB00
 .RE
 .PP
-2.2 Set SAPHanaController multi-state resource into maintenance at production sites (site1, site2).
+2.2 Set SAPHanaController multi-state resource into maintenance at production
+sites (site1, site2).
 .RS 4
 node1 # crm resource maintenance SAPHanaController
 .RE
 .PP
-2.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at production sites (site1, site2).
+2.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at production sites
+(site1, site2).
 .RS 4
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
@@ -346,12 +350,14 @@ node3 # su - ha1adm -c "hdbnsutil -sr_takeover --suspendPrimary"
 node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:\\$?"
 .RE
 .PP
-3.2 Set SAPHanaController multi-state resource into maintenance at new production sites (site3, site4).
+3.2 Set SAPHanaController multi-state resource into maintenance at new production
+sites (site3, site4).
 .RS 4
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at new production sites (site3, site4).
+3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at new production sites
+(site3, site4).
 .RS 4
 node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
@@ -361,7 +367,8 @@ node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 node3 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-3.5 Get SAPHanaController multi-state out of maintenance at new production sites (site3, site4).
+3.5 Get SAPHanaController multi-state out of maintenance at new production sites
+(site3, site4).
 .RS 4
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
@@ -370,7 +377,8 @@ node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .PP
 .B The next steps will overwrite all HANA data at former production sites (site1, site2).
 .PP
-4.1 Register former production primary as secondary (site1) to new production primary (site3).
+4.1 Register former production primary as secondary (site1) to new production
+primary (site3).
 .RS 4
 node1 # su - ha1adm
 .br
@@ -450,6 +458,18 @@ location loc_ip_HA1_HDB00_not_DR rsc_ip_HA1_HDB00 \\
 rule -inf: master-rsc_SAPHanaCon_HA1_HDB00 lt 145
 .RE
 .PP
+\fB*\fP Changing IPaddr2 at DR sites to match production (optional).
+.PP
+The prodution HANA database might be accessed by the same IP address at both
+regions. However, during installation and testing phase both regions should use
+different IP addresses. Once one of the clusters is running in DR mode, in that
+cluster the IP address can be changed to match the production.
+SID is HA1, instance number is 00, IP address is 192.168.2.2.
+.PP
+.RS 2
+# crm configure set rsc_ip_HA1_HDB00.ip 192.168.2.2  
+.RE
+.PP
 \fB*\fP Registering first DR node as secondary to production primary.
 .PP
 Needs to be done at first DR node.
@@ -467,7 +487,6 @@ DR site is site3, production primary is node1, SID is HA1, instance numner is 00
  --online
 .br
 ~> hdbnsutil -sr_state
-.br
 .RE
 .PP
 \fB*\fP Backing up first DR node and enabling system replication.
