@@ -67,21 +67,21 @@ regions. Details are given in the EXAMPLES section below.
 .PP
 2. Install scale-up performance-optimised cluster at production region (site1, site2).
 .PP
-3. Check that everyithing looks fine at production region.
+3. Check that everyihing looks fine at production region.
 .PP
 4. Install scale-up performance-optimised cluster at DR region (site3, site4).
 .PP
-5. Check that everyithing looks fine at DR region.
+5. Check that everything looks fine at DR region.
 .PP
-x. Copy HANA secure keystore from production primary (site1) to all other sites.
+6. Copy HANA secure keystore from production HANA primary (site1) to all other sites.
 .PP
-x. Add location constraint for IPaddr2 to both clusters.
+7. Add DR specific location constraint for IPaddr2 to both clusters.
 .PP
-.\" TODO
+8. Stop Linux cluster and HANA at DR region (site3, site4).
 .PP
-x. Set DR region cluster into DR mode.
+9. Register DR region to production region. See below: Procedure for registering former production HANA as new DR. Do not forget to switch sites and nodes.
 .PP
-.x. Check that everything looks fine.
+10. Check that everything looks fine.
 .RE
 .PP
 Please see also the REQUIREMENTS section below.
@@ -133,7 +133,7 @@ Note: Understand the impact before trying.
 .PP
 3. Decide to takeover HANA primary to third site (site3).
 .PP
-.B The next steps will invalidate all HANA data at former production sites.
+.B The next steps will invalidate all HANA data at former production sites (site1, site2).
 .PP
 4. Set SAPHanaController multi-state resource into maintenance. 
 .RS 4
@@ -162,7 +162,7 @@ node3 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-9. Activate IPaddr2 resource at new production region.
+9. Activate IPaddr2 resource at new production sites (site3, site4).
 .RS 4
 node3 # crm resource start rsc_ip_HA1_HDB00 
 .RE
@@ -198,14 +198,14 @@ Note: Understand the impact before trying.
 .RS 2
 1. Collect information and prepare parameter sheet.
 .PP
-2. Start Linux cluster on first DR node only (node1).
+2. Start Linux cluster on first DR site only (node1).
 .RS 4
 node1 # crm cluster start
 .RE
 .PP
-3. Disable IPaddr2 resource.
+3. Set IPaddr2 resource into maintenance.
 .RS 4
-node1 # crm resource stop rsc_ip_HA1_HDB00
+node1 # crm resource maintenance rsc_ip_HA1_HDB00
 .RE
 .PP
 4. Set SAPHanaController multi-state resource into maintenance.
@@ -218,14 +218,14 @@ node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
 .PP
-6. Start Linux cluster on second DR node (node2).
+6. Start Linux cluster on second DR site (node2).
 .RS 4
 node2 # crm cluster start
 .RE
 .PP
-.B The next steps will overwrite all HANA data at site1 and site2.
+.B The next steps will overwrite all HANA data at former production sites (site1, site2).
 .PP
-7. Register first DR node (node1) as secondary to current primary (node3).
+7. Register first DR site (node1) as secondary to current primary (node3).
 .RS 4
 node1 # su - ha1adm
 .br
@@ -236,14 +236,14 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
  --force_full_replica --name=site1
 .RE
 .PP
-8. Enable system replication at first DR node (node1).
+8. Enable system replication at first DR site (node1).
 .RS 4
 node1 # su - ha1adm
 .br
 node1 ~> hdbnsutil -sr_enable --name=site1
 .RE
 .PP
-9. Register second DR node (node2) as secondary to first DR node (node1).
+9. Register second DR site (node2) as secondary to first DR site (node1).
 .RS 4
 node1 # su - ha1adm
 .br
@@ -264,7 +264,12 @@ node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-12. Check that everything looks fine.
+11. Get IPaddr2 resources out of maintenance.
+.RS 4
+node1 # crm resource maintenance rsc_ip_HA1_HDB00 off
+.RE
+.PP
+13. Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Procedure for switching HANA production and DR region, keep all running.
@@ -294,58 +299,53 @@ Note: Understand the impact before trying.
 .RS 2
 1.1 Collect information and prepare parameter sheet.
 .PP
-.B The next steps will invalidate all HANA data at former production sites.
+.B The next steps will invalidate all HANA data at current production sites (site1, site2).
 .PP
-2.1 Disable IPaddr2 resource at first site (site1).
+2.1 Disable IPaddr2 resource at production sites (site1, site2).
 .RS 4
 node1 # crm resource stop rsc_ip_HA1_HDB00
 .RE
 .PP
-2.2 Set SAPHanaController multi-state resource into maintenance at first site (site1).
+2.2 Set SAPHanaController multi-state resource into maintenance at production sites (site1, site2).
 .RS 4
 node1 # crm resource maintenance SAPHanaController
 .RE
 .PP
-2.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at first site (site1).
+2.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at production sites (site1, site2).
 .RS 4
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
 .PP
-3.1 Perform takeover at third site (site3).
+3.1 Perform takeover at third site (site3: currently DR - new production).
 .RS 4
 node3 # su - ha1adm -c "hdbnsutil -sr_takeover --suspendPrimary"
 .br
 node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:\\$?"
 .RE
 .PP
-3.2 Set SAPHanaController multi-state resource into maintenance at third site (site3).
+3.2 Set SAPHanaController multi-state resource into maintenance at new production sites (site3, site4).
 .RS 4
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at third site (site3).
+3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at new production sites (site3, site4).
 .RS 4
 node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
 .PP
-3.4 Refresh SAPHanaController multi-state resource at third site (site3).
+3.4 Refresh SAPHanaController multi-state resource at new production sites (site3, site4).
 .RS 4
 node3 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-3.5 Get SAPHanaController multi-state out of maintenance third site (site3).
+3.5 Get SAPHanaController multi-state out of maintenance at new production sites (site3, site4).
 .RS 4
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-3.6 Activate IPaddr2 resource at third site (site3).
-.RS 4
-node3 # crm resource start rsc_ip_HA1_HDB00
-.RE
+3.6 Check that everything looks fine so far.
 .PP
-3.7 Check that everything looks fine so far.
-.PP
-.B The next steps will overwrite all HANA data at site1 and site2.
+.B The next steps will overwrite all HANA data at former production sites (site1, site2).
 .PP
 4.1 Register former production primary as secondary (site1) to new production primary (site3).
 .RS 4
@@ -360,17 +360,22 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 node1 ~> exit
 .RE
 .PP
-4.2 Refresh SAPHanaController multi-state resource at first site (site1).
+4.2 Refresh SAPHanaController multi-state resource at new DR sites (site1, site2).
 .RS 4
 node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-4.3 Get SAPHanaController multi-state out of maintenance at first site (site1).
+4.3 Get SAPHanaController multi-state out of maintenance at new DR sites (site1, site2).
 .RS 4
 node1 # crm resource maintenace mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-4.4 Check that everything looks fine.
+4.4 Enable IPaddr2 resource at new DR sites (site1, site2).
+.RS 4
+node1 # crm resource start rsc_ip_HA1_HDB00
+.RE
+.PP
+4.5 Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
