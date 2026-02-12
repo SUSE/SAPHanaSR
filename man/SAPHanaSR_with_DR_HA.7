@@ -14,25 +14,56 @@ SAPHanaSR_with_DR_HA \- SAPHanaSR with HA cluster at DR site.
 \fB*\fP Overview
 .PP
 .\" TODO
-Two HANA system replication pairs are connected by HANA system replication.
-The first site of the DR region is registered to the primary of the production
-region, this replication is sync, syncmem or async.
-The second site of the DR region is registered to the first site of the DR
-region, this replication is sync or syncmem. 
-The Linux clusters have no control over HANA system replication between the
-production region and the DR region.
-.br
-[ A <= B' ] -> [ C => D ]
-.\" TODO wording, naming convention
+Two HANA system replication pairs are connected by a third HANA system replication.
+Each pair is configured as Linux cluster for the scale-up performance-optimized
+scenario. The first pair is running reguarly as production region (site1, site2).
+The second pair is running in DR mode (site3, site4).
 .PP
-At the DR standby cluster, the SAPHanaController resource is configured for
-DR mode.
+The first site of the DR region (site3) is registered to the primary of the
+production region (site1). The replication to DR region might be sync, syncmem
+or async. The second site of the DR region (site4) is registered to the first
+site of the DR region (site3), this replication is sync or syncmem.
+.PP
+The described topology can be noted as
+.PP
+ [ site1 <= site2' ] -> / site3 => site4 /
+.PP
+Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notation.
+.PP
+The Linux clusters have no control over HANA system replication between the
+production region and the DR region. The takeover from production region to
+the DR region has to be decided and carried out manually.
+.\" TODO RPO 
+Please see also the REQUIREMENTS section.
+Examples for performing a takeover to DR region, or re-registering a site are given
+in the EXAMPLES section.
 .PP
 .B The SAPHanaSR with HA cluster at DR site scenario is a technology preview.
 .PP
-\fB*\fP Setup procedure
+\fB*\fP DR mode 
+.PP
+The DR region is almost a Linux cluster for the scale-up performance-optimized
+scenario. But there is no HANA primary site. Instead of the primary, the DR site
+(site3) that is registred to the production primary acts as replication source
+for the DR secondary (site4).
+.PP
+Since there is no primary site, the SAPHanaController RA needs to run in DR mode.
+That is done by setting "PREFER_SITE_TAKEOVER=DR". In DR mode, the cluster will
+start, stop and monitor the SAPHanaController multi-state resource. But the cluster
+will not do a takeover from one DR node to the other.
+Please refer to manual page ocf_suse_SAPHanaController(7) for details.
+However, by monitoring resources and initiating local restart, the Linux cluster
+is able to recover from certain failures by restoring the former state.
+.PP
+Further, the Linux cluster in DR mode allows manual procedures for DR takeover
+in case of disaster at production region and regular switch of roles between
+regions.
+.PP
+\fB*\fP Setup
 .PP
 TODO
+.PP
+Please see also the REQUIREMENTS section below.
 .PP
 .\"
 .SH EXAMPLES
@@ -42,7 +73,7 @@ Detailled runbooks can be created by using the appropriate tasks for adding deta
 to the procedures.
 .\" TODO disclaimer, particularly on takeover decision for async replication.
 .PP
-\fB*\fP Procedure for taking over to DR region in DR case./
+\fB*\fP Procedure for taking over to DR region in DR case.
 .PP
 .\" TODO
 Cluster is up and running in DR mode on DR region nodes, HANA is up and running
@@ -84,14 +115,12 @@ node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .PP
 5. Perform takeover at third site (site3).
 .RS 4
-node3 # su - ha1adm
+node3 # su - ha1adm -c "hdbnsutil -sr_takeover"
 .br
-node3 ~> hdbnsutil -sr_takeover
-.br
-node3 ~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
+node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:$?"
 .RE
 .PP
-6. Change SAPHanaController "PREFER_SITE_TAKEOVER=DR" to "PREFER_SITE_TAKEOVER=yes".
+6. Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes".
 .RS 4
 node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER yes
 .RE
@@ -109,8 +138,8 @@ node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 9. Activate IPaddr2 resource at new production region.
 .RS 4
 .\" TODO check how to handle IP address
-node3 # crm resource maintenance rsc_ip_HA1_HDB00 off
-.br
+.\" node3 # crm resource maintenance rsc_ip_HA1_HDB00 off
+.\" .br
 node3 # crm resource start rsc_ip_HA1_HDB00 
 .RE
 .PP
@@ -150,16 +179,16 @@ node1 # crm cluster start
 3. Disable IPaddr2 resource.
 .RS 4
 node1 # crm resource stop rsc_ip_HA1_HDB00
+.\" .br
+.\" node1 # crm resource maintenance rsc_ip_HA1_HDB00
 .RE
 .PP
 4. Set SAPHanaController multi-state resource into maintenance.
 .RS 4
 node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
-.br
-node1 # crm resource maintenance rsc_ip_HA1_HDB00
 .RE
 .PP
-5. Change SAPHanaController "PREFER_SITE_TAKEOVER=yes" to "PREFER_SITE_TAKEOVER=DR".
+5. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
 .RS 4
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
@@ -250,18 +279,16 @@ node1 # crm resource stop rsc_ip_HA1_HDB00
 node1 # crm resource maintenance SAPHanaController
 .RE
 .PP
-2.3 Change SAPHanaController "PREFER_SITE_TAKEOVER=yes" to "PREFER_SITE_TAKEOVER=DR" at first site (site1).
+2.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at first site (site1).
 .RS 4
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
 .PP
 3.1 Perform takeover at third site (site3).
 .RS 4
-node3 # su - ha1adm
+node3 # su - ha1adm -c "hdbnsutil -sr_takeover --suspendPrimary"
 .br
-node3 ~> hdbnsutil -sr_takeover --suspendPrimary
-.br
-node3 ~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
+node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:$?"
 .RE
 .PP
 3.2 Set SAPHanaController multi-state resource into maintenance at third site (site3).
@@ -269,7 +296,7 @@ node3 ~> cdpy; python3 ./systemReplicationStatus.py; echo RC:$?
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-3.3 Change SAPHanaController "PREFER_SITE_TAKEOVER=DR" to "PREFER_SITE_TAKEOVER=yes" at third site (site3).
+3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at third site (site3).
 .RS 4
 node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .RE
@@ -302,6 +329,8 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
  --replicationMode=async --operationMode=logreplay \\
 .br
  --force_full_replica --name=site1
+.br
+node1 ~> exit
 .RE
 .PP
 4.2 Refresh SAPHanaController multi-state resource at first site (site1).
