@@ -54,9 +54,14 @@ Please refer to manual page ocf_suse_SAPHanaController(7) for details.
 However, by monitoring resources and initiating local restart, the Linux cluster
 is able to recover from certain failures by restoring the former state.
 .PP
-Further, the Linux cluster in DR mode allows manual procedures for DR takeover
-in case of disaster at production region and regular switch of roles between
-regions. Details are given in the EXAMPLES section below.
+Optionally, the same production IP address can be used in both regions. It will
+be set only on sites of the production region. As long as a cluster is running in
+DR mode, it will not set the IP address. Of course, the infrastructure needs to
+allow moving IP address between regions. 
+.PP
+Last but not least, the Linux cluster in DR mode allows manual procedures for DR
+takeover in case of disaster at production region and regular switch of roles
+between regions. Details are given in the EXAMPLES section below.
 .PP
 \fB*\fP Setup
 .PP
@@ -121,7 +126,7 @@ to the procedures.
 More examples, not specific to HA cluster at DR region, can be found in manual
 page SAPHanaSR_maintenance_examples(7).
 .PP
-\fB*\fP Procedure for taking over HANA to DR region in DR case.
+\fB*\fP Procedure for taking over HANA to DR region in case of disaster.
 .PP
 This might be done if both sites of the production region went down and not
 expected to recover in time. It will re-establish production service.
@@ -187,12 +192,7 @@ node3 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-9. Activate IPaddr2 resource at new production sites (site3, site4).
-.RS 4
-node3 # crm resource start rsc_ip_HA1_HDB00 
-.RE
-.PP
-10. Check that everything looks fine.
+9. Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Procedure for registering former production HANA as new DR.
@@ -258,7 +258,7 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 .PP
 7. Start HANA at first DR site (node1).
 .RS 4
-# su - ha1adm
+node1 # su - ha1adm
 .br
 ~> HDB start
 .RE
@@ -283,12 +283,12 @@ node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 .PP
 10. Refresh SAPHanaController multi-state resource.
 .RS 4
-node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+node2 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
 11. Get SAPHanaController multi-state resources out of maintenance.
 .RS 4
-node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
 12. Check that everything looks fine.
@@ -461,10 +461,10 @@ The prodution HANA database might be accessed by the same IP address at both
 regions. However, during installation and testing phase both regions should use
 different IP addresses. Once one of the clusters is running in DR mode, in that
 cluster the IP address can be changed to match the production.
-SID is HA1, instance number is 00, IP address is 192.168.2.2.
+SID is HA1, instance number is 00, IP address is 192.168.22.22 .
 .PP
 .RS 2
-# crm configure set rsc_ip_HA1_HDB00.ip 192.168.2.2  
+# crm configure set rsc_ip_HA1_HDB00.ip 192.168.22.22
 .RE
 .PP
 \fB*\fP Registering first DR node as secondary to production primary.
