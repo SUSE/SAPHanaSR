@@ -1837,13 +1837,24 @@ function saphana_monitor_clone() {
         # check during probe, if this instance is *NOT* running as master
         # setting clone_state to "DEMOTED" is needed to avoid misleading "PROMOTED"/"PROMOTED"
         #
-        crm_res=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE")
-        [[ "$crm_res" =~ "is running on: "(.+)" "(Promoted|Master)"" ]] && master_node_name="${BASH_REMATCH[1]}" || master_node_name=""
-        if [ "$master_node_name" != "$NODENAME" ]; then
-            if [ "$gLss" -ge 2 ]; then
-                # we are in a probe, hana is running and we need to reset the clone_state
-                # TODO PRIO5: Only reset attribute, if it is currently set to "PROMOTED"?
-                set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+        if [[ "$PreferSiteTakeover" == "DR" ]]; then
+            #
+            # in DR mode (first) only set the score
+            #
+            set_crm_promote -5678
+            set_hana_site_attribute "$gSite" "DR" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
+        else:
+            #
+            # in HA mode check the resource status
+            #
+            crm_res=$(crm_resource -W -r "$OCF_RESOURCE_INSTANCE")
+            [[ "$crm_res" =~ "is running on: "(.+)" "(Promoted|Master)"" ]] && master_node_name="${BASH_REMATCH[1]}" || master_node_name=""
+            if [ "$master_node_name" != "$NODENAME" ]; then
+                if [ "$gLss" -ge 2 ]; then
+                    # we are in a probe, hana is running and we need to reset the clone_state
+                    # TODO PRIO5: Only reset attribute, if it is currently set to "PROMOTED"?
+                    set_hana_attribute "${NODENAME}" "DEMOTED" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                fi
             fi
         fi
     else
