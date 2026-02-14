@@ -95,7 +95,7 @@ Please do not use the same IP address at both regions during installation.
 See example "Copying HANA secure keystore from production primary to nodes at DR region."
 .RE
 .PP
-7. Add DR specific location constraint for IPaddr2 to both clusters.
+7. Add DR specific colocation constraint for IPaddr2 to both clusters.
 .RS 4
 See example "Preventing IPaddr2 from starting at DR sites."
 .RE
@@ -228,11 +228,12 @@ Note: Understand the impact before trying.
 node1 # crm cluster start
 .RE
 .PP
-3. Set SAPHanaController multi-state and IPaddr2 resource into maintenance.
+3. Set SAPHanaController multi-state resource into maintenance.
 .RS 4
 node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
-.br
-node1 # crm resource maintenance rsc_ip_HA1_HDB00
+.\" TODO
+.\" .br
+.\" node1 # crm resource maintenance rsc_ip_HA1_HDB00
 .RE
 .PP
 4. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
@@ -256,20 +257,18 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
  --replicationMode=async --operationMode=logreplay \\
 .br
  --force_full_replica --name=site1
+.br
+node1 ~> exit
 .RE
 .PP
 7. Start HANA at first DR site (node1).
 .RS 4
-node1 # su - ha1adm
-.br
-~> HDB start
+node1 # su - ha1adm "HDB start"
 .RE
 .PP
 8. Enable system replication at first DR site (node1).
 .RS 4
-node1 # su - ha1adm
-.br
-node1 ~> hdbnsutil -sr_enable
+node1 # su - ha1adm "hdbnsutil -sr_enable"
 .RE
 .PP
 9. Register second DR site (node2) as secondary to first DR site (node1).
@@ -281,6 +280,9 @@ node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
  --replicationMode=syncmem --operationMode=logreplay \\
 .br
  --force_full_replica --name=site2
+.br
+node1 ~> exit
+.RE
 .RE
 .PP
 10. Refresh SAPHanaController multi-state resource.
@@ -288,11 +290,12 @@ node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 node2 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-11. Get SAPHanaController multi-state and IPaddr2 resource out of maintenance.
+11. Get SAPHanaController multi-state resource out of maintenance.
 .RS 4
 node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
-.br
-node2 # crm resource maintenance rsc_ip_HA1_HDB00 off
+.\" TODO
+.\" .br
+.\" node2 # crm resource maintenance rsc_ip_HA1_HDB00 off
 .RE
 .PP
 12. Check that everything looks fine.
@@ -451,12 +454,18 @@ The production HANA database might be accessed by the same IP address at both
 regions. In that case the IP address must not run on the current DR sites.
 A location constraint prevent the Linux cluster from starting the IPAddr2
 resource at any DR site. This constraint is needed at both regions.
+It replaces the original colocation constraint configuration. See manual page
+SAPHanaSR_basic_cluster(7) for the original constraint.
 SID is HA1, instance number is 00.
 .PP
 .RS 2
-location loc_ip_HA1_HDB00_not_DR rsc_ip_HA1_HDB00 \\
+.\" TODO
+colocation col_ip_prim_SAPHana_HA1_HDB00 +inf: \\
 .br
- rule -inf: master-rsc_SAPHanaCon_HA1_HDB00 lt 145
+ rsc_ip_HA1:Started mst_SAPHanaCon_HA1_HDB00:Promoted
+.\" location loc_ip_HA1_HDB00_not_DR rsc_ip_HA1_HDB00 \\
+.\" .br
+.\" rule -inf: master-rsc_SAPHanaCon_HA1_HDB00 lt 145
 .RE
 .PP
 \fB*\fP Changing IPaddr2 at DR sites to match production.

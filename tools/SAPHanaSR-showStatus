@@ -16,10 +16,11 @@ EXE=$(basename "$0")
 
 function show_help() {
         echo "usage     $EXE [ --help | --version ]"
+        echo "usage     $EXE --watch [n]"
         echo
         echo " --help           show help"
         echo " --version        show version"
-        echo
+        echo " --watch          show status continously"
         exit
 }
 
@@ -28,7 +29,7 @@ function show_status() {
         /usr/sbin/crm_mon -1r --exclude=summary
         echo
         /usr/bin/SAPHanaSR-showAttr
-        /usr/sbin/cs_clusterstate -p
+        /usr/sbin/cs_clusterstate -i | grep -v "#"
 }
 
 # main()
@@ -41,6 +42,10 @@ case $1 in
         -h|--help)
                 show_help
                 exit
+        ;;
+        -w|--watch)
+                N="${3:-9}"
+                /usr/bin/watch -n"$N" $EXE
         ;;
         *)
                 show_status
