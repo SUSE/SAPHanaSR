@@ -50,11 +50,41 @@ Since there is no primary site, the SAPHanaController RA needs to run in DR mode
 That is done by setting "PREFER_SITE_TAKEOVER=DR". In DR mode, the cluster will
 start, stop and monitor the SAPHanaController multi-state resource. But the cluster
 will not do a takeover from one DR node to the other.
-Please refer to manual page ocf_suse_SAPHanaController(7) for details.
 However, by monitoring resources and initiating local restart, the Linux cluster
 is able to recover from certain failures by restoring the former state.
-.\" TODO second DR site goes SFAIL, if first site looses link to production primary
-.\" TODO second DR site recovers to SOK, if first site gets back link to production primary
+Please refer to manual page ocf_suse_SAPHanaController(7) for details.
+.PP
+In DR mode, some cluster attributes are looking different from the regular mode.
+.br
+.B lpt
+- shows 30 for both sites, if all is fine.
+.br
+.B srHook
+- shows SWAIT for the DR site attached to production by async replication.
+It shows SOK for the second DR site, if all is fine. 
+The second DR site shows SFAIL, if the first DR site looses the link to production
+primary.
+The second DR site recovers to SOK, if first DR site gets back the link to
+production primary.
+PRIM is shown for the production primary. Two PRIM sites are indicating a takeover
+at production.
+.br
+.B srMode
+- shows async for the replication from production.
+.br
+.B srPoll
+- shows DR for both DR sites.
+.br
+.B srr
+- shows 30 for both sites, if all is fine.
+.br
+.B clone_state
+- shows DEMOTED for both sites, if all is fine.
+.br
+.B score
+- shows a negative value. 
+.br
+See also manual page SAPHanaSr-showAttr(8).
 .PP
 Optionally, the same production IP address can be used in both regions. It will
 be set only on sites of the production region. As long as a cluster is running in
@@ -602,9 +632,9 @@ has been set up as SAPHanaSR-angi scale-up performance-optimised cluster and the
 whole cluster has been set into maintenance.
 .PP
 \fB*\fP The first site of the DR region is registered to the primary of the
-production region, this replication is sync, syncmem or async.
+production region, this replication mode is async.
 The second site of the DR region is registered to the first site of the DR region,
-this replication is sync or syncmem. 
+this replication mode is sync or syncmem. 
 .br
 [ A <= B' ] -> / C => D /
 .PP
