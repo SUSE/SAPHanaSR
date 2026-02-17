@@ -269,7 +269,7 @@ node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RS 4
 node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .br
-node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
+node1 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
 .RE
 .PP
 5. Start Linux cluster on second DR site (node2).
@@ -312,7 +312,7 @@ node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 .br
  --force_full_replica --name=site2
 .br
-node1 ~> exit
+node2 ~> exit
 .RE
 .PP
 10. Refresh SAPHanaController multi-state resource.
@@ -479,20 +479,22 @@ node1 # ssh node4 "md5sum $PWD/*/*"
 .PP
 The production HANA database might be accessed by the same IP address at both
 regions. In that case the IP address must not run on the current DR sites.
-An order constraint prevents the Linux cluster from starting the IPAddr2
-resource at any DR site. This constraint is needed at both regions.
-.\" It replaces the original colocation constraint configuration. See manual page
-.\" SAPHanaSR_basic_cluster(7) for the original constraint.
+Two locations contstraints are preventing from starting the IPAddr2 resource at
+any DR site. This constraint is needed at both regions.
 SID is HA1, instance number is 00.
 .PP
 .RS 2
-.\" TODO
-.\" colocation col_ip_prim_SAPHana_HA1_HDB00 +inf: \\
-.\" .br
-.\" rsc_ip_HA1:Started mst_SAPHanaCon_HA1_HDB00:Promoted
-order ord_SAPHana_HA1_HDB00_before_ip Optional: \\
+location loc_ip_not_dr_1 rsc_ip_HA1_HDB00 rule -inf: \\
 .br
- mst_SAPHanaCon_HA1_HDB00:promote rsc_ip_HA1:start symmetrical=false
+ master-rsc_SAPHanaCon_HA1_HDB00 lt 145
+.br
+location loc_ip_not_dr_2 rsc_ip_HA1_HDB00 rule -inf: \\
+.br
+ not_defined master-rsc_SAPHanaCon_HA1_HDB00
+.\" TODO
+.\" order ord_SAPHana_HA1_HDB00_promote Optional: \\
+.\" .br
+.\"  mst_SAPHanaCon_HA1_HDB00:promote rsc_ip_HA1:start symmetrical=false
 .RE
 .PP
 \fB*\fP Changing IPaddr2 at DR sites to match production.
