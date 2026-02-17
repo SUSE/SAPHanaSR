@@ -296,12 +296,12 @@ node1 ~> exit
 .PP
 7. Start HANA at first DR site (node1).
 .RS 4
-node1 # su - ha1adm "HDB start"
+node1 # su - ha1adm -c "HDB start"
 .RE
 .PP
 8. Enable system replication at first DR site (node1).
 .RS 4
-node1 # su - ha1adm "hdbnsutil -sr_enable"
+node1 # su - ha1adm -c "hdbnsutil -sr_enable"
 .RE
 .PP
 9. Register second DR site (node2) as secondary to first DR site (node1).
@@ -359,11 +359,6 @@ Note: Understand the impact before trying.
 .PP
 .B The next steps will invalidate all HANA data at current production sites (site1, site2).
 .PP
-.\" 2.1 Disable IPaddr2 resource at production sites (site1, site2).
-.\" .RS 4
-.\" node1 # crm resource stop rsc_ip_HA1_HDB00
-.\" .RE
-.PP
 2.1 Set SAPHanaController multi-state resource into maintenance at production
 sites (site1, site2).
 .RS 4
@@ -384,17 +379,22 @@ node1 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
 node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-3.1 Perform takeover at third site (site3: current DR - new production).
+2.4 Stop HANA at former production secondary (site2).
+.RS 4
+node2 # su - ha1adm -c "HDB stop"
+.RE
+.PP
+3.1 Set SAPHanaController multi-state resource into maintenance at current DR
+sites (site3, site4).
+.RS 4
+node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+3.2 Perform takeover at third site (site3: current DR - new production).
 .RS 4
 node3 # su - ha1adm -c "hdbnsutil -sr_takeover --suspendPrimary"
 .br
 node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:\\$?"
-.RE
-.PP
-3.2 Set SAPHanaController multi-state resource into maintenance at new production
-sites (site3, site4).
-.RS 4
-node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
 3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at new production sites
@@ -443,13 +443,8 @@ node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RS 4
 node1 # crm resource maintenace mst_SAPHanaCon_HA1_HDB00 off
 .RE
-.\" .PP
-.\" 4.4 Enable IPaddr2 resource at new DR sites (site1, site2).
-.\" .RS 4
-.\" node1 # crm resource start rsc_ip_HA1_HDB00
-.\" .RE
 .PP
-4.5 Check that everything looks fine.
+4.4 Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
