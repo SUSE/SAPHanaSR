@@ -334,6 +334,36 @@ node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .PP
 This might be done for regular maintenance procedures.
 .PP
+Top-Level procedure is:
+.RS2
+Production is still up
+.RS4
+set mst-resource to maintenance on BOTH regions (2.1, 3.1)
+.br
+stop secondary at HA region (2.4)
+.RS2
+Production is down:
+.RS4
+manually takeover with suspend primary (3.2)
+.br
+mark new DR as DR region and refresh mst resource (IP goes down now) (2.2, 2.3 )
+.br
+mark new  HA as HA region and refresh mst resource (IP goes up now) (3.3, 3.4)
+.RS2
+Production is up again:
+.RS4
+register former HA primary as DR secondary (async/third site) (4.1)
+.br
+register former HA secondary as secondary (sync(mem)) (NONO)
+.br
+refresh mst on BOTH regions (3.4, 4.2)
+.br
+end maintenance on BOTH regions (3.5, 4.3)
+.RS2
+Production is up, regions HA- and DR-functionalities are available again
+
+The concrete order is described in man SAPHanaSR_with_DR_HA.7. This man page optimizes the top-level view to minimize changes of the node to be logged-in.
+.PP
 \" TODO
 Third site is up and running with system replication enabled.
 All site names have to be same as already known to the cluster.
