@@ -434,17 +434,40 @@ node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 node1 ~> exit
 .RE
 .PP
-4.2 Refresh SAPHanaController multi-state resource at new DR sites (site1, site2).
+4.2 Enable system replication source at new first DR site (site1).
 .RS 4
-node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+node1 # su - ha1adm "hdbnsutil -sr_enable"
 .RE
 .PP
-4.3 Get SAPHanaController multi-state out of maintenance at new DR sites (site1, site2).
+4.3 Register new second DR site (site2) to first DR site (site1).
 .RS 4
-node1 # crm resource maintenace mst_SAPHanaCon_HA1_HDB00 off
+node2 # su - ha1adm
+.br
+node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+.br
+ --replicationMode=syncmem --operationMode=logreplay \\
+.br
+ --force_full_replica --name=site2
+.br
+node2 ~> exit
 .RE
 .PP
-4.4 Check that everything looks fine.
+4.4 Start new second DR site (site2).
+.RS 4
+node2 # su - ha1adm -c "HDB start"
+.RE
+.PP
+4.5 Refresh SAPHanaController multi-state resource at new DR sites (site1, site2).
+.RS 4
+node2 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+4.6 Get SAPHanaController multi-state out of maintenance at new DR sites (site1, site2).
+.RS 4
+node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+.RE
+.PP
+4.7 Check that everything looks fine.
 .RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
