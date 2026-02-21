@@ -1,0 +1,166 @@
+.\" Version: 1.2
+.\"
+.TH SAPHanaSR-ScaleUp-CostOpt 7 "20 Feb 2026" "" "SAPHanaSR"
+.\"
+.SH NAME
+.\"
+SAPHanaSR-ScaleUp-CostOpt \- Automating SAP HANA system replication for scale-up
+cost-optimised setups.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+This manual page provides information for setting up and managing automation of
+SAP HANA system replication (SR) in scale-up cost-optimised setups.
+.\" TODO
+This scenario can be noted as
+.br
+[ A' => B,Q ]
+.PP
+For other scale-up scenarios, please refer to SAPHanaSR(7).
+.PP
+.\"
+.SH EXAMPLES
+.\"
+\fB*\fP Example for the SAPHanaController resources in a cost-optimised scenario.
+.PP
+The first SAP HANA resource is a multi-state pair of production HANAs with a system
+replication (e.g. PRD), managed by the SAPHanaController RA. See manual page
+SAPHanaController-scale-up(7). The second SAP HANA is a single test HANA (e.g. TST)
+running together with the productive HANA secondary on the same node. This second
+-single- HANA is managed as a primitive resource by the SAPInstance RA, see
+respective example below. Of course, a SAPHanaTopology clone resource is needed
+to make this work. See manual page ocf_suse_SAPHanaToplogy(7). It is also necessary
+to prepare an HANA HA/DR hook script for adjusting the secondary  HANA's memory
+in case of sr_takeover. See manual page susCostOpt.py(7) and URLs below. Finally,
+the SAPHanaController primary gets a priority to allow priority fencing. See manual
+page SAPHanaSR_basic_cluster(7).
+Example SID is PRD, instance number is 10.
+.PP
+.RS 2
+primitive rsc_SAPHanaCon_PRD_HDB10 ocf:suse:SAPHanaController \\
+.br
+ op start interval="0" timeout="3600" \\
+.br
+ op stop interval="0" timeout="1800" \\
+.br
+ op promote interval="0" timeout="900" \\
+.br
+ op demote interval="0" timeout="320" \\
+.br
+ op monitor interval="60" role="Promoted" timeout="700" \\
+.br
+ op monitor interval="61" role="Started" timeout="700" \\
+.br
+ params SID="PRD" InstanceNumber="10" PREFER_SITE_TAKEOVER="false" \\
+.br
+ DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="false" \\
+.br
+ meta priority=100
+.PP
+clone mst_SAPHanaCon_PRD_HDB10 rsc_SAPHanaCon_PRD_HDB10 \\
+.br
+ meta clone-max="2" clone-node-max="1 interleave="true" promotable="true"
+.RE
+.PP
+\fB*\fP Example for the SAPInstance resource in a cost-optimised scenario.
+.PP
+The second SAP HANA is a single test HANA (e.g. TST) running together with the
+productive HANA secondary on the same node. This second -single- HANA is managed
+as a primitive resource by the SAPInstance RA.
+See manual page ocf_heartbeat_SAPInstance(7).
+Example SID for the replicated instance is PRD, instance number is 10.
+Example SID for the single instance is TST, instance number is 20, node is node02.
+.\" TODO
+.PP
+.RS 2
+primitive rsc_SAPInstance_TST_HDB20_node02 ocf:heartbeat:SAPInstance \\
+.br
+ params InstanceName="TST_HDB20_node02 \\
+.br
+ MONITOR_SERVICES="hdbindexserver|hdbnameserver" \\
+.br
+ START_PROFILE="/usr/sap/TST/SYS/profile/TST_HDB20_node02" \\
+.br
+ op start interval="0" timeout="1200" \\
+.br
+ op monitor interval="120" timeout="700" \\
+.br
+ op stop interval="0" timeout="600"
+.PP
+location loc_TST_never_on_node01 rsc_SAPInstance_TST_HDB20_node02 -inf: node01
+.PP
+.\" TODO below location and colocation doppelt gemoppelt, because of TID 
+location loc_TST_never_with_PRD-promoted \\
+.br
+  rsc_SAPInstance_TST_HDB20 rule -inf: hana_prd_clone_state eq PROMOTED
+.PP
+colocation col_TST_never_with_PRD-ip -inf: rsc_SAPInstance_TST_HDB20_node02:Started \\
+.br
+ rsc_ip_PRD_HDB10
+.PP
+order ord_TST_stop_before_PRD-promote inf: rsc_SAPInstance_TST_HDB20_node02:stop \\
+.br
+ mst_SAPHanaCon_PRD_HDB10:promote
+.RE
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaController
+the SAPHanaController resource agent
+.TP
+/usr/lib/ocf/resource.d/suse/SAPHanaTopology
+the SAPHanaTopology resource agent
+.TP
+/usr/lib/ocf/resource.d/heartbeat/SAPInstance
+the SAPInstance resource agent
+.TP
+/usr/sap/$SID/$InstanceName/exe
+default path for DIR_EXECUTABLE
+.TP
+/usr/sap/$SID/SYS/profile
+default path for DIR_PROFILE
+.TP
+/usr/share/SAPHanaSR-angi/susCostOpt.py
+the specific HA/DR provider hook script
+.\" TODO
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+.\" TODO
+.\" TODO multi-target tihrd on production primary
+.PP
+\"
+.SH BUGS
+.\"
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+.\" Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) ,
+\fBSAPHanaController-scale-up\fP(7) , \fBocf_suse_SAPHanaTopology\fP(7) ,
+\fBsusCostOpt.py\fP(7) , \fBocf_heartbeat_SAPInstance\fP(7) ,
+\fBSAPHanaSR_maintenance_examples\fP(7) , \fBSAPHanaSR_multi-target\fP(7) ,
+.PP
+.\"
+.SH AUTHORS
+.\"
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2025-2026 SUSE LLC
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
+
