@@ -12,20 +12,30 @@ cost-optimised setups.
 .\"
 This manual page provides information for setting up and managing automation of
 SAP HANA system replication (SR) in scale-up cost-optimised setups.
-The cluster automates one single takeover in case of a failed primary.
-After that happened, the initial state needs to be restored by an administrative
-procedure.
-.\" TODO
+.PP
+An HANA database is replicating data to another HANA database on a second site.
+In the cost-optimised scenario, the second site is also used for a stand-alone
+non-replicated HANA database. The productive secondary HANA on this node must be
+limited in using system resources.
 The scale-up cost-optimised scenario can be noted as
 .br
 [ A' => B,Q ]
 .PP
-For other scale-up scenarios, please refer to SAPHanaSR(7).
+Whenever a takeover is needed, the non-replicated HANA must be stopped first. 
+Thus, the takeover needs longer than in the performance-optimised setup.
+The cluster automates one single takeover in case of a failed primary.
+After that happened, the initial state needs to be restored by an administrative
+procedure.
+.\" TODO
+.PP
+The scale-up cost-optimised setup relies on SAP HANA HA/DR hook provider method
+postTakeover(). Please refer to manual page susTkOver.py(7) for details.
+More requirements are listed in the REQUIREMENTS section below.
 .PP
 .\"
 .SH EXAMPLES
 .\"
-\fB*\fP Example for the SAPHanaController resources in a cost-optimised scenario.
+\fB*\fP Example SAPHanaController resources in a cost-optimised scenario.
 .PP
 The first SAP HANA resource is a multi-state pair of production HANAs with a system
 replication (e.g. PRD), managed by the SAPHanaController RA. See manual page
@@ -45,7 +55,7 @@ primitive rsc_SAPHanaCon_PRD_HDB10 ocf:suse:SAPHanaController \\
 .br
  op start interval="0" timeout="3600" \\
 .br
- op stop interval="0" timeout="1800" \\
+ op stop interval="0" timeout="600" \\
 .br
  op promote interval="0" timeout="900" \\
 .br
@@ -59,6 +69,8 @@ primitive rsc_SAPHanaCon_PRD_HDB10 ocf:suse:SAPHanaController \\
 .br
  DUPLICATE_PRIMARY_TIMEOUT="7200" AUTOMATED_REGISTER="false" \\
 .br
+ ON_FAIL_ACTION="proceed" \\
+.br
  meta priority=100
 .PP
 clone mst_SAPHanaCon_PRD_HDB10 rsc_SAPHanaCon_PRD_HDB10 \\
@@ -66,7 +78,7 @@ clone mst_SAPHanaCon_PRD_HDB10 rsc_SAPHanaCon_PRD_HDB10 \\
  meta clone-max="2" clone-node-max="1 interleave="true" promotable="true"
 .RE
 .PP
-\fB*\fP Example for the SAPInstance resource in a cost-optimised scenario.
+\fB*\fP Example SAPInstance resource in a cost-optimised scenario.
 .PP
 The second SAP HANA is a single test HANA (e.g. TST) running together with the
 productive HANA secondary on the same node. This second -single- HANA is managed
@@ -107,6 +119,11 @@ order ord_TST_stop_before_PRD-promote inf: rsc_SAPInstance_TST_HDB20_node02:stop
  mst_SAPHanaCon_PRD_HDB10:promote
 .RE
 .PP
+* Example IPAddr2 resource in a cost-optimised scenario.
+.PP
+Please find examples on IPaddr2 resource configuration for the replicated SAP
+HANA database in manual page SAPHanaSR_basic_cluster(7). 
+.PP
 \fB*\fP Recovery procedure for reverting to normal operation after takeover.
 .PP
 An overview on reverting to normal operation after takeover is given in manual
@@ -125,14 +142,20 @@ the SAPHanaTopology resource agent
 /usr/lib/ocf/resource.d/heartbeat/SAPInstance
 the SAPInstance resource agent
 .TP
+/usr/share/SAPHanaSR-angi/susCostOpt.py
+the specific HA/DR provider hook script
+.TP
 /usr/sap/$SID/$InstanceName/exe
 default path for DIR_EXECUTABLE
 .TP
 /usr/sap/$SID/SYS/profile
 default path for DIR_PROFILE
 .TP
-/usr/share/SAPHanaSR-angi/susCostOpt.py
-the specific HA/DR provider hook script
+/usr/sap/$SID/home/.hdb/$HOST/
+path to HANA user keystore
+.TP
+/usr/sap/$SID/HDB$nr/$HOST/trace
+path to HANA tracefiles
 .\" TODO
 .PP
 .\"
@@ -151,8 +174,9 @@ not be used. Please refer to SAP documentation for details.
 \fB*\fP SAP HANA Multi-SID (also MCOS) setup must not be used with the cost-optimised
 setup.
 .PP
-\fB*\fP SAPHanaController PREFER_SITE_TAKEOVER=false might be used. See manual page
-SAPHanaController-scale-up(7).
+\fB*\fP The so-called conservative cofiguration variant fits well.
+In addition, SAPHanaController PREFER_SITE_TAKEOVER=false might be used.
+See manual page SAPHanaController-scale-up(7).
 .PP
 \fB*\fP The SAP HANA scale-up cost-optimised scenario can benefit from HANA´s
 persistent memory features. Local restart and takeover are affected by the time
