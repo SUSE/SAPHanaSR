@@ -11,7 +11,7 @@
 """
 
 #global TOOL_VERSION
-TOOL_VERSION = "1.0.20250815"
+TOOL_VERSION = "1.1.20260309"
 # TODO pylint's constant vs variable detection is broken
 # pylint: disable=invalid-name
 
@@ -96,17 +96,13 @@ if __name__ == "__main__":
         else:
             exp_sort_arr = [ exp_sort ]
         for sort_table in exp_sort_arr:
-            match_sort = re.search("([^:]*):([^:]*)(:.)?", sort_table)
+            match_sort = re.search("([^:]*):(.*)", sort_table)
             if match_sort:
                 sort_table = match_sort.group(1)
-                sort_field = match_sort.group(2)
-                sort_direction = match_sort.group(3)
-                # print(f"sort_direction = {sort_direction}")
-                if sort_direction == ':-':
-                    myCluster.config['sort-reverse'] = True  # TODO: this must be defined per table, not for ALL tables
+                sort_field_and_direction = match_sort.group(2)
                 if not myCluster.config['sort']:
                     myCluster.config['sort'] = {}
-                myCluster.config['sort'].update({sort_table: sort_field})
+                myCluster.config['sort'].update({sort_table: sort_field_and_direction})
             else:
                 if not myCluster.config['sort']:
                     myCluster.config['sort'] = {}
@@ -197,8 +193,19 @@ if __name__ == "__main__":
             index_reverse = myCluster.config['sort-reverse']
             #print(f"sort-reverse = {index_reverse}")
             for table in tables:
+                index_table = None
                 if sort_def:
-                    index_table = sort_def.get(table)
+                    index_reverse = False
+                    # print(f"sort_def: {sort_def}")
+                    sort_def_table = sort_def.get(table)  # could be 'field' or 'field:direction'
+                    if sort_def_table:
+                        sort_def_table_arr = sort_def_table.split(":")
+                        if len(sort_def_table_arr) == 1:
+                            ( index_table ) = sort_def_table_arr
+                        else:
+                            ( index_table, direction_table ) = sort_def_table_arr
+                            if direction_table == '-':
+                                index_reverse = True
                 else:
                     index_table = None
                 if index_table is None:
