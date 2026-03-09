@@ -96,10 +96,14 @@ if __name__ == "__main__":
         else:
             exp_sort_arr = [ exp_sort ]
         for sort_table in exp_sort_arr:
-            match_sort = re.search("(.*):(.*)", sort_table)
+            match_sort = re.search("([^:]*):([^:]*)(:.)?", sort_table)
             if match_sort:
                 sort_table = match_sort.group(1)
                 sort_field = match_sort.group(2)
+                sort_direction = match_sort.group(3)
+                print(f"sort_direction = {sort_direction}")
+                if sort_direction == ':-':
+                    myCluster.config['sort-reverse'] = True  # TODO: this must be defined per table, not for ALL tables
                 if not myCluster.config['sort']:
                     myCluster.config['sort'] = {}
                 myCluster.config['sort'].update({sort_table: sort_field})
@@ -167,25 +171,47 @@ if __name__ == "__main__":
         myHana.fill_res_dict()
         myHana.fill_site_dict()
         myHana.fill_host_dict()
-
+        myHana.data = {
+                        'global': myHana.glob_dict,
+                        'resource': myHana.res_dict,
+                        'site': myHana.site_dict,
+                        'host': myHana.host_dict
+                      }
+    tables = {
+                "global": "Global",
+                "resource": "Resource", 
+                "site": "Site", 
+                "host": "Host"
+             }
     for myHana in myCluster.multi_status:
         oformat = "table"
         if 'format' in myCluster.config:
             oformat = myCluster.config['format']
         if oformat == "table":
-            index = myCluster.config['sort']
+            sort_def = myCluster.config['sort']
+            if sort_def:
+                index_all = sort_def.get('all')
+            else:
+                index_all = None
             index_type = 'str'
             index_reverse = myCluster.config['sort-reverse']
-            if index is None:
-                myHana.print_dic_as_table(myHana.glob_dict, "global", "Global")
-                myHana.print_dic_as_table(myHana.res_dict, "resource", "Resource")
-                myHana.print_dic_as_table(myHana.site_dict, "site", "Site")
-                myHana.print_dic_as_table(myHana.host_dict, "host", "Host")
-            else:
-                myHana.print_dic_as_table_sort_by(myHana.glob_dict, index, index_type, index_reverse, "global",   "Global")
-                myHana.print_dic_as_table_sort_by(myHana.res_dict, index, index_type, index_reverse, "resource", "Resource")
-                myHana.print_dic_as_table_sort_by(myHana.site_dict, index, index_type, index_reverse, "site",     "Site")
-                myHana.print_dic_as_table_sort_by(myHana.host_dict, index, index_type, index_reverse, "host",     "Host")
+            print(f"sort-reverse = {index_reverse}")
+            for table in tables:
+                if sort_def:
+                    index_table = sort_def.get(table)
+                else:
+                    index_table = None
+                if index_table is None:
+                    index = index_all
+                else:
+                    index = index_table
+                print(f"table {table}: index_all={index_all} index_table={index_table} index={index} sort_def={sort_def}")
+                if index is None:
+                    print("no sort")
+                    myHana.print_dic_as_table(myHana.data.get(table), table, tables.get(table))
+                else:
+                    print(f"sort-reverse = {index_reverse}")
+                    myHana.print_dic_as_table_sort_by(myHana.data.get(table), index, index_type, index_reverse, table, tables.get(table))
         elif oformat == "json":
             myHana.print_all_as_json()
         elif oformat in {"path", "script"}:
