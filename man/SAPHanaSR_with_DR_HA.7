@@ -95,9 +95,88 @@ Last but not least, the Linux cluster in DR mode allows manual procedures for DR
 takeover in case of disaster at production region and regular switch of roles
 between regions. Details are given in the EXAMPLES section below.
 .PP
-\fB*\fP Setup
+\fB*\fP Setup procedure
 .PP
 .\" TODO
+The two clusters could be set up and connected by different procedures:
+.PP
+a. Set up HANA and Linux clusters in both regions separately. Test both regions
+in production mode before connecting them. Test takeover, re-register and DR mode
+after both regions are connected. This procedure is outlined as example below.
+This is the recommended setup procedure. 
+.PP
+b. Set up HANA and Linux clusters in production region. Connect HANA DR site (or 
+region) without Linux cluster there. Test production region. Install cluster at
+DR region in DR mode. Test takeover. Test production mode again. Test re-register
+and DR mode. This procedure is possible, but not recommended.
+See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
+SAPHanaSR_basic_cluster(7), SAPHanaSR_multi-target(7), et al.
+.PP
+\fB*\fP Maintenance procedures
+.PP
+.\" TODO
+.PP
+Three procedures are specific for the two connected HANA system replication pairs:
+.PP
+a. Procedure for taking over HANA to DR region in case of disaster.
+.br
+This procedure is outlined as example below. 
+.PP
+b. Procedure for registering former production HANA as new DR.
+.br
+This procedure is outlined as example below.
+.PP
+c. Procedure for switching HANA production and DR region, keep HANA running.
+.br
+This might be done for regular maintenance procedures.
+Top-Level procedure is:
+.PP
+.RS 2
+Phase 1: Production is still up.
+.RS 2
+* set mst-resource to maintenance on both regions (2.1, 3.1)
+.br
+* stop secondary at HA region (2.4)
+.RE
+.RS2
+Phase 2: Production is down.
+.RS 2
+* manually takeover with suspend primary (3.2)
+.br
+* mark new DR as DR region and refresh mst resource (IP address goes down) (2.2, 2.3 )
+.br
+* mark new  HA as HA region and refresh mst resource (IP address goes up) (3.3, 3.4)
+.RE
+Phase 3: Production is up again.
+.RS 2
+* register former HA primary as DR secondary (async/third site) (4.1)
+.br
+* register former HA secondary as secondary (sync/syncmem) (NONO)
+.br
+* refresh mst on BOTH regions (3.4, 4.2)
+.br
+* end maintenance on BOTH regions (3.5, 4.3)
+.RE
+Phase 4: Production is up, regions HA- and DR-function available again.
+.RE
+.PP
+A procedure with optimised workflow is is outlined as example below.
+.PP
+.\"
+.SH EXAMPLES
+.\"
+The examples are outlining highlevel procedures as well as describing basic tasks.
+Detailled runbooks can be created by using the appropriate tasks for adding details
+to the procedures.
+.\" TODO disclaimer, particularly on takeover decision for async replication.
+More examples, not specific to HA cluster at DR region, can be found in manual
+page SAPHanaSR_maintenance_examples(7).
+.PP
+\fB*\fP Procedure for setting up HANA and Linux clusters in both regions.
+.PP
+Set up HANA and Linux clusters in both regions separately. Test both regions in
+production role before connecting them. Test takeover and DR role after both are
+connected.
 .PP
 .RS 2
 1. Collect information and prepare parameter sheet.
@@ -147,16 +226,6 @@ Of course, in that example the regions are exchanged. So, make sure to use
 .RE
 .PP
 Please see also the REQUIREMENTS section below.
-.PP
-.\"
-.SH EXAMPLES
-.\"
-The examples are outlining highlevel procedures as well as describing basic tasks.
-Detailled runbooks can be created by using the appropriate tasks for adding details
-to the procedures.
-.\" TODO disclaimer, particularly on takeover decision for async replication.
-More examples, not specific to HA cluster at DR region, can be found in manual
-page SAPHanaSR_maintenance_examples(7).
 .PP
 \fB*\fP Procedure for taking over HANA to DR region in case of disaster.
 .PP
@@ -333,53 +402,6 @@ node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 \fB*\fP Procedure for switching HANA production and DR region, keep HANA running.
 .PP
 This might be done for regular maintenance procedures.
-.\ TODO begin top-level-procedure
-.PP
-Top-Level procedure is:
-.RS 2
-.PP
-\fBPhase 1: Production is still up\fR
-.RS 2
-.PP
-* set mst-resource to maintenance on BOTH regions (2.1, 3.1)
-.PP
-* stop secondary at HA region (2.4)
-.RE
-.\ TODO ####################
-.RS2
-.PP
-\fBPhase 2: Production is down\fR
-.RS 2
-.PP
-* manually takeover with suspend primary (3.2)
-.PP
-* mark new DR as DR region and refresh mst resource (IP goes down now) (2.2, 2.3 )
-.PP
-* mark new  HA as HA region and refresh mst resource (IP goes up now) (3.3, 3.4)
-.RE
-.PP
-.\ TODO ####################
-\fBPhase 3: Production is up again:\fP
-.RS 2
-.PP
-* register former HA primary as DR secondary (async/third site) (4.1)
-.PP
-* register former HA secondary as secondary (sync(mem)) (NONO)
-.PP
-* refresh mst on BOTH regions (3.4, 4.2)
-.PP
-* end maintenance on BOTH regions (3.5, 4.3)
-.RE
-.PP
-.\ TODO ####################
-\fBPhase 4: Production is up, regions HA- and DR-functionalities are available again\fP
-.\ TODO end top-level procedure
-.RE
-.RE
-
-The concrete order is described in man SAPHanaSR_with_DR_HA.7. This man page
-optimises the top-level view to minimize changes of the node to be logged-in.
-.PP
 \" TODO
 Third site is up and running with system replication enabled.
 All site names have to be same as already known to the cluster.
