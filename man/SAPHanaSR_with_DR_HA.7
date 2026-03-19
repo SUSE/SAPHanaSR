@@ -20,9 +20,9 @@ scenario. The first pair is running reguarly as production region (site1, site2)
 The second pair is running in DR mode (site3, site4).
 .PP
 The first site of the DR region (site3) is registered to the primary of the
-production region (site1). The replication to DR region might be sync, syncmem
-or async. The second site of the DR region (site4) is registered to the first
-site of the DR region (site3), this replication is sync or syncmem.
+production region (site1). The replication to DR region is async. The second
+site of the DR region (site4) is registered to the first site of the DR region
+(site3), this replication is sync or syncmem.
 .PP
 The described topology can be noted as
 .PP
@@ -35,7 +35,7 @@ production region and the DR region. The takeover from production region to
 the DR region has to be decided and carried out manually.
 .\" TODO RPO ?
 .\" TODO IP address ?
-Please see also the REQUIREMENTS section.
+Please see also the REQUIREMENTS section below.
 .PP
 .B The SAPHanaSR with HA cluster at DR site scenario is a technology preview.
 .PP
@@ -55,7 +55,7 @@ is able to recover from certain failures by restoring the former state.
 Please refer to manual page ocf_suse_SAPHanaController(7) for details.
 .PP
 In DR mode, some cluster attributes are looking different from the regular mode.
-.br
+.RS 2
 .B lpt
 - shows 30 for both sites, if all is fine.
 .br
@@ -76,15 +76,15 @@ at production.
 - shows DR for both DR sites.
 .br
 .B srr
-- shows 30 for both sites, if all is fine.
+- shows S for both sites, if all is fine.
 .br
 .B clone_state
 - shows DEMOTED for both sites, if all is fine.
 .br
 .B score
 - shows a negative value. 
-.br
-See also manual page SAPHanaSr-showAttr(8).
+.RE
+See also manual page SAPHanaSR-showAttr(8).
 .PP
 Optionally, the same production IP address can be used in both regions. It will
 be set only on sites of the production region. As long as a cluster is running in
@@ -116,14 +116,54 @@ SAPHanaSR_basic_cluster(7), SAPHanaSR_multi-target(7), et al.
 .PP
 .\" TODO
 .PP
-Three procedures are specific for the two connected HANA system replication pairs:
+Three procedures are specific for the two connected HANA system replication pairs.
 .PP
 a. Procedure for taking over HANA to DR region in case of disaster.
+.RS 2
+* Collect information and prepare parameter sheet.
 .br
+* Ensure both sites of the production region (site1, site2) are not running.
+.br
+* Decide to takeover HANA primary to third site (site3).
+.br
+* Perform HANA takeover at third site (site3).
+.br
+* Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes".
+.br
+* Refresh SAPHanaController multi-state resource.
+.br
+* Get SAPHanaController multi-state resource out of maintenance.
+.br
+* Check that everything looks fine.
+.RE
 This procedure is outlined as example below. 
 .PP
 b. Procedure for registering former production HANA as new DR.
+.RS 2
+* Collect information and prepare parameter sheet.
 .br
+* Start Linux cluster on first DR site only (node1).
+.br
+* Set SAPHanaController multi-state resource into maintenance.
+.br
+* Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
+.br
+* Start Linux cluster on second DR site (node2).
+.br
+* Register first DR site (node1) as secondary to current primary (node3)
+.br
+* Start HANA at first DR site (node1).
+.br
+* Enable system replication at first DR site (node1).
+.br
+* Register second DR site (node2) as secondary to first DR site (node1).
+.br
+* Refresh SAPHanaController multi-state resource.
+.br
+* Get SAPHanaController multi-state resource out of maintenance.
+.br
+* Check that everything looks fine.
+.RE
 This procedure is outlined as example below.
 .PP
 c. Procedure for switching HANA production and DR region, keep HANA running.
