@@ -354,10 +354,11 @@ node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 \fB*\fP Procedure for registering former production HANA as new DR.
 .PP
 This might be done, if both sites (or at least one) of the former production
-sites have been recoverd after an outage. It will re-establish DR redundancy.
+sites have been recovered after an outage. It will re-establish DR redundancy.
 .PP
 \" TODO
 At all nodes the automatic start of cluster at boot has to be disabled.
+If automatic start is not disabled, additional measures have to be taken.
 All site names have to be same as already known to the cluster.
 Example for scale-up.
 Details on how to perform the steps can be found in additional examples below
@@ -590,7 +591,61 @@ node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .PP
 4.7 Check that everything looks fine.
 .RE
+.PP
+\fB*\fP Procedure for switching HANA production and DR region, shut down HANA.
+.PP
+This might be done for regular takeover from production to DR region and as exercise.
+The final status is identical to the above takeover procedure.
+.PP
+Third site is up and running with system replication enabled. All site names
+have to be same as already known to the cluster. Example for scale-up. Details
+on how to perform the steps can be found in additional examples.
+.PP
+site1, node1: current production primary, to become first DR replication target
+.br
+site2, node2: current production primary secondary, to become second DR replication
+target
+.br
+site3, node3: current first DR replication target, to become production primary
+.br
+site4, node4: current second DR replication target, to become production secondary
+.PP
+Note: Understand the impact before trying.
+.PP
+1.1 Collect information and prepare parameter sheet.
+.PP
+2.1 Set SAPHanaController multi-state resource into maintenance at production
+sites (site1, site2).
+.br
+2.2 Stop HANA database at production primary site (site1).
+.br
+2.3 Stop HANA database at production secondary site (site2).
+.PP
+3.1 Perform takeover to DR region as described in the respective example.
+.PP
+4.1 Register former production HANA as new DR as described in the respective example.
+.PP
 .\" TODO \fB*\fP Start cluster and HANA at DR region while production region is down.
+.PP
+\fB*\fP Additional measures for registering former productioan as new DR, if automatic cluster start is enabled.
+.PP
+To avoid risk of dual-primary, at any time only one region must run as HANA primary.
+So, if a former production cluster starts the first time after outage and DR takeover,
+the former HANA primary must not start. If the automatic cluster start is enabled,
+additional steps need to be done before the regular procedure for registering as
+new DR region. For scale-up, these steps are:
+.PP
+.RS 2
+1. Make sure not both machines will boot after recovery.
+.br
+2. Boot only one machine.
+.br
+3. Login to that machine. Set the SAPHanaController multi-state resource into maintenance.
+.br
+4. Boot the second machine.
+.br
+5. Perform the regular procedure for registering former production HANA as new DR. 
+.RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
 .PP
