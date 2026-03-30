@@ -44,6 +44,9 @@ def get_sort_value(item, index, **kargs):
     """
     if index in item:
         return item[index]
+    #
+    # for empty values...
+    #
     if 'type' in kargs:
         if kargs['type'] == 'int':
             return 0
@@ -529,7 +532,10 @@ class HanaStatus():
         """
         print_dic_as_table_sort_by - print a dictionary 'table' sorted by 'index'
         """
-        self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1], index, type=index_type)), reverse=index_reverse)), area, table_name)
+        if index == "key":
+            self.print_dic_as_table(dict(sorted(dic.items(), reverse=index_reverse)),area, table_name)
+        else:
+            self.print_dic_as_table(dict(sorted(dic.items(), key=lambda item: (get_sort_value(item[1], index, type=index_type)), reverse=index_reverse)), area, table_name)
 
     def print_dic_as_json(self, print_dic, table_name):
         """

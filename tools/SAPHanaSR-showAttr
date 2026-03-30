@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--from", help="select 'from' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--properties", help="specify the properties file")
     parser.add_argument("--experimental_attributes", nargs="+", help="experimental only - might be deleted later; global:attr1,attr2 site:attr3,attr3 host:attr4,attr5,attr6")
-    parser.add_argument("--experimental_sort", nargs="+", help="experimental only - might be deleted later; site:attrS host:attrH")
+    parser.add_argument("--experimental_sort", nargs="+", help="experimental only - might be deleted later; site:attrS[:+-] host:attrH[:+-]")
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     parser.add_argument("--sid", help="specify the sid to check for")
     parser.add_argument("--sort", help="specify the column name to sort by")
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         for sort_table in exp_sort_arr:
             match_sort = re.search("([^:]*):(.*)", sort_table)
             if match_sort:
-                sort_table = match_sort.group(1)
+                sort_table = match_sort.group(1).lower()
                 sort_field_and_direction = match_sort.group(2)
                 if not myCluster.config['sort']:
                     myCluster.config['sort'] = {}
@@ -201,11 +201,13 @@ if __name__ == "__main__":
                     if sort_def_table:
                         sort_def_table_arr = sort_def_table.split(":")
                         if len(sort_def_table_arr) == 1:
-                            ( index_table ) = sort_def_table_arr
-                        else:
+                            index_table = sort_def_table_arr[0]
+                        elif len(sort_def_table_arr) == 2:
                             ( index_table, direction_table ) = sort_def_table_arr
                             if direction_table == '-':
                                 index_reverse = True
+                        elif len(sort_def_table_arr) == 3:    # field:direction:modifier (int, int+empty, ...) # TODO implement
+                            pass
                 else:
                     index_table = None
                 if index_table is None:
@@ -217,7 +219,8 @@ if __name__ == "__main__":
                     #print("no sort")
                     myHana.print_dic_as_table(myHana.data.get(table), table, tables.get(table))
                 else:
-                    #print(f"sort-reverse = {index_reverse}")
+                    #print(f"index= {index}")
+                    #print(f"index-reverse = {index_reverse}")
                     myHana.print_dic_as_table_sort_by(myHana.data.get(table), index, index_type, index_reverse, table, tables.get(table))
         elif oformat == "json":
             myHana.print_all_as_json()
