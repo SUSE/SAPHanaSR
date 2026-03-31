@@ -1042,7 +1042,13 @@ function saphana_start_secondary() {
            rc="$OCF_SUCCESS"
         fi
     else ######## DR mode ######
-        if wait_for_drsrc 10; then    # we can use DR source as 'primary' here
+        dr_secn=$(get_hana_attribute "$NODENAME" "${gSite}" "${ATTR_NAME_HANA_SEC[@]}")
+        super_ocf_log info "ACT: saphana_start_secondary DR - dr_secn=$dr_secn, gSite=$gSite"
+        if [[ -n "$dr_secn"  && "$dr_secn" == "$gSite" ]]; then
+            # cluster attributes say - we are a (direct) secondary of the HA region
+            super_ocf_log info "ACT: DR region - source is primary (HA region) -> START"
+            saphana_start; rc=$?
+        elif wait_for_drsrc 10; then    # we can use DR source as 'primary' here
             saphana_start; rc=$?
             if [[ "$rc" != "$OCF_SUCCESS" ]]; then
                 if ! wait_for_drsrc 1; then
@@ -1668,12 +1674,19 @@ function saphana_monitor_secondary() {
                 promoted=0;
                 ;;
             WAITING4DRSRC) # We are WAITING for DR SOURCE so not testing the HANA engine now but check for a new start
-                if check_for_drsrc; then
-                    super_ocf_log info "ACT: SECONDARY still in status WAITING - DR SOURCE now available - try a new start"
+                super_ocf_log info "RA: WAITING4DRSRC handling"
+                if [[ "$PreferSiteTakeover" == "DR" ]]; then
+                    if [[ "$dr_prim" == "$dr_src" ]]; then
+                        # local HANA is target of HA region. So the DR internal partner can be ignored here -> satring
+                        super_ocf_log info "ACT: SITE still in status WAITING - HA primary detected - just starting"
+                        saphana_start_clone; rc="$?"
+                    elif check_for_drsrc; then
+                        super_ocf_log info "ACT: SECONDARY still in status WAITING - DR SOURCE now available - try a new start"
+                        saphana_start_clone; rc="$?"
+                    fi
+                elif check_for_primary_master; then
+                    super_ocf_log info "ACT: SECONDARY still in status WAITING - PRIM SOURCE now available - try a new start"
                     saphana_start_clone; rc="$?"
-                #elif [[ "$PreferSiteTakeover" == "DR" ]]; then
-                #    super_ocf_log info "ACT: SITE still in status WAITING - DR Mode detected - just starting"
-                #    saphana_start_clone; rc="$?"
                 else
                     super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - DR SOURCE is still missing"
                     return "$OCF_SUCCESS"
