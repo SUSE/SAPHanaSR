@@ -1042,11 +1042,11 @@ function saphana_start_secondary() {
            rc="$OCF_SUCCESS"
         fi
     else ######## DR mode ######
-        if wait_for_primary_master 10; then    # we can use DR source as 'primary' here
+        if wait_for_drsrc 10; then    # we can use DR source as 'primary' here
             saphana_start; rc=$?
             if [[ "$rc" != "$OCF_SUCCESS" ]]; then
-                if ! wait_for_primary_master 1; then
-                    # It seems the stating secondary could not start because of stopping primary
+                if ! wait_for_drsrc 1; then
+                    # It seems the stating secondary could not start because of stopping DR SOURCE
                     #    so this is a WAITING situation
                     super_ocf_log info "ACT: DR SOURCE seems to be down now ==> WAITING"
                     set_hana_attribute "${NODENAME}" "WAITING4DRSRC" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
@@ -1055,7 +1055,7 @@ function saphana_start_secondary() {
                 fi
             fi
         else
-           super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
+           super_ocf_log info "ACT: wait_for_drsrc ==> WAITING"
            set_hana_attribute "${NODENAME}" "WAITING4DRSRC" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
            set_crm_promote -INFINITY
            rc="$OCF_SUCCESS"
@@ -1327,8 +1327,6 @@ function saphana_check_down_primary() {
             case "$remoteSync" in
                 SOK | PRIM )
                      super_ocf_log info "DEC: PreferSiteTakeover selected so decrease promotion score here (and reset lpa)"
-                     # TODO PRIO1: NG - scale-out has: 'if is_the_master_nameserver', scale-up has 'if check_for_primary_master'
-                     #if check_for_primary_master; then
                      if is_the_master_nameserver; then
                          super_ocf_log info "DEC: PreferSiteTakeover lpa_set_lpt 20 $gSite"
                          lpa_set_lpt 20 "$gSite"
@@ -1656,9 +1654,7 @@ function saphana_monitor_secondary() {
                 fi
                 promoted=0;
                 ;;
-            WAITING4PRIM | WAITING4DRSRC) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
-                # TODO PRIO2: NG - do we still need to wait for the primary to start the secondary?
-                #             in the past we have seen that the secondary fails to start, if the primary is (still) not available
+            WAITING4PRIM ) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
                 if check_for_primary_master; then
                     super_ocf_log info "ACT: SECONDARY still in status WAITING - Primary now available - try a new start"
                     saphana_start_clone; rc="$?"
@@ -1667,6 +1663,19 @@ function saphana_monitor_secondary() {
                 #    saphana_start_clone; rc="$?"
                 else
                     super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing"
+                    return "$OCF_SUCCESS"
+                fi
+                promoted=0;
+                ;;
+            WAITING4DRSRC) # We are WAITING for DR SOURCE so not testing the HANA engine now but check for a new start
+                if check_for_drsrc; then
+                    super_ocf_log info "ACT: SECONDARY still in status WAITING - DR SOURCE now available - try a new start"
+                    saphana_start_clone; rc="$?"
+                #elif [[ "$PreferSiteTakeover" == "DR" ]]; then
+                #    super_ocf_log info "ACT: SITE still in status WAITING - DR Mode detected - just starting"
+                #    saphana_start_clone; rc="$?"
+                else
+                    super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - DR SOURCE is still missing"
                     return "$OCF_SUCCESS"
                 fi
                 promoted=0;
