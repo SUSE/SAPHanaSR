@@ -1041,8 +1041,25 @@ function saphana_start_secondary() {
            set_crm_promote -INFINITY
            rc="$OCF_SUCCESS"
         fi
-    else
-           saphana_start; rc=$?
+    else ######## DR mode ######
+        if wait_for_primary_master 10; then    # we can use DR source as 'primary' here
+            saphana_start; rc=$?
+            if [[ "$rc" != "$OCF_SUCCESS" ]]; then
+                if ! wait_for_primary_master 1; then
+                    # It seems the stating secondary could not start because of stopping primary
+                    #    so this is a WAITING situation
+                    super_ocf_log info "ACT: DR SOURCE seems to be down now ==> WAITING"
+                    set_hana_attribute "${NODENAME}" "WAITING4DRSRC" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+                    set_crm_promote -INFINITY
+                    rc="$OCF_SUCCESS"
+                fi
+            fi
+        else
+           super_ocf_log info "ACT: wait_for_primary_master ==> WAITING"
+           set_hana_attribute "${NODENAME}" "WAITING4DRSRC" "${ATTR_NAME_HANA_CLONE_STATE[@]}"
+           set_crm_promote -INFINITY
+           rc="$OCF_SUCCESS"
+        fi
     fi
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
@@ -1639,15 +1656,15 @@ function saphana_monitor_secondary() {
                 fi
                 promoted=0;
                 ;;
-            WAITING4PRIM ) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
+            WAITING4PRIM | WAITING4DRSRC) # We are WAITING for PRIMARY so not testing the HANA engine now but check for a new start
                 # TODO PRIO2: NG - do we still need to wait for the primary to start the secondary?
                 #             in the past we have seen that the secondary fails to start, if the primary is (still) not available
                 if check_for_primary_master; then
                     super_ocf_log info "ACT: SECONDARY still in status WAITING - Primary now available - try a new start"
                     saphana_start_clone; rc="$?"
-                elif [[ "$PreferSiteTakeover" == "DR" ]]; then
-                    super_ocf_log info "ACT: SITE still in status WAITING - DR Mode detected - just starting"
-                    saphana_start_clone; rc="$?"
+                #elif [[ "$PreferSiteTakeover" == "DR" ]]; then
+                #    super_ocf_log info "ACT: SITE still in status WAITING - DR Mode detected - just starting"
+                #    saphana_start_clone; rc="$?"
                 else
                     super_ocf_log info "ACT: saphana_monitor_clone: SECONDARY still in status WAITING - Primary is still missing"
                     return "$OCF_SUCCESS"
@@ -1842,7 +1859,7 @@ function saphana_monitor_clone() {
             #
             set_crm_promote -5678
             set_hana_site_attribute "$gSite" "DR" "${ATTR_NAME_HANA_SITE_SYNC_STATUS[@]}"
-        else:
+        else
             #
             # in HA mode check the resource status
             #
