@@ -622,6 +622,35 @@ function check_for_primary_master() {
 } # end function check_for_primary_master
 
 #
+# check_for_drsrc
+# checks for a "remote" secondary (makes only sense for DR mode)
+# params: -
+# globals: ATTR_NAME_HANA_SITE_SRR(r), ATTR_NAME_HANA_SITE_LSS(r), gRemSite(r)
+# rc: 0 for available primary (lss is 3 or 4); ( can be used as "true" )
+#     2 warning (lss is 2) ( can be used as "false" )
+#     1 otherwise (lss is 1 or 0) ( can be used as false )
+#
+function check_for_check_for_drsrc() {
+    # called by: TODO
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ()"
+    local rc=1
+    #
+    # get landscape-status and sr-role from "remote" site
+    #
+    rem_lss=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_LSS[@]}")
+    rem_srr=$(get_hana_site_attribute "$gRemSite" "${ATTR_NAME_HANA_SITE_SRR[@]}")
+    super_ocf_log info "RA: check_for_drsrc: gRemSite=$gRemSite; lss-srr-result is = $rem_lss:$rem_srr"
+    case "$rem_lss:$rem_srr" in
+        3:S | 4:S ) rc=0;;  # only valid for DR-mode!!
+        2:S )       rc=2;;
+        * )         rc=1;;
+    esac
+    super_ocf_log info "RA: check_for_drsrc: gRemSite=$gRemSite; lss-srr-result is = $rem_lss:$rem_srr --> rc=$rc"
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function check_for_drsrc
+
+#
 # wait_for_primary_master: wait some time till a running primary master is shown in attributes
 # params: optional: loop count - currently time in 10s waiting loop
 # globals: -
@@ -654,6 +683,40 @@ function wait_for_primary_master() {
     super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
     return "$rc"
 } # end function wait_for_primary_master
+
+#
+# wait_for_drsrc: wait some time till a running secondary source is shown in attributes (only valid in DR mode)
+# params: optional: loop count - currently time in 10s waiting loop
+# globals: -
+#
+function wait_for_drsrc() {
+    # called by: TODO
+    local wait=1
+    local rc=1
+    local loops=${1:-0}
+    local count=0
+    super_ocf_log info "FLOW ${FUNCNAME[0]} ($*)"
+    #
+    # hana_ndb_roles=primary:master1:master:worker:master
+    #
+    while [ "$wait" == 1 ]; do
+        if check_for_drsrc; then
+           wait=0
+           rc=0
+        else
+           if [ "$loops" -gt 0 ]; then
+              (( count++ ))
+              if [ "$count" -gt "$loops" ]; then
+                 wait=0
+                 rc=1
+              fi
+           fi
+           sleep 10
+        fi
+    done
+    super_ocf_log info "FLOW ${FUNCNAME[0]} rc=$rc"
+    return "$rc"
+} # end function wait_for_drsrc
 
 #
 # function: lpa_get_lpt - get lpt from cluster
