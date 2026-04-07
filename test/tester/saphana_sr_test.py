@@ -841,7 +841,7 @@ class SaphanasrTest:
         cmd = ""
         sudo_cmd = ""
         ignore = False
-        if action_name in ("kill_secn_inst", "kill_fourth_inst"):
+        if action_name in ("kill_secn_inst", "kill_fourth_inst"): # either second of HA or DR region
             remote = self.topolo[ref_sHost]
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
             sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
@@ -849,7 +849,7 @@ class SaphanasrTest:
             remote = self.topolo[ref_sWorker]
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
             sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_prim_inst":
+        elif action_name in ("kill_prim_inst", "kill_third_inst"): # either first of HA or DR region
             remote = self.topolo[ref_pHost]
             cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
             sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
@@ -945,7 +945,7 @@ class SaphanasrTest:
             remote = self.topolo[ref_sWorker]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == ("kill_secn_node", "kill_fourth_node"):
+        elif action_name in ("kill_secn_node", "kill_fourth_node"): # either second of HA or DR region
             remote = self.topolo[ref_sHost]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
@@ -953,7 +953,7 @@ class SaphanasrTest:
             remote = self.topolo[ref_pWorker]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_prim_node":
+        elif action_name in ("kill_prim_node", "kill_third_node"): # either first of HA or DR region
             remote = self.topolo[ref_pHost]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
