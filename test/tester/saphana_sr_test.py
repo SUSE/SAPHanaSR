@@ -945,7 +945,7 @@ class SaphanasrTest:
             remote = self.topolo[ref_sWorker]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_secn_node":
+        elif action_name == ("kill_secn_node", "kill_fourth_node"):
             remote = self.topolo[ref_sHost]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
