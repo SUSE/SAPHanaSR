@@ -1,15 +1,14 @@
 {
-    "test": "kill_prim_node",
-    "name": "Kill primary node",
+    "test": "kill_third_node",
+    "name": "Kill third node",
     "purpose": [
         "angi",
-        "todo",
         "ScaleUp",
+        "DRregion",
+        "third",
         "kill",
-        "primary",
         "node",
-        "fencing",
-        "takeover"
+        "fencing"
     ],
     "start": "prereq10",
     "steps": [
@@ -19,7 +18,8 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "kill_prim_node",
+            "post": "kill_third_node",
+            "mstRsc": "mstRscReady",
             "tSite": "tSiteUp",
             "fSite": "fSiteUp",
             "tHost": "tHostUp",
@@ -31,28 +31,18 @@
             "next": "step30",
             "loop": 120,
             "wait": 2,
-            "pSite": [
-                "srr == P",
-                "lpt ~ (1[6-9]........|20|10)",
-                "srHook ~ (PRIM|SWAIT|SREG)",
-                "srPoll == PRIM"
+            "fSite": "fSiteUp",
+            "fHost": "fHostUp",
+            "tSite": [
+                "lpt == 10",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
             ],
-            "sSite": [
-                "lpt ~ (1[6-9]........|30)",
-                "lss == 4",
-                "srr ~ (S|P)",
-                "srHook ~ (PRIM|SOK)",
-                "srPoll ~ (SOK|SFAIL)"
-            ],
-            "pHost": [
+            "tHost": [
                 "clone_state is None",
                 "roles is None",
                 "score is None"
-            ],
-            "sHost": [
-                "clone_state ~ (PROMOTED|DEMOTED)",
-                "roles == master1:master:worker:master",
-                "score ~ (100|145)"
             ]
         },
         {
@@ -61,28 +51,19 @@
             "next": "final40",
             "loop": 180,
             "wait": 2,
-            "pSite": [
+            "fSite": "fSiteUp",
+            "fHost": "fHostUp",
+            "tSite": [
+                "lpt == 10",
                 "lss ~ (1|2)",
-                "srr ~ (P|S)",
-                "lpt ~ (1[6-9]........|30|20|10)",
-                "srHook ~ (PRIM|SWAIT|SREG)",
-                "srPoll ~ (PRIM|SFAIL)"
+                "srr == S",
+                "srHook ~ (SFAIL|SWAIT)",
+                "srPoll ~ (SFAIL|SOK)"
             ],
-            "sSite": [
-                "lpt ~ (1[6-9]........|30)",
-                "lss == 4",
-                "srr ~ (S|P)",
-                "srHook == PRIM",
-                "srPoll ~ (SOK|PRIM)"
-            ],
-            "pHost": [
-                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
-                "roles == master1::worker:"
-            ],
-            "sHost": [
-                "clone_state ~ (DEMOTED|PROMOTED)",
-                "roles == master1:master:worker:master",
-                "score ~ (100|145|150)"
+            "tHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (-INFINITY|0|-1)"
             ]
         },
         {
