@@ -11,7 +11,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     [ha_dr_provider_suschksrv]
     provider = susChkSrv
     path = /usr/share/SAPHanaSR
-    execution_order = 2
+    execution_order = 3
     action_on_lost = kill | stop | ignore | fence (attr is currently not implemented)
     stop_timeout = 20
     # timeout = timeout-in-seconds (currently not implemented)
