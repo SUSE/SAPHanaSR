@@ -12,7 +12,7 @@ To use this HA/DR hook provide please add the following lines (or similar) to yo
     provider = susTkOver
     path = /usr/share/SAPHanaSR
     sustkover_timeout = 30
-    execution_order = 1
+    execution_order = 2
 
     [trace]
     ha_dr_sustkover = info
