@@ -1,16 +1,15 @@
 {
-    "test": "kill_prim_pacemkr-ctrld_fencing",
-    "name": "kill pacemaker-controld on primary node",
+    "test": "kill_third_pacemkr-ctrld_fencing",
+    "name": "Kill pacemaker-controld on third node",
     "purpose": [
         "angi",
-        "todo",
         "ScaleUp",
-        "primary",
+        "DRregion",
+        "third",
         "kill",
         "cluster",
         "fencing"
     ],
-    "todo": "please correct this file",
     "start": "prereq10",
     "steps": [
         {
@@ -19,7 +18,8 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "shell sct_test_kill_pacemkr-ctrld prim",
+            "post": "shell sct_test_kill_pacemkr-ctrld third",
+            "mstRsc": "mstRscReady",
             "tSite": "tSiteUp",
             "fSite": "fSiteUp",
             "tHost": "tHostUp",
@@ -31,26 +31,10 @@
             "next": "step30",
             "loop": 120,
             "wait": 2,
-            "tSite": [
-                "srHook == SWAIT"
-            ],
-            "fSite": [
-                "srHook == SWAIT"
-            ],
-            "tHost": [
-                "lpt ~ (10|30)",
-                "clone_state is None",
-                "roles is None",
-                "score is None"
-            ],
-            "fHost": [
-                "lpt ~ (10|30)",
-                "clone_state ~ (PROMOTED|DEMOTED)",
-                "roles == master1:master:worker:master",
-                "lss == 4",
-                "srr == S",
-                "score ~ (-1234|-5678)"
-            ]
+            "fSite": "fSiteUp",
+            "tSite": "tSiteOut",
+            "fHost": "fHostUp",
+            "tHost": "xHostOut"
         },
         {
             "step": "step30",
@@ -60,21 +44,16 @@
             "wait": 2,
             "fSite": "fSiteUp",
             "tSite": [
-                "srHook == SWAIT"
+                "lpt ~ (10|30)",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
             ],
+            "fHost": "fHostUp",
             "tHost": [
-                "lpt ~ (10|30)",
-                "clone_state ~ (UNDEFINED|DEMOTED|WAITING4NODES)",
+                "clone_state ~ (UNDEFINED|DEMOTED)",
                 "roles == master1::worker:",
-                "lss == 1",
-                "srr == S",
-            ,
-            "fHost": [
-                "lpt ~ (10|30)",
-                "clone_state ~ (DEMOTED|PROMOTED)",
-                "roles == master1:master:worker:master",
-                "lss == 4",
-                "srr == S",
                 "score ~ (-1234|-5678)"
             ]
         },
@@ -82,10 +61,9 @@
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 150,
+            "loop": 300,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
             "tSite": "tSiteUp",
             "fSite": "fSiteUp",
             "tHost": "tHostUp",
