@@ -352,9 +352,13 @@ class SaphanasrTest:
             if ha_or_dr == "HA":
                 test_prop_fh.write(f"node01=\"{topology.get('pHost','node01')}\"\n")
                 test_prop_fh.write(f"node02=\"{topology.get('sHost','node02')}\"\n")
+                test_prop_fh.write(f"pHost=\"{topology.get('pHost','node01')}\"\n")
+                test_prop_fh.write(f"sHost=\"{topology.get('sHost','node02')}\"\n")
             elif ha_or_dr == "DR":
                 test_prop_fh.write(f"node01=\"{topology.get('tHost','node01')}\"\n")
                 test_prop_fh.write(f"node02=\"{topology.get('fHost','node02')}\"\n")
+                test_prop_fh.write(f"tHost=\"{topology.get('tHost','node01')}\"\n")
+                test_prop_fh.write(f"fHost=\"{topology.get('fHost','node02')}\"\n")
             test_prop_fh.write(f"mstResource=\"{self.test_data.get('mstResource','')}\"\n")
             test_prop_fh.write(f"clnResource=\"{self.test_data.get('clnResource','')}\"\n")
             test_prop_fh.write(f"rscIPResource=\"{self.test_data.get('rscIPResource','')}\"\n")
