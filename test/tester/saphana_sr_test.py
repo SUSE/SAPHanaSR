@@ -914,10 +914,10 @@ class SaphanasrTest:
         resource = self.test_data['mstResource']
         cmd = ""
         sudo_cmd = ""
-        if action_name == "ssn":
+        if action_name in ("ssn", "standby_secn_node", "standby_fourth_node"):
             cmd = "/usr/sbin/crm node standby {}".format(self.topolo[ref_sHost])
             sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "osn":
+        elif action_name in ("osn", "online_secn_node", "online_fourth_node"):
             cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_sHost])
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "spn":
