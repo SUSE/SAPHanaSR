@@ -177,11 +177,12 @@ class SaphanasrTest:
         l_obj.update(l_dic)
         return l_obj
 
-    def read_saphana_sr(self):
+    def read_saphana_sr(self, **kargs):
         """
         method to read SAPHanaSR-showAttr cluster attributes and create a nested dictionary
         structure representing the data
         """
+        connect_host = kargs.get('connect_hosts', None)
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
         if self.config['use_sudo']:
@@ -191,7 +192,9 @@ class SaphanasrTest:
         #self.message("remote node broken !!")
         # try other remoteNodes (if given via parameter)
         #self.message(f"len array {len(self.config['remote_nodes'])}")
-        l_remotes = [self.config['remote_node']]
+        l_remotes = []
+        if connect_host:
+            l_remotes.append([connect_host])
         if len(self.config['remote_nodes']) > 1:
             l_remotes.extend(self.config['remote_nodes'])
         switched_remote = False
@@ -630,8 +633,9 @@ class SaphanasrTest:
         return rc_condition
 
 
-    def process_step(self, step):
+    def process_step(self, step, **kargs):
         """ process a single step including optional loops """
+        connect_host = kargs.get('connect_hosts', None)
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
@@ -681,7 +685,7 @@ class SaphanasrTest:
             if self.config['dump_failures']:
                 print(".", end='', flush=True)
             process_result = -1
-            self.read_saphana_sr()
+            self.read_saphana_sr(connect_host = connect_host)
             if "fatalCondition" in step:
                 # self.message("STATUS: step {} to process fatalCondition".format(step_id))
                 process_result = self.__process_fatal_condition(step)
@@ -739,8 +743,9 @@ class SaphanasrTest:
         # self.result.update({step_id: step_result})
         return process_result
 
-    def process_steps(self):
+    def process_steps(self, **kargs):
         """ process a seria of steps till next-step is "END" or there is no next-step """
+        connect_host = kargs.get('connect_hosts', None)
         test_start = self.test_data['start']
         step=self.get_step(test_start)
         step_step = step['step']
@@ -753,7 +758,7 @@ class SaphanasrTest:
             # prepare an 'alternative' step sequence, if 'alternative/on_fail' is set for this step
             #
             step_alternative = step.get('onfail', None)
-            process_result = self.process_step(step)
+            process_result = self.process_step(step, connect_host = connect_host)
             if process_result == 0:
                 self.message("STATUS: Test step {} PASSED successfully".format(step_step))
                 step=self.get_step(step_next)
@@ -784,8 +789,9 @@ class SaphanasrTest:
                 onfail = 'continue'
         return r_code
 
-    def process_test(self):
+    def process_test(self, **kargs):
         """ process the entire test defined in test_data """
+        connect_host = kargs.get('connect_host', None)
         self.run['test_id'] = self.test_data['test']
         test_id = self.run['test_id']
         test_name = self.test_data['name']
@@ -800,7 +806,7 @@ class SaphanasrTest:
         _l_msg += f" test_start='{test_start}'"
         _l_msg += f" test_resource='{test_resource}'"
         self.message(_l_msg)
-        r_code = self.process_steps()
+        r_code = self.process_steps(connect_host = connect_host )
         return r_code
 
     def get_step(self, step_name):

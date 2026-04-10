@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# pylint: disable=invalid-name
 # pylint: disable=consider-using-f-string
 # pylint: disable=fixme
 # pylint: disable=line-too-long
@@ -222,6 +223,17 @@ while test01.run['count'] <= test01.config['repeat']:
         sys.exit (1)
 
     #
+    # check for 'conenct' tag
+    #
+    connect_host_type = test01.test_data.get('connect', None)
+    if connect_host_type:
+        connect_host = l_top.get(connect_host_type, None)
+        test01.message(f"INFO: Connect host type is defined as {connect_host_type}; following topo this is currently host {connect_host}")
+    else:
+        connect_host = None
+        test01.message("INFO: Connect host type is not defined. Use auto select mode")
+
+    #
     # adding mst / promotable resource to the topology dictionary
     #
     test_resource = test01.test_data['mstResource']
@@ -237,6 +249,7 @@ while test01.run['count'] <= test01.config['repeat']:
             a_nodes.append(n_name)
     test01.config['all_nodes'] = ' '.join(a_nodes)
     if test01.config['printTestProperties'] is True:
+        # TODO: move that code to the libtrary and allign the prinTestProperties with write_test_properies()
         p_msg = (
                     f"test_properties:"
                     f" node01={l_top.get('pHost','node01')}"
@@ -257,7 +270,7 @@ while test01.run['count'] <= test01.config['repeat']:
     my_test_id = test01.run['test_id']
     test01.message("TEST: {} testNr={} CALLED ######".format(my_test_id, test01.run['count']))
     try:
-        test01.run['test_rc'] = test01.process_test()
+        test01.run['test_rc'] = test01.process_test(connect_host = connect_host)
     except KeyboardInterrupt:
         test01.run['test_rc'] = 1
         test01.result.update({'interrupted': 'yes'})
