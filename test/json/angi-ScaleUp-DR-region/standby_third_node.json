@@ -5,10 +5,10 @@
         "angi",
         "ScaleUp",
         "DRregion",
+        "standby",
         "third",
         "cluster",
-        "maintenance",
-        "takeover"
+        "maintenance"
     ],
     "start": "prereq10",
     "steps": [
@@ -31,49 +31,43 @@
             "next": "step30",
             "loop": 120,
             "wait": 2,
+            "post": "online_third_node",
+            "fSite": "fSiteUp",
+            "fHost": "fHostUp",
             "tSite": [
+                "lpt == 10",
                 "lss == 1",
-                "srr == S"
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == DR"
             ],
             "tHost": [
                 "clone_state == UNDEFINED",
                 "roles == master1::worker:",
-                "score == -5678",
+                "score == -1234",
                 "standby == on"
-            ],
-            "fSite": [
-                "lpt ~ (10|30)",
-                "lss == 4",
-                "srHook == SWAIT",
-                "srPoll == DR"
-            ],
-            "fHost": [
-                "roles == master1:master:worker:master",
-                "score == -1234"
             ]
         },
         {
             "step": "step30",
-            "name": "takeover on secondary",
+            "name": "node back onnline",
             "next": "final40",
             "loop": 120,
-            "post": "online_third_node",
             "wait": 2,
+            "fSite": "fSiteUp",
+            "fHost": "fHostUp",
             "tSite": [
+                "lpt == 10",
                 "lss == 1",
                 "srr == S",
-                "lpt == 10",
                 "srHook == SWAIT",
                 "srPoll == DR"
             ],
             "tHost": [
-                "clone_state == UNDEFINED",
+                "clone_state == DEMOTED",
                 "roles == master1::worker:",
-                "score == -5678",
-                "standby == on"
-            ],
-            "fSite": "fSiteUp",
-            "fHost": "fHostUp"
+                "score ~ (-1234|-5678)"
+            ]
         },
         {
             "step": "final40",
