@@ -930,31 +930,31 @@ class SaphanasrTest:
         cmd = ""
         sudo_cmd = ""
         if action_name in ("ssn", "standby_secn_node", "standby_fourth_node"):
-            cmd = "/usr/sbin/crm node standby {}".format(self.topolo[ref_sHost])
+            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_sHost]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("osn", "online_secn_node", "online_fourth_node"):
-            cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_sHost])
+            cmd = f"/usr/sbin/crm node online {self.topolo[ref_sHost]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("spn", "standby_prim_node", "standby_third_node"):
-            cmd = "/usr/sbin/crm node standby {}".format(self.topolo[ref_pHost])
+            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_pHost]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("opn", "online_prim_node", "online_third_node"):
-            cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_pHost])
+            cmd = f"/usr/sbin/crm node online {self.topolo[ref_pHost]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_prim_worker_node":
-            cmd = "/usr/sbin/crm node standby {}".format(self.topolo[ref_pWorker])
+            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_pWorker]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_prim_worker_node":
-            cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_pWorker])
+            cmd = f"/usr/sbin/crm node online {self.topolo[ref_pWorker]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_secn_worker_node":
-            cmd = "/usr/sbin/crm node standby {}".format(self.topolo[ref_sWorker])
+            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_sWorker]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_secn_worker_node":
-            cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_sWorker])
+            cmd = f"/usr/sbin/crm node online {self.topolo[ref_sWorker]}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "cleanup":
-            cmd = "/usr/sbin/crm resource cleanup {}".format(resource)
+            cmd = f"/usr/sbin/crm resource cleanup {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_worker_node":
             remote = self.topolo[ref_sWorker]
