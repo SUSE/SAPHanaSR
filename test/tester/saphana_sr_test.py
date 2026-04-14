@@ -978,11 +978,11 @@ class SaphanasrTest:
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "start_hana_resource":
             remote = self.topolo[ref_sHost]
-            cmd = f"crm resource start {}".format(resource)
+            cmd = f"crm resource start {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "stop_hana_resource":
             remote = self.topolo[ref_sHost]
-            cmd = f"crm resource stop {}".format(resource)
+            cmd = f"crm resource stop {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         if self.config['use_sudo']:
             cmd = sudo_cmd
