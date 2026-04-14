@@ -976,6 +976,14 @@ class SaphanasrTest:
             remote = self.topolo[ref_sHost]
             cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo[ref_pHost]} -j DROP"
             sudo_cmd = f"sudo -u root {cmd}"
+        elif action_name == "start_hana_resource":
+            remote = self.topolo[ref_sHost]
+            cmd = f"crm resource start {}".format(resource)
+            sudo_cmd = f"sudo -u root {cmd}"
+        elif action_name == "stop_hana_resource":
+            remote = self.topolo[ref_sHost]
+            cmd = f"crm resource stop {}".format(resource)
+            sudo_cmd = f"sudo -u root {cmd}"
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
@@ -1012,7 +1020,7 @@ class SaphanasrTest:
             action_rc = self.action_on_hana(action_name, ha_or_dr="DR")
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node"):
             action_rc = self.action_on_cluster(action_name)
-        elif action_name_short in ("standby_fourth_node", "online_fourth_node", "standby_third_node", "online_third_node", "kill_fourth_node", "kill_fourth_worker_node", "kill_third_node", "kill_third_worker_node", "simulate_split_brain_dr", "standby_third_worker_node", "online_third_worker_node", "standby_fourth_worker_node", "online_fourth_worker_node"):
+        elif action_name_short in ("standby_fourth_node", "online_fourth_node", "standby_third_node", "online_third_node", "stop_hana_resource", "start_hana_resource", "kill_fourth_node", "kill_fourth_worker_node", "kill_third_node", "kill_third_worker_node", "simulate_split_brain_dr", "standby_third_worker_node", "online_third_worker_node", "standby_fourth_worker_node", "online_fourth_worker_node"):
             action_rc = self.action_on_cluster(action_name, ha_or_dr="DR")
         elif action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
