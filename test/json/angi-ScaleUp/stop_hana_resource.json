@@ -1,0 +1,69 @@
+{
+    "test": "stop_hana_resource",
+    "name": "stop hana resource and restart it" ,
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "hana",
+        "cluster",
+        "maintenance",
+        "stop"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "final40",
+            "loop": 1,
+            "wait": 1,
+            "post": "stop_hana_resource",
+            "mstRsc": "mstRscReady",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "hana stopped",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "post": "start_hana_resource",
+            "pSite": [
+                "lss == 1",
+                "lpt > 1000000000",
+                "srr == P",
+                "srHook == PRIM"
+            ],
+            "sSite": [
+                "lss= 1",
+                "lpt == 10",
+                "srr == S",
+                "srHook == SFAIL"
+            ],
+            "pHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score == 90"
+            ],
+            "sHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score == -3"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "still running",
+            "next": "END",
+            "loop": 180,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}
