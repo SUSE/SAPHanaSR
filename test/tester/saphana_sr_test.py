@@ -935,10 +935,10 @@ class SaphanasrTest:
         elif action_name in ("osn", "online_secn_node", "online_fourth_node"):
             cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_sHost])
             sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "spn":
+        elif action_name in ("spn", "standby_prim_node", "standby_third_node"):
             cmd = "/usr/sbin/crm node standby {}".format(self.topolo[ref_pHost])
             sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "opn":
+        elif action_name in ("opn", "online_prim_node", "online_third_node"):
             cmd = "/usr/sbin/crm node online {}".format(self.topolo[ref_pHost])
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_prim_worker_node":
