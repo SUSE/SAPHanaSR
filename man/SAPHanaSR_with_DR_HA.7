@@ -115,7 +115,7 @@ SAPHanaSR_basic_cluster(7), SAPHanaSR_multi-target(7), et al.
 .PP
 .\" TODO
 .PP
-Three procedures are specific for the two connected HANA system replication pairs.
+Four procedures are specific for the two connected HANA system replication pairs.
 .PP
 a. Procedure for taking over HANA to DR region in case of disaster.
 .RS 2
@@ -196,7 +196,7 @@ Phase 3: Production is up again.
 (async, 3rd site) (4.1)
 .br
 * register former production (HA) secondary as secondary
-(sync/syncmem, 4th site) (NONO)
+(sync/syncmem, 4th site) (n.n.)
 .br
 * refresh multi-state resource in both regions
 (3.4, 4.2)
@@ -208,6 +208,13 @@ Phase 4: Production is up, regions HA- and DR-function available again.
 A procedure with optimised workflow is explained in detail in the EXAMPLES section
 below.
 .PP
+d. Procedure for switching third and fourth node.
+.PP
+.RS 2
+TODO
+.RE
+.PP
+Maintenance activities at both regions need to be aligned.
 General maintenance procedures for the production region can be found in manual
 page SAPHanaSR_maintenance_examples(7).
 .PP
@@ -352,7 +359,7 @@ This might be done, if both sites (or at least one) of the former production
 region have been recovered after an outage. It will re-establish DR redundancy.
 .PP
 \" TODO
-At all nodes the automatic start of cluster at boot has to be disabled.
+At all nodes the automatic start of cluster at boot should be disabled.
 If automatic start is not disabled, additional measures have to be taken.
 All site names have to be the same as already known to the cluster.
 Example for scale-up.
@@ -626,25 +633,30 @@ sites (site1, site2).
 .PP
 .\" TODO \fB*\fP Start cluster and HANA at DR region while production region is down.
 .PP
-\fB*\fP Additional measures for registering former productioan as new DR, if automatic cluster start is enabled.
+\fB*\fP Procedure for switching third and fourth node.
+.PP
+TODO
+.PP
+\fB*\fP Additional measures for registering former productioan as new DR, if
+automatic cluster start is enabled.
 .PP
 To avoid risk of dual-primary, at any time only in one region must run an HANA
-primary. So, if a former production cluster starts the first time after outage and
-DR takeover, the former HANA primary must not start. If the automatic cluster start
-is enabled, additional steps need to be done before the regular procedure for
-registering as new DR region. For scale-up, these steps are:
+primary. So, if a former production cluster starts the first time after outage
+and DR takeover, the former HANA primary must not start. If the automatic cluster
+start is enabled, additional steps need to be done before the regular procedure
+for registering as new DR region. For scale-up, these steps are:
 .PP
 .RS 2
 1. Make sure not both machines will boot after recovery.
 .br
 2. Boot only one machine.
 .br
-3. Login to that machine. Set the SAPHanaController multi-state resource into maintenance.
+3. Login to that machine. Set the SAPHanaController multi-state resource into
+maintenance.
 .br
 4. Boot the second machine.
 .br
-5. Perform the regular procedure for registering former production HANA as new DR. 
-.RE
+5. Perform the regular procedure for registering former production HANA as new DR..RE
 .PP
 \fB*\fP Entry in gobal.ini to register secondaries on takeover.
 .PP
@@ -714,10 +726,10 @@ SID is HA1, instance number is 00, IP address is 192.168.22.22 .
 \fB*\fP Using Dynamic DNS for moving the HANA IP address between regions. 
 .PP
 .\" TODO
-It might be that the same IP address should be used at both regions. Usually
-the IP address is managed by the IPaddr2 RA, sometimes together with a
-loadbalancer. If this is not possible across regions, Dynamic DNS might be an
-option. For details please refer to manual page ocf_heartbeat_dnsupdate(7).
+It might be that the same IP address should be used at both regions. Usually the
+IP address is managed by the IPaddr2 RA, sometimes together with a loadbalancer.
+If this is not possible across regions, Dynamic DNS might be an option. For details
+please refer to manual page ocf_heartbeat_dnsupdate(7).
 .\" SUSE support KB article
 .\" "SAPHanaSR HANA system replication automation without layer 2 network".
 .PP
@@ -858,22 +870,29 @@ The resulting topology looks like: [ A <= B' ] -> { C => D }
 at the DR passive cluster. In case of manual DR takeover, this parameter needs to
 be changed. See manual page ocf_suse_SAPHanaController(7).
 .PP
-\fB*\fP At all nodes automatic start of the Linux cluster at boot has to be disabled.
-If the automatic start is enabled, additional measures are needed. The customer is
-responsible for this measures.
+\fB*\fP At all nodes automatic start of the Linux cluster at boot should be disabled.
+If automatic start is enabled, additional measures are needed. F.e. the nodes are
+booted one by one manually or the network between nodes is blocked at boot.
+The customer is responsible for this measures.
 .PP
 \fB*\fP The HA cluster moves an IP address with the HANA primary between the two
 production nodes. The IP address will not be moved from production region to DR
-region. However, the same IP address can be used in both regions, if the infrastructure
-allows that. 
-.PP
-\fB*\fP Decision and procedure for takeover to DR region are in customer´s
-responsibility. All need to comply to SAP HANA requirements, please refer to SAP
-documentation for details.
+region. However, the same IP address can be used in both regions, if infrastructure
+allows that.
 .PP
 \fB*\fP The third site´s srHook attribute is stored in the production cluster CIB.
 The attribute stays, even if a former production has been registered as DR after
 takeover. The attribute might be deleted manually to avoid confusion.
+.PP
+\fB*\fP
+
+.PP
+\fB*\fP Maintenance activities at both regions need to be aligned. Particularly
+replication topology must not be changed at the same time.
+.PP
+\fB*\fP Decision and procedure for takeover to DR region are in customer´s
+responsibility. All need to comply to SAP HANA requirements, please refer to SAP
+documentation for details.
 .PP
 \fB*\fP Any procedure has to be tested, documented and trained before applying on
 production systems.
