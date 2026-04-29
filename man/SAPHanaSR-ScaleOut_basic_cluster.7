@@ -27,7 +27,7 @@ the quorum loss. For SAPHanaSR-ScaleOut, an odd number of nodes is required. Set
 no-quorum-policy to 'freeze' won't allow the partition to shoot any other node
 when it doesn't have quorum. Cluster will not be able to add and start new resources,
 but running will stay alive.
-.\" TODO not 15sp7: If the cluster uses disk-less SBD, the no-quorum-policy 'suicide' is required. 
+.\" TODO not 15sp7: If the cluster uses disk-less SBD, the no-quorum-policy 'suicide' is required 
 .PP
 \fBdefault-resource-stickiness = 1000\fR
 .PP
@@ -257,8 +257,9 @@ primitive rsc_stonith_sbd stonith:fence_sbd \\
 .PP
 \fB* crm simple IP address resource configuration\fR
 .PP
-Let the Linux cluster manage one IP address and move that address along
-with the HANA primary master nameserver.
+Let the Linux cluster manage one IP address and move that address along with the
+HANA primary master nameserver. If the HANA primary master nameserver is in
+transition, the IP address might be placed somewhere temporarily.
 .PP
 .RS 2
 primitive rsc_ip_SLE_HDB00 IPaddr2 \\
@@ -270,6 +271,32 @@ primitive rsc_ip_SLE_HDB00 IPaddr2 \\
 colocation col_ip_with_SLE_HDB00 \\
 .br
  2000: rsc_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
+.RE
+.PP
+\fB* crm pedantic IP address resource configuration\fR
+.PP
+Let the Linux cluster manage one IP address and move that address along with the
+HANA primary master nameserver. While the HANA primary master nameserver is in
+transition, the IP address is stopped.
+.PP
+.RS 2
+primitive rsc_ip_SLE_HDB00 IPaddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.188
+.br
+colocation col_ip_with_SLE_HDB00 \\
+.br
+ 2000: rsc_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
+.br
+location loc_ip_hdb_not1 rsc_ip_SLE_HDB00 \\
+.br
+ rule -inf: master-rsc_SAPHanaCon_SLE_HDB00 lt 145
+.br
+location loc_ip_hdb_not2 rsc_ip_SLE_HDB00 \\
+.br
+ rule -inf: not_defined master-rsc_SAPHanaCon_HA1_HDB00
 .RE
 .PP
 \fB* crm protective IP address resource configuration\fR
