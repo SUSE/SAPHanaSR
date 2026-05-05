@@ -204,7 +204,6 @@ class SaphanasrTest:
         # make list unique:
         #
         l_remotes = list(dict.fromkeys(l_remotes))
-        print(l_remotes)
         switched_remote = False
         for remote_node in l_remotes:
             # self.message(f"test now with host {remote_node}")
