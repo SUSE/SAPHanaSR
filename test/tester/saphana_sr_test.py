@@ -193,10 +193,18 @@ class SaphanasrTest:
         # try other remoteNodes (if given via parameter)
         #self.message(f"len array {len(self.config['remote_nodes'])}")
         l_remotes = []
+        s_remote_node = self.config.get('remote_node', None)
+        if s_remote_node:
+            l_remotes.append(s_remote_node)   # stored remote last succesful remote node on first place
         if connect_host:
-            l_remotes.append([connect_host])
+            l_remotes.append(connect_host)
         if len(self.config['remote_nodes']) > 1:
             l_remotes.extend(self.config['remote_nodes'])
+        #
+        # make list unique:
+        #
+        l_remotes = list(dict.fromkeys(l_remotes))
+        print(l_remotes)
         switched_remote = False
         for remote_node in l_remotes:
             # self.message(f"test now with host {remote_node}")
