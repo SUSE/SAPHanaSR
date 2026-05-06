@@ -1,13 +1,14 @@
 {
-    "test": "kill_prim_inst",
-    "name": "Kill primary instance",
+    "test": "stop_prim_inst",
+    "name": "Stop HANA primary master instance",
     "purpose": [
         "angi",
         "ScaleUp",
-        "demo",
-        "kill",
         "primary",
-        "instance"
+        "stop",
+        "hana",
+        "master",
+        "takeover"
     ],
     "start": "prereq10",
     "steps": [
@@ -17,10 +18,9 @@
             "next": "step20",
             "loop": 1,
             "wait": 1,
-            "post": "kill_prim_inst",
-            "todo": "allow something like pSite == @@pSite@@ or pSite == %pSite",
-            "pSite": "pSiteUpDemo",
-            "sSite": "sSiteUpDemo",
+            "post": "shell sct_test_stop_prim_inst",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
             "pHost": "pHostUp",
             "sHost": "sHostUp"
         },
@@ -42,12 +42,12 @@
                 "lss == 4",
                 "srr == S",
                 "srHook ~ (PRIM|SOK)",
-                "srPoll == SOK"
+                "srPoll ~ (SOK|SFAIL)"
             ],
             "pHost": [
                 "clone_state ~ (PROMOTED|DEMOTED|UNDEFINED)",
                 "roles == master1::worker:",
-                "score ~ (90|5|0)"
+                "score ~ (90|70|5|0)"
             ],
             "sHost": [
                 "clone_state ~ (PROMOTED|DEMOTED)",
@@ -73,12 +73,12 @@
                 "lss == 4",
                 "srr ~ (S|P)",
                 "srHook == PRIM",
-                "srPoll == SOK"
+                "srPoll ~ (SOK|SFAIL)"
             ],
             "pHost": [
                 "clone_state ~ (UNDEFINED|DEMOTED)",
-                "roles == master1::worker:",
-                "score ~ (90|5)"
+                "roles ~ master1::worker:",
+                "score ~ (90|70|5)"
             ],
             "sHost": [
                 "clone_state ~ (DEMOTED|PROMOTED)",
@@ -91,14 +91,15 @@
             "step": "final40",
             "name": "end recover",
             "next": "END",
-            "loop": 300,
+            "loop": 240,
             "wait": 2,
             "post": "cleanup",
-            "remark": "pXXX and sXXX are now exchanged",
             "pSite": "sSiteUp",
             "sSite": "pSiteUp",
             "pHost": "sHostUp",
-            "sHost": "pHostUp"
+            "sHost": "pHostUp",
+            "pWorker": "sWorkerUp",
+            "sWorker": "pWorkerUp"
         }
     ]
 }
