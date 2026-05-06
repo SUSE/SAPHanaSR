@@ -1,0 +1,94 @@
+{
+    "test": "freeze_long_secn_fs",
+    "name": "freeze sap hana fs on secondary node - long time - fencing",
+    "purpose": [
+        "angi",
+        "todo",
+        "ScaleUp",
+        "secondary",
+        "storage",
+        "freeze",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_freeze_secn_fs",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "wait with frozen fs",
+            "next": "step30",
+            "loop": 30,
+            "wait": 2,
+            "post": "sleep 120",
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fHost": [
+                "clone_state == DEMOTED",
+                "score == 100"
+            ],
+            "fSite": [
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == DR"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "failure detected + host fenced",
+            "next": "step40",
+            "loop": 700,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "xHostOut",
+            "fSite": [
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == DR"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "begin recover",
+            "next": "final60",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fHost": [
+                "clone_state ~ (DEMOTED|UNDEFINED)",
+                "score == 100"
+            ],
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss == 4",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ]
+        },
+        {
+            "step": "final60",
+            "name": "end recover",
+            "next": "END",
+            "loop": 180,
+            "wait": 2,
+            "post": "cleanup",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

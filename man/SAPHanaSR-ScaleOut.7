@@ -1,6 +1,6 @@
 .\" Version: 1.2 
 .\"
-.TH SAPHanaSR-ScaleOut 7 "26 Jan 2026" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-ScaleOut 7 "17 Jan 2026" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 .\"
@@ -47,14 +47,13 @@ This systems have a small number of large nodes. The systems are mission critica
 Often another system replication site is connected to increase data redundancy.
 E.g. 2 nodes with 20TB RAM each per site. Specific HANA HA/DR providers can handle
 failing processes.
-.\" TODO active/active read-enabled with scale-out?
 .PP
 In a nutshell: OLAP systems have many nodes. OLTP systems have few large nodes.
 HANA can handle site-internal fail-over. The Linux cluster handles split-brain
 detection, node fencing on general failures, takeover from primary to secondary
-site including IP address.
+site including IP address. See also SAPHanaSR-angi-scenarios(7).
 .PP
-\fBScenarios\fR
+\fBSituations\fR
 .PP
 .\" TODO
 In order to illustrate the meaning of the above overview, some important
@@ -91,7 +90,7 @@ The rational behind this is shown in the following scenario:
 5. The admin also stops the cluster on site_B (we have two HANAs both
    internally marked down and primary now).
 .br
-6. What, if the admin would now restart the cluster on site_A?
+6. What, if the admin now restarts the cluster on site_A?
 .br
 6.1 site_A would take its own CIB after waiting for the initial fencing
     time for site_B.
@@ -144,7 +143,7 @@ to repair a local failure.
 If the master nameserver of an HANA database system fails, the HANA will start
 the nameserver on another node. Therefor usually up to two nodes are
 configured as additional nameserver candidates. At least one of them should be
-a standby node to optimize failover time. The Linux cluster will detect the
+a standby node to optimise failover time. The Linux cluster will detect the
 change and move the IP address to the new active master nameserver.
 This case fits for scale-out HANAs with big number of nodes, e.g. BW systems.
 .PP
@@ -346,12 +345,14 @@ see also firewalld(8).
 .PP
 30. No SELinux rules must block any needed action. See also selinux(8).
 .PP
-.PP
 31. For the conservative configuration variant, the Linux cluster should not start
 automatically at OS boot.
 .PP
-32. Sizing of both HANA sites needs to be done according to SAP rules. The scale-out
-performace optimized scenario requires both sites prepared for running the primary
+32. The Linux cluster should not start automatically at reboot on an node that
+recently has been fenced.
+.PP
+33. Sizing of both HANA sites needs to be done according to SAP rules. The scale-out
+performace optimised scenario requires both sites prepared for running the primary
 HANA database.
 .PP
 .\"
@@ -359,7 +360,7 @@ HANA database.
 .\"
 In case of any problem, please use your favourite SAP support process to open
 a request for the component BC-OP-LNX-SUSE.
-Please report any other feedback and suggestions to feedback@suse.com.
+.\" TODO Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
@@ -392,7 +393,6 @@ https://archive.sap.com/documents/docs/DOC-60334 ,
 http://scn.sap.com/community/hana-in-memory/blog/2015/12/14/sap-hana-sps-11-whats-new-ha-and-dr--by-the-sap-hana-academy ,
 .br
 https://blogs.sap.com/2020/01/30/sap-hana-and-persistent-memory/ ,
-.\" TODO SAP notes 3007062 ...
 .br
 https://www.rfc-editor.org/rfc/rfc952
 .PP

@@ -1,0 +1,73 @@
+{
+    "test": "kill_fourth_pacemkr-ctrld_fencing",
+    "name": "kill pacemaker-controld on fourth node",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "DRregion",
+        "fourth",
+        "kill",
+        "cluster",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_kill_pacemkr-ctrld fourth",
+            "mstRsc": "mstRscReady",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected - node down",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "fSite": "fSiteOut",
+            "tHost": "tHostUp",
+            "fHost": "xHostOut"
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 180,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook ~ (SFAIL|SWAIT)",
+                "srPoll == DR"
+            ],
+            "tHost": "tHostUp",
+            "fHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

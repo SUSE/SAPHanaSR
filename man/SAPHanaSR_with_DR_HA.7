@@ -1,0 +1,994 @@
+.\" Version: 1.2 
+.\"
+.TH SAPHanaSR_with_DR_HA 7 "30 Mar 2026" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+. \"
+SAPHanaSR_with_DR_HA \- SAPHanaSR with HA cluster at DR region.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+\fB*\fP Overview
+.PP
+.\" TODO
+Two HANA system replication pairs are connected by a third HANA system replication.
+Each pair is configured as Linux cluster for the scale-up performance-optimised
+scenario. The first pair is running reguarly as production region (site1, site2).
+The second pair is running in DR mode (site3, site4).
+.PP
+The first site of the DR region (site3) is registered to the primary of the
+production region (site1). The replication to DR region is async. The second
+site of the DR region (site4) is registered to the first site of the DR region
+(site3), this replication is sync or syncmem.
+.PP
+The described topology can be noted as
+.PP
+ [ site2 <= site1' ] -> { site3 => site4 }
+.PP
+Please refer to manual page SAPHanaSR-angi-scenarios(7) for the scenario notation.
+.PP
+The Linux clusters have no control over HANA system replication between the
+production region and the DR region. The takeover from production region to
+the DR region has to be decided and performed manually.
+.\" TODO RPO ?
+.\" TODO IP address ?
+Please see also the REQUIREMENTS section below.
+.PP
+.B The SAPHanaSR with HA cluster at DR region scenario is a technology preview.
+.PP
+\fB*\fP DR mode 
+.PP
+The DR region is almost a Linux cluster for the scale-up performance-optimised
+scenario. But there is no HANA primary site. Instead of the primary, the DR site
+(site3) that is registered to the production primary acts as replication source
+for the DR secondary (site4).
+.PP
+Since there is no primary site, the SAPHanaController RA needs to run in DR mode.
+That is done by setting "PREFER_SITE_TAKEOVER=DR". In DR mode, the cluster will
+start, stop and monitor the SAPHanaController multi-state resource. But the cluster
+will not do a takeover from one DR node to the other.
+However, by monitoring resources and initiating local restart, the Linux cluster
+is able to recover from certain failures by restoring the former state.
+Please refer to manual page ocf_suse_SAPHanaController(7) for details.
+.PP
+In DR mode, some cluster attributes are looking different from the regular mode.
+.RS 2
+.B lpt
+- shows 30 for both sites, if all is fine.
+.br
+.B srHook
+- shows SWAIT for the DR site attached to production by async replication.
+It shows SOK for the second DR site, if all is fine. 
+The second DR site shows SFAIL, if the first DR site looses the link to production
+primary.
+The second DR site recovers to SOK, if first DR site gets back the link to
+production primary.
+PRIM is shown for the production primary. Two PRIM sites are indicating a takeover
+at production.
+.br
+.B srMode
+- shows async for the replication from production.
+.br
+.B srPoll
+- shows DR for both DR sites.
+.br
+.B srr
+- shows S for both sites, if all is fine.
+.br
+.B clone_state
+- shows DEMOTED for both sites, if all is fine.
+.br
+.B score
+- shows a negative value. 
+.RE
+See also manual page SAPHanaSR-showAttr(8).
+.PP
+Optionally, the same production IP address can be used in both regions. It will
+be set only on sites of the production region. As long as a cluster is running in
+DR mode, it will not set the IP address. Of course, the infrastructure needs to
+allow moving IP address between regions. 
+.PP
+Last but not least, the Linux cluster in DR mode allows manual procedures for DR
+takeover in case of disaster at production region and regular switch of roles
+between regions.
+.PP
+\fB*\fP Setup procedures
+.PP
+.\" TODO
+The two clusters could be set up and connected by different procedures:
+.PP
+a. Set up HANA and Linux clusters in both regions separately. Test both regions
+in production mode before connecting them. Test takeover, register and DR mode
+once both regions are connected. This procedure is outlined as example below.
+This is the recommended setup procedure.
+.PP
+b. Set up HANA and Linux clusters in production region. Connect HANA DR site (or 
+region) without Linux cluster there. Test production region.
+Install cluster at DR region in DR mode. Test takeover.
+.\" TODO Test production mode again.
+Test register and DR mode. This procedure is possible, but not recommended.
+See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
+SAPHanaSR_basic_cluster(7), SAPHanaSR_multi-target(7), et al.
+.PP
+\fB*\fP Maintenance procedures
+.PP
+.\" TODO
+Common maintenance procedures specific for the two connected HANA system replication
+pairs are outlined here.
+Maintenance activities at both regions need to be aligned.
+.br
+General maintenance procedures for the production region can be found in manual
+page SAPHanaSR_maintenance_examples(7).
+.PP
+a. Procedure for take-over HANA to DR region in case of disaster.
+.\" TODO
+.RS 2
+* Collect information and prepare parameter sheet.
+.br
+* Ensure both sites of the production region (site1, site2) are not running.
+.br
+* Decide to takeover HANA primary to third site (site3).
+.br
+* Perform HANA takeover at third site (site3).
+.br
+* Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes".
+.br
+* Refresh SAPHanaController multi-state resource.
+.br
+* Get SAPHanaController multi-state resource out of maintenance.
+.br
+* Check that everything looks fine.
+.RE
+This procedure is explained in detail in the EXAMPLES section below.
+.PP
+b. Procedure for register former production HANA as new DR.
+.\" TODO
+.RS 2
+* Collect information and prepare parameter sheet.
+.br
+* Start Linux cluster on first DR site only (node1).
+.br
+* Set SAPHanaController multi-state resource into maintenance.
+.br
+* Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
+.br
+* Start Linux cluster on second DR site (node2).
+.br
+* Register first DR site (node1) as secondary to current primary (node3)
+.br
+* Start HANA at first DR site (node1).
+.br
+* Enable system replication at first DR site (node1).
+.br
+* Register second DR site (node2) as secondary to first DR site (node1).
+.br
+* Refresh SAPHanaController multi-state resource.
+.br
+* Get SAPHanaController multi-state resource out of maintenance.
+.br
+* Change srHook attribute of first DR site (node1) to SWAIT.
+.br
+* Check that everything looks fine.
+.RE
+This procedure is explained in detail in the EXAMPLES section below.
+.PP
+c. Procedure for switch HANA production and DR region, keep HANA running.
+.br
+.\" TODO This might be done for regular maintenance procedures.
+.br
+Phase 1: Production is still up.
+.RS 2
+* Collect information and prepare parameter sheet (1.1).
+.br
+* Set multi-state resource to maintenance in both regions (2.1, 3.1).
+.br
+* Stop secondary in production (HA) region (2.4).
+.RE
+Phase 2: Production is down.
+.RS 2
+* Manually takeover to current DR region (3rd site) with suspend primary
+(3.2).
+.br
+* Mark new DR as DR region and refresh multi-state resource
+(IP address goes down) (2.2, 2.3).
+.br
+* Mark new production (HA) as HA region and refresh multi-state resource
+(IP address goes up) (3.3, 3.4).
+.RE
+Phase 3: Production is up again.
+.RS 2
+* Register former production (HA) primary as DR secondary
+(async, 3rd site) (4.1).
+.br
+* Register former production (HA) secondary as secondary
+(sync/syncmem, 4th site) (n.n.).
+.br
+* Refresh multi-state resource in both regions (3.4, 4.2).
+.br
+* End maintenance in both regions (3.5, 4.3).
+.RE
+Phase 4: Production is up, regions HA- and DR-function available again.
+.RS 2
+* Check that everything looks fine (3.6).
+.RE
+A procedure with optimised workflow is explained in detail in the EXAMPLES section
+below.
+.PP
+d. Procedure for switch first and second HANA site at DR region.
+.\" TODO
+.RS 2
+* Collect information and prepare parameter sheet.
+.br
+* Set SAPHanaController multi-state resource into maintenance at DR sites
+(site3, site4).
+.br
+* Un-register second DR site (site4) from first (site3).
+.br
+* Un-register first DR site (site3) from production primary (site1 or site2).
+.br
+* Register new first DR site (site4) async to production primary (site1 or site2).
+.br
+* Back-up first DR site (site4) HANA, if needed.
+.br
+* Enable system replication at first DR site (site4).
+.br
+* Register new second DR site (site3) sync/syncmem to first DR site (site4).
+.br
+* Change srHook attribute of first DR site (site4) to SWAIT.
+.br
+* Refresh SAPHanaController multi-state resource at DR sites (site3, site4).
+.br
+* Get SAPHanaController multi-state resource out of maintenance at DR sites
+(site3, site4).
+.br
+* Remove orphaned srHook attribute of former first DR site (site3) from CIB at
+production region (site1 or site2) (optional).
+.br
+* Check that everything looks fine.
+.RE
+The steps are explained in detail in the EXAMPLES section below and in manual page
+SAPHanaSR_multi-target(7).
+.\" .PP
+.\" TODO \fB*\fP Procedure to start cluster and HANA at DR region while production region is down.
+.PP
+.\"
+.SH EXAMPLES
+.\"
+The examples are outlining highlevel procedures as well as describing basic tasks.
+Detailled runbooks can be created by using the appropriate tasks for adding details
+to the procedures.
+.\" TODO disclaimer, particularly on takeover decision for async replication.
+More examples, not specific to HA cluster at DR region, can be found in manual
+page SAPHanaSR_maintenance_examples(7).
+.PP
+\fB*\fP Procedure for set up HANA and Linux clusters in both regions.
+.PP
+Set up HANA and Linux clusters in both regions separately. Test both regions in
+production role before connecting them. Test takeover and DR role after both are
+connected.
+.PP
+.RS 2
+1. Collect information and prepare parameter sheet.
+.PP
+2. Install SAPHanaSR-angi scale-up performance-optimised scenario at production
+region (site1, site2).
+.RS 4
+See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
+SAPHanaSR_basic_cluster(7), et al.
+.RE
+.PP
+3. Check that everything works fine at production region (site1, site2).
+.PP
+4. Install SAPHanaSR-angi scale-up performance-optimised scenario at DR region
+(site3, site4).
+.RS 4
+See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
+SAPHanaSR_basic_cluster(7), et al.
+Please do not use the same IP address at both regions during installation. 
+.RE
+.PP
+5. Check that everything works fine at DR region (site3, site4).
+.PP
+6. Copy HANA secure keystore from production primary (site1) to DR nodes.
+(site3, site4).
+.RS 4
+See example "Copying HANA secure keystore from production primary to nodes at DR region."
+.RE
+.PP
+7. Add DR specific colocation constraint for IPaddr2 to both clusters.
+.RS 4
+See example "Preventing IPaddr2 from starting at DR sites."
+.RE
+.PP
+8. Stop Linux cluster and HANA at DR region (site3, site4).
+.PP
+9. Register DR region (site3, site4) to production region (site1, site2).
+.RS 4
+See example "Procedure for register former production HANA as new DR."
+Of course, in that example the regions are exchanged. So, make sure to use
+(site1, site2) instead of (site3, site4) and vice versa. 
+.RE
+.PP
+10. Change IP address at DR region (site3, site4) to match production - optional.
+.PP
+11. Check that everything works fine.
+.RE
+.PP
+Please see also the REQUIREMENTS section below.
+.PP
+\fB*\fP Procedure for take-over HANA to DR region in case of disaster.
+.PP
+This might be done if both sites of the production region went down and are not
+expected to recover in time. It will re-establish the production service.
+.PP
+.\" TODO
+Cluster is up and running in DR mode on DR region nodes, HANA is up and running
+in DR mode there as well.
+SAPHanaController parameter "PREFER_SITE_TAKEOVER=DR" is set.
+Example for scale-up.
+Make sure to check for sane and idle status of Linux cluster and HANA before and
+after each step.
+.\" TODO RPO RTO ?
+Details on how to perform the steps can be found in additional examples below
+and in manual page SAPHanaSR_maintenance_examples(7). See also SAP note 2517805.
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+site1, node1: former production primary, currently down
+.br
+site2, node2: former production secondary, currently down
+.br
+site3, node3: current first DR replication target, to become production primary
+.br
+site4, node4: current second DR replication target, to become production secondary
+.RE
+.PP
+Note: Understand the impact before trying.
+.PP
+.RS 2
+1. Collect information and prepare parameter sheet.
+.PP
+2. Ensure both sites of the production region (site1, site2) are not running.
+.PP
+3. Decide to takeover HANA primary to third site (site3).
+.PP
+4. Set SAPHanaController multi-state resource into maintenance. 
+.RS 4
+node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+.B The next steps will invalidate all HANA data at former production sites (site1, site2).
+.PP
+5. Perform HANA takeover at third site (site3).
+.RS 4
+node3 # su - ha1adm -c "hdbnsutil -sr_takeover"
+.br
+node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:\\$?"
+.RE
+.PP
+6. Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes".
+.RS 4
+node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER yes
+.br
+node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
+.RE
+.PP
+7. Refresh SAPHanaController multi-state resource.
+.RS 4
+node3 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+8. Get SAPHanaController multi-state resource out of maintenance.
+.RS 4
+node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+.RE
+.PP
+9. Check that everything looks fine.
+.br
+Note: The srHook attribute of the failed former primary is still present. It might
+be removed or will be overwritten once the former primary got registered as new
+first DR site.
+.RE
+.PP
+\fB*\fP Procedure for register former production HANA as new DR.
+.PP
+This might be done, if both sites (or at least one) of the former production
+region have been recovered after an outage. It will re-establish DR redundancy.
+.PP
+\" TODO
+At all nodes the automatic start of cluster at boot should be disabled.
+If automatic start is not disabled, additional measures have to be taken.
+All site names have to be the same as already known to the cluster.
+Example for scale-up.
+Details on how to perform the steps can be found in additional examples below
+and in manual page SAPHanaSR_maintenance_examples(7).
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+site1, node1: currently idle, to become first DR replication target
+.br
+site2, node2: currently idle, to become second DR replication target
+.br
+site3, node3: production primary
+.br
+site4, node4: production secondary
+.RE
+.PP
+Note: Understand the impact before trying.
+.PP
+.RS 2
+1. Collect information and prepare parameter sheet.
+.PP
+2. Start Linux cluster on first DR site \fBonly\fP (node1).
+.RS 4
+node1 # crm cluster start
+.RE
+.PP
+3. Set SAPHanaController multi-state resource into maintenance.
+.RS 4
+node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+4. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
+.RS 4
+node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
+.br
+node1 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
+.RE
+.PP
+5. Start Linux cluster on second DR site (node2).
+.RS 4
+node1 # crm cluster start --all
+.RE
+.PP
+.B The next steps will overwrite all HANA data at former production sites (site1, site2).
+.PP
+6. Register first DR site (node1) as secondary to current primary (node3).
+.RS 4
+node1 # su - ha1adm
+.br
+node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
+.br
+ --replicationMode=async --operationMode=logreplay \\
+.br
+ --force_full_replica --name=site1
+.br
+node1 ~> exit
+.RE
+.PP
+7. Start HANA at first DR site (node1).
+.RS 4
+node1 # su - ha1adm -c "HDB start"
+.RE
+.PP
+8. Enable system replication at first DR site (node1).
+.RS 4
+node1 # su - ha1adm -c "hdbnsutil -sr_enable"
+.RE
+.PP
+9. Register second DR site (node2) as secondary to first DR site (node1).
+.RS 4
+node2 # su - ha1adm
+.br
+node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+.br
+ --replicationMode=syncmem --operationMode=logreplay \\
+.br
+ --force_full_replica --name=site2
+.br
+node2 ~> exit
+.RE
+.PP
+10. Refresh SAPHanaController multi-state resource.
+.RS 4
+node2 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+11. Get SAPHanaController multi-state resource out of maintenance.
+.RS 4
+node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+.RE
+.PP
+12. Change srHook attribute of first DR site (site1) to SWAIT.
+.RS 4
+node2 # crm_attribute -n hana_ha1_site_srHook_site1 -v SWAIT -t crm_config -s SAPHanaSR
+.RE
+.PP
+13. Check that everything looks fine.
+.RE
+.PP
+\fB*\fP Procedure for switch HANA production and DR region, keep HANA running.
+.PP
+This might be done for regular maintenance procedures.
+\" TODO
+Third site is up and running with system replication enabled.
+All site names have to be the same as already known to the cluster.
+Example for scale-up.
+Details on how to perform the steps can be found in additional examples below
+and in manual page SAPHanaSR_maintenance_examples(7).
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+site1, node1: current production primary, to become first DR replication target
+.br
+site2, node2: current production secondary, to become second DR replication target
+.br
+site3, node3: current first DR replication target, to become production primary
+.br
+site4, node4: current second DR replication target, to become production secondary
+.RE
+.PP
+Note: Understand the impact before trying.
+.PP
+.RS 2
+1.1 Collect information and prepare parameter sheet.
+.PP
+.B The next steps will invalidate all HANA data at current production sites (site1, site2).
+.PP
+2.1 Set SAPHanaController multi-state resource into maintenance at production
+sites (site1, site2).
+.RS 4
+node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+2.2 Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at production sites
+(site1, site2).
+.RS 4
+node1 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
+.br
+node1 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
+.RE
+.PP
+2.3 Refresh SAPHanaController multi-state resource at former production sites
+(sites1, sites2).
+.RS 4
+node1 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+2.4 Stop HANA at former production secondary (site2).
+.RS 4
+node2 # su - ha1adm -c "HDB stop"
+.RE
+.PP
+3.1 Set SAPHanaController multi-state resource into maintenance at current DR
+sites (site3, site4).
+.RS 4
+node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+3.2 Perform takeover at third site (site3: current DR - new production).
+.RS 4
+node3 # su - ha1adm -c "hdbnsutil -sr_takeover --suspendPrimary"
+.br
+node3 # su - ha1adm -c "cdpy; python systemReplicationStatus.py; echo rc:\\$?"
+.RE
+.PP
+3.3 Change SAPHanaController to "PREFER_SITE_TAKEOVER=yes" at new production sites
+(site3, site4).
+.RS 4
+node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER yes
+.br
+node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
+.RE
+.PP
+3.4 Refresh SAPHanaController multi-state resource at new production sites (site3, site4).
+.RS 4
+node3 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+3.5 Get SAPHanaController multi-state out of maintenance at new production sites
+(site3, site4).
+.RS 4
+node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+.RE
+.PP
+3.6 Check that everything looks fine so far.
+.PP
+.B The next steps will overwrite all HANA data at former production sites (site1, site2).
+.PP
+4.1 Register former production primary as secondary (site1) to new production
+primary (site3).
+.RS 4
+node1 # su - ha1adm
+.br
+node1 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
+.br
+ --replicationMode=async --operationMode=logreplay \\
+.br
+ --force_full_replica --name=site1
+.br
+node1 ~> exit
+.RE
+.PP
+4.2 Enable system replication source at new first DR site (site1).
+.RS 4
+node1 # su - ha1adm "hdbnsutil -sr_enable"
+.RE
+.PP
+4.3 Register new second DR site (site2) to first DR site (site1).
+.RS 4
+node2 # su - ha1adm
+.br
+node2 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+.br
+ --replicationMode=syncmem --operationMode=logreplay \\
+.br
+ --force_full_replica --name=site2
+.br
+node2 ~> exit
+.RE
+.PP
+4.4 Start new second DR site (site2).
+.RS 4
+node2 # su - ha1adm -c "HDB start"
+.RE
+.PP
+4.5 Refresh SAPHanaController multi-state resource at new DR sites (site1, site2).
+.RS 4
+node2 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+4.6 Get SAPHanaController multi-state out of maintenance at new DR sites (site1, site2).
+.RS 4
+node2 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
+.RE
+.PP
+4.7 Check that everything looks fine.
+.RE
+.PP
+\fB*\fP Procedure for switch HANA production and DR region, shut down HANA.
+.PP
+This might be done for regular takeover from production to DR region and as exercise.
+The final status is identical to the above takeover procedure.
+.PP
+Third site is up and running with system replication enabled. All site names
+have to be same as already known to the cluster. Example for scale-up. Details
+on how to perform the steps can be found in additional examples.
+.PP
+.RS 2
+site1, node1: current production primary, to become first DR replication target
+.br
+site2, node2: current production secondary, to become second DR replication
+target
+.br
+site3, node3: current first DR replication target, to become production primary
+.br
+site4, node4: current second DR replication target, to become production secondary
+.RE
+.PP
+Note: Understand the impact before trying.
+.PP
+.RS 2
+1.1 Collect information and prepare parameter sheet.
+.PP
+2.1 Set SAPHanaController multi-state resource into maintenance at production
+sites (site1, site2).
+.RS 2
+node1 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+.B The next steps will stop HANA at production sites.
+.PP
+2.2 Stop HANA database at production primary site (site1).
+.RS 2
+node1 # su - ha1adm -c "HDB kill"
+.br
+node1 # su - ha1adm -c "HDB info"
+.RE
+.PP
+2.3 Stop HANA database at production secondary site (site2).
+.RS 2
+node1 # ssh node2 'su - ha1adm -c "HDB kill" '
+.br
+node1 # ssh node2 'su - ha1adm -c "HDB info" '
+.RE
+.PP
+3.1 Perform takeover to DR region as described in the respective example.
+.PP
+4.1 Register former production HANA as new DR as described in the respective example.
+.RE
+.PP
+.\" .PP
+.\" TODO \fB*\fP Procedure for switch first and second HANA site at DR region.
+.\" .PP
+.\" TODO \fB*\fP Procedure to start cluster and HANA at DR region while production region is down.
+.\" .PP
+\fB*\fP Additional measures for registering former productioan as new DR, if
+automatic cluster start is enabled.
+.PP
+To avoid risk of dual-primary, at any time only in one region must run an HANA
+primary. So, if a former production cluster starts the first time after outage
+and DR takeover, the former HANA primary must not start. If the automatic cluster
+start is enabled, additional steps need to be done before the regular procedure
+for registering as new DR region. For scale-up, these steps are:
+.PP
+.RS 2
+1. Make sure not both machines will boot after recovery.
+.br
+2. Boot only one machine.
+.br
+3. Login to that machine. Set the SAPHanaController multi-state resource into
+maintenance.
+.br
+4. Boot the second machine.
+.br
+5. Perform the regular procedure for registering former production HANA as new DR.
+.RE
+.PP
+\fB*\fP Entry in global.ini to register secondaries on takeover.
+.PP
+This entry is needed at all HANA nodes. The HANA has to be stopped before the file
+can be edited. Do not copy the file global.ini between nodes.
+Please check SAP HANA documentation for details.
+.PP
+.RS 2
+[system_replication]
+.br
+ ...
+.br
+register_secondaries_on_takeover = true
+ ...
+.RE
+.PP
+\fB*\fP Copying HANA secure keystore from production primary to nodes at DR region.
+.PP
+Needs to be done at production primary before registering the DR secondaries.
+Production primary is node2. DR secondary nodes are node3 and node4, SID is HA1.
+.PP
+.RS 2
+node1 # cd /usr/sap/HA1/SYS/global/security/rsecssfs
+.br
+node1 # md5sum */*
+.br
+node1 # rsync -va * node3:$PWD/
+.br
+node1 # rsync -va * node4:$PWD/
+.br
+node1 # ssh node3 "md5sum $PWD/*/*"
+.br
+node1 # ssh node4 "md5sum $PWD/*/*"
+.RE
+.PP
+\fB*\fP Preventing IPaddr2 from starting at DR sites.
+.PP
+The production HANA database might be accessed by the same IP address at both
+regions. In that case the IP address must not run on the current DR sites.
+Two location contstraints are preventing from starting the IPaddr2 resource at
+any DR site. This constraint is needed at both regions.
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+location loc_ip_not_dr_1 rsc_ip_HA1_HDB00 rule -inf: \\
+.br
+ master-rsc_SAPHanaCon_HA1_HDB00 lt 145
+.br
+location loc_ip_not_dr_2 rsc_ip_HA1_HDB00 rule -inf: \\
+.br
+ not_defined master-rsc_SAPHanaCon_HA1_HDB00
+.RE
+.PP
+\fB*\fP Changing IPaddr2 at DR sites to match production.
+.PP
+The production HANA database might be accessed by the same IP address at both
+regions. However, during installation and testing phase both regions should use
+different IP addresses. Once one of the clusters is running in DR mode, in that
+cluster the IP address can be changed to match the production.
+SID is HA1, instance number is 00, IP address is 192.168.22.22 .
+.PP
+.RS 2
+# crm configure set rsc_ip_HA1_HDB00.ip 192.168.22.22
+.RE
+.PP
+\fB*\fP Using Dynamic DNS for moving the HANA IP address between regions. 
+.PP
+.\" TODO
+It might be that the same IP address should be used at both regions. Usually the
+IP address is managed by the IPaddr2 RA, sometimes together with a loadbalancer.
+If this is not possible across regions, Dynamic DNS might be an option. For details
+please refer to manual page ocf_heartbeat_dnsupdate(7).
+.\" SUSE support KB article
+.\" "SAPHanaSR HANA system replication automation without layer 2 network".
+.PP
+\fB*\fP Registering first DR node as secondary to production primary.
+.PP
+Needs to be done at first DR node.
+DR site is site3, production primary is node1, SID is HA1, instance numner is 00.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> HDB info
+.br
+~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+.br
+ --replicationMode=async --operationMode=logreplay --name=site3 \\
+.br
+ --online
+.br
+~> hdbnsutil -sr_state
+.RE
+.PP
+\fB*\fP Backing up first DR node and enabling system replication.
+.PP
+Needs to be done at first DR node, before registering another node.
+First DR site is site3, SID is HA1, instance number is 00.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> hdbsql -i 00 -u SYSTEM -d SYSTEMDB \\
+.br
+ "BACKUP DATA FOR FULL SYSTEM USING FILE ('backup')"
+.br
+~> hdbnsutil -sr_enable --name=site3
+.br
+~> hdbnsutil -sr_state
+.RE
+.PP
+\fB*\fP Registering second DR node to first one.
+.PP
+Nees to be done at second DR node.
+SID is HA1, site is site4, first DR node is node3, instance number is 00.
+Needs first DR node up and running.
+.PP
+.RS 2
+# su - ha1adm
+.br
+~> HDB info
+.br
+~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
+.br
+ --replicationMode=syncmem --operationMode=logreplay --name=site4 \\
+.br
+ --online
+.br
+~> hdbnsutil -sr_state
+.RE
+.PP
+\fB*\fP Removing orphaned srHook attribute from CIB.
+.PP
+Might be done after a former production region site has been registered as
+new DR region site to the new HANA production primary site.
+SID is HA1, site is site1.
+.br
+Note: Understand the impact before trying.
+.PP
+.RS 2
+# crm configure show SAPHanaSR | grep _srHook_site1=
+.br
+# crm_attribute -n hana_ha1_site_srHook_site1 -t crm_config \\
+.br
+ -s SAPHanaSR --delete
+.br
+# crm configure show SAPHanaSR | grep _srHook_site1=
+.RE
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/hana/shared/$SID/global/hdb/custom/config/global.ini
+on-disk representation of HANA global system configuration.
+.TP
+/usr/sap/$SID/SYS/global/security/rsecssfs/
+HANA database secure keystore directory.
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+.\" TODO
+\fB*\fP SAPHanaSR-angi version 1.4 or later.
+.PP
+\fB*\fP Only one system replication between the two SAP HANA databases in the Linux
+cluster. Maximum one system replication to an HANA database outside the Linux cluster.
+.PP 
+\fB*\fP The replication mode is either sync or syncmem for the cluster controlled
+replication. Replication mode async is not supported inside the Linux cluster.
+The replication mode is async for the replication from production region to DR
+region.
+.\" TODO Replication mode sync and syncmem are not supported between regions. 
+.PP
+\fB*\fP Once an HANA system replication site is known to the Linux cluster, that
+exact site name has to be used whenever the site is registered manually. At any
+time only one site is configured as primary replication source.
+.PP
+\fB*\fP The Linux clusters have no control over HANA system replication between the
+production region and the DR region.
+.PP
+\fB*\fP No Multi-SID scenario.
+.PP
+\fB*\fP The SAPHanaSR with HA cluster at DR region scenario should be configured
+as progressive variant. See SAPHanaSR-angi-scenarios(7).
+.PP
+\fB*\fP "register_secondaries_on_takeover = true" is needed at all HANA sites at
+production region and DR region.
+.PP
+\fB*\fP All HANA sites need to have the same content in their HANA secure keystore.
+.PP
+\fB*\fP Sufficient disk space for transaction logs and log backup at each potential
+replication source. Housekeeping might also help.
+.PP
+\fB*\fP Before connecting the DR region to the production region, the production
+SAPHanaSR-angi scale-up performance-optimised cluster needs to be up and running.
+.PP
+\fB*\fP Before connecting the DR region to the production region, the DR region
+has been set up as SAPHanaSR-angi scale-up performance-optimised cluster and the
+whole cluster has been set into maintenance.
+.PP
+\fB*\fP The first site (C) of the DR region is registered to the primary (B) of
+the production region, this replication mode is async.
+The second site (D) of the DR region is registered to the first site (C) of the
+DR region, this replication mode is sync or syncmem. 
+.br
+The resulting topology looks like: [ A <= B' ] -> { C => D }
+.PP
+\fB*\fP The SAPHanaController parameter "PREFER_SITE_TAKEOVER=DR" has to be set
+at the DR passive cluster. In case of manual DR takeover, this parameter needs to
+be changed. See manual page ocf_suse_SAPHanaController(7).
+.PP
+\fB*\fP After recovery of a former failed primary, the cluster must not start
+resources before DR passive mode is set. Thus, at all nodes automatic start of
+the Linux cluster at boot should be disabled.
+If automatic start is enabled, additional measures are needed. F.e. the nodes are
+booted one by one manually or the network between nodes is blocked at boot.
+The customer is responsible for this measures.
+.PP
+\fB*\fP The HA cluster moves an IP address with the HANA primary between the two
+production nodes. The IP address will not be moved from production region to DR
+region. However, the same IP address can be used in both regions, if infrastructure
+allows that.
+.PP
+\fB*\fP The third site´s srHook attribute is stored in the production cluster CIB.
+The attribute stays, even if a former production has been registered as DR after
+takeover. The attribute might be deleted manually to avoid confusion.
+.PP
+\fB*\fP Maintenance activities at both regions need to be aligned. Particularly
+replication topology must not be changed at the same time.
+.PP
+\fB*\fP Decision and procedure for takeover to DR region are in customer´s
+responsibility. All need to comply to SAP HANA requirements, please refer to SAP
+documentation for details.
+.PP
+\fB*\fP Any procedure has to be tested, documented and trained before applying on
+production systems.
+.PP
+See also the REQUIREMENTS section in manual pages SAPHanaSR(7) and susHanaSR.py(7). 
+.PP
+.\"
+.SH BUGS
+.\"
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+.\" TODO Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaSR\fP(7) , 
+\fBSAPHanaSR_multi-target\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) ,
+\fBocf_suse_SAPHanaController\fP(7) , \fBsusHanaSR.py\fP(7) ,
+\fBocf_heartbeat_dnsupdate\fP(7) ,
+\fBha_related_acronyms\fP(7) , \fBha_related_sap_notes\fP(7) ,
+.br
+https://support.scc.suse.com/s/kb/SAPHanaSR-HANA-system-replication-automation-without-layer-2-network?language=en_US
+.br
+https://help.sap.com/docs/SAP_HANA_PLATFORM/4e9b18c116aa42fc84c7dbfd02111aba/74418e86b48542ffb38b54072e0b66ce.html ,
+.br
+2517805 - How-to check if SAP HANA System Replication is in Sync or not
+.PP
+.\"
+.SH AUTHORS
+.\"
+A.Briel, F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2026 SUSE LLC
+.br
+The package SAPHanaSR-angi comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

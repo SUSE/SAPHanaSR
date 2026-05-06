@@ -1,0 +1,92 @@
+#!/bin/bash
+#
+# sct_test_maintenance_cluster_turn_hana_dr - with resource in maintenace: exchange third/fourth
+#
+# (c) 2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# - set mst-resource in maintenance mode
+# - unregister second DR site from first
+# - unregister first DR site from production primary 
+# - register new first DR site async to production primary
+# - back-up first DR site HANA ?
+# - enable system replication at first DR site
+# - register new second DR site sync/syncmem to first DR site
+# - change srHook attribute of first DR site to SWAIT
+# - wait till cluster is idle
+# - refresh mst-resource
+# - wait till cluster is idle
+# - get mst-resource out of maintenance (normal operation)
+#
+# expected outcome: cluster running, SAP HANA instanes running, roles exchanged
+#
+set -u
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source /usr/lib/SAPHanaSR-tester/sct_test_lib
+source .test_properties
+currPrimary=$(sctl_get_curr_prim "$node01")
+currSecondary=$(sctl_get_curr_secn "${node01}")
+currThird=$(sctl_get_curr_third "$node01")
+currFourth=$(sctl_get_curr_fourth "$node01")
+
+# shellcheck disable=SC2029
+sctl_run_crm "${node01}" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "${node01}" "-s 2"
+
+# get vhosts from node names
+vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
+if [[ -z "$vhostPrim" ]]; then
+    vhostPrim="$currPrimary"
+fi
+vhostFourth=$(sctl_get_vhost "${node01}" "$currFourth")
+if [[ -z "$vhostFourth" ]]; then
+    vhostPrim="$currFourth"
+fi
+
+echo "p=${currPrimary}, vhostPrim=${vhostPrim}, f=${currFourth}, vhostFourth=${vhostFourth}"
+siteThird=$(sctl_get_site "${node01}" "$currThird")
+siteFourth=$(sctl_get_site "${node01}" "$currFourth")
+echo "t=$currThird ($siteThird), f=$currFourth ($siteFourth)"
+
+echo "==== SUSE Resource Maintenance Begin ===="
+sctl_run_crm "${node02}" "resource maintenance $mstResource on"
+
+sctl_run_hdbnsutil "$currThird" "$sidadm" "-sr_unregister --force"
+
+sctl_run_hdbnsutil "$currFourth" "$sidadm" "-sr_unregister --force"
+sctl_run_hdbnsutil "$currFourth" "$sidadm" "-sr_register --remoteHost=$vhostPrim --remoteInstance=$instNr --name=$siteFourth --replicationMode=async --operationMode=$opMode --online"
+while true; do
+    sctl_run_sap_python3 "$currPrim" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
+    if [[ "$rc" != 15 ]]; then
+        echo "sleep 60"
+        sleep 60
+    else
+        break
+    fi
+done
+
+sctl_run_hdbnsutil "$currFourth" "$sidadm" "-sr_enable --name=$siteFourth"
+
+sctl_run_hdbnsutil "$currThird" "$sidadm" "-sr_register --remoteHost=$vhostFourth --remoteInstance=$instNr --name=$siteThird --replicationMode=$srMode --operationMode=$opMode --online"
+while true; do
+    sctl_run_sap_python3 "$currFourth" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
+    if [[ "$rc" != 15 ]]; then
+        echo "sleep 60"
+        sleep 60
+    else
+        break
+    fi
+done
+
+# TODO Change srHook attribute of first DR site to SWAIT.
+
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource maintenance $mstResource off"
+echo "==== SUSE Resource Maintenance End ===="
+#

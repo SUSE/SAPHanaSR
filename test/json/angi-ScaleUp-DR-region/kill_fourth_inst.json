@@ -1,0 +1,82 @@
+{
+    "test": "kill_fourth_inst",
+    "name": "Kill fourth instance",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "DRregion",
+        "fourth",
+        "kill",
+        "hana"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "kill_fourth_inst",
+            "mstRsc": "mstRscReady",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook ~ (SFAIL|SWAIT)",
+                "srPoll == DR"
+            ],
+            "fHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|2)",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "fHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 240,
+            "wait": 2,
+            "post": "cleanup",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

@@ -1,0 +1,122 @@
+{ 
+    "test": "start_hana_resource.json",
+    "name": "stop hana multi state resource and restart it - check for WAITING4DRSRC",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "DRregion",
+        "hana",
+        "cluster",
+        "maintenance",
+        "stop"
+    ],
+    "note": [
+        "restart the mst resource and checks if fourth nnode ",
+        "does intermediately go to WAITING4DRSRC",
+        "then it checks fourth node comes up after third",
+        "test also cheks for async on third and sync* on fourth (step30)"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites - stop hana",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "stop_hana_resource",
+            "mstRsc": "mstRscReady",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "hana stopped - start hana",
+            "next": "step30",
+            "loop": 180,
+            "wait": 2,
+            "post": "start_hana_resource",
+            "tSite": "tSiteDown",
+            "fSite": "fSiteDown",
+            "tHost": "xHostDown",
+            "fHost": "xHostDown"
+        },
+        {
+            "step": "step30",
+            "name": "hana starting - WAITING4DRSRC",
+            "next": "step40",
+            "loop": 180,
+            "wait": 2,
+            "post": "start_hana_resource",
+            "tSite": [
+                "lpt == 10",
+                "lss ~ (1|2)",
+                "srMode == async",
+                "srPoll == DR",
+                "srr == S"
+           ],
+            "fSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srMode ~ (sync|syncmem)",
+                "srPoll == DR",
+                "srr == S"
+            ],
+            "tHost": [
+                "clone_state == DEMOTED",
+                "roles == master1:master:worker:master",
+                "score == -5678"
+            ],
+            "fHost": [
+                "clone_state == WAITING4DRSRC",
+                "roles == master1::worker",
+                "score == -INFINITY"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "hana starting - fourth node",
+            "next": "final50",
+            "loop": 180,
+            "wait": 2,
+            "post": "start_hana_resource",
+            "tSite": [
+                "lpt ~ (10|30)",
+                "lss == 4",
+                "srMode == async",
+                "srPoll == DR",
+                "srr == S"
+           ],
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|2)",
+                "srMode ~ (sync|syncmem)",
+                "srPoll == DR",
+                "srr == S"
+            ],
+            "tHost": [
+                "clone_state == DEMOTED",
+                "roles == master1:master:worker:master",
+                "score == -5678"
+            ],
+            "fHost": [
+                "clone_state == DEMOTED",
+                "roles == master1:master:worker:master",
+                "score == -INFINITY"
+            ]
+        },
+        {
+            "step": "final50",
+            "name": "still running",
+            "next": "END",
+            "loop": 180,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

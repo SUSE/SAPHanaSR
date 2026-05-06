@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR-angi-scenarios 7 "17 Nov 2025" "" "SAPHanaSR-angi"
+.TH SAPHanaSR-angi-scenarios 7 "30 Mar 2026" "" "SAPHanaSR-angi"
 .\"
 .SH NAME
 .\"
@@ -33,6 +33,7 @@ c c c
 ^ c ^
 ^ c c
 ^ c ^
+^ c ^
 c c c
 ^ c ^
 ^ c ^
@@ -46,6 +47,7 @@ Topology@Scenario@Status
 Scale-Up@perf-opt@Supported
 @perf-opt, 2nd site read-enabled@Supported
 @perf-opt, multi-target, 3rd site outside cluster@Supported
+@perf-opt, multi-target, w. DR passive cluster *@Undocumented
 @perf-opt, multi-SID@Undocumented
 @perf-opt, w. S/4 ENSA2 in same cluster@Undocumented
 @perf-opt, w. S/4 ENSA1 in same cluster@Undocumented
@@ -68,7 +70,8 @@ Scale-Out@perf-opt, up to 12 nodes, no standby (BW)@Supported
 .RS 4
 Note: One additional Linux cluster node at 3rd site is needed for all scale-out scenarios.
 .br
-* Note 2: SUSE HA for scale-out standalone XSA is a technology preview. 
+* Note 2: SUSE HA for scale-out standalone XSA and
+SUSE HA for scale-up perf-opt w. DR passive cluster are technology preview. 
 .RE
 .\" TODO mention side effects of combined installations, e.g. resource limits or fencing priority
 .\" TODO align wording with "Supported HA Solutions"
@@ -103,21 +106,25 @@ c c
 c c
 c c
 c c
+c c
+c c
 c c.
 Symbol@Meaning
-[ ]@Linux cluster
- A B C@master nameserver node
- a b c@worker node
+[ ]@Linux cluster running
+{ }@Linux cluster DR passive
+ A B C D@master nameserver node
+ a b c d@worker node
  _ @ standby node
+ x @ XSA node
 =>@synchronous replication
 ->@asynchronous replication
 '@primary IP address
-"@secondary (read-enabled) IP address
+"@other IP address
 .TE
 .PP
-The scale-up performance-optimised multi-target scenario can be noted as:
+The scale-up performance-optimised read-enabled scenario can be noted as:
 .br
-[ A' => B ] -> C
+[ A' => B" ]
 .PP
 \fB* Variants overview\fB
 .PP
@@ -156,7 +163,7 @@ alert fencing. The related settings are:
 .br
 - SAPHanaFilesystem ON_FAIL_ACTION=fence and stop action on-fail=fence
 .br
-- susChkSrv.py action_on_lost=fence, for performance-optimized
+- susChkSrv.py action_on_lost=fence, for performance-optimised
 .br
 - SAPHanaSR-alert-fencing, for scale-out without standby node
 .br
@@ -207,8 +214,17 @@ susHanaSR.py(7), susTkOver.py(7), susChkSrv.py(7), susCostOpt.py(7).
 .\"
 \fB* Examples for supported scenarios\fR
 .TP
-Scale-up performance-optimised multi-target
+Scale-up performance-optimised
+[ A' => B ]
+.TP
+Scale-up performance-optimised multi-tier
 [ A' => B ] -> C
+.TP
+Scale-up performance-optimised multi-target
+[ A <= B' ] -> C
+.TP
+Scale-up performance-optimised multi-target DR passive
+[ A <= B' ] -> { C => D }
 .TP
 Scale-up cost-optimised
 [ A' => B,Q ]
@@ -216,16 +232,22 @@ Scale-up cost-optimised
 Scale-out performance-optimised multi-target read-enabled (ERP)
 [ 'Aa => "Bb ] -> Cc -> Dd
 .TP
+Scale-out performance-optimised w. XSA standalone node
+[ 'Ax" => Bx ]
+.TP
 Scale-out performance-optimised, each site 8-node w. standby (BW)
 [ 'Aaaaaaa_ => Bbbbbbb_ ]
 .PP
 \fB* Examples for non-supported scenarios\fR
 .TP
+Scale-up performance-optimised w. async replication in cluster
+[ A' -> B ]
+.TP
 Scale-up performance-optimised multi-target 3rd site in cluster
 [ A' => B => C ]
 .TP
-Scale-out performance-optimised two clusters connected
-[ 'Aa => Bb ] -> [ 'Cc => Dd ]
+Scale-up performance-optimised two clusters connected
+[ 'A => B ] -> [ 'C => D ]
 .PP
 .\"
 .SH BUGS
@@ -241,7 +263,8 @@ Please report any other feedback and suggestions to feedback@suse.com.
 \fBocf_suse_SAPHanaController\fP(7) , \fBocf_suse_SAPHana\fP(7) ,
 \fBocf_suse_SAPHanaFilesystem\fP(7) , \fBSAPHanaSR-alert-fencing\fP(8) ,
 \fBsusChkSrv.py\fP(7) , \fBSAPHanaSR_basic_cluster\fP(7) ,
-\fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) ,
+\fBSAPHanaSR-ScaleOut_basic_cluster\fP(7) , \fBSAPHanaSR_multi-target\fP(7) ,
+\fBSAPHanaSR_with_DR_HA\fP(7) , \fBSAPHanaSR-ScaleOut-XSA\fP(7) ,
 .br
 https://documentation.suse.com/sles-sap/sap-ha-support/html/sap-ha-support/article-sap-ha-support.html ,
 .br

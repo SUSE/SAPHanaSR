@@ -1,0 +1,141 @@
+{
+    "test": "maintenance_with_standby_nodes",
+    "name": "standby+online secondary then standby+online primary",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "DRregion",
+        "maintenance",
+        "standby",
+        "primary",
+        "secondary",
+        "cluster"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites ssn",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "ssn",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "fourth site: node is standby",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "post": "osn",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteDown",
+            "tHost": "tHostUp",
+            "fHost": "xHostDown"
+        },
+        {
+            "step": "step30",
+            "name": "fourth site: node back online",
+            "next": "step40",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "fHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "step40",
+            "name": "sr up and running again",
+            "next": "step110",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step110",
+            "name": "test prerequisites spn",
+            "next": "step120",
+            "loop": 1,
+            "wait": 1,
+            "post": "spn",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step120",
+            "name": "third site: node is standby",
+            "next": "step130",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteDown",
+            "tHost": "xHostDown",
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss == 4",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "fHost": [
+                "clone_state == PROMOTED",
+                "roles == master1:master:worker:master",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "step130",
+            "name": "takeover on secondary",
+            "next": "final140",
+            "loop": 120,
+            "post": "opn",
+            "wait": 2,
+            "tSite": [
+                "lss == 1",
+                "srr == S",
+                "lpt == 10",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "tHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score == 150",
+                "standby == on"
+            ],
+            "fSite": "fSiteUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "final140",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

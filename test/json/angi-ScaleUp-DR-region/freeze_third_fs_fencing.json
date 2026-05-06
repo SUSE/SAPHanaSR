@@ -1,0 +1,97 @@
+{
+    "test": "freeze_prim_fs_fencing",
+    "name": "freeze sap hana fs on primary node",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "DRregion",
+        "primary",
+        "storage",
+        "freeze",
+        "fencing"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_freeze_prim_fs",
+            "mstRsc": "mstRscReady",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected",
+            "next": "step30",
+            "loop": 120,
+            "wait": 2,
+            "tSite": [
+                "srr == S",
+                "lpt ~ (10|30)",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss == 4",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "tHost": [],
+            "fHost": [
+                "clone_state ~ (PROMOTED|DEMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "begin recover",
+            "next": "final40",
+            "loop": 300,
+            "wait": 2,
+            "tSite": [
+                "lss ~ (1|2)",
+                "srr == S",
+                "lpt ~ (10|30)",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "fSite": [
+                "lpt ~ (10|30)",
+                "lss == 4",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "tHost": [
+                "clone_state ~ (UNDEFINED|DEMOTED)",
+                "roles == master1::worker:"
+            ],
+            "fHost": [
+                "clone_state ~ (DEMOTED|PROMOTED)",
+                "roles == master1:master:worker:master",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

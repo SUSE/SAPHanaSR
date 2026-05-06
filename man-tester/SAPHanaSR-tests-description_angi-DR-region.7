@@ -1,0 +1,897 @@
+.\" Version: 1.2 
+.\"
+.TH SAPHanaSR-tests-description_angi-DR-region 7 "11 Jan 2025" "" "SAPHanaSR-angi"
+.\"
+.SH NAME
+.\"
+SAPHanaSR-tests-description_angi-DR-region \- Functional tests for SAPHanaSR-angi scale-up with DR HA for DR region.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+Functional test are shipped for the scale-up with DR HA scenario. This tests
+could be run out-of-the-box. The test cases are defined in dedicated files.
+See manual page SAPHanaSR-tests-syntax(5) for syntax details.
+Tests for SAPHanaSR-angi scale-up with DR HA for DR region scenario are listed
+in SAPHanaSR-tests-angi-scale-up-DR-region(7).
+.PP
+Each test can be executed by running the command SAPHanaSR-testCluster with
+appropriate parameters. See manual page SAPHanaSR-testCluster(8).
+.PP
+The tests are a sub-set of the SAPHanaSR-angi scale-up perf-opt progressive
+tests. 
+Main difference is that the DR region does not have an HANA primary. Instead of
+the primary, one secondary (called third) is connected to the production region
+and replicates to another secondary (called fourth).
+So several CIB attributes are different. See manual page  SAPHanaSR_with_DR_HA(7).
+.PP
+Predefined functional tests, specific for DR region:
+.PP
+\fBblock_fourth_node_network\fP
+.RS 2
+Descr: Block all network at fourth node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: rcnetwork stop
+.br
+Expect: fourth node fenced and finally restarted.
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Infrastructure failure, main cluster case.
+.RE
+.PP
+\fBblock_manual_takeover\fP
+.RS 2
+Descr: Blocked manual takeover, for susTkOver.py.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See susTkOver.py(7).
+.br
+Expect: Both nodes stay online.
+Both HANA stay online.
+Failed manual takeover attempt is logged in syslog and HANA tracefile.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Admin mistake.
+.RE
+.PP
+\fBblock_third_node_network\fP
+.RS 2
+Descr: Block all network at third node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: rcnetwork stop
+.br
+Expect: Third node fenced and finally restarted.
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Infrastructure failure, main cluster case. 
+.RE
+.PP
+\fBblock_sr\fP
+.RS 2
+Descr: Block HANA SR and check srHook SFAIL, unblock to recover.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See susHanaSR.py(7), SAPHanaSR.py(7), SAPHanaSrMultiTarget.py(7).
+.br
+Expect: All nodes stay online.
+Both HANA stay online.
+SR at DR region SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Infrastructure failure, main cluster case.
+.RE
+.PP
+\fBblock_sr_and_freeze_third_fs\fP
+.RS 2
+Descr: Block HANA SR and freeze HANA FS on third node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See ocf_suse_SAPHanaFilesystem(7), susHanaSR.py.(7).
+.br
+Expect: Both nodes stay online.
+HANA third is stopped and finally back online.
+SR at DR region SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Infrastructure failure, main cluster case.
+.RE
+.PP
+\fBcleanup_cib\fP
+.RS 2
+Descr: Clean up failures, constraints, maintenance, etc.
+.br
+Topology: ScaleUp and ScaleOut.
+.br
+Prereq: HANA and cluster configured. All nodes up and running.
+.br
+Test: Clean up failures, constraints, maintenance, etc.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.br
+Comment: Just housekeeping.
+.RE
+.PP
+\fBflup\fP
+.RS 2
+Descr: Like nop but very short sleep, just checking the test engine.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Wait and see.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.br
+Comment: Just housekeeping.
+.RE
+.PP
+\fBfreeze_short_fourth_fs\fP
+.RS 2
+Descr: Freeze HANA FS on fourth node.
+.br
+Test: See ocf_suse_SAPHanaFilesystem(7), susHanaSR.py.(7).
+.br
+Expect: Both nodes stay online.
+Both HANA stay online.
+SR at DR region SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Infrastructure failure.
+.RE
+.PP
+.\" \fBfreeze_third_fs_fencing\fP
+.\" .RS 2
+.\" Descr: Freeze HANA FS on third node, for SAPHanaFilesystem (ON_FAIL_ACTION=fence).
+.\" .br
+.\" Topology: ScaleUp (angi only).
+.\" .br
+.\" Prereq: Cluster and HANA are up and running, all good.
+.\" .br
+.\" Test: See ocf_suse_SAPHanaFilesystem(7).
+.\" .br
+.\" Expect: Third node fenced and restarted.
+.\" HANA third stopped and finally restarted.
+.\" SR at DR region SFAIL and finally SOK.
+.\" No takeover. One fence.
+.\" .br
+.\" Comment: Infrastructure failure, main cluster case.
+.\" .RE
+.\" .PP
+
+\fBkill_fourth_indexserver_fencing\fP
+.RS 2
+Descr: Kill fourth indexserver, for susChkSrv.py (action_on_lost=fence).
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See susChkSrv.py(7).
+.br
+Expect: Fourth node fenced.
+HANA fourth killed and finally restarted.
+SR to production stays SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_fourth_inst\fP
+.RS 2
+Descr: Kill fourth instance.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: HDB kill-9
+.br
+Expect: Fourth node stays online.
+HANA fourth stopped and finally restarted.
+SR to production SFAIL stays SWAIT. TODO
+SR at DR SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_fourth_nameserver\fP
+.RS 2
+Descr: Kill fourth nameserver.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u <sid>adm hdbnameserver -11
+.br
+Expect: Fourth nameserver restarted.
+HANA fourth temporarily degraded (lss=2).
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_fourth_node\fP
+.RS 2
+Descr: Kill fourth node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: systemctl reboot --force
+.br
+Expect: Fourth node fenced and finally restarted.
+HANA fourth killed and finally restarted.
+SR to production stays SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Node failure, main cluster case.
+.RE
+.PP
+\fBkill_fourth_pacemakerd\fP
+.RS 2
+Descr: Kill fourth pacemakerd.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u root pacemakerd -11
+.br
+Expect: Fourth pacemakerd restarted.
+Both HANA stay online.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_fourth_pacemkr-attrd\fP
+.RS 2
+Descr: Kill fourth pacemaker-attrd.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u hacluster -f pacemaker-attrd -11
+.br
+Expect: Fourth node fenced and finally restarted (PCMK_fail_fast=yes).
+HANA fourth killed and finally restarted.
+SR to production stays SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_fourth_pacemkr-based\fP
+.RS 2
+Descr: Kill fourth pacemaker-based.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u hacluster -f pacemaker-based -11
+.br
+Expect: Fourth node fenced and finally restarted (PCMK_fail_fast=yes).
+HANA fourth killed and finally restarted.
+SR to production stays SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_fourth_pacemkr-controld\fP
+.RS 2
+Descr: Kill fourth pacemaker-controld.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u hacluster -f pacemaker-controld -11
+.br
+Expect: Fourth node fenced and finally restarted (PCMK_fail_fast=yes).
+HANA fourth killed and finally restarted.
+SR to production stays SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_fourth_saphostexec\fP
+.RS 2
+Descr: Kill fourth saphostexec.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u root -11 saphostexec
+.br
+Expect: saphostagent service restarted.
+Both HANA stay online.
+SR to production stays SWAIT. TODO
+SR at DR region stays SOK.
+No takeover. No fencing.
+.br
+Comment: Application failure, recovered by systemd or SAPHanaTopology RA.
+.RE
+.PP
+.\" \fBkill_fourth_xsengine\fP
+.\" .RS 2
+.\" Descr: Kill fourth xsengine.
+.\" .br
+.\" Topology: ScaleUp (angi only).
+.\" .br
+.\" Prereq: Cluster and HANA are up and running, all good.
+.\" .br
+.\" Test: pkill -u <sid>adm -11 hdbxsengine
+.\" .br
+.\" Expect: Fourth xsengine restarted.
+.\" HANA fourth temporarily degraded (lss=2).
+.\" SR to production stays SWAIT. TODO
+.\" SR at DR region SFAIL and finally SOK.
+.\" No takeover. No fencing.
+.\" .br
+.\" Comment: Application failure, HANA recovers on its own.
+.\" .RE
+.\" .PP
+\fBkill_third_indexserver_fencing\fP
+.RS 2
+Descr: Kill third indexserver, for susChkSrv.py (action_on_lost=fence).
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See susChkSrv.py(7).
+.br
+Expect: Third node fenced.
+HANA third killed and finally restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_third_inst\fP
+.RS 2
+Descr: Kill third instance.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: HDB kill-9
+.br
+Expect: Third node stays online.
+HANA third stopped and finally restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Application failure, main cluster case.
+.RE
+.PP
+\fBkill_third_nameserver\fP
+.RS 2
+Descr: Kill third nameserver.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u <sid>adm hdbnameserver -11
+.br
+Expect: Third nameserver restarted.
+HANA third temporarily degraded (lss=2).
+No takeover. No fencing.
+.br
+Comment: Application failure, HANA recovers on its own.
+.RE
+.PP
+\fBkill_third_node\fP
+.RS 2
+Descr: Kill third node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: systemctl reboot --force
+.br
+Expect: Third node fenced and finally restarted.
+HANA third killed and finally restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Node failure, main cluster case.
+.RE
+.PP
+\fBkill_third_pacemakerd\fP
+.RS 2
+Descr: Kill third pacemakerd.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u root pacemakerd -11
+.br
+Expect: Third pacemakerd restarted.
+Both HANA stay online.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_third_pacemkr-attrd\fP
+.RS 2
+Descr: Kill third pacemaker-attrd.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u hacluster -f pacemaker-attrd -11
+.br
+Expect: Third node fenced and finally restarted (PCMK_fail_fast=yes).
+HANA third killed and finally restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_third_pacemkr-based\fP
+.RS 2
+Descr: Kill third pacemaker-based.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u hacluster -f pacemaker-based -11
+.br
+Expect: Third node fenced and finally restarted (PCMK_fail_fast=yes).
+HANA third killed and finally restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_third_pacemkr-controld\fP
+.RS 2
+Descr: Kill third pacemaker-controld.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u hacluster -f pacemaker-controld -11
+.br
+Expect: Third node fenced and finally restarted (PCMK_fail_fast=yes).
+HANA third killed and finally restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. One fencing.
+.br
+Comment: Cluster failure.
+.RE
+.PP
+\fBkill_third_saphostexec\fP
+.RS 2
+Descr: Kill third saphostexec.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: pkill -u root -11 saphostexec
+.br
+Expect: saphostagent service restarted.
+Both HANA stay online.
+SR to production stays SWAIT. TODO
+SR at DR region stays SOK.
+No takeover. No fencing.
+.br
+Comment: Application failure, recovered by systemd or SAPHanaTopology RA.
+.RE
+.PP
+.\" \fBkill_third_xsengine\fP
+.\" .RS 2
+.\" Descr: Kill third xsengine.
+.\" .br
+.\" Topology: ScaleUp (angi only).
+.\" .br
+.\" Prereq: Cluster and HANA are up and running, all good.
+.\" .br
+.\" Test: pkill -u <sid>adm -11 hdbxsengine
+.\" .br
+.\" Expect: Third xsengine restarted.
+.\" HANA third temporarily degraded (lss=2).
+.\" SR to production SFAIL and finally SWAIT. TODO
+.\" SR at DR region SFAIL and finally SOK.
+.\" No takeover. No fencing.
+.\" .br
+.\" Comment: Application failure, HANA recovers on its own.
+.\" .RE
+.\" .PP
+\fBmaintenance_cluster_hana_running\fP
+.RS 2
+Descr: Stop and restart cluster, keep HANA running.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See SAPHanaSR_maintenance_examples(7).
+crm maintenance on;
+crm cluster stop --all;
+crm cluster start --all;
+crm resource refresh <cln_topology>;
+crm resource refresh <msl_controller>;
+crm resource maintenance off;
+.br
+Expect: All nodes stay online.
+Cluster stopped and restarted.
+Both HANA keep running.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Main admin procedure.
+.RE
+.PP
+\fBmaintenance_cluster_turn_hana\fP
+.RS 2
+Descr: Maintenance procedure, manually turning HANA sites.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See SAPHanaSR_with_DR_HA(7).
+.br
+Expect: All nodes stay online.
+HANA third unregistered and finally started as fourth.
+HANA fourth unregistered and finally started as third.
+SR to production SFAIL and finally SWAIT.
+SR at DR region SFAIL and finally SOK.
+Sites switched. No takeover. No fencing.
+.br
+Comment: Main admin procedure.
+.RE
+.PP
+\fBmaintenance_third_crmreport\fP
+.RS 2
+Descr: Maintenance procedure, collect crm report on third node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See crm(8).
+.br
+Expect: All nodes stay online.
+Both HANA stay online.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Usual admin procedure.
+.RE
+.PP
+\fBmaintenance_third_supportconfig\fP
+.RS 2
+Descr: Maintenance procedure, collect supportconfig on third node.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See supportconfig(8), supportconfig_plugins(5).
+.\" supportutils-plugin-ha-sap
+.br
+Expect: All nodes stay online.
+Both HANA stay online.
+SR stays SOK.
+No takeover. No fencing.
+.br
+Comment: Usual admin procedure.
+.RE
+.PP
+\fBmaintenance_with_standby_nodes\fP
+.RS 2
+Descr: standby+online fourth then standby+online third
+.br
+Topology: ScaleUp.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: See SAPHanaSR_maintenance_examples(7).
+.br
+Expect: All nodes stay online.
+HANA third stopped and finally started as fourth.
+HANA fourth becomes finally third.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+One takeover. No fencing.
+.br
+Comment: Sub-optimal admin procedure.
+.RE
+.PP
+\fBnop\fP
+.RS 2
+Descr: No operation - check, wait and check again (stability check).
+.br
+Topology: ScaleUp (angi-only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Wait and see.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.br
+Comment: Main cluster case.
+.RE
+.PP
+\fBone_stable_hour\fP
+.RS 2
+Descr: Check regulary for one hour that there is no failure.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Wait and see, repeat every ten minutes for one hour.
+.br
+Expect: Cluster and HANA are up and running, all good.
+.br
+Comment: Main cluster case.
+.RE
+.PP
+\fBrestart_cluster_hana_running\fP
+.RS 2
+Descr: Stop and restart cluster, keep HANA running.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: crm maintenance on;
+crm cluster stop --all;
+crm cluster start --all;
+crm resource refresh <cln_topology>;
+crm resource refresh <msl_controller>;
+crm resource maintenance off;
+.br
+Expect: All nodes stay online.
+Cluster stopped and restarted.
+Both HANA keep running.
+SR to production stays SWAIT.
+SR at DR region stays SOK.
+No takeover. No fencing.
+.br
+Comment: Sub-optimal admin procedure.
+.RE
+.PP
+\fBrestart_cluster\fP
+.RS 2
+Descr: Stop and restart cluster and HANA.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: crm cluster stop --all;
+sapcontrol ... StartSystem;
+sapcontrol ... StartSystem;
+crm cluster start --all;
+.br
+Expect: All nodes stay online.
+Cluster stopped and restarted.
+Both HANA stopped and manually restarted.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Sub-optimal admin procedure.
+.RE
+.PP
+\fBrestart_cluster_turn_hana\fP
+.RS 2
+Descr: Stop cluster and HANA, manually start and takeover HANA, start cluster.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: Stop cluster and HANA, manually start HANA and do takeover, restart cluster. TODO
+No resource maintenance, no resource refresh.
+.br
+Expect: All nodes stay online.
+Both HANA stopped.
+HANA third finally started as fourth.
+HANA fourth becomes finally third by manual takeover.
+SR to production SFAIL and finally SWAIT. TODO
+SR at DR region SFAIL and finally SOK.
+One takeover. No takeover by cluster. No fencing.
+.br
+Comment: Sub-optimal admin procedure, challenge for susHanaSR.py.
+.RE
+.PP
+.\" \fBsplit_brain_prio\fP
+.\" .RS 2
+.\" Descr: Network split-brain with priority fencing.
+.\" .br
+.\" Topology: ScaleUp.
+.\" .br
+.\" Prereq: Cluster and HANA are up and running, all good.
+.\" .br
+.\" Test: iptables -I INPUT -p udp -m multiport --ports 5404 -j DROP
+.\" .br
+.\" Expect: Fourth node fenced and finally online.
+.\" Third node stays online.
+.\" HANA third stays online.
+.\" SR to production TODO
+.\" SR at DR region SFAIL and finally SOK.
+.\" No takeover. One fencing.
+.\" .br
+.\" Comment: Infrastructure failure, main cluster case.
+.\" .RE
+.\" .PP
+\fBstandby_fourth_node\fP
+.RS 2
+Descr: Set fourth node standby and online again.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: crm node standby <node>; crm node online <node>
+.br
+Expect: All nodes stay online.
+Fourth node standby and finally back online.
+HANA fourth stopped and finally restarted.
+SR at DR region SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Sub-optimal admin procedure.
+.RE
+.PP
+\fBstandby_third_node\fP
+.RS 2
+Descr: Set third node standby and online again.
+.br
+Topology: ScaleUp (angi only).
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: crm node standby <node>; crm node online <node>
+.br
+Expect: All nodes stay online.
+Third node standby and finally back online.
+HANA third stopped and finally restarted.
+SR to production SFAIL and finally SWAIT.
+SR at DR region SFAIL and finally SOK.
+No takeover. No fencing.
+.br
+Comment: Admin mistake.
+.RE
+.PP
+\fBstop_hana_resource\fP
+.RS 2
+Descr: Stop HANA resource and restart it.
+.br
+Topology: ScaleUp, ScaleOut.
+.br
+Prereq: Cluster and HANA are up and running, all good.
+.br
+Test: crm resource stop <mstrsc>; crm resource start <mstrsc>
+.br
+Expect: Both HANAs stop and restart.
+Cluster stays online.
+SR SFAIL and finally SOK. No takeover. No fencing.
+.br
+Comment: Sub-optimal admin procedure.
+.PP
+.\"
+.SH EXAMPLES
+.\"
+* List tests for SAPHanaSR-angi scal-up scenarios.
+.PP
+.RS 2
+# ls /usr/share/SAPHanaSR-tester/json/angi-ScaleU-DR-regionp/
+.RE
+.PP
+.\"
+.SH FILES
+.\"
+.TP
+/usr/share/SAPHanaSR-tester/json/angi-ScaleUp-DR-region/
+functional tests for SAPHanaSR-angi scale-up with DR HA scenario for DR region.
+.TP
+/usr/bin/sct_test_*
+shell scripts for un-easy tasks on the cluster nodes.
+.\" .TP
+.\" /usr/share/SAPHanaSR-tester/samples/runtests_angi-ScaleUp-DR-region.txt
+.\" test sequence example.  
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+See the REQUIREMENTS section in SAPHanaSR-tester(7) and SAPHanaSR-angi(7).
+Further, HANA database and Linux cluster are configured according to the SUSE
+setup guide for the scale-up performance-optimised scenario progressive variant
+with DR HA scenario.
+Of course, HANA database and Linux cluster have certain requirements.
+Please refer to the product documentation.
+.PP
+.\"
+.SH BUGS
+.\"
+.\" In case of any problem, please use your favourite SAP support process to open
+.\" a request for the component BC-OP-LNX-SUSE.
+Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBSAPHanaSR-tester\fP(7) , \fBSAPHanaSR-testCluster\fP(8) ,
+\fBSAPHanaSR-tests-angi-DR-region\fP(7) ,
+\fBSAPHanaSR-tests-syntax\fP(5) , \fBSAPHanaSR-tests-angi-ScaleUp\fP(7) ,
+\fBSAPHanaSR-tests-angi-ScaleUp_on-fail-fence\fP(7) ,
+\fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR_with_DR_HA\fP(7) ,
+\fBSAPHanaSR-showAttr\fP(8)
+.PP
+.\"
+.SH AUTHORS
+.\"
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2026 SUSE LLC
+.br
+The package SAPHanaSR-tester comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"
+

@@ -1,0 +1,85 @@
+{
+    "test": "standby_fourth_node",
+    "name": "standby fourth node (and online again)",
+    "purpose": [
+        "angi",
+        "ScaleUp",
+        "DRregion",
+        "standby",
+        "fourth",
+        "cluster",
+        "maintenance"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "standby_fourth_node",
+            "mstRsc": "mstRscReady",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        },
+        {
+            "step": "step20",
+            "name": "node is standby",
+            "next": "step30",
+            "loop": 90,
+            "wait": 2,
+            "post": "online_fourth_node",
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == DR"
+            ],
+            "fHost": [
+                "clone_state == UNDEFINED",
+                "roles == master1::worker:",
+                "score == -1234",
+                "standby == on"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "node back online",
+            "next": "final40",
+            "loop": 120,
+            "wait": 2,
+            "tSite": "tSiteUp",
+            "tHost": "tHostUp",
+            "fSite": [
+                "lpt == 10",
+                "lss == 1",
+                "srr == S",
+                "srHook == SWAIT",
+                "srPoll == DR"
+            ],
+            "fHost": [
+                "clone_state == DEMOTED",
+                "roles == master1::worker:",
+                "score ~ (-1234|-5678)"
+            ]
+        },
+        {
+            "step": "final40",
+            "name": "end recover",
+            "next": "END",
+            "loop": 120,
+            "wait": 2,
+            "post": "cleanup",
+            "tSite": "tSiteUp",
+            "fSite": "fSiteUp",
+            "tHost": "tHostUp",
+            "fHost": "fHostUp"
+        }
+    ]
+}

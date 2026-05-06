@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# SAPHanaSR-showStatus
+#
+# (c) 2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# Version: 2026-02-16
+#
+# shellcheck disable=SC2030,SC2031,SC2002,SC2034,SC2009
+#set -x
+
+EXE=$(basename "$0")
+
+function show_help() {
+        echo "usage     $EXE [ --help | --version ]"
+        echo "usage     $EXE --watch [n]"
+        echo
+        echo " --help           show help"
+        echo " --version        show version"
+        echo " --watch          show status continously"
+}
+
+function show_status() {
+        # TODO cluster not running
+        /usr/sbin/crm_mon -1r --exclude=summary
+        echo
+        /usr/bin/SAPHanaSR-showAttr
+        /usr/sbin/cs_clusterstate -i | grep -v "#"
+}
+
+# main()
+case $1 in
+        -v|--version)
+                echo -n "$EXE"
+                head -11 /usr/bin/"$EXE" | grep "^# Version: "
+                exit
+        ;;
+        -h|--help)
+                show_help
+                exit
+        ;;
+        -w|--watch)
+                N="${2:-9}"
+                /usr/bin/watch -n"$N" "$EXE"
+        ;;
+        *)
+                show_status
+                exit
+        ;;
+esac
+#
