@@ -131,20 +131,19 @@ while test01.run['count'] <= test01.config['repeat']:
     fourthSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'syncmem', 'srPoll': 'DR'})
     if not fourthSite:
         fourthSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'sync', 'srPoll': 'DR'})
-    l_top.update({'fSite': fourthSite})
+    if fourthSite:
+        l_top.update({'fSite': fourthSite})
     # first try to use site-msn attribute to get the master name server
     # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
     if l_top['pSite']:
         l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
     if l_top['sSite']:
         l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
-    if l_top.get('tSite'):
+    if l_top.get('tSite', None):
         l_top.update({'ha_or_dr': 'DR'})
         l_top.update({'tHost': test01.get_value('Site', l_top['tSite'], 'mns')})
     if l_top.get('fSite'):
         l_top.update({'fHost': test01.get_value('Site', l_top['fSite'], 'mns')})
-    else:
-        l_top.update({'fHost': None})
 
     # get first non master-nameserver worker node for primary and secondary site
     # TODO: check, if l_top pSite/sSite are already set correctly
@@ -199,15 +198,9 @@ while test01.run['count'] <= test01.config['repeat']:
     # TODO: do we need the old method as fallback, if msn is empty or misleading?
     #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
     #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
-    if l_top.get('tSite'):
-        main_topo = "DR"
+    if l_top.get('tSite',None):
         # looks like a DR cluster
-        l_msg = (
-                    f"TOPO: DR tSite={l_top['tSite']}"
-                    f" fSite={l_top['fSite']}"
-                    f" tHost={l_top['tHost']}"
-                    f" fHost={l_top['fHost']}"
-                )
+        main_topo = "DR"
     elif l_top['pHost'] is None:
         # pHost is empty - this indicates a serious detection problem
         main_topo = "UNKNOWN"
