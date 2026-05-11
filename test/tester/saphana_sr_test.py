@@ -251,11 +251,11 @@ class SaphanasrTest:
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         # sloppy might be need to set per search-criteria (e.g. True for roles not False for site)
         # Query runs from area-level via object-level. Then search for key=value.
-        l_sloppy = False
-        if 'sloppy' in kwargs:
-            l_sloppy = kwargs['sloppy']
-            self.debug(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
+        l_sloppy = kwargs.get('sloppy', False)
+        l_multi = kwargs.get('multi', False)
+        self.debug(f"DEBUG: DBG1 l_sloppy == {l_sloppy}, l_multi == {l_multi}")
         object_name = None
+        object_names = []
         l_sr = self.dict_sr
         # check, if 'area' is in the sr-data-dictionary
         if area_name in l_sr:
@@ -278,8 +278,12 @@ class SaphanasrTest:
                     else:
                         all_match = False
                 if all_match:
+                    object_names.append(k)
                     object_name = k
-                    break
+                    if not l_multi:
+                        break
+        if l_multi:
+            return object_names
         return object_name
 
     def get_value(self, area_name, object_name, key):
