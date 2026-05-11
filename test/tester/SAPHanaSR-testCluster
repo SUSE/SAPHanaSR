@@ -149,23 +149,39 @@ while test01.run['count'] <= test01.config['repeat']:
     # get first non master-nameserver worker node for primary and secondary site
     # TODO: check, if l_top pSite/sSite are already set correctly
     # TODO: check for roles must be sloppy, check for site must be strict - maybe sloppy=['roles'] ??
+    # TODO: Currently we only support scaleup and scaleout (ERP) with up to 3 nodes or scaleout with one master nameserver+ one standalone (e.g. XSA)
     if l_top['pSite']:
-        p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)
-        if p_worker:
+        print('p_worker')
+        list_p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True, multi=True)
+        if len(list_p_worker) == 1:
             l_top.update({'pWorker': p_worker})
             l_top.update({'pWorkerType': 'worker'})
+        elif len(list_p_worker) == 2:
+            l_top.update({'pWorker': list_p_worker[0]})
+            l_top.update({'pWorker2': list_p_worker[1]})
+            l_top.update({'pWorkerType': 'worker'})
         else:
+            #
+            # this type currently only with max 2 hana nodes (master-nameserver and one xs_worker or other standalone)
+            #
             p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':slave:none'}, sloppy=True)
             l_top.update({'pWorker': p_worker})
             l_top.update({'pWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
     else:
         l_top.update({'pWorker': None})
     if l_top['sSite']:
-        s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)
-        if s_worker:
-            l_top.update({'sWorker': s_worker })
+        list_s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True, multi=True)
+        if len(list_s_worker) == 1:
+            l_top.update({'sWorker': list_s_worker[0] })
+            l_top.update({'sWorkerType': 'worker'})
+        elif len(list_s_worker) == 2:
+            l_top.update({'sWorker': list_s_worker[0] })
+            l_top.update({'sWorker2': list_s_worker[1] })
             l_top.update({'sWorkerType': 'worker'})
         else:
+            #
+            # this type currently only with max 2 hana nodes (master-nameserver and one xs_worker or other standalone)
+            #
             s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':slave:none'}, sloppy=True)
             l_top.update({'sWorker': s_worker })
             l_top.update({'sWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
@@ -184,6 +200,7 @@ while test01.run['count'] <= test01.config['repeat']:
     #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
     #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
     if l_top.get('tSite'):
+        main_topo = "DR"
         # looks like a DR cluster
         l_msg = (
                     f"TOPO: DR tSite={l_top['tSite']}"
@@ -193,6 +210,7 @@ while test01.run['count'] <= test01.config['repeat']:
                 )
     elif l_top['pHost'] is None:
         # pHost is empty - this indicates a serious detection problem
+        main_topo = "UNKNOWN"
         l_msg = (
                     f"TOPO: UNKNOWN pSite={l_top['pSite']}"
                     f" sSite={l_top['sSite']}"
@@ -203,6 +221,7 @@ while test01.run['count'] <= test01.config['repeat']:
                 )
     elif l_top['pWorker'] is None:
         # pWorker is empty - this indicates scale-up
+        main_topo = "scaleUp"
         l_msg = (
                     f"TOPO: scaleUp pSite={l_top['pSite']}"
                     f" sSite={l_top['sSite']}"
@@ -211,6 +230,7 @@ while test01.run['count'] <= test01.config['repeat']:
                 )
     else:
         # pWorker is set - this indicates scale-out
+        main_topo = "scaleOut"
         l_msg = (
                     f"TOPO: scaleOut pSite={l_top['pSite']}"
                     f" sSite={l_top['sSite']}"
@@ -221,6 +241,9 @@ while test01.run['count'] <= test01.config['repeat']:
                     f" pWorkerType={l_top['pWorkerType']}"
                     f" sWorkerType={l_top['sWorkerType']}"
                 )
+    l_msg = f"TOPO: {main_topo}"
+    for k in l_top.keys():
+        l_msg = l_msg + f" {k}={l_top.get(k)}"
     test01.message(l_msg)
     test01.result.update({'topology': l_top })
 
