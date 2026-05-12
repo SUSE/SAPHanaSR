@@ -11,7 +11,7 @@
 """
 
 #global TOOL_VERSION
-TOOL_VERSION = "1.1.20260309"
+TOOL_VERSION = "1.1.20260512"
 # TODO pylint's constant vs variable detection is broken
 # pylint: disable=invalid-name
 
@@ -43,6 +43,7 @@ if __name__ == "__main__":
     parser.add_argument("--select", help="selecton of attributes to be printed (default, [test], minimal, sr, all)")
     parser.add_argument("--sid", help="specify the sid to check for")
     parser.add_argument("--sort", help="specify the column name to sort by")
+    parser.add_argument("--read_json", help="read data from json file instead of cib (experimental option, will be deleted later)")
     parser.add_argument("--to", help="select 'to' - timepoint ('YYYY-M-D H:M:S')")
     parser.add_argument("--version", help="output version and exit", action="store_true")
     #parser.add_argument("--dumpFailures", help="print failed checks per loop",
@@ -78,6 +79,8 @@ if __name__ == "__main__":
             myCluster.config['sort'] = args.sort[1:]
         else:
             myCluster.config['sort'] = { "all": args.sort } # global sort for all tables (old stykle)
+    if args.read_json:
+        myCluster.config['read_json'] = args.read_json 
     if args.to:
         dt = dateutil_parser.parse(args.to)
         myCluster.config['to'] = int(dt.timestamp())
@@ -108,71 +111,97 @@ if __name__ == "__main__":
                     myCluster.config['sort'] = {}
                 myCluster.config['sort'].update({"all": sort_table})
     myCluster.read_properties()
-    dir_list = myCluster.config.get('dir_list', None)
-    cib_file_list = myCluster.config.get('cib_file_list', [])
-    if dir_list:
-        for single_dir in dir_list:
-            file_list = myCluster.find(single_dir, pattern=myCluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
-            if file_list:
-                cib_file_list.extend(file_list)
-    #
-    # here the cib files iteration would begin
-    #   - we need to read all given cib files
-    #   - sort the found data dictionaries by cib-date
-    #   - output all data dictionaries, filtered by from+to
-    #
-    if not cib_file_list:
-        cib_file_list = [ None ]   # set cib_file_list to call the life cluster (in xml_import)
-    for cib_file in cib_file_list:
-        myHana    = HanaStatus(myCluster.config, selections=myCluster.selections)
-        myHana.xml_import(cib_file)
-        multi_sid = False
-        if myCluster.config['sid'] is None:
-            myHana.get_sids()
-            if len(myHana.sids) == 0:
-                print("ERR: No SID found in cluster config")
-                sys.exit(1)
-            elif len(myHana.sids) > 1:
-                print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
-                multi_sid = False
-                sys.exit(1)
-            else:
-                myHana.config['sid'] = myHana.sids[0].lower()
-                myCluster.config['sid'] = myHana.sids[0].lower()
-        myHana.fill_glob_dict()
-        if 'cib-time' in myHana.glob_dict['global']:
-            #print(f"dbg: test time filter")
-            dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
-            cibtime = int(dt.timestamp())
-            myHana.ts = cibtime
-            if myCluster.config['from'] <= cibtime <= myCluster.config['to']:
-                pass
-            else:
-                print(f"Filter cib-time {myHana.glob_dict['global']['cib-time']}")
-                continue
+
+    read_json = myCluster.config.get('read_json', None)
+    if read_json:
+        #
+        # alternative simulation handling
+        #
+        with open(read_json, encoding="utf-8") as json_in:
+            jdata = json.load(json_in)
+        myHana = HanaStatus(myCluster.config, selections=myCluster.selections)
+        myHana.data = {
+                        'global': jdata.get('Global'),
+                        'resource': jdata.get('Resource'),
+                        'site': jdata.get('Site'),
+                        'host': jdata.get('Host'),
+                      }
+        myHana.glob_dict = myHana.data.get('global')
+        # actions to read the (given) json file to the object dictionary
         if len(myCluster.multi_status) == 0:
             myCluster.multi_status.insert(0, myHana)
-        else:
-            # search position where to insert the new hana_status
-            pos = 0
-            inserted = 0
-            for hana_status in myCluster.multi_status:
-                if myHana.ts < hana_status.ts:
-                    myCluster.multi_status.insert(pos, myHana)
-                    inserted = 1
-                    break
-                pos += 1
-            if inserted == 0:
-                myCluster.multi_status.insert(pos, myHana)  # insert at the end, if it is not inserted before
-        myHana.fill_res_dict()
-        myHana.fill_site_dict()
-        myHana.fill_host_dict()
-        myHana.data = {
-                        'global': myHana.glob_dict,
-                        'resource': myHana.res_dict,
-                        'site': myHana.site_dict,
-                        'host': myHana.host_dict
-                      }
+    else:
+        #
+        # original cib handling (live or files)
+        #
+
+        dir_list = myCluster.config.get('dir_list', None)
+        cib_file_list = myCluster.config.get('cib_file_list', [])
+        if dir_list:
+            for single_dir in dir_list:
+                file_list = myCluster.find(single_dir, pattern=myCluster.config.get('pattern_list', None)) # use default patterns pe-input-nnn.bz2 and pe-warn-nnn.bz2
+                if file_list:
+                    cib_file_list.extend(file_list)
+        #
+        # here the cib files iteration would begin
+        #   - we need to read all given cib files
+        #   - sort the found data dictionaries by cib-date
+        #   - output all data dictionaries, filtered by from+to
+        #
+        if not cib_file_list:
+            cib_file_list = [ None ]   # set cib_file_list to call the life cluster (in xml_import), None marks live-cluster-query
+        for cib_file in cib_file_list:
+            myHana    = HanaStatus(myCluster.config, selections=myCluster.selections)
+            myHana.xml_import(cib_file)
+            multi_sid = False
+            if myCluster.config['sid'] is None:
+                myHana.get_sids()
+                if len(myHana.sids) == 0:
+                    print("ERR: No SID found in cluster config")
+                    sys.exit(1)
+                elif len(myHana.sids) > 1:
+                    print(f"WARN: Multiple SIDs found in cluster config: {str(myCluster.sids)} Please specify SID using --sid <SID>")
+                    multi_sid = False
+                    sys.exit(1)
+                else:
+                    myHana.config['sid'] = myHana.sids[0].lower()
+                    myCluster.config['sid'] = myHana.sids[0].lower()
+            myHana.fill_glob_dict()
+            if 'cib-time' in myHana.glob_dict['global']:
+                #print(f"dbg: test time filter")
+                dt = dateutil_parser.parse(myHana.glob_dict['global']['cib-time'])
+                cibtime = int(dt.timestamp())
+                myHana.ts = cibtime
+                if myCluster.config['from'] <= cibtime <= myCluster.config['to']:
+                    pass
+                else:
+                    print(f"Filter cib-time {myHana.glob_dict['global']['cib-time']}")
+                    continue
+            if len(myCluster.multi_status) == 0:
+                myCluster.multi_status.insert(0, myHana)
+            else:
+                # search position where to insert the new hana_status
+                pos = 0
+                inserted = 0
+                for hana_status in myCluster.multi_status:
+                    if myHana.ts < hana_status.ts:
+                        myCluster.multi_status.insert(pos, myHana)
+                        inserted = 1
+                        break
+                    pos += 1
+                if inserted == 0:
+                    myCluster.multi_status.insert(pos, myHana)  # insert at the end, if it is not inserted before
+            myHana.fill_res_dict()
+            myHana.fill_site_dict()
+            myHana.fill_host_dict()
+            myHana.data = {
+                            'global': myHana.glob_dict,
+                            'resource': myHana.res_dict,
+                            'site': myHana.site_dict,
+                            'host': myHana.host_dict
+                          }
+
+
     tables = {
                 "global": "Global",
                 "resource": "Resource", 
@@ -228,25 +257,25 @@ if __name__ == "__main__":
             cib_time=0
             if 'cib-time' in myHana.glob_dict["global"]:
                 cib_time = myHana.glob_dict["global"]['cib-time']
-            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"', ts=cib_time)
-            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"', ts=cib_time)
-            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"', ts=cib_time)
-            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.data.get('global'), "global", "Global", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.data.get('resource'), "resource", "Resource", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.data.get('site'), "site", "Site", quote='"', ts=cib_time)
+            myHana.print_dic_as_path(myHana.data.get('host'), "host", "Host", quote='"', ts=cib_time)
         elif oformat in {"tester"}:
-            myHana.print_dic_as_path(myHana.glob_dict, "global", "Global", quote='"')
-            myHana.print_dic_as_path(myHana.res_dict, "resource", "Resource", quote='"')
-            myHana.print_dic_as_path(myHana.site_dict, "site", "Site", quote='"')
-            myHana.print_dic_as_path(myHana.host_dict, "host", "Host", quote='"')
+            myHana.print_dic_as_path(myHana.data.get('global'), "global", "Global", quote='"')
+            myHana.print_dic_as_path(myHana.data.get('resource'), "resource", "Resource", quote='"')
+            myHana.print_dic_as_path(myHana.data.get('site'), "site", "Site", quote='"')
+            myHana.print_dic_as_path(myHana.data.get('host'), "host", "Host", quote='"')
         elif oformat in {"cache"}:
-            myHana.print_dic_as_csv(myHana.host_dict, "host", "Host", quote='', short=True, fs=':')
+            myHana.print_dic_as_csv(myHana.data.get('host'), "host", "Host", quote='', short=True, fs=':')
         elif oformat in {"csv"}:
             cib_time=0
             if 'cib-time' in myHana.glob_dict["global"]:
                 cib_time = myHana.glob_dict["global"]['cib-time']
-            myHana.print_dic_as_csv(myHana.glob_dict, "global", "Global", quote='', ts=cib_time)
-            myHana.print_dic_as_csv(myHana.res_dict, "resource", "Resource", quote='', ts=cib_time)
-            myHana.print_dic_as_csv(myHana.site_dict, "site", "Site", quote='', ts=cib_time)
-            myHana.print_dic_as_csv(myHana.host_dict, "host", "Host", quote='', ts=cib_time)
-    if len(cib_file_list) == 0:
-        print("ERROR: No cib files found")
-        sys.exit(2)
+            myHana.print_dic_as_csv(myHana.data.get('global'), "global", "Global", quote='', ts=cib_time)
+            myHana.print_dic_as_csv(myHana.data.get('resource'), "resource", "Resource", quote='', ts=cib_time)
+            myHana.print_dic_as_csv(myHana.data.get('site'), "site", "Site", quote='', ts=cib_time)
+            myHana.print_dic_as_csv(myHana.data.get('host'), "host", "Host", quote='', ts=cib_time)
+    #if len(cib_file_list) == 0:
+    #    print("ERROR: No cib files found")
+    #    sys.exit(2)
