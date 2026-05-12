@@ -97,7 +97,8 @@ class SaphanasrTest:
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
         self.test_data = {}
-        self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
+        # self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
+        self.topolo = {}
         self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'pHost': 'Host', 'sHost': 'Host' }
         self.debug("INIT: tester version: {}".format(self.version))
         self.__failed_role_counter__ = 0
