@@ -126,6 +126,7 @@ while test01.run['count'] <= test01.config['repeat']:
     # sSite is referenced by sHost-site-attr
     #
     primSite = test01.get_area_object_by_key_val('Site', {'srr': 'P', 'srPoll': 'PRIM'})
+    if primSite:
         l_top.update({'pSite': primSite })
     secnSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srPoll': 'SOK'})
     if secnSite:
@@ -141,9 +142,9 @@ while test01.run['count'] <= test01.config['repeat']:
         l_top.update({'fSite': fourthSite})
     # first try to use site-msn attribute to get the master name server
     # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
-    if l_top['pSite']:
+    if l_top.get('pSite', None):
         l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
-    if l_top['sSite']:
+    if l_top.get('sSite', None):
         l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
     if l_top.get('tSite', None):
         l_top.update({'ha_or_dr': 'DR'})
@@ -155,7 +156,7 @@ while test01.run['count'] <= test01.config['repeat']:
     # TODO: check, if l_top pSite/sSite are already set correctly
     # TODO: check for roles must be sloppy, check for site must be strict - maybe sloppy=['roles'] ??
     # TODO: Currently we only support scaleup and scaleout (ERP) with up to 3 nodes or scaleout with one master nameserver+ one standalone (e.g. XSA)
-    if l_top['pSite']:
+    if l_top.get('pSite', None):
         print('p_worker')
         list_p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True, multi=True)
         if len(list_p_worker) == 1:
@@ -174,7 +175,7 @@ while test01.run['count'] <= test01.config['repeat']:
             l_top.update({'pWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
     else:
         l_top.update({'pWorker': None})
-    if l_top['sSite']:
+    if l_top.get('sSite', None):
         list_s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True, multi=True)
         if len(list_s_worker) == 1:
             l_top.update({'sWorker': list_s_worker[0] })
@@ -193,8 +194,8 @@ while test01.run['count'] <= test01.config['repeat']:
     else:
         l_top.update({'sWorker': None})
 
-    if l_top['pHost'] is None:
-        # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
+    if not(primSite or secnSite or thirdSite or fourthSite):
+        # we did not found any HAregion nor DRregion site, so lets try SAPHanaSR classic attributes
         l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
         l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
         l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
@@ -207,39 +208,15 @@ while test01.run['count'] <= test01.config['repeat']:
     if l_top.get('tSite',None):
         # looks like a DR cluster
         main_topo = "DR"
-    elif l_top['pHost'] is None:
+    elif l_top.get('pHost', None) is None:
         # pHost is empty - this indicates a serious detection problem
         main_topo = "UNKNOWN"
-        l_msg = (
-                    f"TOPO: UNKNOWN pSite={l_top['pSite']}"
-                    f" sSite={l_top['sSite']}"
-                    f" pHost={l_top['pHost']}"
-                    f" sHost={l_top['sHost']}"
-                    f" pWorker={l_top['pWorker']}"
-                    f" sWorker={l_top['sWorker']}"
-                )
-    elif l_top['pWorker'] is None:
+    elif l_top.get('pWorker', None) is None:
         # pWorker is empty - this indicates scale-up
         main_topo = "scaleUp"
-        l_msg = (
-                    f"TOPO: scaleUp pSite={l_top['pSite']}"
-                    f" sSite={l_top['sSite']}"
-                    f" pHost={l_top['pHost']}"
-                    f" sHost={l_top['sHost']}"
-                )
     else:
         # pWorker is set - this indicates scale-out
         main_topo = "scaleOut"
-        l_msg = (
-                    f"TOPO: scaleOut pSite={l_top['pSite']}"
-                    f" sSite={l_top['sSite']}"
-                    f" pHost={l_top['pHost']}"
-                    f" sHost={l_top['sHost']}"
-                    f" pWorker={l_top['pWorker']}"
-                    f" sWorker={l_top['sWorker']}"
-                    f" pWorkerType={l_top['pWorkerType']}"
-                    f" sWorkerType={l_top['sWorkerType']}"
-                )
     l_msg = f"TOPO: {main_topo}"
     for k in l_top.keys():
         l_msg = l_msg + f" {k}={l_top.get(k)}"
