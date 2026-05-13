@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+
+# call the script in the git repository main directory (e.g. SAPHanaSR)
+#
+# Syntax:
+# call_SAPHanaSR-testCluster_Simulate remoteHost 
+
+BASE_DIR="$PWD"
+remote="$1"
+list_scenario="angi-ScaleUp angi-ScaleUp-DR-region angi-ScaleOut-XSA"
+scenario="angi-ScaleOut-XSA"
+scenario="angi-ScaleUp-DR-region"
+scenario="angi-ScaleUp"
+
+test="flup"
+
+mkdir -p "$BASE_DIR"/tmp
+for scenario in $list_scenario; do
+    python3.11  "$BASE_DIR"/test/tester/SAPHanaSR-testCluster \
+        --jsonInSimulate "$BASE_DIR"/test/simulate/SAPHanaSR-showAttr."$scenario"."$test".json \
+        --properties "$BASE_DIR"/test/simulate/properties."$scenario"."$test".json \
+        --remote "$remote" \
+        --default "$BASE_DIR"/test/json/"$scenario"/defaults.json \
+        --testFile="$BASE_DIR"/test/json/"$scenario"/"$test".json \
+        --jsonOut "$BASE_DIR"/tmp/"$test".out.json \
+        --logFile "$BASE_DIR"/tmp/log.file.txt || break
+done
