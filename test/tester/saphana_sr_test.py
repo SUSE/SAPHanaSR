@@ -99,7 +99,7 @@ class SaphanasrTest:
         self.test_data = {}
         # self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
         self.topolo = {}
-        self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'pHost': 'Host', 'sHost': 'Host' }
+        self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'tSite': 'Site', 'fSite': 'Site', 'pHost': 'Host', 'sHost': 'Host', 'tHost': 'Host', 'fHost': 'Host' }
         self.debug("INIT: tester version: {}".format(self.version))
         self.__failed_role_counter__ = 0
         self.__min_failed_role_counter__ = 0
