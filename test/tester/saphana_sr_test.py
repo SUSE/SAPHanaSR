@@ -609,7 +609,7 @@ class SaphanasrTest:
     def __process_fatal_condition(self, step, **kwargs):
         """ __process_fatal_conditions
             rc == 0 : no fatal condition matched
-            rc != 0 : at least one of the fatal packages (childs) mathed
+            rc != 0 : at least one of the fatal packages (childs) matched
             kwargs: step_loop_failures[]
         """
         rc_condition = 1
