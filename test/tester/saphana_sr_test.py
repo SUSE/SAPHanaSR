@@ -184,10 +184,14 @@ class SaphanasrTest:
         structure representing the data
         """
         connect_host = kargs.get('connect_hosts', None)
+        read_json = self.config.get('jsonInSimulate', None)
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
+        if read_json:
+            cmd = f"{cmd} --read_json {read_json}"
         if self.config['use_sudo']:
             cmd = f"sudo -u root {cmd}"
+        self.message(f'TOPO: cmd = {cmd}')
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
@@ -1055,10 +1059,10 @@ class SaphanasrTest:
         if cmd != "":
             if remote == "localhost":
                 self.message("QUERY: {} LOCAL: {}".format(action_name, cmd))
-                local_call_result = subprocess.run(cmd.split(), check=False)
+                local_call_result = subprocess.run(cmd.split(), check=False, capture_output=True)
                 action_rc = local_call_result.returncode
                 action_stdout = local_call_result.stdout
-                self.message("QUERY: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
+                self.message("QUERY: {} LOCAL: {} rc={} ({})".format(action_name, cmd, action_rc, action_stdout))
             else:
                 self.message("QUERY: {} REMOTE at {}: {}".format(action_name, remote, cmd))
                 a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
