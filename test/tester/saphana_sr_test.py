@@ -1144,7 +1144,7 @@ if __name__ == "__main__":
         test01.run['r_id'] = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
         l_top = test01.topolo
-        l_top.update({'global': 'global'})
+        # l_top.update({'global': 'global'})
         # for angi-ScaleUp and classic ScaleOut:
         # pSite is the site with srr-attribute == "P"
         # sSite is the site with srr-attribute == "S"
