@@ -1,0 +1,99 @@
+{
+    "test": "freeze_secn_site_nfs",
+    "name": "freeze nfs on secondary site",
+    "purpose": [
+        "angi",
+        "ScaleOut",
+        "secondary",
+        "freeze",
+        "site",
+        "network",
+        "storage",
+        "nfs"
+    ],
+    "start": "prereq10",
+    "steps": [
+        {
+            "step": "prereq10",
+            "name": "test prerequisites",
+            "next": "step20",
+            "loop": 1,
+            "wait": 1,
+            "post": "shell sct_test_freeze_secn_site_nfs",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        },
+        {
+            "step": "step20",
+            "name": "failure detected + wait with frozen nfs",
+            "next": "step30",
+            "loop": 30,
+            "wait": 2,
+            "post": "sleep 120",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "srr == S",
+                "srHook == SFAIL"
+            ]
+        },
+        {
+            "step": "step30",
+            "name": "failure detected + unfreeze nfs",
+            "next": "step40",
+            "loop": 90,
+            "wait": 2,
+            "post": "shell sct_test_unfreeze_secn_site_nfs",
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sSite": [
+                "lpt == 10",
+                "lss == 4",
+                "srr == S",
+                "srHook == SFAIL",
+                "srPoll == SFAIL"
+            ]
+        },
+       {
+            "step": "step40",
+            "name": "begin recover",
+            "next": "final50",
+            "loop": 120,
+            "wait": 2,
+            "pSite": "pSiteUp",
+            "pHost": "pHostUp",
+            "pWorker": "pWorkerUp",
+            "sHost": [
+                "clone_state ~ (DEMOTED|UNDEFINED)",
+                "score == 100"
+            ],
+            "sSite": [
+                "lpt ~ (10|30)",
+                "lss ~ (1|4)",
+                "srr == S",
+                "srHook ~ (SOK|SFAIL)",
+                "srPoll ~ (SOK|SFAIL)"
+            ]
+        },
+        {
+            "step": "final50",
+            "name": "end recover",
+            "next": "END",
+            "loop": 300,
+            "wait": 2,
+            "post": "cleanup",
+            "pSite": "pSiteUp",
+            "sSite": "sSiteUp",
+            "pHost": "pHostUp",
+            "sHost": "sHostUp",
+            "pWorker": "pWorkerUp",
+            "sWorker": "sWorkerUp"
+        }
+    ]
+}
