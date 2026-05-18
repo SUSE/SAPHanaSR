@@ -191,7 +191,7 @@ class SaphanasrTest:
             cmd = f"{cmd} --read_json {read_json}"
         if self.config['use_sudo']:
             cmd = f"sudo -u root {cmd}"
-        self.message(f'TOPO: cmd = {cmd}')
+        self.debug(f'TOPO: cmd = {cmd}')
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
