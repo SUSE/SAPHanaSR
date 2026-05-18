@@ -720,6 +720,8 @@ class SaphanasrTest:
                                   self.process_topology_object(step, 'sHost', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pWorker', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'sWorker', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'pWorker2', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'sWorker2', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'tSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'fSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'tHost', 'Host', list_of_failures=list_of_failures),
