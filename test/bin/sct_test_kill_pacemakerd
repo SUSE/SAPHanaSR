@@ -18,28 +18,33 @@
 set -u
 killNode=""
 srRole=""
-while "$#" -gt 0; do
+while [[ "$#" -gt 0 ]]; do
     case "$1" in
-        --by-role ) #
+        --by-role ) # by-role ROLE
                     shift
                     srRole="$1"  # should be prim[:master|worker] or secn[:master|worker] | third | fourth
                     ;;
-        --node )    #
+        --node )    # node HOST
                     shift
                     killNode="$1"
                     ;;
         prim | prim:* | secn | secn:* | third | fourth )
                     srRole="$1"
+                    echo "by-role $srRole"
                     ;;
+        * )         #
+                    echo "unknown parameter $1"
     esac
     shift
 done
 rc=1 # mark fail, by default
-source /usr/lib/SAPHanaSR-tester/sct_test_lib
+dirname=$(dirname $0)
+source /usr/lib/SAPHanaSR-tester/sct_test_lib ||  source $dirname/../lib/sct_test_lib && echo "loading alternative test library from source directory"
 source .test_properties
 if [[ -n "$killNode" ]]; then
     echo "killNode=$killNode (set by command line)"
 else
+    echo "connect to $node01"
     case "$srRole" in
         prim | prim:master ) killNode=$(sctl_get_curr_prim "$node01");;
         secn | secn:master ) killNode=$(sctl_get_curr_secn "$node01");;
@@ -47,7 +52,7 @@ else
         secn:worker        ) killNode=$(sctl_get_curr_secn_worker "$node01");;
         third              ) killNode="$tHost";; # TODO: Check, if we need a sctl_get_curr_third function
         fourth             ) killNode="$fHost";; # TODO: Check, if we need a sctl_get_curr_fourth_function
-        * ) echo "Neither prim, secn, third nor fourth in cmd line"
+        * ) echo "Neither prim, secn, third nor fourth in cmd line ($srRole)"
             exit 2;;
     esac
     echo "killNode=$killNode (selected by role $srRole)"
