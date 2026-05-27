@@ -555,7 +555,7 @@ class HanaStatus():
                                  'Site': self.site_dict,
                                  'Host': self.host_dict
                               }, indent=4
-                              )
+                             )
         print(json_obj)
 
     def print_dic_as_path(self, print_dic, area, table_name, **kargs):

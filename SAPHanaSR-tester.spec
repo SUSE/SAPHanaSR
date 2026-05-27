@@ -20,7 +20,7 @@ License:        GPL-2.0
 Group:          Productivity/Clustering/HA
 AutoReqProv:    on
 Summary:        Test suite for SAPHanaSR clusters
-Version:        2.4.0
+Version:        2.5.0
 Release:        0
 Url:            https://www.suse.com/c/fail-safe-operation-of-sap-hana-suse-extends-its-high-availability-solution/
 
@@ -67,6 +67,7 @@ mkdir -p %{buildroot}/usr/bin
 mkdir -p %{buildroot}/usr/share/%{name}
 mkdir -p %{buildroot}/usr/share/%{name}/samples
 mkdir -p %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
+mkdir -p %{buildroot}/usr/share/%{name}/simulate
 mkdir -p %{buildroot}/usr/lib/%{name}
 mkdir -p %{buildroot}%{_mandir}/man5
 mkdir -p %{buildroot}%{_mandir}/man7
@@ -96,6 +97,9 @@ cp -a test/json %{buildroot}/usr/share/%{name}
 cp -a test/www %{buildroot}/usr/share/%{name}
 install -m 0644 test/samples/* %{buildroot}/usr/share/%{name}/samples
 install -m 0644 crm_cfg/angi-ScaleUp/[0-9]*_* %{buildroot}/usr/share/%{name}/samples/crm_cfg/angi-ScaleUp
+
+# simulate files
+install -m 0644 test/simulate/* %{buildroot}/usr/share/%{name}/simulate
 
 # manual pages
 install -m 0444 man-tester/*.5.gz %{buildroot}%{_mandir}/man5

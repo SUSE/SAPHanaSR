@@ -37,12 +37,13 @@ parser.add_argument("--testFile", help="specify the test file")
 parser.add_argument("--defaultsFile", help="specify the default checks file")
 parser.add_argument("--properties", help="specify the properties file")
 parser.add_argument("--remoteNodes", nargs="*", help="cluster nodes to use for ssh connection")
-parser.add_argument("--simulate", help="only simulate, dont call actions",
+parser.add_argument("--simulate", help="only simulate, dont call actions (not implemented)",
                     action="store_true")
 parser.add_argument("--repeat", help="how often to repeat the test")
 parser.add_argument("--dumpFailures", help="print failed checks per loop",
                     action="store_true")
 parser.add_argument("--logFile", help="log file to write the messages")
+parser.add_argument("--jsonInSimulate", help="Experimental: Option can be removed without any notice - Call SAPHanaSR-showAttr with option --read_json (file)")
 parser.add_argument("--jsonOut", help="json file to write detailled test results")
 parser.add_argument("--printTestProperties", help="print test properties and exit",
                     action="store_true")
@@ -84,6 +85,9 @@ if args.logFile:
     # pylint: disable-next=R1732
     test01.run['log_file_handle'] = open(test01.config['log_file'], 'a', encoding="utf-8")
     test01.config['jsonOut'] = args.jsonOut
+if args.jsonInSimulate:
+    test01.message("PARAM: jsonInSimulate: {}".format(args.jsonInSimulate))
+    test01.config['jsonInSimulate'] = args.jsonInSimulate
 if args.jsonOut:
     test01.message("PARAM: jsonOut: {}".format(args.jsonOut))
 if args.printTestProperties:
@@ -109,7 +113,7 @@ while test01.run['count'] <= test01.config['repeat']:
         test01.run['r_id'] = random.randrange(10000,99999,1)
     test01.read_saphana_sr()
     l_top = test01.topolo
-    l_top.update({'global': 'global'})
+    # l_top.update({'global': 'global'})
     # for angi-ScaleUp and classic ScaleOut:
     # pSite is the site with srr-attribute == "P"
     # sSite is the site with srr-attribute == "S"
@@ -125,55 +129,81 @@ while test01.run['count'] <= test01.config['repeat']:
     # pSite is referenced by pHost-site-attr
     # sSite is referenced by sHost-site-attr
     #
-    l_top.update({'pSite': test01.get_area_object_by_key_val('Site', {'srr': 'P'})})
-    l_top.update({'sSite': test01.get_area_object_by_key_val('Site', {'srr': 'S'})})
-    l_top.update({'tSite': test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'async'})})
-    fourthSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'syncmem'})
+    primSite = test01.get_area_object_by_key_val('Site', {'srr': 'P', 'srPoll': 'PRIM'})
+    if primSite:
+        l_top.update({'pSite': primSite })
+    secnSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srPoll': 'SOK'})
+    if secnSite:
+        l_top.update({'sSite': secnSite })
+    # l_top.update({'sSite': test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srPoll': 'SOK'})})
+    thirdSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'async', 'srPoll': 'DR'})
+    if thirdSite:
+        l_top.update({'tSite': test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'async', 'srPoll': 'DR'})})
+    fourthSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'syncmem', 'srPoll': 'DR'})
     if not fourthSite:
-        fourthSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'sync'})
-    l_top.update({'fSite': fourthSite})
+        fourthSite = test01.get_area_object_by_key_val('Site', {'srr': 'S', 'srMode': 'sync', 'srPoll': 'DR'})
+    if fourthSite:
+        l_top.update({'fSite': fourthSite})
     # first try to use site-msn attribute to get the master name server
     # TODO: check, if msn could be 'misleading', if using 'virtual' SAP HANA host names
-    if l_top['pSite']:
+    if l_top.get('pSite', None):
         l_top.update({'pHost': test01.get_value('Site', l_top['pSite'], 'mns')})
-    if l_top['sSite']:
+    if l_top.get('sSite', None):
         l_top.update({'sHost': test01.get_value('Site', l_top['sSite'], 'mns')})
-    if l_top.get('tSite'):
+    if l_top.get('tSite', None):
         l_top.update({'ha_or_dr': 'DR'})
         l_top.update({'tHost': test01.get_value('Site', l_top['tSite'], 'mns')})
     if l_top.get('fSite'):
         l_top.update({'fHost': test01.get_value('Site', l_top['fSite'], 'mns')})
-    else:
-        l_top.update({'fHost': None})
 
     # get first non master-nameserver worker node for primary and secondary site
     # TODO: check, if l_top pSite/sSite are already set correctly
     # TODO: check for roles must be sloppy, check for site must be strict - maybe sloppy=['roles'] ??
-    if l_top['pSite']:
-        p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True)
-        if p_worker:
-            l_top.update({'pWorker': p_worker})
+    # TODO: Currently we only support scaleup and scaleout (ERP) with up to 3 nodes or scaleout with one master nameserver+ one standalone (e.g. XSA)
+    if l_top.get('pSite', None):
+        print('p_worker')
+        list_p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':worker:slave'}, sloppy=True, multi=True)
+        if len(list_p_worker) == 1:
+            l_top.update({'pWorker': list_p_worker[0]})
+            l_top.update({'pWorkerType': 'worker'})
+        elif len(list_p_worker) == 2:
+            l_top.update({'pWorker': list_p_worker[0]})
+            l_top.update({'pWorker2': list_p_worker[1]})
             l_top.update({'pWorkerType': 'worker'})
         else:
+            #
+            # this type currently only with max 2 hana nodes (master-nameserver and one xs_worker or other standalone)
+            #
             p_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['pSite'], 'roles': ':slave:none'}, sloppy=True)
-            l_top.update({'pWorker': p_worker})
-            l_top.update({'pWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
+            if p_worker:
+                l_top.update({'pWorker': p_worker})
+                l_top.update({'pWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
     else:
-        l_top.update({'pWorker': None})
-    if l_top['sSite']:
-        s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True)
-        if s_worker:
-            l_top.update({'sWorker': s_worker })
+        pass
+        # l_top.update({'pWorker': None})
+    if l_top.get('sSite', None):
+        list_s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':worker:slave'}, sloppy=True, multi=True)
+        if len(list_s_worker) == 1:
+            l_top.update({'sWorker': list_s_worker[0] })
+            l_top.update({'sWorkerType': 'worker'})
+        elif len(list_s_worker) == 2:
+            l_top.update({'sWorker': list_s_worker[0] })
+            l_top.update({'sWorker2': list_s_worker[1] })
             l_top.update({'sWorkerType': 'worker'})
         else:
+            # either scaleUp or small scaleOut with second node is a standalone
+            # this type currently only with max 2 hana nodes (master-nameserver and one xs_worker or other standalone)
+            #
             s_worker = test01.get_area_object_by_key_val('Host', {'site': l_top['sSite'], 'roles': ':slave:none'}, sloppy=True)
-            l_top.update({'sWorker': s_worker })
-            l_top.update({'sWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
+            if s_worker:
+                l_top.update({'sWorker': s_worker })
+                l_top.update({'sWorkerType': 'standalone'})  # TODO: xs_worker or other standalone
     else:
-        l_top.update({'sWorker': None})
+        pass
+        # l_top.update({'sWorker': None})
 
-    if l_top['pHost'] is None:
-        # if mns attributes do not work this is most likely a classic-ScaleUp we need to query by roles
+    if not(primSite or secnSite or thirdSite or fourthSite):
+        # we did not found any HAregion nor DRregion site, so lets try SAPHanaSR classic attributes
         l_top.update({'pHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:P:'}, sloppy=True)})
         l_top.update({'sHost': test01.get_area_object_by_key_val('Host', {'roles': '[0-4]:S:'}, sloppy=True)})
         l_top.update({'pSite': test01.get_value('Host', l_top['pHost'], 'site')})
@@ -183,44 +213,21 @@ while test01.run['count'] <= test01.config['repeat']:
     # TODO: do we need the old method as fallback, if msn is empty or misleading?
     #l_top.update({'pHost': test01.get_area_object_by_key_val('Host', 'site', l_top['pSite'])})
     #l_top.update({'sHost': test01.get_area_object_by_key_val('Host', 'site', l_top['sSite'])})
-    if l_top.get('tSite'):
+    if l_top.get('tSite',None):
         # looks like a DR cluster
-        l_msg = (
-                    f"TOPO: DR tSite={l_top['tSite']}"
-                    f" fSite={l_top['fSite']}"
-                    f" tHost={l_top['tHost']}"
-                    f" fHost={l_top['fHost']}"
-                )
-    elif l_top['pHost'] is None:
+        main_topo = "DR"
+    elif l_top.get('pHost', None) is None:
         # pHost is empty - this indicates a serious detection problem
-        l_msg = (
-                    f"TOPO: UNKNOWN pSite={l_top['pSite']}"
-                    f" sSite={l_top['sSite']}"
-                    f" pHost={l_top['pHost']}"
-                    f" sHost={l_top['sHost']}"
-                    f" pWorker={l_top['pWorker']}"
-                    f" sWorker={l_top['sWorker']}"
-                )
-    elif l_top['pWorker'] is None:
+        main_topo = "UNKNOWN"
+    elif l_top.get('pWorker', None) is None:
         # pWorker is empty - this indicates scale-up
-        l_msg = (
-                    f"TOPO: scaleUp pSite={l_top['pSite']}"
-                    f" sSite={l_top['sSite']}"
-                    f" pHost={l_top['pHost']}"
-                    f" sHost={l_top['sHost']}"
-                )
+        main_topo = "scaleUp"
     else:
         # pWorker is set - this indicates scale-out
-        l_msg = (
-                    f"TOPO: scaleOut pSite={l_top['pSite']}"
-                    f" sSite={l_top['sSite']}"
-                    f" pHost={l_top['pHost']}"
-                    f" sHost={l_top['sHost']}"
-                    f" pWorker={l_top['pWorker']}"
-                    f" sWorker={l_top['sWorker']}"
-                    f" pWorkerType={l_top['pWorkerType']}"
-                    f" sWorkerType={l_top['sWorkerType']}"
-                )
+        main_topo = "scaleOut"
+    l_msg = f"TOPO: {main_topo}"
+    for k in l_top:
+        l_msg = l_msg + f" {k}={l_top.get(k)}"
     test01.message(l_msg)
     test01.result.update({'topology': l_top })
 
@@ -246,6 +253,7 @@ while test01.run['count'] <= test01.config['repeat']:
     ### debug exit after printing test properties
     a_nodes = []
     r_list_nodes = test01.query_on_cluster("list_nodes")
+    print(r_list_nodes)
     r_lines = r_list_nodes[0].split('\n')
     for rl in r_lines:
         a_rl = rl.split(' ')
