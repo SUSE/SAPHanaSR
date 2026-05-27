@@ -4,13 +4,17 @@
 .\"
 .SH NAME
 . \"
-SAPHanaSR_with_DR_HA_setup \- SAPHanaSR with HA cluster at DR region.
+SAPHanaSR_with_DR_HA_setup \- SAPHanaSR with HA cluster at DR region setup procedure.
 .PP
 .\"
 .SH DESCRIPTION
 .\"
-TODO
-
+Two HANA system replication pairs are connected by a third HANA system replication.
+Each pair is configured as Linux cluster for the scale-up performance-optimised
+scenario. The first pair is running reguarly as production region (site1, site2).
+The second pair is running in DR mode (site3, site4).
+See manual page SAPHanaSR_with_DR_HA(7) for details
+.PP
 The two clusters could be set up and connected by different procedures:
 .PP
 a. Set up HANA and Linux clusters in both regions separately. Test both regions
@@ -26,9 +30,6 @@ Test register and DR mode. This procedure is possible, but not recommended.
 See manual pages SAPHanaSR(7), SAPHanaController-scale-up(7), susHanaSR.py(7),
 SAPHanaSR_basic_cluster(7), SAPHanaSR_multi-target(7), SAPHanaSR_with_DR_HA(7), 
 et al.
-
-
-
 .PP
 .\"
 .SH EXAMPLES
@@ -44,6 +45,17 @@ page SAPHanaSR_basic_setup(7).
 Set up HANA and Linux clusters in both regions separately. Test both regions in
 production role before connecting them. Test takeover and DR role after both are
 connected.
+SID is HA1, instance number is 00.
+.PP
+.RS 2
+site1, node1: production primary
+.br
+site2, node2: production secondary
+.br
+site3, node3: current temporary primary, to become first DR replication target
+.br
+site4, node4: current temporary secondary, to second DR replication target
+.RE
 .PP
 .RS 2
 1. Collect information and prepare parameter sheet.
@@ -78,12 +90,17 @@ See example "Copying HANA secure keystore from production primary to nodes at DR
 See example "Preventing IPaddr2 from starting at DR sites."
 .RE
 .PP
-8. Set SAPHanaController multi-state resource into maintenance at new DR sites (site3, site4).
+8. Set SAPHanaController multi-state resource into maintenance at DR region (node3, node4).
 .RS 4
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-9. Stop Linux cluster and HANA at DR region (node3, node4).
+9. Stop HANA at DR region (node3, node4). Stop primary first.
+.RS 4
+node3 # su - ha1adm -c "HDB stop"
+.br
+node4 # su - ha1adm -c "HDB stop"
+.RE
 .PP
 10. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR".
 .RS 4
@@ -92,13 +109,13 @@ node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
 .RE
 .PP
-.B The next steps will overwrite all HANA data at new DR sites (site3, site4).
+.B The next steps will overwrite all HANA data at DR sites (site3, site4).
 .PP
-11. Register first DR site (node3) as secondary to primary (site1).
+11. Register first DR site (node3) as secondary to production primary (site1).
 .RS 4
 node3 # su - ha1adm
 .br
-node3 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
+node3 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 .br
  --replicationMode=async --operationMode=logreplay \\
 .br
@@ -117,11 +134,11 @@ node3 # su - ha1adm -c "HDB start"
 node3 # su - ha1adm -c "hdbnsutil -sr_enable"
 .RE
 .PP
-14. Register second DR site (site4) as secondary to first DR site (sitee3).
+14. Register second DR site (site4) as secondary to first DR site (site3).
 .RS 4
 node4 # su - ha1adm
 .br
-node4 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
+node4 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 .br
  --replicationMode=syncmem --operationMode=logreplay \\
 .br
@@ -130,26 +147,31 @@ node4 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 node4 ~> exit
 .RE
 .PP
-15. Refresh SAPHanaController multi-state resource.
+15. Start second DR site (site4).
+.RS 4
+node4 # su - ha1adm -c "HDB start"
+.RE
+.PP
+16. Refresh SAPHanaController multi-state resource.
 .RS 4
 node4 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-16. Get SAPHanaController multi-state resource out of maintenance.
+17. Get SAPHanaController multi-state resource out of maintenance.
 .RS 4
 node4 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-17. Change srHook attribute of first DR site (site3) to SWAIT.
+18. Change srHook attribute of first DR site (site3) to SWAIT.
 .RS 4
 node4 # crm_attribute -n hana_ha1_site_srHook_site3 -v SWAIT -t crm_config -s SAPHanaSR
 .RE
 .PP
-18. Check that everything looks fine.
+19. Check that everything looks fine.
 .PP
-19. Change IP address at DR region (site3, site4) to match production - optional.
+20. Change IP address at DR region (site3, site4) to match production (optional).
 .PP
-20. Check that everything works fine.
+21. Check that everything works fine.
 .RE
 .PP
 Please see also the REQUIREMENTS section in manual page SAPHanaSR_with_DR_HA(7).
@@ -206,7 +228,6 @@ location loc_ip_not_dr_2 rsc_ip_HA1_HDB00 rule -inf: \\
  not_defined master-rsc_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-.PP
 \fB*\fP Changing IPaddr2 at DR sites to match production.
 .PP
 The production HANA database might be accessed by the same IP address at both
@@ -248,20 +269,20 @@ First DR site is site3, SID is HA1, instance number is 00.
 .PP
 \fB*\fP Removing orphaned srHook attribute from CIB.
 .PP
-Might be done after a former production region site has been registered as
-new DR region site to the new HANA production primary site.
-SID is HA1, site is site1.
+Might be done at DR region, after the first DR site has been registered to the
+production primary site.
+SID is HA1, first DR site is site3.
 .br
 Note: Understand the impact before trying.
 .PP
 .RS 2
-# crm configure show SAPHanaSR | grep _srHook_site1=
+# crm configure show SAPHanaSR | grep _srHook_site3=
 .br
-# crm_attribute -n hana_ha1_site_srHook_site1 -t crm_config \\
+# crm_attribute -n hana_ha1_site_srHook_site3 -t crm_config \\
 .br
  -s SAPHanaSR --delete
 .br
-# crm configure show SAPHanaSR | grep _srHook_site1=
+# crm configure show SAPHanaSR | grep _srHook_site3=
 .RE
 .PP
 .\"
@@ -277,7 +298,7 @@ HANA database secure keystore directory.
 .\"
 .SH REQUIREMENTS
 .\"
-See REQUIREMENTS section in manual page SAPHanaSR_with_DR_HA(7).
+See REQUIREMENTS section in manual page SAPHanaSR_with_DR_HA(7) and SAPHanaSR-angi(7).
 .PP
 .\"
 .SH BUGS
@@ -292,7 +313,9 @@ a request for the component BC-OP-LNX-SUSE.
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaSR\fP(7) , 
 \fBSAPHanaSR_multi-target\fP(7) , \fBSAPHanaSR_with_DR_HA\fP(7) ,
 \fBSAPHanaSR_maintenance_examples\fP(7) ,
-\fBocf_suse_SAPHanaController\fP(7) , \fBsusHanaSR.py\fP(7)
+\fBocf_suse_SAPHanaController\fP(7) , \fBsusHanaSR.py\fP(7) ,
+.br
+https://documentation.suse.com/sbp/sap/
 .PP
 .\"
 .SH AUTHORS
