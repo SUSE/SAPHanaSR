@@ -85,24 +85,30 @@ Please do not use the same IP address at both regions during installation.
 See example "Copying HANA secure keystore from production primary to nodes at DR region."
 .RE
 .PP
-7. Add DR specific colocation constraint for IPaddr2 to both clusters.
+7. Add entry in global.ini to register secondaries on takeover.
+.\" TODO
+.RS 4
+See example "Entry in global.ini to register secondaries on takeover."
+.RE
+.PP
+8. Add DR specific colocation constraint for IPaddr2 to both clusters.
 .RS 4
 See example "Preventing IPaddr2 from starting at DR sites."
 .RE
 .PP
-8. Set SAPHanaController multi-state resource into maintenance at DR region (node3, node4).
+9. Set SAPHanaController multi-state resource into maintenance at DR region (node3, node4).
 .RS 4
 node3 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-9. Stop HANA at DR region (node3, node4). Stop primary first.
+10. Stop HANA at DR region (node3, node4). Stop primary first.
 .RS 4
 node3 # su - ha1adm -c "HDB stop"
 .br
 node4 # su - ha1adm -c "HDB stop"
 .RE
 .PP
-10. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at DR region.
+11. Change SAPHanaController to "PREFER_SITE_TAKEOVER=DR" at DR region.
 .RS 4
 node3 # crm configure set rsc_SAPHanaCon_HA1_HDB00.PREFER_SITE_TAKEOVER DR
 .br
@@ -111,7 +117,7 @@ node3 # crm configure show rsc_SAPHanaCon_HA1_HDB00 | grep PREFER_SITE_TAKEOVER
 .PP
 .B The next steps will overwrite all HANA data at DR sites (site3, site4).
 .PP
-11. Register first DR site (node3) as secondary to production primary (site1).
+12. Register first DR site (node3) as secondary to production primary (site1).
 .RS 4
 node3 # su - ha1adm
 .br
@@ -124,17 +130,17 @@ node3 ~> hdbnsutil -sr_register --remoteHost=node1 --remoteInstance=00 \\
 node3 ~> exit
 .RE
 .PP
-12. Start HANA at first DR site (site3).
+13. Start HANA at first DR site (site3).
 .RS 4
 node3 # su - ha1adm -c "HDB start"
 .RE
 .PP
-13. Enable system replication at first DR site (site3).
+14. Enable system replication at first DR site (site3).
 .RS 4
 node3 # su - ha1adm -c "hdbnsutil -sr_enable"
 .RE
 .PP
-14. Register second DR site (site4) as secondary to first DR site (site3).
+15. Register second DR site (site4) as secondary to first DR site (site3).
 .RS 4
 node4 # su - ha1adm
 .br
@@ -147,32 +153,32 @@ node4 ~> hdbnsutil -sr_register --remoteHost=node3 --remoteInstance=00 \\
 node4 ~> exit
 .RE
 .PP
-15. Start second DR site (site4).
+16. Start second DR site (site4).
 .RS 4
 node4 # su - ha1adm -c "HDB start"
 .RE
 .PP
-16. Refresh SAPHanaController multi-state resource.
+17. Refresh SAPHanaController multi-state resource.
 .RS 4
 node4 # crm resource refresh mst_SAPHanaCon_HA1_HDB00
 .RE
 .PP
-17. Get SAPHanaController multi-state resource out of maintenance.
+18. Get SAPHanaController multi-state resource out of maintenance.
 .RS 4
 node4 # crm resource maintenance mst_SAPHanaCon_HA1_HDB00 off
 .RE
 .PP
-18. Change srHook attribute of first DR site (site3) to SWAIT.
+19. Change srHook attribute of first DR site (site3) to SWAIT.
 .RS 4
 node4 # crm_attribute -n hana_ha1_site_srHook_site3 -v SWAIT -t crm_config -s SAPHanaSR
 .RE
 .PP
-19. Change IP address at DR region (site3, site4) to match production (optional).
+20. Change IP address at DR region (site3, site4) to match production (optional).
 .RS 4
 See example "Changing IPaddr2 at DR sites to match production."
 .RE
 .PP
-20. Check that everything works fine.
+21. Check that everything works fine.
 .RE
 .PP
 \fB*\fP Entry in global.ini to register secondaries on takeover.
