@@ -768,6 +768,13 @@ time only one site is configured as primary replication source.
 \fB*\fP The Linux clusters have no control over HANA system replication between the
 production region and the DR region.
 .PP
+\fB*\fP The first site (C) of the DR region is registered to the primary (B) of
+the production region, this replication mode is async.
+The second site (D) of the DR region is registered to the first site (C) of the
+DR region, this replication mode is sync or syncmem. 
+.br
+The resulting topology looks like: [ A <= B' ] -> { C => D }
+.PP
 \fB*\fP No Multi-SID scenario.
 .PP
 \fB*\fP The SAPHanaSR with HA cluster at DR region scenario should be configured
@@ -786,14 +793,8 @@ SAPHanaSR-angi scale-up performance-optimised cluster needs to be up and running
 .PP
 \fB*\fP Before connecting the DR region to the production region, the DR region
 has been set up as SAPHanaSR-angi scale-up performance-optimised cluster and the
-whole cluster has been set into maintenance.
-.PP
-\fB*\fP The first site (C) of the DR region is registered to the primary (B) of
-the production region, this replication mode is async.
-The second site (D) of the DR region is registered to the first site (C) of the
-DR region, this replication mode is sync or syncmem. 
-.br
-The resulting topology looks like: [ A <= B' ] -> { C => D }
+.\" TODO whole cluster
+SAPHanaController multi-state resouece has been set into maintenance.
 .PP
 \fB*\fP The SAPHanaController parameter "PREFER_SITE_TAKEOVER=DR" has to be set
 at the DR passive cluster. In case of manual DR takeover, this parameter needs to
@@ -813,11 +814,11 @@ allows that.
 .PP
 \fB*\fP The third site´s srHook attribute is stored in the production cluster CIB.
 The attribute stays, even if a former production has been registered as DR after
-takeover. The attribute might be deleted manually to avoid confusion.
+takeover. This orphaned attribute might be deleted manually to avoid confusion.
 .PP
 \fB*\fP The primary site´s srHook attribute is stored in the DR cluster CIB.
 The attribute stays, even if a takeover happened at the production region.
-The attribute might be deleted manually to avoid confusion.
+This orphaned attribute might be deleted manually to avoid confusion.
 .PP
 \fB*\fP Maintenance activities at both regions need to be aligned. Particularly
 replication topology must not be changed at the same time.
@@ -826,8 +827,8 @@ replication topology must not be changed at the same time.
 responsibility. All need to comply to SAP HANA requirements, please refer to SAP
 documentation for details.
 .PP
-\fB*\fP Any procedure has to be tested, documented and trained before applying on
-production systems.
+\fB*\fP Any procedure has to be tested, documented and trained before being
+applied on production or DR systems.
 .PP
 See also the REQUIREMENTS section in manual pages SAPHanaSR(7) and susHanaSR.py(7). 
 .PP
