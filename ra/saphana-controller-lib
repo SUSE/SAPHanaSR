@@ -434,9 +434,9 @@ function analyze_hana_sync_statusSRS() {
     if [ -n "$gRemSite" ]; then
        siteParam="--site=$gRemSite"
     fi
-    # TODO PRIO2: NG scale-up has 5s here (static); scale-out used HANA_CALL_TIMEOUT  - review
-    # TODO PRIO2: NG define "python systemReplicationStatus.py" in saphana_init_sap_commands()?
-    # TODO PRIO2: NG reaction, if timeout occurs? Should we set SFAIL?
+    # DONE: NG scale-up has 5s here (static); scale-out used HANA_CALL_TIMEOUT  - review : we stay with the 5s. This call is intended not to take longer or fail.
+    # TODO PRIO3: NG define "python systemReplicationStatus.py" in saphana_init_sap_commands()?
+    # DONE: NG reaction, if timeout occurs? Should we set SFAIL?
     FULL_SR_STATUS=$(HANA_CALL --timeout 5 --cmd "python systemReplicationStatus.py $siteParam" 2>/dev/null); srRc=$?
     super_ocf_log info "DEC ${FUNCNAME[0]} systemReplicationStatus.py (to site '$gRemSite')-> $srRc"
     super_ocf_log info "FLOW ${FUNCNAME[0]} systemReplicationStatus.py (to site '$gRemSite')-> $srRc"
@@ -1635,6 +1635,13 @@ function saphana_monitor_secondary() {
         # if dr_prim ==dr_src the local (own) site is directly attached to the primary so set the attributes
         #
         # TODO PRIO2: Logmessage for setting Global/prim, Global/secn and Site/<x>/srHook
+        # TODO PRIO2: If the primary changes on the HAregion the old site names still (also) has the PRIM attribute
+        #             could we remove this left-over attribute?
+        #             e.g. if we run on S4:
+        #             siteReplicationMode/S1=primary  ==> This is the primary (but only the first replica on DRregion should write the attribute)
+        #             siteMapping/S1=S4   ==> this is the source of S4 site, "we" are first replica on DRregion => mark S1 as PRIM
+        #             siteMapping/S4=S3
+        #             siteMapping/S1=S2   ==> S2 is a replica on HAregion => remove an left-over PRIM attribute
         #
         if [[ "$dr_prim" == "$dr_src" ]]; then
             set_hana_attribute "$NODENAME" "${gSite}" "${ATTR_NAME_HANA_SEC[@]}"

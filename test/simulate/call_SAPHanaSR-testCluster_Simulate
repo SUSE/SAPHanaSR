@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+
+# call the script in the git repository main directory (e.g. SAPHanaSR)
+#
+# Syntax:
+# call_SAPHanaSR-testCluster_Simulate remoteHost 
+
+BASE_DIR="$PWD"
+remote="$1"
+list_scenario="angi-ScaleUp angi-ScaleUp-DR-region angi-ScaleOut-XSA angi-ScaleOut-5nodes angi-ScaleOut-7nodes"
+
+test="flup"
+
+mkdir -p "$BASE_DIR"/tmp
+for scenario in $list_scenario; do
+    # 2026-05-18 16:16:53 [42765] PROC: 
+    printf "%s [%-5.5s] %-7s scenario $scenario test $test on $remote\n" "$(date '+%Y-%m-%d %H:%M:%S')" "------" "SIMULATE:"
+    python3.11  "$BASE_DIR"/test/tester/SAPHanaSR-testCluster \
+        --jsonInSimulate "$BASE_DIR"/test/simulate/SAPHanaSR-showAttr."$scenario"."$test".json \
+        --properties "$BASE_DIR"/test/simulate/properties."$scenario"."$test".json \
+        --remote "$remote" \
+        --default "$BASE_DIR"/test/json/"$scenario"/defaults.json \
+        --testFile="$BASE_DIR"/test/json/"$scenario"/"$test".json \
+        --jsonOut "$BASE_DIR"/tmp/"$test".out.json \
+        --logFile "$BASE_DIR"/tmp/log.file.txt || break
+done

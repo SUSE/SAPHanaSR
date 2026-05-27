@@ -97,8 +97,9 @@ class SaphanasrTest:
         self.result = { 'test_id': self.run['r_id'], 'config': self.config, 'test_name': '', 'topology': {}, 'steps': {} }
         self.dict_sr = {}
         self.test_data = {}
-        self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
-        self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'pHost': 'Host', 'sHost': 'Host' }
+        # self.topolo = { 'pSite': None, 'sSite': None, 'pHost': None, 'sHost': None }
+        self.topolo = {}
+        self.topo_translate =  { 'global': 'Global', 'pSite': 'Site', 'sSite': 'Site', 'tSite': 'Site', 'fSite': 'Site', 'pHost': 'Host', 'sHost': 'Host', 'tHost': 'Host', 'fHost': 'Host' }
         self.debug("INIT: tester version: {}".format(self.version))
         self.__failed_role_counter__ = 0
         self.__min_failed_role_counter__ = 0
@@ -183,10 +184,14 @@ class SaphanasrTest:
         structure representing the data
         """
         connect_host = kargs.get('connect_hosts', None)
+        read_json = self.config.get('jsonInSimulate', None)
         #cmd = [ './helpSAPHanaSR-showAttr', '--format=script'  ]
         cmd = "/usr/bin/SAPHanaSR-showAttr --format=tester --select=all"
+        if read_json:
+            cmd = f"{cmd} --read_json {read_json}"
         if self.config['use_sudo']:
             cmd = f"sudo -u root {cmd}"
+        self.debug(f'TOPO: cmd = {cmd}')
         self.dict_sr={}
         sr_out = ""
         #self.message("remote node broken !!")
@@ -251,11 +256,11 @@ class SaphanasrTest:
         """ method to search in SR for an ObjectName filtered by 'area' and key=value """
         # sloppy might be need to set per search-criteria (e.g. True for roles not False for site)
         # Query runs from area-level via object-level. Then search for key=value.
-        l_sloppy = False
-        if 'sloppy' in kwargs:
-            l_sloppy = kwargs['sloppy']
-            self.debug(f"DEBUG: DBG1 l_sloppy == {l_sloppy}")
+        l_sloppy = kwargs.get('sloppy', False)
+        l_multi = kwargs.get('multi', False)
+        self.debug(f"DEBUG: DBG1 l_sloppy == {l_sloppy}, l_multi == {l_multi}")
         object_name = None
+        object_names = []
         l_sr = self.dict_sr
         # check, if 'area' is in the sr-data-dictionary
         if area_name in l_sr:
@@ -278,8 +283,12 @@ class SaphanasrTest:
                     else:
                         all_match = False
                 if all_match:
+                    object_names.append(k)
                     object_name = k
-                    break
+                    if not l_multi:
+                        break
+        if l_multi:
+            return object_names
         return object_name
 
     def get_value(self, area_name, object_name, key):
@@ -364,6 +373,12 @@ class SaphanasrTest:
                 test_prop_fh.write(f"node02=\"{topology.get('sHost','node02')}\"\n")
                 test_prop_fh.write(f"pHost=\"{topology.get('pHost','node01')}\"\n")
                 test_prop_fh.write(f"sHost=\"{topology.get('sHost','node02')}\"\n")
+                pWorker = topology.get('pWorker',None)
+                if pWorker:
+                    test_prop_fh.write(f"pWorker=\"{pWorker}\"\n")
+                sWorker = topology.get('sWorker',None)
+                if sWorker:
+                    test_prop_fh.write(f"sWorker=\"{sWorker}\"\n")
             elif ha_or_dr == "DR":
                 test_prop_fh.write(f"node01=\"{topology.get('tHost','node01')}\"\n")
                 test_prop_fh.write(f"node02=\"{topology.get('fHost','node02')}\"\n")
@@ -600,7 +615,7 @@ class SaphanasrTest:
     def __process_fatal_condition(self, step, **kwargs):
         """ __process_fatal_conditions
             rc == 0 : no fatal condition matched
-            rc != 0 : at least one of the fatal packages (childs) mathed
+            rc != 0 : at least one of the fatal packages (childs) matched
             kwargs: step_loop_failures[]
         """
         rc_condition = 1
@@ -711,6 +726,8 @@ class SaphanasrTest:
                                   self.process_topology_object(step, 'sHost', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'pWorker', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'sWorker', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'pWorker2', 'Host', list_of_failures=list_of_failures),
+                                  self.process_topology_object(step, 'sWorker2', 'Host', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'tSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'fSite', 'Site', list_of_failures=list_of_failures),
                                   self.process_topology_object(step, 'tHost', 'Host', list_of_failures=list_of_failures),
@@ -1050,10 +1067,10 @@ class SaphanasrTest:
         if cmd != "":
             if remote == "localhost":
                 self.message("QUERY: {} LOCAL: {}".format(action_name, cmd))
-                local_call_result = subprocess.run(cmd.split(), check=False)
+                local_call_result = subprocess.run(cmd.split(), check=False, capture_output=True)
                 action_rc = local_call_result.returncode
                 action_stdout = local_call_result.stdout
-                self.message("QUERY: {} LOCAL: {} rc={}".format(action_name, cmd, action_rc))
+                self.message("QUERY: {} LOCAL: {} rc={} ({})".format(action_name, cmd, action_rc, action_stdout))
             else:
                 self.message("QUERY: {} REMOTE at {}: {}".format(action_name, remote, cmd))
                 a_result = self.__do_ssh__(remote, self.config['user'], cmd, password=self.config['password'], log=True)
@@ -1135,7 +1152,7 @@ if __name__ == "__main__":
         test01.run['r_id'] = random.randrange(10000,99999,1)
         test01.read_saphana_sr()
         l_top = test01.topolo
-        l_top.update({'global': 'global'})
+        # l_top.update({'global': 'global'})
         # for angi-ScaleUp and classic ScaleOut:
         # pSite is the site with srr-attribute == "P"
         # sSite is the site with srr-attribute == "S"
