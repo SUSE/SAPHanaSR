@@ -43,8 +43,8 @@ The cluster automates one single takeover in case of a failed primary. After tha
 happened, the initial state needs to be restored by the administrative procedure
 outlined in manual page susCostOpt.py(7).
 .PP
-This manual page provides information about installing and customising an HA
-for HANA cost-optimised scenario. The whole procedure is organised in phases:
+This manual page provides information about setting up the SUSE HA for HANA
+cost-optimised scenario. The whole procedure is organised in phases:
 .RS 2
 1. Planning the installation
 .br
@@ -85,26 +85,74 @@ to the procedures.
 .PP
 \fB*\fP Installing the HANA databases on both cluster nodes
 .PP
+TODO
+.br
+This are the steps for installing the HANA databases on both cluster nodes:
 .RS 2
-
+1. Install the replicating SAP HANA databases.
+.br
+2. Verify that both replicating databases are up and running.
+.br
+3. Install the non-replicating SAP HANA database on the secondary node.
+.br
+4. Verify that the non-replicating database is up and running.
 .RE
 .PP
 \fB*\fP Setting up HANA system replication
 .PP
+The two production databases have to be connected by system replication.
+Details on setting up HANA system replication are given in manual page
+SAPHanaSR_maintenance_examples(7).
+.\" TODO: HANA backup
+Details on limiting the secondary database are given in manual page
+susCostOpt.py(7).
+.br
+This are the steps for setting up HANA system replication:
 .RS 2
-
+1. Back up the primary database.
+.br
+2. Enable system replication at primary database.
+.br
+3. Register, limit and start the secondary database.
+.br
+4. Verify the system replication.
 .RE
 .PP
 \fB*\fP Setting up HANA HA/DR providers
 .PP
+The two HANA HA/DR providers susHanaSR.py and susCostOpt.py are mandatory for
+the cost-optimised scenario. Details on that HA/DR providers are given in manual
+pages susHanaSR.py(7), susCostOpt.py(7) and SAPHanaSR-manageProvider(8).
+.br
+This are the steps for setting up HANA HA/DR providers:
 .RS 2
-
+1. Implement the hook script SAPHanaSR.py on both sites.
+.br
+2. Implement the hook script susCostOpt.py on takeover site.
+.br
+3. Configure the system replication operation mode.
+.br
+4. Allow <sid>adm to access the cluster on both sites.
+.br
+5. Create a database user key in <sid>adm´s keystore on takeover site.
+.br
+6. Test the hook script integration.
 .RE
 .PP
 \fB*\fP Configuring the cluster
 .PP
+TODO manual pages crm(8), SAPHanaSR_basic_cluster(7) and
+SAPHanaController-scale-up(7).
+Details on testing the HA/DR provider hook integration are given in manual
+pages susHanaSR.py(7) and susCostOpt.py(7). 
+.br
+This are the steps for configuring the cluster: 
 .RS 2
-
+1. Configure the basic cluster.
+.br
+2. Configure cluster properties and resources.
+.br
+3. Test the HA/DR provider hook integration.
 .RE
 .PP
 \fB*\fP Testing the cluster
@@ -118,7 +166,13 @@ to the procedures.
 .\"
 .TP
 /usr/share/SAPHanaSR-angi/susCostOpt.py
-the hook provider, delivered with the RPM
+the HA/DR provider hook script for postTakeover(), delivered with the RPM
+.TP
+/usr/share/SAPHanaSR-angi/susHanaSR.py
+the HA/DR provider hook script for srConnectionChanged(), delivered with the RPM
+.TP
+/etc/sudoers.d/*
+the sudo permissions configuration
 .TP
 /hana/shared/$SID/global/hdb/custom/config/global.ini
 on-disk representation of HANA global system configuration
@@ -146,7 +200,7 @@ a request for the component BC-OP-LNX-SUSE.
 .\"
 \fBSAPHanaSR-angi\fP(7) , \fBSAPHanaSR-angi-scenarios\fP(7) , \fBSAPHanaSR\fP(7) ,
 \fBSAPHanaSR_basic_cluster\fP(7) , \fBsusCostOpt.py\fP(7) , \fBsusHanaSR.py\fP(7) ,
-\fBSAPHanaController-scale-up\fP(7) ,
+\fBSAPHanaController-scale-up\fP(7) , \fBSAPHanaSR_maintenance_examples\fP(7) ,
 \fBocf_heartbeat_SAPInstance\fP(7) , \fBocf_heartbeat_IPaddr2\fP(7) , 
 .br
 https://documentation.suse.com/sbp/sap/ ,
