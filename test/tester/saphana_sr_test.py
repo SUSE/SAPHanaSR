@@ -869,6 +869,8 @@ class SaphanasrTest:
         ref_pHost = 'pHost'
         ref_sWorker = 'sWorker'
         ref_pWorker = 'pWorker'
+        ref_sWorker2 = 'sWorker2'
+        ref_pWorker2 = 'pWorker2'
         if ha_or_dr == "DR":
             ref_sHost = 'fHost'
             ref_pHost = 'tHost'
@@ -984,6 +986,10 @@ class SaphanasrTest:
             remote = self.topolo[ref_sWorker]
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
+        elif action_name == "kill_secn_worker2_node":
+            remote = self.topolo[ref_sWorker2]
+            cmd = "/usr/bin/systemctl reboot --force"
+            sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("kill_secn_node", "kill_fourth_node"): # either second of HA or DR region
             remote = self.topolo[ref_sHost]
             cmd = "/usr/bin/systemctl reboot --force"
@@ -1050,7 +1056,7 @@ class SaphanasrTest:
             action_rc = self.action_on_hana(action_name)
         elif action_name_short in ("kill_third_inst", "kill_third_worker_inst", "kill_fourth_inst", "kill_fourth_worker_inst", "kill_third_indexserver", "kill_fourth_indexserver", "kill_third_worker_indexserver", "kill_fourth_worker_indexserver", "kill_third_nameserver", "kill_fourth_nameserver", "kill_third_xsengine", "kill_fourth_xsengine"):
             action_rc = self.action_on_hana(action_name, ha_or_dr="DR")
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "stop_hana_resource", "start_hana_resource", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node", "ban_prim_hana_resource", "ban_secn_hana_resource"):
+        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_secn_worker2_node", "kill_prim_node", "kill_prim_worker_node", "stop_hana_resource", "start_hana_resource", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node", "ban_prim_hana_resource", "ban_secn_hana_resource"):
             action_rc = self.action_on_cluster(action_name)
         elif action_name_short in ("standby_fourth_node", "online_fourth_node", "standby_third_node", "online_third_node", "kill_fourth_node", "kill_fourth_worker_node", "kill_third_node", "kill_third_worker_node", "simulate_split_brain_dr", "standby_third_worker_node", "online_third_worker_node", "standby_fourth_worker_node", "online_fourth_worker_node"):
             action_rc = self.action_on_cluster(action_name, ha_or_dr="DR")
