@@ -31,7 +31,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.4.20260405"
+    version = "2.5.20260603"
 
     def message(self, msg, **kwargs):
         """
@@ -946,6 +946,8 @@ class SaphanasrTest:
         ref_pHost = 'pHost'
         ref_sWorker = 'sWorker'
         ref_pWorker = 'pWorker'
+        ref_sWorker2 = 'sWorker2'
+        ref_pWorker2 = 'pWorker2'
         if ha_or_dr == "DR":
             ref_sHost = 'fHost'
             ref_pHost = 'tHost'
