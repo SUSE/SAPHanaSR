@@ -1054,9 +1054,34 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "kill_prim_xsengine", "kill_secn_xsengine", "bmt"):
+        elif action_name_short in (
+                 "kill_prim_inst", 
+                 "kill_prim_worker_inst",
+                 "kill_secn_inst",
+                 "kill_secn_worker_inst",
+                 "kill_prim_indexserver",
+                 "kill_secn_indexserver",
+                 "kill_prim_worker_indexserver",
+                 "kill_secn_worker_indexserver",
+                 "kill_prim_nameserver",
+                 "kill_secn_nameserver",
+                 "kill_prim_xsengine",
+                 "kill_secn_xsengine",
+                 "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("kill_third_inst", "kill_third_worker_inst", "kill_fourth_inst", "kill_fourth_worker_inst", "kill_third_indexserver", "kill_fourth_indexserver", "kill_third_worker_indexserver", "kill_fourth_worker_indexserver", "kill_third_nameserver", "kill_fourth_nameserver", "kill_third_xsengine", "kill_fourth_xsengine"):
+        elif action_name_short in (
+                 "kill_third_inst",
+                 "kill_third_worker_inst",
+                 "kill_fourth_inst",
+                 "kill_fourth_worker_inst",
+                 "kill_third_indexserver",
+                 "kill_fourth_indexserver",
+                 "kill_third_worker_indexserver",
+                 "kill_fourth_worker_indexserver",
+                 "kill_third_nameserver",
+                 "kill_fourth_nameserver",
+                 "kill_third_xsengine",
+                 "kill_fourth_xsengine"):
             action_rc = self.action_on_hana(action_name, ha_or_dr="DR")
         elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_secn_worker2_node", "kill_prim_node", "kill_prim_worker_node", "stop_hana_resource", "start_hana_resource", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node", "ban_prim_hana_resource", "ban_secn_hana_resource"):
             action_rc = self.action_on_cluster(action_name)
