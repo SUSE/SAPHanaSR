@@ -946,6 +946,8 @@ class SaphanasrTest:
         ref_pHost = 'pHost'
         ref_sWorker = 'sWorker'
         ref_pWorker = 'pWorker'
+        ref_sWorker2 = 'sWorker2'
+        ref_pWorker2 = 'pWorker2'
         if ha_or_dr == "DR":
             ref_sHost = 'fHost'
             ref_pHost = 'tHost'
