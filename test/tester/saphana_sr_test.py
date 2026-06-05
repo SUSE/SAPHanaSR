@@ -1123,7 +1123,8 @@ class SaphanasrTest:
                  "standby_fourth_worker_node",
                  "online_fourth_worker_node"):
             action_rc = self.action_on_cluster(action_name, ha_or_dr="DR")
-        elif self.actions.get(action_name) and self.actions.get(action_name).get('type') == 'os':
+        elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'os':
+            self.message(f"INFO: Use action dictionary to identify action type 'os' for action '{action_name_short}'")
             # action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
         else:
