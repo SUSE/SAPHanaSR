@@ -166,60 +166,60 @@ class SaphanasrTest:
                         # hana DRregion
                         #
                         'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost'},
-                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False},
                         'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
                         'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost'},
                         'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
                         #
                         # cluster HAregion
                         #
-                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'osn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
-                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'osn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
+                        'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
+                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
+                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
+                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker2'},
+                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
+                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
+                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
+                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
+                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
+                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker'},
+                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker'},
+                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
+                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
+                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
+                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
                         #
                         # cluster DRregion
                         #
-                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
-                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost'},
+                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost'},
+                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost'},
+                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost'},
+                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost'},
+                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost'},
+                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
                         #
                         # os
                         #
-                        'shell': { 'type': 'os', 'node': 'xx' },
-                        'sleep': { 'type': 'os', 'node': 'xx' }
+                        'shell': { 'type': 'os', 'connection': 'local' },
+                        'sleep': { 'type': 'os', 'connection': 'local' }
                        }
 
     def __insert_to_area__(self, area, the_object):
@@ -941,6 +941,7 @@ class SaphanasrTest:
     def action_on_hana(self, action_name, **kargs):
         """ perform a given action on SAP HANA primary or secondary """
         ha_or_dr = kargs.get('ha_or_dr', 'HA')
+        the_action = kargs.get('action', None)
         ref_sHost = 'sHost'
         ref_pHost = 'pHost'
         ref_sWorker = 'sWorker'
@@ -1018,94 +1019,99 @@ class SaphanasrTest:
     def action_on_cluster(self, action_name, **kargs):
         """ perform a given action on cluster node """
         ha_or_dr = kargs.get('ha_or_dr', 'HA')
-        ref_sHost = 'sHost'
-        ref_pHost = 'pHost'
-        ref_sWorker = 'sWorker'
-        ref_pWorker = 'pWorker'
-        ref_sWorker2 = 'sWorker2'
-        ref_pWorker2 = 'pWorker2'
-        if ha_or_dr == "DR":
-            ref_sHost = 'fHost'
-            ref_pHost = 'tHost'
-            ref_sWorker = 'fWorker'
-            ref_pWorker = 'tWorker'
+        the_action = kargs.get('action', None)
+        the_node = None
+        the_node_type = None
+        the_connection = None
         remote = self.config['remote_node']
         resource = self.test_data['mstResource']
         cmd = ""
         sudo_cmd = ""
+        if the_action:
+            the_node_type = the_action.get('node', None)
+        if the_node_type:
+            the_node = self.topolo.get('the_node_type', None)
+            remote = the_node
+        else:
+            the_connection = the_action.get('connection', None)
+            if the_connection:
+                if the_connection == 'local':
+                    remote = 'localhost'   # overwrite remote to localhost
         if action_name in ("ssn", "standby_secn_node", "standby_fourth_node"):
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_sHost]}"
+            cmd = f"/usr/sbin/crm node standby {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("osn", "online_secn_node", "online_fourth_node"):
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_sHost]}"
+            cmd = f"/usr/sbin/crm node online {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("spn", "standby_prim_node", "standby_third_node"):
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_pHost]}"
+            cmd = f"/usr/sbin/crm node standby {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("opn", "online_prim_node", "online_third_node"):
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_pHost]}"
+            cmd = f"/usr/sbin/crm node online {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_prim_worker_node":
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_pWorker]}"
+            cmd = f"/usr/sbin/crm node standby {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_prim_worker_node":
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_pWorker]}"
+            cmd = f"/usr/sbin/crm node online {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "standby_secn_worker_node":
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_sWorker]}"
+            cmd = f"/usr/sbin/crm node standby {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "online_secn_worker_node":
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_sWorker]}"
+            cmd = f"/usr/sbin/crm node online {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "cleanup":
             cmd = f"/usr/sbin/crm resource cleanup {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_worker_node":
-            remote = self.topolo[ref_sWorker]
+            remote = the_node
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_secn_worker2_node":
-            remote = self.topolo[ref_sWorker2]
+            remote = the_node
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("kill_secn_node", "kill_fourth_node"): # either second of HA or DR region
-            remote = self.topolo[ref_sHost]
+            remote = the_node
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "kill_prim_worker_node":
-            remote = self.topolo[ref_pWorker]
+            remote = the_node
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name in ("kill_prim_node", "kill_third_node"): # either first of HA or DR region
-            remote = self.topolo[ref_pHost]
+            remote = the_node
             cmd = "/usr/bin/systemctl reboot --force"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "simulate_split_brain":
-            remote = self.topolo[ref_sHost]
-            cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo[ref_pHost]} -j DROP"
+            remote = the_node
+            # TODO: not ready for DRregion
+            cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo.get('pHost')} -j DROP"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "start_hana_resource":
-            remote = self.topolo[ref_sHost]
+            remote = the_node
             cmd = f"crm resource start {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "stop_hana_resource":
-            remote = self.topolo[ref_sHost]
+            remote = the_node
             cmd = f"crm resource stop {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "ban_prim_hana_resource":
-            remote = self.topolo[ref_pHost]
+            remote = the_node
             cmd = f"crm resource ban {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         elif action_name == "ban_secn_hana_resource":
-            remote = self.topolo[ref_sHost]
+            remote = the_node
             cmd = f"crm resource ban {resource}"
             sudo_cmd = f"sudo -u root {cmd}"
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
 
-    def action_on_os(self, action_name):
+    def action_on_os(self, action_name, **kargs):
         """ perform a given action on control node """
+        the_action = kargs.get('action', None)
         remote = self.config['remote_node']
         action_array = action_name.split(" ")
         action_name_short = action_array[0]
@@ -1130,20 +1136,25 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'hana':
-            hadr = self.actions.get(action_name_short).get('ha_dr', None)
-            self.message(f"INFO: Use action dictionary to identify action type 'hana' for action '{action_name_short}'")
-            action_rc = self.action_on_hana(action_name, ha_or_dr=hadr)
-        elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'cluster':
-            hadr = self.actions.get(action_name_short).get('ha_dr', None)
-            self.message(f"INFO: Use action dictionary to identify action type 'cluster' for action '{action_name_short}'")
-            action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr)
-        elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'os':
-            self.message(f"INFO: Use action dictionary to identify action type 'os' for action '{action_name_short}'")
-            # action_name_short in ("sleep", "shell"):
-            action_rc = self.action_on_os(action_name)
         else:
-            action_rc = 2
+            the_action = self.actions.get(action_name_short, None)
+            the_type = "n/a"
+            if the_action:
+                the_type = the_action.get('type', "n/a")
+            if the_type == 'hana':
+                hadr = the_action.get('ha_dr', None)
+                self.message(f"INFO: Use action dictionary to identify action type 'hana' for action '{action_name_short}'")
+                action_rc = self.action_on_hana(action_name, ha_or_dr=hadr, action=the_action)
+            elif the_type == 'cluster':
+                hadr = the_action.get('ha_dr', None)
+                self.message(f"INFO: Use action dictionary to identify action type 'cluster' for action '{action_name_short}'")
+                action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr, action=the_action)
+            elif the_type == 'os':
+                self.message(f"INFO: Use action dictionary to identify action type 'os' for action '{action_name_short}'")
+                # action_name_short in ("sleep", "shell"):
+                action_rc = self.action_on_os(action_name, action=the_action)
+            else:
+                action_rc = 2
         return action_rc
 
     def query_call(self, action_name, cmd, remote):
