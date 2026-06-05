@@ -146,6 +146,18 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         self.actions = {
+                        'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR'},
                         'ssn': { 'type': 'cluster', 'ha_dr': 'HA'},
                         'osn': { 'type': 'cluster', 'ha_dr': 'HA'},
                         'spn': { 'type': 'cluster', 'ha_dr': 'HA'},
@@ -1107,20 +1119,9 @@ class SaphanasrTest:
                  "kill_secn_xsengine",
                  "bmt"):
             action_rc = self.action_on_hana(action_name)
-        elif action_name_short in (
-                 "kill_third_inst",
-                 "kill_third_worker_inst",
-                 "kill_fourth_inst",
-                 "kill_fourth_worker_inst",
-                 "kill_third_indexserver",
-                 "kill_fourth_indexserver",
-                 "kill_third_worker_indexserver",
-                 "kill_fourth_worker_indexserver",
-                 "kill_third_nameserver",
-                 "kill_fourth_nameserver",
-                 "kill_third_xsengine",
-                 "kill_fourth_xsengine"):
-            action_rc = self.action_on_hana(action_name, ha_or_dr="DR")
+        elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'hana':
+            hadr = self.actions.get(action_name_short).get('ha_dr', None)
+            action_rc = self.action_on_hana(action_name, ha_or_dr=hadr)
         elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'cluster':
             hadr = self.actions.get(action_name_short).get('ha_dr', None)
             action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr)
