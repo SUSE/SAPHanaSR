@@ -145,6 +145,10 @@ class SaphanasrTest:
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
+        self.actions = {
+                            'shell': { 'type': 'os' },
+                            'sleep': { 'type': 'os' }
+                       }
 
     def __insert_to_area__(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
@@ -1119,7 +1123,8 @@ class SaphanasrTest:
                  "standby_fourth_worker_node",
                  "online_fourth_worker_node"):
             action_rc = self.action_on_cluster(action_name, ha_or_dr="DR")
-        elif action_name_short in ("sleep", "shell"):
+        elif self.actions.get(action_name) and self.actions.get(action_name).get('type') == 'os':
+            # action_name_short in ("sleep", "shell"):
             action_rc = self.action_on_os(action_name)
         else:
             action_rc = 2
