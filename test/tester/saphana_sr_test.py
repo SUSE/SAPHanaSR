@@ -146,6 +146,25 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         self.actions = {
+                        #
+                        # hana HAregion
+                        #
+                        'kill_prim_inst': { 'type': 'hana', 'ha_dr': 'HA'}, 
+                        'kill_prim_worker_inst': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_secn_inst': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_secn_worker_inst': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_prim_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_secn_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_prim_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_secn_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_prim_nameserver': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'bmt': { 'type': 'hana', 'ha_dr': 'HA'},
+                        #
+                        # hana DRregion
+                        #
                         'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR'},
                         'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR'},
                         'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR'},
@@ -158,6 +177,9 @@ class SaphanasrTest:
                         'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR'},
                         'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR'},
                         'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR'},
+                        #
+                        # cluster HAregion
+                        #
                         'ssn': { 'type': 'cluster', 'ha_dr': 'HA'},
                         'osn': { 'type': 'cluster', 'ha_dr': 'HA'},
                         'spn': { 'type': 'cluster', 'ha_dr': 'HA'},
@@ -177,7 +199,9 @@ class SaphanasrTest:
                         'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
                         'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
                         'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
-
+                        #
+                        # cluster DRregion
+                        #
                         'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR'},
                         'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
                         'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
@@ -191,7 +215,9 @@ class SaphanasrTest:
                         'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
                         'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR'},
                         'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
-
+                        #
+                        # os
+                        #
                         'shell': { 'type': 'os' },
                         'sleep': { 'type': 'os' }
                        }
@@ -1104,21 +1130,6 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in (
-                 "kill_prim_inst", 
-                 "kill_prim_worker_inst",
-                 "kill_secn_inst",
-                 "kill_secn_worker_inst",
-                 "kill_prim_indexserver",
-                 "kill_secn_indexserver",
-                 "kill_prim_worker_indexserver",
-                 "kill_secn_worker_indexserver",
-                 "kill_prim_nameserver",
-                 "kill_secn_nameserver",
-                 "kill_prim_xsengine",
-                 "kill_secn_xsengine",
-                 "bmt"):
-            action_rc = self.action_on_hana(action_name)
         elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'hana':
             hadr = self.actions.get(action_name_short).get('ha_dr', None)
             action_rc = self.action_on_hana(action_name, ha_or_dr=hadr)
