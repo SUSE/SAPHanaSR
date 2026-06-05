@@ -146,8 +146,21 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         self.actions = {
-                            'shell': { 'type': 'os' },
-                            'sleep': { 'type': 'os' }
+                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'dr'},
+                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'shell': { 'type': 'os' },
+                        'sleep': { 'type': 'os' }
                        }
 
     def __insert_to_area__(self, area, the_object):
