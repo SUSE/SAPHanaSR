@@ -149,77 +149,77 @@ class SaphanasrTest:
                         #
                         # hana HAregion
                         #
-                        'kill_prim_inst': { 'type': 'hana', 'ha_dr': 'HA'}, 
-                        'kill_prim_worker_inst': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_secn_inst': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_secn_worker_inst': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_prim_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_secn_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_prim_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_secn_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_prim_nameserver': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA'},
-                        'bmt': { 'type': 'hana', 'ha_dr': 'HA'},
+                        'kill_prim_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'}, 
+                        'kill_prim_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'},
+                        'kill_secn_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'kill_secn_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'kill_prim_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'},
+                        'kill_secn_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'kill_prim_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker'},
+                        'kill_secn_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker'},
+                        'kill_prim_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'xx'},
+                        'bmt': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'xx'},
                         #
                         # hana DRregion
                         #
-                        'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR'},
-                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR'},
+                        'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx'},
                         #
                         # cluster HAregion
                         #
-                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'osn': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'spn': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'opn': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
-                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'osn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
+                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'xx'},
                         #
                         # cluster DRregion
                         #
-                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR'},
-                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR'},
-                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
+                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx'},
                         #
                         # os
                         #
-                        'shell': { 'type': 'os' },
-                        'sleep': { 'type': 'os' }
+                        'shell': { 'type': 'os', 'node': 'xx' },
+                        'sleep': { 'type': 'os', 'node': 'xx' }
                        }
 
     def __insert_to_area__(self, area, the_object):
@@ -1132,9 +1132,11 @@ class SaphanasrTest:
             action_rc = 0
         elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'hana':
             hadr = self.actions.get(action_name_short).get('ha_dr', None)
+            self.message(f"INFO: Use action dictionary to identify action type 'hana' for action '{action_name_short}'")
             action_rc = self.action_on_hana(action_name, ha_or_dr=hadr)
         elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'cluster':
             hadr = self.actions.get(action_name_short).get('ha_dr', None)
+            self.message(f"INFO: Use action dictionary to identify action type 'cluster' for action '{action_name_short}'")
             action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr)
         elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'os':
             self.message(f"INFO: Use action dictionary to identify action type 'os' for action '{action_name_short}'")
