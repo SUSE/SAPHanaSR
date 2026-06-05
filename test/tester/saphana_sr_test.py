@@ -146,19 +146,40 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         self.actions = {
-                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'dr'},
-                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'dr'},
-                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'dr'},
+                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'osn': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'spn': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'opn': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
+                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA'},
+
+                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR'},
+                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR'},
+                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR'},
+
                         'shell': { 'type': 'os' },
                         'sleep': { 'type': 'os' }
                        }
@@ -1100,27 +1121,6 @@ class SaphanasrTest:
                  "kill_third_xsengine",
                  "kill_fourth_xsengine"):
             action_rc = self.action_on_hana(action_name, ha_or_dr="DR")
-        elif action_name_short in (
-                 "ssn",
-                 "osn",
-                 "spn",
-                 "opn",
-                 "cleanup",
-                 "kill_secn_node",
-                 "kill_secn_worker_node",
-                 "kill_secn_worker2_node",
-                 "kill_prim_node",
-                 "kill_prim_worker_node",
-                 "stop_hana_resource",
-                 "start_hana_resource",
-                 "simulate_split_brain",
-                 "standby_prim_worker_node",
-                 "online_prim_worker_node",
-                 "standby_secn_worker_node",
-                 "online_secn_worker_node",
-                 "ban_prim_hana_resource",
-                 "ban_secn_hana_resource"):
-            action_rc = self.action_on_cluster(action_name)
         elif self.actions.get(action_name_short) and self.actions.get(action_name_short).get('type') == 'cluster':
             hadr = self.actions.get(action_name_short).get('ha_dr', None)
             action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr)
