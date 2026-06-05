@@ -31,7 +31,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.5.20260603"
+    version = "2.6.20260605"
 
     def message(self, msg, **kwargs):
         """
@@ -1030,13 +1030,14 @@ class SaphanasrTest:
         if the_action:
             the_node_type = the_action.get('node', None)
         if the_node_type:
-            the_node = self.topolo.get('the_node_type', None)
+            the_node = self.topolo.get(the_node_type, None)
             remote = the_node
         else:
             the_connection = the_action.get('connection', None)
             if the_connection:
                 if the_connection == 'local':
                     remote = 'localhost'   # overwrite remote to localhost
+        self.message(f"INFO: the_node_type: {the_node_type}, the_node: {the_node}, the_connection: {the_connection} remote: {remote}") # TODO: change to debug later
         if action_name in ("ssn", "standby_secn_node", "standby_fourth_node"):
             cmd = f"/usr/sbin/crm node standby {the_node}"
             sudo_cmd = f"sudo -u root {cmd}"
