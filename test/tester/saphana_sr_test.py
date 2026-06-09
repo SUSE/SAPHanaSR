@@ -145,46 +145,55 @@ class SaphanasrTest:
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
+        # TODO: move action and action_type dictionary to a config file
+        # TODO: resolver-variables: @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ @@service@@ @@sid@@ @@SID@@
+        self.action_types = {
+                        'kill_inst': { 'cmd': "su - @@sid@@adm HDB kill-9", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/HDB kill-9" },
+                        'kill_sap_service': { 'cmd': "pkill -u @@sid@@adm --signal 11 @@service@@", 'sudo': "sudo -u root pkill -u @@sid@@adm --signal 11 @@service@@" },
+                        'kill_node': { },
+                        'cluster_node': { 'cmd': "/usr/sbin/crm node @@param1@@ @@node@@", 'sudo': "sudo -u root @@cmd@@"},
+                        'cluster_resource': { 'cmd': "/usr/sbin/crm resource @@param1@@ @@param2@@", 'sudo': "sudo -u root @@cmd@@" }
+                       }
         self.actions = {
                         #
                         # hana HAregion
                         #
-                        'kill_prim_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'}, 
-                        'kill_prim_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'kill_secn_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
-                        'kill_secn_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
-                        'kill_prim_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'kill_secn_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
-                        'kill_prim_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker'},
-                        'kill_secn_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker'},
-                        'kill_prim_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker'},
-                        'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker'},
-                        'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'kill_prim_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_inst' }, 
+                        'kill_prim_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_inst'},
+                        'kill_secn_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_inst'},
+                        'kill_secn_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_inst'},
+                        'kill_prim_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_secn_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_prim_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_secn_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_prim_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver'},
+                        'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver'},
+                        'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_sap_service', 'param1': ' hdbxsengine'},
+                        'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_sap_service', 'param1': ' hdbxsengine'},
                         'bmt': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
                         #
                         # hana DRregion
                         #
-                        'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost'},
-                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False},
-                        'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost'},
-                        'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'kill_inst'},
+                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_inst'},
+                        'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'kill_inst'},
+                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False , 'action_type': 'kill_inst'},
+                        'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver' },
+                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver' },
+                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver' },
+                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver' },
+                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbxsengine' },
+                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbxsengine' },
                         #
                         # cluster HAregion
                         #
-                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
-                        'osn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
-                        'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
+                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'osn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'cleanup', 'param2': '@@mst_resource@@'},
                         'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
                         'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
                         'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker2'},
