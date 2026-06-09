@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# sct_test_maintenance_seamless_cluster_turn_hana - with resource in maintenace: exchange primary/secondary
+#
+# (c) 2025-2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# - set mst-resource in maintenance mode
+# - takeover on secondary with suspend primary (gets new primary)
+# - stop suspended primary
+# - refresh mst-resource to move IPaddr2
+# - register suspended primary (gets new secondary)
+# - wait till cluster is idle
+# - refresh mst-resource
+# - wait till cluster is idle
+# - get mst-resource out of maintenance (normal operation)
+#
+# expected outcome: cluster running, SAP HANA instanes running, SR roles exchanged
+#
+set -u
+src=${BASH_SOURCE[0]}
+full_path=$(readlink -f "$src")
+dir_path=$(dirname "$full_path")
+source /usr/lib/SAPHanaSR-tester/sct_test_lib
+source .test_properties
+currPrimary=$(sctl_get_curr_prim "$node01")
+currSecondary=$(sctl_get_curr_secn "${node01}")
+
+# shellcheck disable=SC2029
+sctl_run_crm "${node01}" "resource cleanup $mstResource"
+sctl_run_cs_wf_idle "${node01}" "-s 2"
+
+# get vhosts from node names
+vhostPrim=$(sctl_get_vhost "${node01}" "$currPrimary")
+vhostSecn=$(sctl_get_vhost "${node01}" "$currSecondary")
+if [[ -z "$vhostPrim" ]]; then
+    vhostPrim="$currPrimary"
+fi
+if [[ -z "$vhostSecn" ]]; then
+    vhostSecn="$currSecondary"
+fi
+echo "p=$currPrimary, s=$currSecondary vhostPrim=$vhostPrim vhostSecn=$vhostSecn"
+sitePrimary=$(sctl_get_site "${node01}" "$currPrimary")
+echo "p=$currPrimary ($sitePrimary), s=$currSecondary"
+
+echo "==== SUSE Resource Maintenance Begin ===="
+
+sctl_run_crm "${node02}" "resource maintenance $mstResource on"
+
+sctl_run_hdbnsutil "$currSecondary" "$sidadm" "-sr_takeover --suspendPrimary"
+echo "sleep 5"
+sleep 5
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function StopSystem"
+echo "sleep 5"
+sleep 5
+sctl_run_sapcontrol "$currPrimary" "$sidadm" "-nr $instNr -function WaitforStopped 300 10"
+
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+# TODO check IPaddr2
+
+sctl_run_hdbnsutil "$currPrimary" "$sidadm" "-sr_register --remoteHost=$vhostSecn --remoteInstance=$instNr --name=$sitePrimary --replicationMode=$srMode --operationMode=$opMode"
+while true; do
+    sctl_run_sap_python3 "$currSecondary" "$sidadm" "exe/python_support/systemReplicationStatus.py 1>/dev/null"; rc="$?"
+    if [[ "$rc" != 15 ]]; then
+        echo "sleep 60"
+        sleep 60
+    else
+        break
+    fi
+done
+
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource refresh $mstResource"
+sctl_run_cs_wf_idle "${node02}" "-s 2"
+sctl_run_crm "${node02}" "resource maintenance $mstResource off"
+echo "==== SUSE Resource Maintenance End ===="
+#
