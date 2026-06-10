@@ -146,7 +146,6 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         # TODO: move action and action_type dictionary to a config file
-        # TODO: resolver-variables: @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ @@pHost@@ (@@service@@) @@sid@@ @@SID@@
         self.action_types = {
                         'kill_inst': { 'cmd': "su - @@sid@@adm HDB kill-9", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/HDB kill-9" },
                         'kill_sap_service': { 'cmd': "pkill -u @@sid@@adm --signal 11 @@param1@@", 'sudo': "sudo -u root pkill -u @@sid@@adm --signal 11 @@param1@@" },
@@ -154,7 +153,9 @@ class SaphanasrTest:
                         'cluster_node': { 'cmd': "/usr/sbin/crm node @@param1@@ @@node@@", 'sudo': "sudo -u root @@cmd@@"},
                         'cluster_resource': { 'cmd': "/usr/sbin/crm resource @@param1@@ @@param2@@", 'sudo': "sudo -u root @@cmd@@" },
                         'hana_takeover': { 'cmd': "su - @@sis@@adm -c 'hdbnsutil -sr_takeover'", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/exe/hdbnsutil -sr_takeover" },
-                        'block_ip': { 'cmd': "/usr/bin/iptables -I INPUT -s @@pHost@@ -j DROP", 'sudo': "sudo -u root @@cmd@@" }
+                        'block_ip': { 'cmd': "/usr/bin/iptables -I INPUT -s @@pHost@@ -j DROP", 'sudo': "sudo -u root @@cmd@@" },
+                        'sleep': { 'cmd': "sleep @@actParam1@@" },
+                        'shell': { 'cmd': "@@actParamAll@@" }
                        }
         self.actions = {
                         #
@@ -229,9 +230,39 @@ class SaphanasrTest:
                         #
                         # os
                         #
-                        'shell': { 'type': 'os', 'connection': 'local' },
-                        'sleep': { 'type': 'os', 'connection': 'local' }
+                        'shell': { 'type': 'os', 'connection': 'local', 'action_type': 'sleep' },
+                        'sleep': { 'type': 'os', 'connection': 'local', 'action_type': 'shell' }
                        }
+
+    def __resolve__(self, line, **kargs):
+        # TODO: resolver-variables: @@actParam1@@ @@actParamAll@@ @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ @@pHost@@ (@@service@@) @@sid@@ @@SID@@
+        """
+        __resolver__ replaces all occurences of patterns @@xx@@ in line
+        l_resolver called by: create_pxe_file, create_config_files
+
+        params:
+            line - source text line to be translated
+        Object attributes:
+            self.l_replace - dictionary of replacement rules
+        """
+        replace = kargs.get('replace', None)
+
+        still_resolve = True
+
+        repl_line = line
+        while still_resolve:
+            still_resolve = False
+            for r_key in replace:
+                orig_line = repl_line
+                repl_val = replace.get(r_key,None)
+                if repl_val:
+                    repl_line = orig_line.replace(r_key, replace.get(r_key))
+                    if orig_line != repl_line:
+                        still_resolve = True
+                else:
+                    self.message(f"WARNING: {r_key} has empty replace value (None)")
+        return repl_line
+
 
     def __insert_to_area__(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
@@ -957,8 +988,8 @@ class SaphanasrTest:
         ref_pHost = 'pHost'
         ref_sWorker = 'sWorker'
         ref_pWorker = 'pWorker'
-        ref_sWorker2 = 'sWorker2'
-        ref_pWorker2 = 'pWorker2'
+        #ref_sWorker2 = 'sWorker2'
+        #ref_pWorker2 = 'pWorker2'
         if ha_or_dr == "DR":
             ref_sHost = 'fHost'
             ref_pHost = 'tHost'
@@ -1029,7 +1060,7 @@ class SaphanasrTest:
 
     def action_on_cluster(self, action_name, **kargs):
         """ perform a given action on cluster node """
-        ha_or_dr = kargs.get('ha_or_dr', 'HA')
+        #ha_or_dr = kargs.get('ha_or_dr', 'HA')
         the_action = kargs.get('action', None)
         the_node = None
         the_node_type = None
@@ -1127,7 +1158,40 @@ class SaphanasrTest:
         remote = self.config['remote_node']
         action_array = action_name.split(" ")
         action_name_short = action_array[0]
+
+        sid = self.test_data['sid'].lower()
+        SID = self.test_data['sid'].upper()
+        ino = self.test_data['instNo']
+        pHost = self.topolo.get('pHost', None)
+        mst_resource = self.test_data.get('mstResource','')
+
+        cmd = the_action.get('cmd', "")
+        sudo = the_action.get('sudo', "")
+        node = the_action.get('node', "")
+        param1 = the_action.get('param1', "")
+        param2 = the_action.get('param2', "")
+
+        replace = {
+                    '@@actParam1@@': action_array[1],
+                    '@@actParamAll@@': " ".join(action_array[0:]),
+                    '@@cmd@@': cmd,
+                    '@@INO@@': ino,
+                    '@@mst_resource@@': mst_resource,
+                    '@@node@@': node,
+                    '@@param1@@': param1,
+                    '@@param2@@': param2,
+                    '@@pHost@@': pHost,
+                    # '@@service@@': xxTODOxx,
+                    '@@sid@@': sid,
+                    '@@SID@@': SID
+                  }
         cmd = ""
+
+        cmd = self.__resolve__(cmd, replace = replace)
+        replace.update({ 'cmd': cmd })
+
+        sudo = self.__resolve__(sudo,  replace = replace)
+
         if action_name_short == "sleep":
             remote = 'localhost'
             if len(action_array) == 2:
@@ -1163,7 +1227,6 @@ class SaphanasrTest:
                 action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr, action=the_action)
             elif the_type == 'os':
                 self.message(f"INFO: Use action dictionary to identify action type 'os' for action '{action_name_short}'")
-                # action_name_short in ("sleep", "shell"):
                 action_rc = self.action_on_os(action_name, action=the_action)
             else:
                 action_rc = 2
