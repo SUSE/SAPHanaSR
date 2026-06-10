@@ -146,13 +146,14 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         # TODO: move action and action_type dictionary to a config file
-        # TODO: resolver-variables: @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ @@service@@ @@sid@@ @@SID@@
+        # TODO: resolver-variables: @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ (@@service@@) @@sid@@ @@SID@@
         self.action_types = {
                         'kill_inst': { 'cmd': "su - @@sid@@adm HDB kill-9", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/HDB kill-9" },
-                        'kill_sap_service': { 'cmd': "pkill -u @@sid@@adm --signal 11 @@service@@", 'sudo': "sudo -u root pkill -u @@sid@@adm --signal 11 @@service@@" },
-                        'kill_node': { },
+                        'kill_sap_service': { 'cmd': "pkill -u @@sid@@adm --signal 11 @@param1@@", 'sudo': "sudo -u root pkill -u @@sid@@adm --signal 11 @@param1@@" },
+                        'kill_node': { 'cmd': "/usr/bin/systemctl reboot --force", 'sudo': "sudo -u root @@cmd@@"},
                         'cluster_node': { 'cmd': "/usr/sbin/crm node @@param1@@ @@node@@", 'sudo': "sudo -u root @@cmd@@"},
                         'cluster_resource': { 'cmd': "/usr/sbin/crm resource @@param1@@ @@param2@@", 'sudo': "sudo -u root @@cmd@@" }
+                        'hana_takeover': { 'cmd': "su - @@sis@@adm -c 'hdbnsutil -sr_takeover'", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/exe/hdbnsutil -sr_takeover" }
                        }
         self.actions = {
                         #
@@ -170,7 +171,7 @@ class SaphanasrTest:
                         'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver'},
                         'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_sap_service', 'param1': ' hdbxsengine'},
                         'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_sap_service', 'param1': ' hdbxsengine'},
-                        'bmt': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'bmt': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'hana_takeover'},
                         #
                         # hana DRregion
                         #
@@ -194,36 +195,36 @@ class SaphanasrTest:
                         'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_node', 'param1': 'standby'},
                         'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_node', 'param1': 'online'},
                         'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'cleanup', 'param2': '@@mst_resource@@'},
-                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
-                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
-                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker2'},
-                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
+                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_node'},
+                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_node'},
+                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker2', 'action_type': 'kill_node'},
+                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_node'},
+                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_node'},
                         'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
                         'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
                         'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
-                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker'},
-                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker'},
-                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
-                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker'},
-                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost'},
-                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost'},
+                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_resource', 'param1': 'ban'},
+                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_resource', 'param1': 'ban'}
                         #
                         # cluster DRregion
                         #
-                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost'},
-                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost'},
-                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost'},
-                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost'},
-                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
-                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False },
+                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'kill_node'},
+                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node' },
+                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'kill_node'},
+                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node' },
                         #
                         # os
                         #
