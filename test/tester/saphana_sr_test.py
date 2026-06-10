@@ -146,14 +146,15 @@ class SaphanasrTest:
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
         # TODO: move action and action_type dictionary to a config file
-        # TODO: resolver-variables: @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ (@@service@@) @@sid@@ @@SID@@
+        # TODO: resolver-variables: @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ @@pHost@@ (@@service@@) @@sid@@ @@SID@@
         self.action_types = {
                         'kill_inst': { 'cmd': "su - @@sid@@adm HDB kill-9", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/HDB kill-9" },
                         'kill_sap_service': { 'cmd': "pkill -u @@sid@@adm --signal 11 @@param1@@", 'sudo': "sudo -u root pkill -u @@sid@@adm --signal 11 @@param1@@" },
                         'kill_node': { 'cmd': "/usr/bin/systemctl reboot --force", 'sudo': "sudo -u root @@cmd@@"},
                         'cluster_node': { 'cmd': "/usr/sbin/crm node @@param1@@ @@node@@", 'sudo': "sudo -u root @@cmd@@"},
-                        'cluster_resource': { 'cmd': "/usr/sbin/crm resource @@param1@@ @@param2@@", 'sudo': "sudo -u root @@cmd@@" }
-                        'hana_takeover': { 'cmd': "su - @@sis@@adm -c 'hdbnsutil -sr_takeover'", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/exe/hdbnsutil -sr_takeover" }
+                        'cluster_resource': { 'cmd': "/usr/sbin/crm resource @@param1@@ @@param2@@", 'sudo': "sudo -u root @@cmd@@" },
+                        'hana_takeover': { 'cmd': "su - @@sis@@adm -c 'hdbnsutil -sr_takeover'", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/exe/hdbnsutil -sr_takeover" },
+                        'block_ip': { 'cmd': "/usr/bin/iptables -I INPUT -s @@pHost@@ -j DROP", 'sudo': "sudo -u root @@cmd@@" }
                        }
         self.actions = {
                         #
@@ -200,15 +201,15 @@ class SaphanasrTest:
                         'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker2', 'action_type': 'kill_node'},
                         'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_node'},
                         'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_node'},
-                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
-                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
-                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote'},
+                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'stop', 'param2': '@@mst_resource@@'},
+                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'start', 'param2': '@@mst_resource@@'},
+                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'block_ip'},
                         'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'cluster_node', 'param1': 'standby'},
                         'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'cluster_node', 'param1': 'online'},
                         'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'cluster_node', 'param1': 'standby'},
                         'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'cluster_node', 'param1': 'online'},
                         'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_resource', 'param1': 'ban'},
-                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_resource', 'param1': 'ban'}
+                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_resource', 'param1': 'ban'},
                         #
                         # cluster DRregion
                         #
