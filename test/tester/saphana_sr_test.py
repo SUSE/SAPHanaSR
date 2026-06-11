@@ -1016,6 +1016,9 @@ class SaphanasrTest:
         """ perform a given action on control node """
         the_action = kargs.get('action', None)
         remote = self.config['remote_node']
+        the_conn_ref = the_action.get('connection', None)
+        if the_conn_ref and the_conn_ref == "local":
+            remote = "localhost"
 
         (cmd, sudo) = self.__cmd_and_sudo_resolve__(action_string, action = the_action)
         self.debug(f"DBG: cmd: {cmd} sudo: {sudo}")
@@ -1028,9 +1031,11 @@ class SaphanasrTest:
         if len(action_array) == 2:         # action_name and one param
             act_param1 = action_array[1]
             act_param2 = ""
-        elif len(action_array) == 3:       # action_name and two params
+            act_param_all = act_param1
+        elif len(action_array) >= 3:       # action_name and two or more params
             act_param1 = action_array[1]
             act_param2 = action_array[2]
+            act_param_all = " ".join(action_array[1:])
         else:
             act_param1 = ""
             act_param2 = ""
@@ -1056,7 +1061,7 @@ class SaphanasrTest:
         replace = {
                     '@@actParam1@@': act_param1,
                     '@@actParam2@@': act_param2,
-                    '@@actParamAll@@': action_string,
+                    '@@actParamAll@@': act_param_all,
                     '@@cmd@@': cmd,
                     '@@INO@@': ino,
                     '@@mst_resource@@': mst_resource,
