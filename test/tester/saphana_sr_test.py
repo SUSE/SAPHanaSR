@@ -1198,17 +1198,6 @@ class SaphanasrTest:
 
         sudo = self.__resolve__(sudo,  replace = replace)
 
-        if action_name_short == "sleep":
-            remote = 'localhost'
-            if len(action_array) == 2:
-                action_parameter = action_array[1]
-            else:
-                action_parameter = "60"
-            cmd = "sleep {}".format(action_parameter)
-        elif action_name_short == "shell":
-            remote = 'localhost'
-            action_parameter = " ".join(action_array[1:])
-            cmd = "{}".format(action_parameter)
         return self.action_call(action_name, cmd, remote)
 
     def action(self, action_name):
