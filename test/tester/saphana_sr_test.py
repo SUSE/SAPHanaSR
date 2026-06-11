@@ -230,8 +230,8 @@ class SaphanasrTest:
                         #
                         # os
                         #
-                        'shell': { 'type': 'os', 'connection': 'local', 'action_type': 'sleep' },
-                        'sleep': { 'type': 'os', 'connection': 'local', 'action_type': 'shell' }
+                        'shell': { 'type': 'os', 'connection': 'local', 'action_type': 'shell' },
+                        'sleep': { 'type': 'os', 'connection': 'local', 'action_type': 'sleep' }
                        }
 
     def __resolve__(self, line, **kargs):
@@ -1165,8 +1165,11 @@ class SaphanasrTest:
         pHost = self.topolo.get('pHost', None)
         mst_resource = self.test_data.get('mstResource','')
 
-        cmd = the_action.get('cmd', "")
-        sudo = the_action.get('sudo', "")
+        action_type_name = the_action.get('action_type', {})
+        the_action_type = self.action_types.get(action_type_name)
+
+        cmd = the_action_type.get('cmd', "")
+        sudo = the_action_type.get('sudo', "")
         node = the_action.get('node', "")
         param1 = the_action.get('param1', "")
         param2 = the_action.get('param2', "")
