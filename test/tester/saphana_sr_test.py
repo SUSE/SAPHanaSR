@@ -255,7 +255,7 @@ class SaphanasrTest:
             for r_key in replace:
                 orig_line = repl_line
                 repl_val = replace.get(r_key,"")
-                repl_line = orig_line.replace(r_key, replace.get(r_key))
+                repl_line = orig_line.replace(r_key, repl_val)
                 if orig_line != repl_line:
                     still_resolve = True
         return repl_line
@@ -979,78 +979,17 @@ class SaphanasrTest:
 
     def action_on_hana(self, action_name, **kargs):
         """ perform a given action on SAP HANA primary or secondary """
-        ha_or_dr = kargs.get('ha_or_dr', 'HA')
         the_action = kargs.get('action', None)
-        ref_sHost = 'sHost'
-        ref_pHost = 'pHost'
-        ref_sWorker = 'sWorker'
-        ref_pWorker = 'pWorker'
-        #ref_sWorker2 = 'sWorker2'
-        #ref_pWorker2 = 'pWorker2'
-        if ha_or_dr == "DR":
-            ref_sHost = 'fHost'
-            ref_pHost = 'tHost'
-            ref_sWorker = 'fWorker'
-            ref_pWorker = 'tWorker'
         remote = self.config['remote_node']
-        test_sid = self.test_data['sid']
-        test_ino = self.test_data['instNo']
-        cmd = ""
-        sudo_cmd = ""
-        ignore = False
-        if action_name in ("kill_secn_inst", "kill_fourth_inst"): # either second of HA or DR region
-            remote = self.topolo[ref_sHost]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_secn_worker_inst":
-            remote = self.topolo[ref_sWorker]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name in ("kill_prim_inst", "kill_third_inst"): # either first of HA or DR region
-            remote = self.topolo[ref_pHost]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_prim_worker_inst":
-            remote = self.topolo[ref_pWorker]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_prim_indexserver":
-            remote = self.topolo[ref_pHost]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_secn_indexserver":
-            remote = self.topolo[ref_sHost]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_prim_worker_indexserver":
-            remote = self.topolo[ref_pWorker]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_secn_worker_indexserver":
-            remote = self.topolo[ref_sWorker]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_prim_xsengine":
-            remote = self.topolo[ref_pHost]
-            cmd = "pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-        elif action_name == "kill_secn_xsengine":
-            remote = self.topolo[ref_sHost]
-            cmd = "pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-        elif action_name == "kill_prim_nameserver":
-            remote = self.topolo[ref_pHost]
-            cmd = "pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-        elif action_name == "kill_secn_nameserver":
-            remote = self.topolo[ref_sHost]
-            cmd = "pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-        elif action_name == "bmt":
-            remote = self.topolo[ref_sHost]
-            cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
-            ignore = True  # ignore rc!=0, because this is intended for this case
+        ignore = False  # tODO for bmt we had ignore = True
+
+        the_name_ref = the_action.get('node', None)
+        remote = self.topolo[the_name_ref]
+
+        (cmd, sudo_cmd) = self.__cmd_and_sudo_resolve__(action_name, action = the_action)
+        self.message(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
+
+        # ha_or_dr = kargs.get('ha_or_dr', 'HA')
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote, ignore=ignore)
@@ -1149,12 +1088,28 @@ class SaphanasrTest:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote)
 
-    def action_on_os(self, action_name, **kargs):
+    def action_on_os(self, action_string, **kargs):
         """ perform a given action on control node """
         the_action = kargs.get('action', None)
         remote = self.config['remote_node']
-        action_array = action_name.split(" ")
-        action_name_short = action_array[0]
+
+        (cmd, sudo) = self.__cmd_and_sudo_resolve__(action_string, action = the_action)
+        self.message(f"DBG: cmd: {cmd} sudo: {sudo}")
+
+        return self.action_call(action_string, cmd, remote)
+
+    def __cmd_and_sudo_resolve__(self,  action_string, **kargs):
+        the_action = kargs.get('action', None)
+        action_array = action_string.split(" ") # split into name and optional params
+        if len(action_array) == 2:         # action_name and one param
+            act_param1 = action_array[1]
+            act_param2 = ""
+        elif len(action_array) == 3:       # action_name and two params
+            act_param1 = action_array[1]
+            act_param2 = action_array[2]
+        else:
+            act_param1 = ""
+            act_param2 = ""
 
         sid = self.test_data['sid'].lower()
         SID = self.test_data['sid'].upper()
@@ -1165,8 +1120,8 @@ class SaphanasrTest:
         action_type_name = the_action.get('action_type', {})
         the_action_type = self.action_types.get(action_type_name)
 
-        self.message(f'INFO: the_action: {the_action}')
-        self.message(f'INFO: action_type_name: {action_type_name}, the_action_type: {the_action_type}')
+        self.message(f'DBG: the_action: {the_action}')
+        self.message(f'DBG: action_type_name: {action_type_name}, the_action_type: {the_action_type}')
 
         cmd = the_action_type.get('cmd', "")
         sudo = the_action_type.get('sudo', "")
@@ -1175,8 +1130,9 @@ class SaphanasrTest:
         param2 = the_action.get('param2', "")
 
         replace = {
-                    '@@actParam1@@': action_array[1],
-                    '@@actParamAll@@': " ".join(action_array[0:]),
+                    '@@actParam1@@': act_param1,
+                    '@@actParam2@@': act_param2,
+                    '@@actParamAll@@': action_string,
                     '@@cmd@@': cmd,
                     '@@INO@@': ino,
                     '@@mst_resource@@': mst_resource,
@@ -1189,16 +1145,15 @@ class SaphanasrTest:
                     '@@SID@@': SID
                   }
 
-        self.message(f'INFO: replace: {replace}')
-        self.message(f'INFO: cmd (before): {cmd}')
+        self.message(f'DBG: replace: {replace}')
+        self.message(f'DBG: cmd (before): {cmd}')
 
         cmd = self.__resolve__(cmd, replace = replace)
         replace.update({ 'cmd': cmd })
-        self.message(f'INFO: cmd (after): {cmd}')
+        self.message(f'DBG: cmd (after): {cmd}')
 
         sudo = self.__resolve__(sudo,  replace = replace)
-
-        return self.action_call(action_name, cmd, remote)
+        return (cmd, sudo)
 
     def action(self, action_name):
         """ perform a given action """
