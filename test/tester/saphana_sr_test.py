@@ -254,13 +254,10 @@ class SaphanasrTest:
             still_resolve = False
             for r_key in replace:
                 orig_line = repl_line
-                repl_val = replace.get(r_key,None)
-                if repl_val:
-                    repl_line = orig_line.replace(r_key, replace.get(r_key))
-                    if orig_line != repl_line:
-                        still_resolve = True
-                else:
-                    self.message(f"WARNING: {r_key} has empty replace value (None)")
+                repl_val = replace.get(r_key,"")
+                repl_line = orig_line.replace(r_key, replace.get(r_key))
+                if orig_line != repl_line:
+                    still_resolve = True
         return repl_line
 
 
