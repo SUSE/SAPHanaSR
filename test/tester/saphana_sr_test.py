@@ -1185,10 +1185,13 @@ class SaphanasrTest:
                     '@@sid@@': sid,
                     '@@SID@@': SID
                   }
-        cmd = ""
+
+        self.message(f'INFO: replace: {replace}')
+        self.message(f'INFO: cmd (before): {cmd}')
 
         cmd = self.__resolve__(cmd, replace = replace)
         replace.update({ 'cmd': cmd })
+        self.message(f'INFO: cmd (after): {cmd}')
 
         sudo = self.__resolve__(sudo,  replace = replace)
 
