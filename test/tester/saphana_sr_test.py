@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
+# TODO: secondary TOPO is not detected, if secondary is down or not comlete?
 # pylint: disable=fixme
 # pylint: disable=line-too-long
 # pylint: disable=broad-exception-caught
@@ -559,6 +560,7 @@ class SaphanasrTest:
     def __run_check__(self, single_check, area_name, object_name, step_step, **kwargs):
         # match <key> <comp> <regExp>
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
+        # TODO: fail, if e.g. sHost is requested in the checks but there is no sHost in the TOPOLO(gy)
         match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is|is not) (.*)", single_check)
         check_result = -1
         c_key = "x"
@@ -987,106 +989,28 @@ class SaphanasrTest:
         remote = self.topolo[the_name_ref]
 
         (cmd, sudo_cmd) = self.__cmd_and_sudo_resolve__(action_name, action = the_action)
-        self.message(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
+        self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
 
         # ha_or_dr = kargs.get('ha_or_dr', 'HA')
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote, ignore=ignore)
 
-    def action_on_cluster(self, action_name, **kargs):
+    def action_on_cluster(self, action_string, **kargs):
         """ perform a given action on cluster node """
-        #ha_or_dr = kargs.get('ha_or_dr', 'HA')
         the_action = kargs.get('action', None)
-        the_node = None
-        the_node_type = None
-        the_connection = None
-        remote = self.config['remote_node']
-        resource = self.test_data['mstResource']
-        cmd = ""
-        sudo_cmd = ""
-        if the_action:
-            the_node_type = the_action.get('node', None)
-        if the_node_type:
-            the_node = self.topolo.get(the_node_type, None)
-            remote = the_node
-        else:
-            the_connection = the_action.get('connection', None)
-            if the_connection:
-                if the_connection == 'local':
-                    remote = 'localhost'   # overwrite remote to localhost
-        self.message(f"INFO: the_node_type: {the_node_type}, the_node: {the_node}, the_connection: {the_connection} remote: {remote}") # TODO: change to debug later
-        if action_name in ("ssn", "standby_secn_node", "standby_fourth_node"):
-            cmd = f"/usr/sbin/crm node standby {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("osn", "online_secn_node", "online_fourth_node"):
-            cmd = f"/usr/sbin/crm node online {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("spn", "standby_prim_node", "standby_third_node"):
-            cmd = f"/usr/sbin/crm node standby {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("opn", "online_prim_node", "online_third_node"):
-            cmd = f"/usr/sbin/crm node online {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "standby_prim_worker_node":
-            cmd = f"/usr/sbin/crm node standby {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "online_prim_worker_node":
-            cmd = f"/usr/sbin/crm node online {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "standby_secn_worker_node":
-            cmd = f"/usr/sbin/crm node standby {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "online_secn_worker_node":
-            cmd = f"/usr/sbin/crm node online {the_node}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "cleanup":
-            cmd = f"/usr/sbin/crm resource cleanup {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_secn_worker_node":
-            remote = the_node
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_secn_worker2_node":
-            remote = the_node
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("kill_secn_node", "kill_fourth_node"): # either second of HA or DR region
-            remote = the_node
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_prim_worker_node":
-            remote = the_node
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("kill_prim_node", "kill_third_node"): # either first of HA or DR region
-            remote = the_node
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "simulate_split_brain":
-            remote = the_node
-            # TODO: not ready for DRregion
-            cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo.get('pHost')} -j DROP"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "start_hana_resource":
-            remote = the_node
-            cmd = f"crm resource start {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "stop_hana_resource":
-            remote = the_node
-            cmd = f"crm resource stop {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "ban_prim_hana_resource":
-            remote = the_node
-            cmd = f"crm resource ban {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "ban_secn_hana_resource":
-            remote = the_node
-            cmd = f"crm resource ban {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
+        remote = self.config['remote_node']  # TODO: remote might also be 'local(host)' if action->connection is set to local
+
+        the_name_ref = the_action.get('node', None)
+        if the_name_ref:
+            remote = self.topolo[the_name_ref]
+
+        (cmd, sudo_cmd) = self.__cmd_and_sudo_resolve__(action_string, action = the_action)
+        self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
+
         if self.config['use_sudo']:
             cmd = sudo_cmd
-        return self.action_call(action_name, cmd, remote)
+        return self.action_call(action_string, cmd, remote)
 
     def action_on_os(self, action_string, **kargs):
         """ perform a given action on control node """
@@ -1094,7 +1018,7 @@ class SaphanasrTest:
         remote = self.config['remote_node']
 
         (cmd, sudo) = self.__cmd_and_sudo_resolve__(action_string, action = the_action)
-        self.message(f"DBG: cmd: {cmd} sudo: {sudo}")
+        self.debug(f"DBG: cmd: {cmd} sudo: {sudo}")
 
         return self.action_call(action_string, cmd, remote)
 
@@ -1120,8 +1044,8 @@ class SaphanasrTest:
         action_type_name = the_action.get('action_type', {})
         the_action_type = self.action_types.get(action_type_name)
 
-        self.message(f'DBG: the_action: {the_action}')
-        self.message(f'DBG: action_type_name: {action_type_name}, the_action_type: {the_action_type}')
+        self.debug(f'DBG: the_action: {the_action}')
+        self.debug(f'DBG: action_type_name: {action_type_name}, the_action_type: {the_action_type}')
 
         cmd = the_action_type.get('cmd', "")
         sudo = the_action_type.get('sudo', "")
@@ -1145,12 +1069,12 @@ class SaphanasrTest:
                     '@@SID@@': SID
                   }
 
-        self.message(f'DBG: replace: {replace}')
-        self.message(f'DBG: cmd (before): {cmd}')
+        self.debug(f'DBG: replace: {replace}')
+        self.debug(f'DBG: cmd (before): {cmd}')
 
         cmd = self.__resolve__(cmd, replace = replace)
         replace.update({ 'cmd': cmd })
-        self.message(f'DBG: cmd (after): {cmd}')
+        self.debug(f'DBG: cmd (after): {cmd}')
 
         sudo = self.__resolve__(sudo,  replace = replace)
         return (cmd, sudo)
