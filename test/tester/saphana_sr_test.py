@@ -1165,6 +1165,9 @@ class SaphanasrTest:
         action_type_name = the_action.get('action_type', {})
         the_action_type = self.action_types.get(action_type_name)
 
+        self.message(f'INFO: the_action: {the_action}')
+        self.message(f'INFO: action_type_name: {action_type_name}, the_action_type: {the_action_type}')
+
         cmd = the_action_type.get('cmd', "")
         sudo = the_action_type.get('sudo', "")
         node = the_action.get('node', "")
