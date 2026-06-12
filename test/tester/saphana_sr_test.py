@@ -256,7 +256,8 @@ class SaphanasrTest:
             for r_key in replace:
                 orig_line = repl_line
                 repl_val = replace.get(r_key,"")
-                repl_line = orig_line.replace(r_key, repl_val)
+                if r_key and repl_val:
+                    repl_line = orig_line.replace(r_key, repl_val)
                 if orig_line != repl_line:
                     still_resolve = True
         return repl_line
