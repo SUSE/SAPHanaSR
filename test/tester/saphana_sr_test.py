@@ -1029,17 +1029,16 @@ class SaphanasrTest:
     def __cmd_and_sudo_resolve__(self,  action_string, **kargs):
         the_action = kargs.get('action', None)
         action_array = action_string.split(" ") # split into name and optional params
+        act_param_all = ""
+        act_param1 = ""
+        act_param2 = ""
         if len(action_array) == 2:         # action_name and one param
             act_param1 = action_array[1]
-            act_param2 = ""
             act_param_all = act_param1
         elif len(action_array) >= 3:       # action_name and two or more params
             act_param1 = action_array[1]
             act_param2 = action_array[2]
             act_param_all = " ".join(action_array[1:])
-        else:
-            act_param1 = ""
-            act_param2 = ""
 
         sid = self.test_data['sid'].lower()
         SID = self.test_data['sid'].upper()
