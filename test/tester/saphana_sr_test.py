@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
-# TODO: secondary TOPO is not detected, if secondary is down or not comlete?
+# DONE: secondary TOPO is not detected, if secondary is down or not comlete?
 # pylint: disable=fixme
 # pylint: disable=line-too-long
 # pylint: disable=broad-exception-caught
@@ -22,7 +22,7 @@ import json
 import argparse
 import random
 
-# Version: 1.5.20250306
+# Version: 3.0.20260615
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -32,7 +32,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.6.20260605"
+    version = "3.0.20260615"
 
     def message(self, msg, **kwargs):
         """
@@ -78,7 +78,8 @@ class SaphanasrTest:
         self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
         self.run['r_id'] = random.randrange(10000,99999,1)
         cmdparse = kwargs.get('cmdparse', True)
-        self.config = { 'test_file': "-",
+        self.config = { 'actions_file': '/usr/share/SAPHanaSR-tester/json/engine/action_def.json',
+                        'test_file': "-",
                         'defaults_file': None,
                         'properties_file': "properties.json",
                         'log_file': "",
@@ -146,6 +147,22 @@ class SaphanasrTest:
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
+        self.actions = {}
+        self.action_types = {}
+        # self.__actions_hardcoded__()
+        self.__actions_load__()
+
+    def __actions_load__(self):
+        """ __actions_load__(self) - load the action definitions from the given json file """
+        with open(self.config['actions_file'], encoding="utf-8") as dc_fh:
+            action_def = json.load(dc_fh)
+        action_types = action_def.get('action_types', {})
+        actions = action_def.get('actions', {})
+
+        self.action_types = action_types
+        self.actions = actions
+
+    def __actions_hardcoded__(self):
         # TODO: move action and action_type dictionary to a config file
         self.action_types = {
                         'kill_inst': { 'cmd': "su - @@sid@@adm HDB kill-9", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/HDB kill-9" },
