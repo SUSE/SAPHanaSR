@@ -119,6 +119,7 @@ try:
                                      " reject non-cluster action sr_takeover()"
                                      " because related SID is not configured in the cluster"
                                      f"  - missing resources (cmdrc={cmdrc})")
+                    sra_rc = RC_TOB
                 elif cmdrc == 4:
                     # block takeover
                     # sr_takeover attribute not found or not set to 'T'
