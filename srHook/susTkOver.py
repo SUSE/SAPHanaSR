@@ -10,7 +10,7 @@ susTkOver needs SAP HANA 2.0 SPS4 (2.00.040.00) as minimum version
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
     [ha_dr_provider_susTkOver]
     provider = susTkOver
-    path = /usr/share/SAPHanaSR
+    path = /usr/share/SAPHanaSR-angi
     sustkover_timeout = 30
     execution_order = 2
 

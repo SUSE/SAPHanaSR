@@ -10,7 +10,7 @@ susChkSrv needs SAP HANA 2.0 SPS4 (2.00.040.00) as minimum version
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
     [ha_dr_provider_suschksrv]
     provider = susChkSrv
-    path = /usr/share/SAPHanaSR
+    path = /usr/share/SAPHanaSR-angi
     execution_order = 3
     action_on_lost = kill | stop | ignore | fence (attr is currently not implemented)
     stop_timeout = 20
@@ -87,7 +87,7 @@ try:
             self.logTimestamp(method, episode, "init called")
 
             # read settings from global.ini
-            # read sustkover_timeout
+            # read stop_timeout
             if self.config.hasKey("stop_timeout"):
                 self.stop_timeout = self.config.get("stop_timeout")
             else:

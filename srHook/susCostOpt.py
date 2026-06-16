@@ -13,7 +13,7 @@ global allocation limit and the pre-load of column tables.
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
     [ha_dr_provider_susCostOpt]
     provider = susCostOpt
-    path = /usr/share/SAPHanaSR
+    path = /usr/share/SAPHanaSR-angi
     userKey = costoptkey
     execution_order = 1
     costopt_primary_global_allocation_limit = limit-in-mb # optional only for special use-cases
