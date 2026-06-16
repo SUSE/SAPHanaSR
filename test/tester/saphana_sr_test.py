@@ -1004,10 +1004,11 @@ class SaphanasrTest:
         ignore = False  # tODO for bmt we had ignore = True
 
         the_name_ref = the_action.get('node', None)
-        remote = self.topolo[the_name_ref]
 
-        (cmd, sudo_cmd) = self.__cmd_and_sudo_resolve__(action_name, action = the_action)
+        (the_name_ref, cmd, sudo_cmd) = self.__node_cmd_and_sudo_resolve__(action_name, action = the_action)
         self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
+
+        remote = self.topolo[the_name_ref]
 
         # ha_or_dr = kargs.get('ha_or_dr', 'HA')
         if self.config['use_sudo']:
@@ -1023,7 +1024,7 @@ class SaphanasrTest:
         if the_name_ref:
             remote = self.topolo[the_name_ref]
 
-        (cmd, sudo_cmd) = self.__cmd_and_sudo_resolve__(action_string, action = the_action)
+        (the_name_ref, cmd, sudo_cmd) = self.__node_cmd_and_sudo_resolve__(action_string, action = the_action)
         self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
 
         if self.config['use_sudo']:
@@ -1038,12 +1039,12 @@ class SaphanasrTest:
         if the_conn_ref and the_conn_ref == "local":
             remote = "localhost"
 
-        (cmd, sudo) = self.__cmd_and_sudo_resolve__(action_string, action = the_action)
+        (the_name_ref, cmd, sudo) = self.__node_cmd_and_sudo_resolve__(action_string, action = the_action)
         self.debug(f"DBG: cmd: {cmd} sudo: {sudo}")
 
         return self.action_call(action_string, cmd, remote)
 
-    def __cmd_and_sudo_resolve__(self,  action_string, **kargs):
+    def __node_cmd_and_sudo_resolve__(self,  action_string, **kargs):
         the_action = kargs.get('action', None)
         action_array = action_string.split(" ") # split into name and optional params
         act_param_all = ""
@@ -1091,6 +1092,11 @@ class SaphanasrTest:
                     '@@SID@@': SID
                   }
 
+        self.message(f'DBG: replace: {replace}')
+        self.message(f'DBG: node (before): {node}')
+        node = self.__resolve__(node, replace = replace)
+        self.message(f'DBG: node (after): {node}')
+
         self.debug(f'DBG: replace: {replace}')
         self.debug(f'DBG: cmd (before): {cmd}')
 
@@ -1099,7 +1105,7 @@ class SaphanasrTest:
         self.debug(f'DBG: cmd (after): {cmd}')
 
         sudo = self.__resolve__(sudo,  replace = replace)
-        return (cmd, sudo)
+        return (node, cmd, sudo)
 
     def action(self, action_name):
         """ perform a given action """
