@@ -10,7 +10,7 @@ susTkOver needs SAP HANA 2.0 SPS4 (2.00.040.00) as minimum version
 To use this HA/DR hook provide please add the following lines (or similar) to your global.ini:
     [ha_dr_provider_susTkOver]
     provider = susTkOver
-    path = /usr/share/SAPHanaSR
+    path = /usr/share/SAPHanaSR-angi
     sustkover_timeout = 30
     execution_order = 2
 
@@ -114,12 +114,12 @@ try:
                                      f" because found cluster maintenance settings (cmdrc={cmdrc})")
                     sra_rc = 0
                 elif cmdrc == 7:
-                    # given SID not configured in the cluster, block takeover
+                    # given SID not configured in the cluster, permit takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
                                      " reject non-cluster action sr_takeover()"
                                      " because related SID is not configured in the cluster"
                                      f"  - missing resources (cmdrc={cmdrc})")
-                    sra_rc = RC_TOB
+                    sra_rc = 0
                 elif cmdrc == 4:
                     # block takeover
                     # sr_takeover attribute not found or not set to 'T'

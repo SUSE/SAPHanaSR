@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # pylint: disable=consider-using-f-string
+# DONE: secondary TOPO is not detected, if secondary is down or not comlete?
 # pylint: disable=fixme
 # pylint: disable=line-too-long
 # pylint: disable=broad-exception-caught
@@ -21,7 +22,7 @@ import json
 import argparse
 import random
 
-# Version: 1.5.20250306
+# Version: 3.0.20260615
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -31,7 +32,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "2.4.20260405"
+    version = "3.0.20260615"
 
     def message(self, msg, **kwargs):
         """
@@ -77,7 +78,8 @@ class SaphanasrTest:
         self.run = { 'log_file_handle': None, 'r_id': None, 'test_rc': 0, 'count': 1 }
         self.run['r_id'] = random.randrange(10000,99999,1)
         cmdparse = kwargs.get('cmdparse', True)
-        self.config = { 'test_file': "-",
+        self.config = { 'actions_file': '/usr/share/SAPHanaSR-tester/json/engine/action_def.json',
+                        'test_file': "-",
                         'defaults_file': None,
                         'properties_file': "properties.json",
                         'log_file': "",
@@ -145,6 +147,138 @@ class SaphanasrTest:
                 self.run['log_file_handle'] = open(self.config['log_file'], 'a', encoding="utf-8")
         else:
             self.debug("DEBUG: lib skips parsing cmdline")
+        self.actions = {}
+        self.action_types = {}
+        # self.__actions_hardcoded__()
+        self.__actions_load__()
+
+    def __actions_load__(self):
+        """ __actions_load__(self) - load the action definitions from the given json file """
+        with open(self.config['actions_file'], encoding="utf-8") as dc_fh:
+            action_def = json.load(dc_fh)
+        action_types = action_def.get('action_types', {})
+        actions = action_def.get('actions', {})
+
+        self.action_types = action_types
+        self.actions = actions
+
+    def __actions_hardcoded__(self):
+        # TODO: move action and action_type dictionary to a config file
+        self.action_types = {
+                        'kill_inst': { 'cmd': "su - @@sid@@adm HDB kill-9", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/HDB kill-9" },
+                        'kill_sap_service': { 'cmd': "pkill -u @@sid@@adm --signal 11 @@param1@@", 'sudo': "sudo -u root pkill -u @@sid@@adm --signal 11 @@param1@@" },
+                        'kill_node': { 'cmd': "/usr/bin/systemctl reboot --force", 'sudo': "sudo -u root @@cmd@@"},
+                        'cluster_node': { 'cmd': "/usr/sbin/crm node @@param1@@ @@node@@", 'sudo': "sudo -u root @@cmd@@"},
+                        'cluster_resource': { 'cmd': "/usr/sbin/crm resource @@param1@@ @@param2@@", 'sudo': "sudo -u root @@cmd@@" },
+                        'hana_takeover': { 'cmd': "su - @@sis@@adm -c 'hdbnsutil -sr_takeover'", 'sudo': "sudo -u @@sid@@adm --login /usr/sap/@@SID@@/HDB@@INO@@/exe/hdbnsutil -sr_takeover" },
+                        'block_ip': { 'cmd': "/usr/bin/iptables -I INPUT -s @@pHost@@ -j DROP", 'sudo': "sudo -u root @@cmd@@" },
+                        'sleep': { 'cmd': "sleep @@actParam1@@" },
+                        'shell': { 'cmd': "@@actParamAll@@" }
+                       }
+        self.actions = {
+                        #
+                        # hana HAregion
+                        #
+                        'kill_prim_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_inst' }, 
+                        'kill_prim_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_inst'},
+                        'kill_secn_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_inst'},
+                        'kill_secn_worker_inst': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_inst'},
+                        'kill_prim_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_secn_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_prim_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_secn_worker_indexserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_prim_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver'},
+                        'kill_secn_nameserver': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver'},
+                        'kill_prim_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_sap_service', 'param1': ' hdbxsengine'},
+                        'kill_secn_xsengine': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_sap_service', 'param1': ' hdbxsengine'},
+                        'bmt': { 'type': 'hana', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'hana_takeover'},
+                        #
+                        # hana DRregion
+                        #
+                        'kill_third_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'kill_inst'},
+                        'kill_third_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_inst'},
+                        'kill_fourth_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'kill_inst'},
+                        'kill_fourth_worker_inst': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False , 'action_type': 'kill_inst'},
+                        'kill_third_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_fourth_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver'},
+                        'kill_third_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver' },
+                        'kill_fourth_worker_indexserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbindexserver' },
+                        'kill_third_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver' },
+                        'kill_fourth_nameserver': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbnameserver' },
+                        'kill_third_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbxsengine' },
+                        'kill_fourth_xsengine': { 'type': 'hana', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_sap_service', 'param1': 'hdbxsengine' },
+                        #
+                        # cluster HAregion
+                        #
+                        'ssn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'osn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'spn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'opn': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'cleanup': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'cleanup', 'param2': '@@mst_resource@@'},
+                        'kill_secn_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'kill_node'},
+                        'kill_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'kill_node'},
+                        'kill_secn_worker2_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker2', 'action_type': 'kill_node'},
+                        'kill_prim_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'kill_node'},
+                        'kill_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'kill_node'},
+                        'stop_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'stop', 'param2': '@@mst_resource@@'},
+                        'start_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'connection': 'remote', 'action_type': 'cluster_resource', 'param1': 'start', 'param2': '@@mst_resource@@'},
+                        'simulate_split_brain': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'block_ip'},
+                        'standby_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_prim_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pWorker', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'standby_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_secn_worker_node': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sWorker', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'ban_prim_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'pHost', 'action_type': 'cluster_resource', 'param1': 'ban'},
+                        'ban_secn_hana_resource': { 'type': 'cluster', 'ha_dr': 'HA', 'node': 'sHost', 'action_type': 'cluster_resource', 'param1': 'ban'},
+                        #
+                        # cluster DRregion
+                        #
+                        'standby_fourth_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_fourth_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'standby_third_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'cluster_node', 'param1': 'standby'},
+                        'online_third_node':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'cluster_node', 'param1': 'online'},
+                        'kill_fourth_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'fHost', 'action_type': 'kill_node'},
+                        'kill_fourth_worker_node':{ 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node' },
+                        'kill_third_node':     { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'tHost', 'action_type': 'kill_node'},
+                        'kill_third_worker_node':    { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'simulate_split_brain_dr':   { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'standby_third_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'online_third_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'standby_fourth_worker_node': { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node'},
+                        'online_fourth_worker_node':  { 'type': 'cluster', 'ha_dr': 'DR', 'node': 'xx', 'implemented': False, 'action_type': 'kill_node' },
+                        #
+                        # os
+                        #
+                        'shell': { 'type': 'os', 'connection': 'local', 'action_type': 'shell' },
+                        'sleep': { 'type': 'os', 'connection': 'local', 'action_type': 'sleep' }
+                       }
+
+    def __resolve__(self, line, **kargs):
+        # TODO: resolver-variables: @@actParam1@@ @@actParamAll@@ @@cmd@@ @@INO@@ @@mst_resource@@ @@node@@ @@param1@@ @@param2@@ @@pHost@@ (@@service@@) @@sid@@ @@SID@@
+        """
+        __resolver__ replaces all occurences of patterns @@xx@@ in line
+        l_resolver called by: create_pxe_file, create_config_files
+
+        params:
+            line - source text line to be translated
+        Object attributes:
+            self.l_replace - dictionary of replacement rules
+        """
+        replace = kargs.get('replace', None)
+
+        still_resolve = True
+
+        repl_line = line
+        while still_resolve:
+            still_resolve = False
+            for r_key in replace:
+                orig_line = repl_line
+                repl_val = replace.get(r_key,"")
+                if r_key and repl_val:
+                    repl_line = orig_line.replace(r_key, repl_val)
+                if orig_line != repl_line:
+                    still_resolve = True
+        return repl_line
+
 
     def __insert_to_area__(self, area, the_object):
         """ insert an object dictionary to an area dictionary """
@@ -444,6 +578,7 @@ class SaphanasrTest:
     def __run_check__(self, single_check, area_name, object_name, step_step, **kwargs):
         # match <key> <comp> <regExp>
         # TODO: maybe allow flexible whitespace <key><ws><comp><ws><value>
+        # TODO: fail, if e.g. sHost is requested in the checks but there is no sHost in the TOPOLO(gy)
         match_obj = re.search("(.*) (==|!=|>|>=|<|<=|~|!~|>~|is|is not) (.*)", single_check)
         check_result = -1
         c_key = "x"
@@ -864,180 +999,113 @@ class SaphanasrTest:
 
     def action_on_hana(self, action_name, **kargs):
         """ perform a given action on SAP HANA primary or secondary """
-        ha_or_dr = kargs.get('ha_or_dr', 'HA')
-        ref_sHost = 'sHost'
-        ref_pHost = 'pHost'
-        ref_sWorker = 'sWorker'
-        ref_pWorker = 'pWorker'
-        if ha_or_dr == "DR":
-            ref_sHost = 'fHost'
-            ref_pHost = 'tHost'
-            ref_sWorker = 'fWorker'
-            ref_pWorker = 'tWorker'
+        the_action = kargs.get('action', None)
         remote = self.config['remote_node']
-        test_sid = self.test_data['sid']
-        test_ino = self.test_data['instNo']
-        cmd = ""
-        sudo_cmd = ""
-        ignore = False
-        if action_name in ("kill_secn_inst", "kill_fourth_inst"): # either second of HA or DR region
-            remote = self.topolo[ref_sHost]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_secn_worker_inst":
-            remote = self.topolo[ref_sWorker]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name in ("kill_prim_inst", "kill_third_inst"): # either first of HA or DR region
-            remote = self.topolo[ref_pHost]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_prim_worker_inst":
-            remote = self.topolo[ref_pWorker]
-            cmd = "su - {}adm HDB kill-9".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/HDB kill-9".format(test_sid.lower(), test_sid, test_ino)
-        elif action_name == "kill_prim_indexserver":
-            remote = self.topolo[ref_pHost]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_secn_indexserver":
-            remote = self.topolo[ref_sHost]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_prim_worker_indexserver":
-            remote = self.topolo[ref_pWorker]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_secn_worker_indexserver":
-            remote = self.topolo[ref_sWorker]
-            cmd = "pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbindexserver".format(test_sid.lower())
-        elif action_name == "kill_prim_xsengine":
-            remote = self.topolo[ref_pHost]
-            cmd = "pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-        elif action_name == "kill_secn_xsengine":
-            remote = self.topolo[ref_sHost]
-            cmd = "pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbxsengine".format(test_sid.lower())
-        elif action_name == "kill_prim_nameserver":
-            remote = self.topolo[ref_pHost]
-            cmd = "pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-        elif action_name == "kill_secn_nameserver":
-            remote = self.topolo[ref_sHost]
-            cmd = "pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-            sudo_cmd = "sudo -u root pkill -u {}adm --signal 11 hdbnameserver".format(test_sid.lower())
-        elif action_name == "bmt":
-            remote = self.topolo[ref_sHost]
-            cmd = "su - {}adm -c 'hdbnsutil -sr_takeover'".format(test_sid.lower())
-            sudo_cmd = "sudo -u {}adm --login /usr/sap/{}/HDB{}/exe/hdbnsutil -sr_takeover".format(test_sid.lower(), test_sid, test_ino)
-            ignore = True  # ignore rc!=0, because this is intended for this case
+        ignore = False  # tODO for bmt we had ignore = True
+
+        the_name_ref = the_action.get('node', None)
+
+        (the_name_ref, cmd, sudo_cmd) = self.__node_cmd_and_sudo_resolve__(action_name, action = the_action)
+        self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
+
+        remote = self.topolo[the_name_ref]
+
+        # ha_or_dr = kargs.get('ha_or_dr', 'HA')
         if self.config['use_sudo']:
             cmd = sudo_cmd
         return self.action_call(action_name, cmd, remote, ignore=ignore)
 
-    def action_on_cluster(self, action_name, **kargs):
+    def action_on_cluster(self, action_string, **kargs):
         """ perform a given action on cluster node """
-        ha_or_dr = kargs.get('ha_or_dr', 'HA')
-        ref_sHost = 'sHost'
-        ref_pHost = 'pHost'
-        ref_sWorker = 'sWorker'
-        ref_pWorker = 'pWorker'
-        if ha_or_dr == "DR":
-            ref_sHost = 'fHost'
-            ref_pHost = 'tHost'
-            ref_sWorker = 'fWorker'
-            ref_pWorker = 'tWorker'
-        remote = self.config['remote_node']
-        resource = self.test_data['mstResource']
-        cmd = ""
-        sudo_cmd = ""
-        if action_name in ("ssn", "standby_secn_node", "standby_fourth_node"):
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_sHost]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("osn", "online_secn_node", "online_fourth_node"):
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_sHost]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("spn", "standby_prim_node", "standby_third_node"):
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_pHost]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("opn", "online_prim_node", "online_third_node"):
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_pHost]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "standby_prim_worker_node":
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_pWorker]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "online_prim_worker_node":
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_pWorker]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "standby_secn_worker_node":
-            cmd = f"/usr/sbin/crm node standby {self.topolo[ref_sWorker]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "online_secn_worker_node":
-            cmd = f"/usr/sbin/crm node online {self.topolo[ref_sWorker]}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "cleanup":
-            cmd = f"/usr/sbin/crm resource cleanup {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_secn_worker_node":
-            remote = self.topolo[ref_sWorker]
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("kill_secn_node", "kill_fourth_node"): # either second of HA or DR region
-            remote = self.topolo[ref_sHost]
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "kill_prim_worker_node":
-            remote = self.topolo[ref_pWorker]
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name in ("kill_prim_node", "kill_third_node"): # either first of HA or DR region
-            remote = self.topolo[ref_pHost]
-            cmd = "/usr/bin/systemctl reboot --force"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "simulate_split_brain":
-            remote = self.topolo[ref_sHost]
-            cmd = f"/usr/bin/iptables -I INPUT -s {self.topolo[ref_pHost]} -j DROP"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "start_hana_resource":
-            remote = self.topolo[ref_sHost]
-            cmd = f"crm resource start {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "stop_hana_resource":
-            remote = self.topolo[ref_sHost]
-            cmd = f"crm resource stop {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "ban_prim_hana_resource":
-            remote = self.topolo[ref_pHost]
-            cmd = f"crm resource ban {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
-        elif action_name == "ban_secn_hana_resource":
-            remote = self.topolo[ref_sHost]
-            cmd = f"crm resource ban {resource}"
-            sudo_cmd = f"sudo -u root {cmd}"
+        the_action = kargs.get('action', None)
+        remote = self.config['remote_node']  # TODO: remote might also be 'local(host)' if action->connection is set to local
+
+        the_name_ref = the_action.get('node', None)
+        if the_name_ref:
+            remote = self.topolo[the_name_ref]
+
+        (the_name_ref, cmd, sudo_cmd) = self.__node_cmd_and_sudo_resolve__(action_string, action = the_action)
+        self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
+
         if self.config['use_sudo']:
             cmd = sudo_cmd
-        return self.action_call(action_name, cmd, remote)
+        return self.action_call(action_string, cmd, remote)
 
-    def action_on_os(self, action_name):
+    def action_on_os(self, action_string, **kargs):
         """ perform a given action on control node """
+        the_action = kargs.get('action', None)
         remote = self.config['remote_node']
-        action_array = action_name.split(" ")
-        action_name_short = action_array[0]
-        cmd = ""
-        if action_name_short == "sleep":
-            remote = 'localhost'
-            if len(action_array) == 2:
-                action_parameter = action_array[1]
-            else:
-                action_parameter = "60"
-            cmd = "sleep {}".format(action_parameter)
-        elif action_name_short == "shell":
-            remote = 'localhost'
-            action_parameter = " ".join(action_array[1:])
-            cmd = "{}".format(action_parameter)
-        return self.action_call(action_name, cmd, remote)
+        the_conn_ref = the_action.get('connection', None)
+        if the_conn_ref and the_conn_ref == "local":
+            remote = "localhost"
+
+        (the_name_ref, cmd, sudo) = self.__node_cmd_and_sudo_resolve__(action_string, action = the_action)
+        self.debug(f"DBG: cmd: {cmd} sudo: {sudo}")
+
+        return self.action_call(action_string, cmd, remote)
+
+    def __node_cmd_and_sudo_resolve__(self,  action_string, **kargs):
+        the_action = kargs.get('action', None)
+        action_array = action_string.split(" ") # split into name and optional params
+        act_param_all = ""
+        act_param1 = ""
+        act_param2 = ""
+        if len(action_array) == 2:         # action_name and one param
+            act_param1 = action_array[1]
+            act_param_all = act_param1
+        elif len(action_array) >= 3:       # action_name and two or more params
+            act_param1 = action_array[1]
+            act_param2 = action_array[2]
+            act_param_all = " ".join(action_array[1:])
+
+        sid = self.test_data['sid'].lower()
+        SID = self.test_data['sid'].upper()
+        ino = self.test_data['instNo']
+        pHost = self.topolo.get('pHost', None)
+        mst_resource = self.test_data.get('mstResource','')
+
+        action_type_name = the_action.get('action_type', {})
+        the_action_type = self.action_types.get(action_type_name)
+
+        self.debug(f'DBG: the_action: {the_action}')
+        self.debug(f'DBG: action_type_name: {action_type_name}, the_action_type: {the_action_type}')
+
+        cmd = the_action_type.get('cmd', "")
+        sudo = the_action_type.get('sudo', "")
+        node = the_action.get('node', "")
+        param1 = the_action.get('param1', "")
+        param2 = the_action.get('param2', "")
+
+        replace = {
+                    '@@actParam1@@': act_param1,
+                    '@@actParam2@@': act_param2,
+                    '@@actParamAll@@': act_param_all,
+                    '@@cmd@@': cmd,
+                    '@@INO@@': ino,
+                    '@@mst_resource@@': mst_resource,
+                    '@@node@@': node,
+                    '@@param1@@': param1,
+                    '@@param2@@': param2,
+                    '@@pHost@@': pHost,
+                    # '@@service@@': xxTODOxx,
+                    '@@sid@@': sid,
+                    '@@SID@@': SID
+                  }
+
+        self.message(f'DBG: replace: {replace}')
+        self.message(f'DBG: node (before): {node}')
+        node = self.__resolve__(node, replace = replace)
+        self.message(f'DBG: node (after): {node}')
+
+        self.debug(f'DBG: replace: {replace}')
+        self.debug(f'DBG: cmd (before): {cmd}')
+
+        cmd = self.__resolve__(cmd, replace = replace)
+        replace.update({ 'cmd': cmd })
+        self.debug(f'DBG: cmd (after): {cmd}')
+
+        sudo = self.__resolve__(sudo,  replace = replace)
+        return (node, cmd, sudo)
 
     def action(self, action_name):
         """ perform a given action """
@@ -1046,18 +1114,24 @@ class SaphanasrTest:
         action_rc = 0
         if action_name == "":
             action_rc = 0
-        elif action_name_short in ("kill_prim_inst", "kill_prim_worker_inst", "kill_secn_inst", "kill_secn_worker_inst", "kill_prim_indexserver", "kill_secn_indexserver", "kill_prim_worker_indexserver", "kill_secn_worker_indexserver", "kill_prim_nameserver", "kill_secn_nameserver", "kill_prim_xsengine", "kill_secn_xsengine", "bmt"):
-            action_rc = self.action_on_hana(action_name)
-        elif action_name_short in ("kill_third_inst", "kill_third_worker_inst", "kill_fourth_inst", "kill_fourth_worker_inst", "kill_third_indexserver", "kill_fourth_indexserver", "kill_third_worker_indexserver", "kill_fourth_worker_indexserver", "kill_third_nameserver", "kill_fourth_nameserver", "kill_third_xsengine", "kill_fourth_xsengine"):
-            action_rc = self.action_on_hana(action_name, ha_or_dr="DR")
-        elif action_name_short in ("ssn", "osn", "spn", "opn", "cleanup", "kill_secn_node", "kill_secn_worker_node", "kill_prim_node", "kill_prim_worker_node", "stop_hana_resource", "start_hana_resource", "simulate_split_brain", "standby_prim_worker_node", "online_prim_worker_node", "standby_secn_worker_node", "online_secn_worker_node", "ban_prim_hana_resource", "ban_secn_hana_resource"):
-            action_rc = self.action_on_cluster(action_name)
-        elif action_name_short in ("standby_fourth_node", "online_fourth_node", "standby_third_node", "online_third_node", "kill_fourth_node", "kill_fourth_worker_node", "kill_third_node", "kill_third_worker_node", "simulate_split_brain_dr", "standby_third_worker_node", "online_third_worker_node", "standby_fourth_worker_node", "online_fourth_worker_node"):
-            action_rc = self.action_on_cluster(action_name, ha_or_dr="DR")
-        elif action_name_short in ("sleep", "shell"):
-            action_rc = self.action_on_os(action_name)
         else:
-            action_rc = 2
+            the_action = self.actions.get(action_name_short, None)
+            the_type = "n/a"
+            if the_action:
+                the_type = the_action.get('type', "n/a")
+            if the_type == 'hana':
+                hadr = the_action.get('ha_dr', None)
+                self.message(f"INFO: Use action dictionary to identify action type 'hana' for action '{action_name_short}'")
+                action_rc = self.action_on_hana(action_name, ha_or_dr=hadr, action=the_action)
+            elif the_type == 'cluster':
+                hadr = the_action.get('ha_dr', None)
+                self.message(f"INFO: Use action dictionary to identify action type 'cluster' for action '{action_name_short}'")
+                action_rc = self.action_on_cluster(action_name, ha_or_dr=hadr, action=the_action)
+            elif the_type == 'os':
+                self.message(f"INFO: Use action dictionary to identify action type 'os' for action '{action_name_short}'")
+                action_rc = self.action_on_os(action_name, action=the_action)
+            else:
+                action_rc = 2
         return action_rc
 
     def query_call(self, action_name, cmd, remote):

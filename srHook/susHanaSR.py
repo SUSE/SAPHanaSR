@@ -23,7 +23,7 @@ import os
 #    execution_order = 1
 #
 #    [trace]
-#    ha_dr_saphanasr = info
+#    ha_dr_sushanasr = info
 #
 FH_SR_HOOK_VERSION = "1.001.1"
 

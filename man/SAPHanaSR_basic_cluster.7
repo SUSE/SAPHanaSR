@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR 7 "30 Oct 2025" "" "SAPHanaSR_basic_cluster"
+.TH SAPHanaSR 7 "02 Jun 2026" "" "SAPHanaSR_basic_cluster"
 .\"
 .SH NAME
 .\"
@@ -262,6 +262,27 @@ colocation col_ip_with_SLE_HDB00 \\
  2000: rsc_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
 .RE
 .PP
+\fB* alternative location constraint for IP address\fR
+.PP
+Alternative resource configuration for the HANA primary master virtual IP address.
+Same use case as example above. Instead of following the SAPHanaController resource
+PROMOTED role by colocation rule, the IPaddr2 resource follows the node score by
+location rule directly. Simplifies moving the IP address during maintenance.
+.PP
+.RS 2
+primitive rsc_ip_SLE_HDB00 IPaddr2 \\
+.br
+ op monitor interval=10s timeout=20s \\
+.br
+ params ip=192.168.178.188
+.br
+location loc_ip_with_SLE_HDB00 \\
+.br
+ rsc_ip_SLE_HDB00 \\
+.br
+ rule 2000: master-rsc_SAPHanaCon_SLE_HDB00 eq 150
+.RE
+.PP
 \fB* crm protective IP address resource configuration\fR
 .PP
 Let the Linux cluster manage one IP address. The resource should tolerate short
@@ -497,9 +518,9 @@ pacemaker log
 .\"
 .SH BUGS
 .\"
-In case of any problem, please use your favourite SAP support process to open
-a request for the component BC-OP-LNX-SUSE.
-Please report any other feedback and suggestions to feedback@suse.com.
+In case of any problem, please use your favourite SAP support process to open a
+request for the component BC-OP-LNX-SUSE.
+.\" TODO Please report any other feedback and suggestions to feedback@suse.com.
 .PP
 .\"
 .SH SEE ALSO
