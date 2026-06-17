@@ -114,11 +114,12 @@ try:
                                      f" because found cluster maintenance settings (cmdrc={cmdrc})")
                     sra_rc = 0
                 elif cmdrc == 7:
-                    # given SID not configured in the cluster, block takeover
+                    # given SID not configured in the cluster, permit takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
                                      " reject non-cluster action sr_takeover()"
                                      " because related SID is not configured in the cluster"
                                      f"  - missing resources (cmdrc={cmdrc})")
+                    sra_rc = 0
                 elif cmdrc == 4:
                     # block takeover
                     # sr_takeover attribute not found or not set to 'T'
