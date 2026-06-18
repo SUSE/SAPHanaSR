@@ -108,7 +108,7 @@ try:
                                      f" because cluster is not working properly cmdrc={cmdrc}")
                     sra_rc = 0
                 elif cmdrc == 5:
-                    # multi-state resource in maintenance, permit takeover
+                    # multi-state resource or cluster in maintenance, permit takeover
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
                                      " permit non-cluster action sr_takeover()"
                                      f" because found cluster maintenance settings (cmdrc={cmdrc})")
@@ -123,7 +123,7 @@ try:
                 elif cmdrc == 4:
                     # block takeover
                     # sr_takeover attribute not found or not set to 'T'
-                    # and multi-state ressource is NOT in maintenance
+                    # and multi-state resource or cluster is NOT in maintenance
                     self.tracer.info(f"{self.__class__.__name__}.{method}()"
                                      f" reject non-cluster action sr_takeover() cmdrc={cmdrc}")
                     try:
