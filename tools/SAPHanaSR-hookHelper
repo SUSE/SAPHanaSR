@@ -9,15 +9,15 @@
 # Helper script for HA/DR hooks
 # currently implemented use case are 'checkTakeover' and 'fenceMe'
 
-# For now we only check the maintenance mode of the multi-state ressource (as descibed in the official supported maintenance procedure described in man page SAPHanaSR_maitenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools.
+# We check the maintenance mode of the multi-state resource (as described in the official supported maintenance procedure in man page SAPHanaSR_maintenance_examples(7) - EXAMPLES: * Perform an SAP HANA take-over by using SAP tools) and additionally the cluster-wide maintenance mode.
 
 # Definition of the exit codes returned to the hook scripts:
 # for the current use case 'checkTakeover' it translate to
 #  0 - OK
 #    - takeover requested by cluster, permit takeover
 #  4 - block takeover (sr_takeover attribute not found or not set to 'T' and
-#      multi-state ressource is NOT in maintenance)
-#  5 - multi-state resource in maintenance, permit takeover
+#      multi-state resource and cluster are NOT in maintenance)
+#  5 - multi-state resource or cluster in maintenance, permit takeover
 #  6 - cluster not available, permit takeover
 #  7 - given SID not configured in the cluster, permit takeover
 # 99 - unknown cluster command error, permit takeover
@@ -87,6 +87,15 @@ sid_is_in_cluster() {
     else
         return 0
     fi
+}
+
+# check, if the whole cluster is in maintenance mode
+chk_cluster_maintenance() {
+    cmaint=$(xmllint -xpath "string(//crm_config/cluster_property_set/nvpair[@name='maintenance-mode']/@value)" "$cibtmp")
+    if [ -z "$cmaint" ]; then
+        cmaint="false"
+    fi
+    echo "$cmaint"
 }
 
 # check, if the multi-state resource is in maintenance
@@ -232,15 +241,16 @@ case "$USECASE" in
             chk_takeover_attr; rc=$?
             if [ "$rc" == 4 ]; then
                 # sr_takeover attribute not found or not set to 'T'
-	        # check, if multi-state ressource is in maintenance
-                maint=$(chk_msres_maintenance)
-                if [ "$maint" == "true" ]; then
-                    # permit sr_takeover, because multi-state ressource is
-                    # in maintenance
-	            rc=5
+                # check, if multi-state resource or cluster is in maintenance
+                msres_maint=$(chk_msres_maintenance)
+                cluster_maint=$(chk_cluster_maintenance)
+                if [ "$msres_maint" == "true" ] || [ "$cluster_maint" == "true" ]; then
+                    # permit sr_takeover, because multi-state resource or cluster
+                    # is in maintenance
+                    rc=5
                 else
                     # block takeover, because sr_takeover attribute not found or not
-                    # set to 'T' and multi-state ressource is NOT in maintenance
+                    # set to 'T' and multi-state resource and cluster are NOT in maintenance
                     rc=4
                 fi
             fi
