@@ -38,7 +38,7 @@ Summary:        Test suite for SAPHanaSR clusters - SAPHanaSR-tester-client is t
 Conflicts:      SAPHanaSR-angi
 
 %description
-SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focussed test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
+SAPHanaSR-tester is a suite for semi-automated tests of SAPHanaSR clusters. First focused test-scenarios are angi-ScaleUp and angi-ScaleOut (e.g. for ERP systems).
 
 The test cases are described in JSON files. Each test is separated into one ore multiple steps. For each step there is an expectation about the SAPHanaSR attributes, which needs to match.
 Additionally each step defines the 'next' step and an optional action to be triggered if the step status has been reached (all expectations match).
