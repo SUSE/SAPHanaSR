@@ -1,4 +1,4 @@
-# <div align="center"> SAPHanaSR-angi - SAP HANA System Replication <br> A Next Generation Interface </div>
+# <div align="center"> SAPHanaSR-angi - SAP HANA System Replication <br> Advanced Next Generation Interface </div>
 
 The SUSE resource agents to control the SAP HANA database in system replication setups
 
@@ -7,12 +7,12 @@ The SUSE resource agents to control the SAP HANA database in system replication 
 
 ## Introduction
 
-SAPHanaSR-angi is "SAP HANA SR - An Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
+SAPHanaSR-angi is "SAP HANA SR - Advanced Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
 It provides an automatic failover between SAP HANA nodes with configured System Replication in HANA. The current version of SAPHanaSR-angi is targeting SAP HANA SR scale-up and scale-out setups.
 
 CIB attributes are not backward compatible between SAPHanaSR-angi and the classic SAPHanaSR. Nevertheless, SAPHanaSR and SAPHanaSR-ScaleOut can be upgraded to SAPHanaSR-angi by following the documented procedure.
 
-This technology is included in the SUSE Linux Enterprise Server for SAP Applications 15, via the RPM package with the same name.
+This technology is included in the SUSE Linux Enterprise Server for SAP Applications 15 and 16, via the RPM package with the same name.
 
 System replication will help to replicate the database data from one node to another node in order to compensate for database failures. With this mode of operation, internal SAP HANA high-availability (HA) mechanisms and the Linux cluster have to work together.
 
