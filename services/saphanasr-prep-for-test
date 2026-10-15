@@ -1,0 +1,93 @@
+#!/bin/bash
+#
+# saphanasr-prep-for-test
+#
+# (c) 2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# Version: 2026-07-03
+#
+
+EXE="$0"
+NOT="Do NOT use this script on production clusters!"
+
+function help() {
+	echo "usage:	$(basename "$EXE") [ --help | --version | --force ]"
+	echo "OPTION:"
+	echo " --help		show help"
+	echo " --version	show version info"
+	echo " --force	prepare node for cluster tests"
+	echo
+	echo "Do NOT call this script while the cluster is running!"
+	echo "$NOT"
+	echo
+}
+
+function prep_sbd() {
+	cs_clear_sbd_devices --local
+	cs_show_sbd_devices
+	return 0
+}
+
+function chck_fs() {
+    file_systems="/hana"
+    max_pct=90
+    # TODO: cleanup actively
+	for fs in $file_systems; do
+	    pct="$(df -P $fs | awk '$6 == "'$fs'" { print $5 }')"
+	    pct_num=${pct%\%}
+	    if [[ $pct_num -ge $max_pct ]]; then
+                logger -s -t saphanasr-prep-for-test "filesystem $fs full $pct_num >= $max_pct"
+		return 2
+	    else
+                logger -s -t saphanasr-prep-for-test "filesystem $fs OK $pct_num < $max_pct"
+            fi
+	done
+        return 0
+}
+
+function prep_pcmk() {
+	crm cluster start
+	crm cluster wait_for_startup 60
+	cs_wait_for_idle -s 6 >/dev/null
+	crm_mon -1r --exclude=summary | tr -s "\n"
+	cs_wait_for_idle -s 6
+	return 0
+}
+
+function chck_pcmk() {
+	systemctl status pacemaker 2>&1 >/dev/null; rc=$?
+	if [[ $rc -eq 0 ]]; then
+		echo "pacemaker already running"
+		echo "### $NOT ###"
+		return 1
+	fi
+	return 0
+}
+
+# main()
+
+rc=0
+case $1 in
+	-v | --version)
+		echo -n "$(basename "$EXE") "
+		head -11 "$EXE" | grep "^# Version: "
+	;;
+	-f | --force)
+		rc=2
+	        logger -s -t saphanasr-prep-for-test "### $NOT ###"
+		chck_fs && \
+		chck_pcmk && \
+		prep_sbd && \
+		prep_pcmk && \
+		rc=0 && \
+	        logger -s -t saphanasr-prep-for-test "### $NOT ###" 
+	;;
+	*)
+		help
+	;;
+esac
+exit $rc
+#

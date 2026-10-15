@@ -22,7 +22,7 @@ import json
 import argparse
 import random
 
-# Version: 3.0.20260615
+# Version: 3.1.20260708
 # for ssh remote calls this module uses paramiko
 #from paramiko import SSHClient
 import paramiko
@@ -32,7 +32,7 @@ class SaphanasrTest:
     """
     class to check SAP HANA cluster during tests
     """
-    version = "3.0.20260615"
+    version = "3.1.20260708"
 
     def message(self, msg, **kwargs):
         """
@@ -745,6 +745,9 @@ class SaphanasrTest:
             if topology_object_name in topolo:
                 object_name = topolo[topology_object_name]
                 rc_checks = self.run_checks(checks, area_name, object_name, step.get('step',''), list_of_failures=list_of_failures)
+            else:
+                self.message(f"ERROR: Object {topology_object_name} missing in topology but used in checks")
+                rc_checks = 1
         return rc_checks
 
     def __process_fatal_condition(self, step, **kwargs):
@@ -793,6 +796,8 @@ class SaphanasrTest:
     def process_step(self, step, **kargs):
         """ process a single step including optional loops """
         connect_host = kargs.get('connect_hosts', None)
+        process_result = -1
+        preaction_rc = 0
         step_id = step['step']
         step_name = step['name']
         step_next = step['next']
@@ -813,18 +818,22 @@ class SaphanasrTest:
         else:
             wait = 2
         loops = 0
-        if 'post' in step:
-            step_action = step['post']
-        else:
-            step_action = ""
+        step_preaction = step.get('pre', "")
+        step_action = step.get('post', "")
         _l_msg = (
                      "PROC:"
                      f" step_id='{step_id}'"
                      f" step_name='{step_name}'"
                      f" step_next='{step_next}'"
                      f" step_action='{step_action}'"
+                     f" step_preaction='{step_preaction}'"
                      f" max_loops='{max_loops}'"
                  )
+
+        if len(step_preaction) != 0:
+            preaction_rc = self.action(step_preaction)
+            step_result.update({'preaction': step_preaction})
+            step_result.update({'preaction_rc': preaction_rc})
         self.message(_l_msg)
         fatal = False
         self.__min_failed_role_counter__ = 1000
@@ -882,9 +891,11 @@ class SaphanasrTest:
         if self.config['dump_failures'] and fatal is False:
             print("")
         self.message("STATUS: step {} checked in {} loop(s)".format(step_id, loops))
-        if process_result == 0:
+        if preaction_rc != 0 and process_result == 0:
+            process_result = 1  # set step failed, if pre-action failed
+        if process_result == 0: # post-action is only called, if step checks have been passed
             if len(step_action) != 0:
-                action_rc = self.action(step_action) # post-action is only called, if step checks have been passed
+                action_rc = self.action(step_action)
                 step_result.update({'action': step_action})
                 step_result.update({'action_rc': action_rc})
                 if action_rc != 0:
@@ -1003,12 +1014,12 @@ class SaphanasrTest:
         remote = self.config['remote_node']
         ignore = False  # tODO for bmt we had ignore = True
 
-        the_name_ref = the_action.get('node', None)
+        #the_name_ref = the_action.get('node', None)
 
-        (the_name_ref, cmd, sudo_cmd) = self.__node_cmd_and_sudo_resolve__(action_name, action = the_action)
+        (remote, cmd, sudo_cmd) = self.__node_cmd_and_sudo_resolve__(action_name, action = the_action)
         self.debug(f"DBG: cmd: {cmd} sudo_cmd: {sudo_cmd}")
 
-        remote = self.topolo[the_name_ref]
+        #remote = self.topolo[the_name_ref]
 
         # ha_or_dr = kargs.get('ha_or_dr', 'HA')
         if self.config['use_sudo']:
@@ -1040,11 +1051,12 @@ class SaphanasrTest:
             remote = "localhost"
 
         (the_name_ref, cmd, sudo) = self.__node_cmd_and_sudo_resolve__(action_string, action = the_action)
-        self.debug(f"DBG: cmd: {cmd} sudo: {sudo}")
+        self.debug(f"DBG: cmd: {cmd} sudo: {sudo} (the_name_ref  {the_name_ref}")
 
         return self.action_call(action_string, cmd, remote)
 
     def __node_cmd_and_sudo_resolve__(self,  action_string, **kargs):
+        """ __node_cmd_and_sudo_resolve__ - returns resoved (node, cmd and sudo-cmd) """
         the_action = kargs.get('action', None)
         action_array = action_string.split(" ") # split into name and optional params
         act_param_all = ""
@@ -1072,10 +1084,11 @@ class SaphanasrTest:
 
         cmd = the_action_type.get('cmd', "")
         sudo = the_action_type.get('sudo', "")
-        node = the_action.get('node', "")
+        nodeType = the_action.get('node', "")
         param1 = the_action.get('param1', "")
         param2 = the_action.get('param2', "")
 
+        node = self.topolo.get(nodeType, "")
         replace = {
                     '@@actParam1@@': act_param1,
                     '@@actParam2@@': act_param2,
@@ -1092,10 +1105,8 @@ class SaphanasrTest:
                     '@@SID@@': SID
                   }
 
-        self.message(f'DBG: replace: {replace}')
-        self.message(f'DBG: node (before): {node}')
-        node = self.__resolve__(node, replace = replace)
-        self.message(f'DBG: node (after): {node}')
+        if nodeType != "" and node != "":
+            self.message(f'INFO: nodeType: {nodeType} => node: {node}')
 
         self.debug(f'DBG: replace: {replace}')
         self.debug(f'DBG: cmd (before): {cmd}')

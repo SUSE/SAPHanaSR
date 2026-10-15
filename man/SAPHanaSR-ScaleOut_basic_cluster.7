@@ -1,6 +1,6 @@
 .\" Version: 1.2 
 .\"
-.TH SAPHanaSR-ScaleOut_basic_cluster 7 "02 Jun 2026" "" "SAPHanaSR"
+.TH SAPHanaSR-ScaleOut_basic_cluster 7 "20 Sep 2026" "" "SAPHanaSR"
 .\"
 .SH NAME
 .\"
@@ -23,11 +23,14 @@ might be beneficial as well.
 .PP
 The crm basic parameter no-quorum-policy in the CIB defines how the cluster should
 act in case of quorum loss. With more than two nodes, the cluster must not ignore
-the quorum loss. For SAPHanaSR-ScaleOut, an odd number of nodes is required. Setting
-no-quorum-policy to 'freeze' won't allow the partition to shoot any other node
+the quorum loss. For SAPHanaSR-ScaleOut, an odd number of nodes is required.
+.br
+With disk-based SBD, the no-quorum-policy could be 'freeze' or 'suizide'.
+Setting no-quorum-policy 'freeze' won't allow the partition to shoot any other node
 when it doesn't have quorum. Cluster will not be able to add and start new resources,
-but running will stay alive.
-.\" TODO not 15sp7: If the cluster uses disk-less SBD, the no-quorum-policy 'suicide' is required 
+but running resources will stay alive.
+.br
+If the cluster uses disk-less SBD, the no-quorum-policy 'suicide' is mandatory.
 .PP
 \fBdefault-resource-stickiness = 1000\fR
 .PP
@@ -307,9 +310,9 @@ primitive rsc_ip_SLE_HDB00 IPaddr2 \\
 .br
  params ip=192.168.178.188
 .br
-colocation col_ip_with_SLE_HDB00 \\
+location loc_ip_with_SLE_HDB00 rsc_ip_SLE_HDB00 \\
 .br
- 2000: rsc_ip_SLE_HDB00:Started mst_SAPHanaCon_SLE_HDB00:Promoted
+ rule 2000: master-rsc_SAPHanaCon_SLE_HDB00 eq 150
 .br
 location loc_ip_hdb_not1 rsc_ip_SLE_HDB00 \\
 .br

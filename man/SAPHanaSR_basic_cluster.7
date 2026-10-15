@@ -1,6 +1,6 @@
 .\" Version: 1.2
 .\"
-.TH SAPHanaSR 7 "02 Jun 2026" "" "SAPHanaSR_basic_cluster"
+.TH SAPHanaSR 7 "06 Aug 2026" "" "SAPHanaSR_basic_cluster"
 .\"
 .SH NAME
 .\"
@@ -498,6 +498,28 @@ No output means default. See /etc/sysconfig/sbd for details.
 .RS 2
 # grep "pacemaker-.*unresponsive.to.ipc" /var/log/messags
 .RE
+.PP
+\fB* test priority fencing for cluster communication failure, SLE 15
+.PP
+This will test whether priority fencing is working. 
+This test should not be done on production systems.
+See also manual page iptables(8) and corosync.conf(5).
+.br
+Note: Understand the impact before trying.
+.PP
+1. Check HANA and Linux cluster for clean and idle state.
+.PP
+2. On secondary, block corosync ports.
+.RS 2
+# PORTS="5404,5405,5406,5407,5408,5409,5410,5411,5412"
+.br
+# iptables -I INPUT -p udp -m multiport --ports "$PORTS" -j DROP & exit
+.RE
+.PP
+3. On primary, watch cluster reaction.
+.RS 2
+# SAPHanaSR-showStatus -w
+.RE 
 .PP
 .\"
 .SH FILES

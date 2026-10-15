@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# saphanasr-rmhdbpid
+#
+# (c) 2026 SUSE LLC
+# Author: F.Herschel, L.Pinne.
+# GNU General Public License v2. No warranty.
+# http://www.gnu.org/licenses/gpl.html
+#
+# Version: 2026-07-02
+#
+
+EXE="$0"
+
+function help() {
+	echo "usage:	$(basename "$EXE") [ --help | --version | --force ]"
+	echo "OPTION:"
+	echo " --help			show help"
+	echo " --version		show version info"
+	echo " --force		remove all hdbdaemon pid files"
+	echo
+	echo "Do NOT call this script while HANA is running!"
+	echo
+}
+
+function rm_all() {
+	HOST=$(hostname -s)
+	FILES=$(ls /usr/sap/*/HDB*/"${HOST}"/lock/hdbdaemon@3*00.pid 2>/dev/null)
+	if [[ -z "$FILES" ]]; then
+		echo "No lock files found"
+	fi
+	for file in $FILES; do
+		echo "Check file $file"
+		fPID=$(cat "$file")
+		if [[ $fPID =~ ^0*([1-9]+) ]]; then 
+			PID="${BASH_REMATCH[1]}"
+		fi 
+		#echo "Info: fPID=$fPID, PID=$PID"
+		if [[ -n "$PID" ]]; then
+            # TODO remove line "PID.TTY.*TIME.CMD" from output
+			if ps -p "$PID" 2>/dev/null; then
+				echo "Keep file $file"
+			else
+				echo "Remove file $file; pid was $PID"
+				rm "$file" &
+			fi
+		fi
+	done
+	return 0
+}
+
+# main()
+
+case $1 in
+	-v | --version)
+		echo -n "$(basename "$EXE") "
+		head -11 "$EXE" | grep "^# Version: "
+	;;
+	-f | --force)
+		rm_all
+	;;
+	*)
+		help
+	;;
+esac
+#

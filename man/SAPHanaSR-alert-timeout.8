@@ -1,0 +1,198 @@
+.\" Version: 1.2
+.\"
+.TH SAPHanaSR-alert-timeout 8 "06 Oct 2026" "" "SAPHanaSR"
+.\"
+.SH NAME
+.\"
+SAPHanaSR-alert-timeout \- Alert agent for cluster resources timeout alerts.
+.PP
+.\"
+.SH DESCRIPTION
+.\"
+SAPHanaSR-alert-timeout can be used to react on Linux cluster resources timeout
+alerts.
+.PP
+The Linux cluster provides an interface to initiate external actions when a
+cluster event occurs (alert). Than the cluster calls an external program (an
+alert agent) to handle that alert.
+.PP
+When a Linux cluster resource agent runs into resources timeout, the cluster can
+call SAPHanaSR-alert-timeout on each active cluster node. Main purpose is colleting
+data in case of resource agent timeouts.
+.br
+See also manual pages SAPHanaSR-hookHelper(8) and ocf_suse_SAPHanaController(7).
+.PP
+.B SAPHanaSR-alert-timeout is a technology preview.
+.PP
+.\"
+.SH SUPPORTED PARAMETERS
+.TP
+\fBtimeout\fR
+If the alert agent does not complete within this amount of time, it will be terminated.
+Optional, default "30s", minimum "30s", example "meta timeout=30s".
+.TP
+\fBalert_sid\fR
+SAP SID of the instance to handle. Might be used by custom helper scripts.
+Optional, default "HA1", example "attributes alert_sid=ADA".
+.TP
+\fBalert_ino\fR
+SAP instance number of instance to handle. Might be used by custom helper scripts.
+Optional, default "00", example "attributes alert_ino=22".
+.TP
+\fBalert_cmd\fR
+Command to call. Might be used to name a custom helper script.
+SAPHanaSR-alert-timeout calls the command like
+.br
+(sudo "$alert_cmd" "$alert_subcmd" "$alert_sid" "$alert_ino" 2>&1).
+.br
+Optional, default "/usr/bin/SAPHanaSR-helper", example "alert_cmd=/usr/local/bin/dumpstack".
+.TP
+\fBalert_subcmd\fR
+Subcommand to call SAPHanaSR-hookHelper or custom script with.
+Optional, default "alertLog".
+.br
+See manual page SAPHanaSR-hookHelper(8).
+.PP
+.\"
+.SH RETURN CODES
+.\"
+.B 0
+Successful program execution.
+.br
+.B >0
+Usage, syntax or execution errors.
+.br
+In addition log entries are written, which can be scanned by using a pattern
+like "SAPHanaSR-alert-timeout".
+.PP
+.\"
+.SH EXAMPLES
+.\"
+\fB*\fR Simple example configuration for the resources timeout alert agent.
+.PP
+The following lines needs to be added to the cluster´s CIB:
+.PP
+.RS 2
+alert resources-1 "/usr/bin/SAPHanaSR-alert-timeout" \\
+.br
+ select resources
+.RE
+.PP
+\fB*\fR Simple example for configuring the alert agent by using crm.
+.PP
+Alternate way for configuring the alert agent.
+.PP
+.RS 2
+# crm configure alert resources-1 \\
+.br
+ "/usr/bin/SAPHanaSR-alert-timeout" \\
+.br
+ select resources
+.RE
+.PP
+\fB*\fR Advanced example configuration for the resources timeout alert agent.
+.PP
+A custom script /usr/local/bin/dumpstack is used, SID is ADA, instance number 00.
+The resulting call is:
+.br
+ /usr/local/bin/dumpstack trace ADA 00
+.PP
+.RS 2
+alert resources-1 "/usr/bin/SAPHanaSR-alert-timeout" \\
+.br
+ select resources \\
+.br
+ attributes alert_sid=ADA alert_ino=00 \\
+.br 
+ alert_cmd="/usr/local/bin/dumpstack" alert_subcmd="trace"
+.RE
+.PP
+.PP
+\fB*\fR Showing alert agent messages.
+.PP
+.RS 2
+# grep SAPHanaSR-alert-timeout /var/log/messages
+.RE
+.PP
+\fB*\fR Showing alert agent helper messages.
+.PP
+.RS 2
+# grep SAPHanaSR-hookHelper.*alertLog /var/log/messages
+.RE
+.PP
+\fB*\fR Example for sudo permissions in /etc/sudoers.d/SAPHanaSR .
+.PP
+See also manual pages sudoers(5) and SAPHanaSR-hookHelper(8).
+.PP
+.RS 2
+# SAPHanaSR-alert-timeout needs
+.br
+hacluster ALL=(ALL) NOPASSWD: /usr/bin/SAPHanaSR-hookHelper --sid=HA1 --case=alertLog
+.RE
+.PP
+.\"
+.SH FILES
+.TP
+/usr/bin/SAPHanaSR-alert-timeout
+the alert agent
+.TP
+/usr/bin/SAPHanaSR-hookHelper
+the default alert agent helper
+.TP
+/etc/sudoers.d/
+directory for sudoers config files
+.PP
+.\"
+.SH REQUIREMENTS
+.\"
+* SAPHanaSR-alert-timeout should be activated only, when requested by support.
+.PP
+* No other alert agent should be configured for the resources alert.
+.PP
+* User hacluster is member of group haclient. Both are defined locally on all
+cluster nodes.
+.PP
+* User hacluster needs password-less sudo permission on "/usr/bin/SAPHanaSR-hookHelper".
+If a custom script is used, respective permissions might be needed.
+.PP
+* The customer is responsible for any custom script called by the alert agent.
+Any custom script should return within the alert agent timeout.
+.PP
+.\" TODO * To allow SAPHanaSR-hookHelper command "stack", gdb is needed.
+.\" .PP
+* To allow SAPHanaSR-hookHelper command "alertLog", ClusterTool2 3.1.4 or newer is needed.
+.PP
+* The alert agent runtime almost completely depends on call-outs to OS and
+Linux cluster. The alert agent timeout should be 30s at least.
+.PP
+.\"
+.SH BUGS
+.\"
+In case of any problem, please use your favourite SAP support process to open
+a request for the component BC-OP-LNX-SUSE.
+.\" TODO Please report any other feedback and suggestions to feedback@suse.com.
+.PP
+.PP
+.\"
+.SH SEE ALSO
+.\"
+\fBocf_suse_SAPHanaController\fP(7) ,
+\fBSAPHanaSR-hookHelper\fP(8) , \fBcrm\fP(8), \fBsudoers\fP(5) ,
+.br
+https://clusterlabs.org/pacemaker/doc/2.1/Pacemaker_Administration/singlehtml/#alert-agents
+.PP
+.\"
+.SH AUTHORS
+.\"
+F.Herschel, L.Pinne.
+.PP
+.\"
+.SH COPYRIGHT
+.\"
+(c) 2026 SUSE LLC
+.br
+SAPHanaSR-alert-timeout comes with ABSOLUTELY NO WARRANTY.
+.br
+For details see the GNU General Public License at
+http://www.gnu.org/licenses/gpl.html
+.\"

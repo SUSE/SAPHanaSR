@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+# SAPHanaSR-alert-timeout
+#
+# Author:       F.Herschel, L.Pinne, 2026
+# Support:      linux@sap.com
+# License:      GNU General Public License (GPL)
+# Copyright:    (c) 2026 SUSE LLC
+# Version:	    2026-10-07_12:10
+#
+# crm configure alert resources-1 "/usr/bin/SAPHanaSR-alert-timeout" select resources attributes alert_sid=HA1 alert_ino=00 alert_cmd="/bin/true"
+# TODO: timeout 30s default okay?
+#
+
+logger_tag="SAPHanaSR-alert-timeout"
+logger="/usr/bin/logger"
+
+#crm_alert_recipient="${CRM_alert_recipient:-/dev/null}" # curently unused
+crm_alert_kind="${CRM_alert_kind:-manual call}"         # nodes, fencing, resources, attribute
+#crm_alert_node="${CRM_alert_node:-$HOSTNAME}"          # TODO: Do we need to filter for the local node?
+crm_alert_desc="${CRM_alert_desc:-no description}"
+crm_alert_status="${CRM_alert_status:-no status}"
+#crm_alert_rc="${CRM_alert_rc:-no rc}"                   # currently unused
+#crm_alert_target_rc="${CRM_alert_target_rc:-no target rc}" # currently unused
+crm_alert_rsc="${CRM_alert_rsc:-no resource}"
+
+alert_sid="${alert_sid:-HA1}"
+alert_ino="${alert_ino:-00}"
+alert_cmd="${alert_cmd:-/usr/bin/SAPHanaSR-hookHelper}"
+alert_subcmd="${alert_subcmd:-alertLog}"
+react_on="2-Timedout"
+
+$logger -i -t "$logger_tag" "AH: begin event '$crm_alert_kind'"
+
+function process_failure()
+{
+    if [[ -x "$alert_cmd" ]]; then
+        if [[ "$alert_cmd" == "/usr/bin/SAPHanaSR-hookHelper" ]]; then
+            $logger -i -t "$logger_tag" "AH: calling: $alert_cmd --sid=$alert_sid --case=$alert_subcmd"
+            alert_cmd_out=$(sudo "$alert_cmd" --sid="$alert_sid" --case="$alert_subcmd" 2>&1); alert_cmd_rc="$?"
+            $logger -i -t "$logger_tag" "AH: alert_cmd_out='$alert_cmd_out': alert_cmd_rc='$alert_cmd_rc'"
+        else
+            $logger -i -t "$logger_tag" "AH: calling: $alert_cmd $alert_subcmd $alert_sid $alert_ino"
+            alert_cmd_out=$(sudo "$alert_cmd" "$alert_subcmd" "$alert_sid" "$alert_ino" 2>&1); alert_cmd_rc="$?"
+            $logger -i -t "$logger_tag" "AH: alert_cmd_out='$alert_cmd_out': alert_cmd_rc='$alert_cmd_rc'"
+        fi
+    else
+        $logger -t "$logger_tag" "AH: no executable alert_cmd '$alert_cmd'"
+    fi
+}
+
+case "$crm_alert_kind" in
+    resource|resources)
+        msg="Resource '${crm_alert_rsc}' is now status '${crm_alert_status}' ('${crm_alert_desc}')"
+        issue="${crm_alert_status}-${crm_alert_desc// /}"
+        $logger -i -t "$logger_tag" "INFO: issue: $issue"
+        $logger -i -t "$logger_tag" "INFO: $msg"
+        if [[ "$issue" == "$react_on" ]]; then
+            process_failure
+        fi
+        ;;
+    *)
+        msg="Unhandled '$crm_alert_kind' alert (${crm_alert_desc})"
+        $logger -i -t "$logger_tag" "INFO: $msg"
+        ;;
+esac
+$logger -i -t "$logger_tag" "AH: end event '$crm_alert_kind'"
+#

@@ -8,11 +8,64 @@
 # License:      GNU General Public License (GPL)
 # Copyright:    (c) 2023-2026 SUSE LLC
 
-CREATE ROW TABLE fhcounter (timestamp TIMESTAMP, counter BIGINT);
+SET schema system;
+CREATE ROW TABLE fhcounter (timestamp TIMESTAMP, pid BIGINT, id BIGINT, lastid BIGINT);
+
+TODO: Temporary the name fhcounter is now fhcounter2
+
+
+SELECT *
+FROM XTAB AS a
+WHERE a.LASTID IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM XTAB AS b
+      WHERE b.ID = a.LASTID
+  );
+
+################### BACKUP IDs ermitteln ###########
+SELECT TOP 10
+    BACKUP_ID,
+    SYS_START_TIME,
+    STATE_NAME,
+    COMMENT
+FROM
+    M_BACKUP_CATALOG
+WHERE
+    ENTRY_TYPE_NAME = 'complete data backup'
+    AND STATE_NAME = 'successful'
+ORDER BY
+    SYS_START_TIME DESC;
+###################################################
+
+BACKUP CATALOG DELETE ALL BEFORE BACKUP_ID <BACKUP_ID> COMPLETE;
+
+###################################################
+
+SELECT * FROM fhcounter2 AS a \
+         WHERE a.LASTID IS NOT NULL AND NOT EXISTS
+               ( SELECT 1 FROM fhcounter2 AS b
+                          WHERE b.ID = a.LASTID
+               );
+SELECT * FROM fhcounter2 AS a
+         WHERE NOT EXISTS
+               ( SELECT 1 FROM fhcounter2 AS b
+                          WHERE (b.ID = a.LASTID) AND (b.PID = a.PID )
+               );
+SELECT * FROM fhcounter2 AS a
+         WHERE a.id != 1 AND NOT EXISTS
+               ( SELECT 1 FROM fhcounter2 AS b
+                          WHERE (b.ID = a.LASTID) AND (b.PID = a.PID )
+               );
+
+SELECT t1.* FROM fhcounter2 t1
+            LEFT JOIN fhcounter2 t2 ON t1."LASTID" = t2."ID"
+                 WHERE t2."ID" IS NULL AND t1."LASTID" IS NOT NULL;
 
 TODO: parameter für "site" und pro LOOP die site ausgeben
-TODO: parameter für "user-key"
-TODO: parameter für "service" und ausgabe pro LOOP Zeile (für den Access auf den vom Cluster bereitgestellten Primary)
+DONE: parameter für "user-key"
+TODO: parameter für "service" und ausgabe pro LOOP Zeile (für den Access
+      auf den vom Cluster bereitgestellten Primary)
 
 select * from fhcounter;
 """
@@ -36,7 +89,7 @@ except ImportError as e:
     print(f"Module dbapi not found - install the missing SAP Python Driver 'hdbcli' - {e}")
 
 # parameter section
-VERSION = "1.10.2"
+VERSION = "3.141"
 USERKEY_DFLT = "TESTER"
 #
 
@@ -44,20 +97,28 @@ USERKEY_DFLT = "TESTER"
 # pylint: disable-next=invalid-name
 class DbThreads:
     """
+    class DbThreads
     DbThreads - class to handle db threads (query, update, healthcheck)
     """
+    # initialize the lock object - use this lock always when you change object fields
+    # (e.g. self.connection = ...)
     AccessData = threading.Lock()
 
     # TODO: add args, kwargs handling later or remove from __init__()
     # pylint: disable-next=unused-argument
     def __init__(self, *args, **kwargs):
+        """
+        __init__(self, *args, **kwargs)
+        args: TBD
+        kargs: TBD
+        constructor for class DbThreads
+        """
         super().__init__()
-        #my_sid_upper = os.environ.get('SAPSYSTEMNAME')
-        #mysid = my_sid_upper.lower()
         # TODO: user key by option
         self.userkey = USERKEY_DFLT
         self.connection = None
         self.list=[]
+        self.id = 0
         self.count_sql = None
         self.err_status = False
         # TODO: do we need err_txt AND _err_txt?
@@ -67,36 +128,94 @@ class DbThreads:
         self._msg_txt = ""
         self._err_flag = False
         self._msg_flag = False
+        self.pid = os.getpid()
         self.run_time = time.time()
-        self.kick_me = False
+        self.kick_me = False         # stop the run_sql - thread (to start an other)
         self.thread_sql = None
         self.thread_watchdog = None
+        self.__emergency_stop__ = 0
+        self.init_create_table = False
+        self.init_drop_data = False
 
     def start_thread_sql(self):
-        """ start_thread_sql - start a sql thread """
+        """
+        start_thread_sql(self)
+        start_thread_sql - start a sql thread
+        """
+        #print("-sts-", end='')
         self.thread_sql = threading.Thread(target=self.run_sql)
         self.thread_sql.start()
 
     def start_thread_watchdog(self):
-        """ start a watchdog thread """
+        """
+        start_thread_watchdog(self)
+        start a watchdog thread
+        """
+        #print("-stw-", end='')
         self.thread_watchdog = threading.Thread(target=self.run_watchdog)
         self.thread_watchdog.start()
 
     def del_thread_sql(self):
-        """ remove a sql thread """
+        """
+        del_thread_sql(self)
+        remove a sql thread
+        """
         del self.thread_sql
 
     def start_threads(self):
-        """ start set of threads """
+        """
+        start_threads(self)
+        start all basic threads
+        """
         self.start_thread_sql()
         self.start_thread_watchdog()
 
+    def drop_data(self):
+        """
+        drop_data(self)
+        """
+        with DbThreads.AccessData:
+            _connection = self.connect()
+            _cursor = _connection.cursor()
+            sql_drop = "DELETE FROM fhcounter2;"
+            try:
+                _cursor.execute(sql_drop)
+            except Exception as exerr:
+                self._err_flag = True
+                self._err_txt = "DD-ERR-01"
+            _cursor.close()
+
+    def create_table(self):
+        """
+        create_table(self)
+        """
+        print("create table system.fhcounter2")
+        with DbThreads.AccessData:
+            _connection = self.connect()
+            _cursor = _connection.cursor()
+            sql_create = "CREATE ROW TABLE system.fhcounter2\
+                          (timestamp TIMESTAMP, pid BIGINT, id BIGINT, lastid BIGINT);\
+                         "
+            try:
+                _cursor.execute(sql_create)
+            except Exception as exerr:
+                self._err_flag = True
+                self._err_txt = "CT-ERR-01"
+            _cursor.close()
+
     def run_sql(self):
-        """ run sql """
+        """
+        run_sql(self)
+        run sql
+        """
         _connection = self.connect()
         _i = 0
-        _count = None
+        _count = 0
         _list = []
+        if self.init_create_table:
+            self.create_table()
+        if self.init_drop_data:
+            self.drop_data()
         while True:
             _i += 1
             lstatus = ""
@@ -104,21 +223,44 @@ class DbThreads:
             self._err_flag = False
             self._msg_flag = False
             self._err_txt = "<>"
-            sleep_in_sec = 2
+            sleep_in_sec = 1
             if _connection is None:
                 #print(f"@@RUN-CONN@@",end='',flush=True)
                 _connection = self.connect()
             else:
                 _connection = self.check_and_reconnect(_i)
                 #print(f"@@RUN-INS@@",end='',flush=True)
-                sql.insert()
-                #print(f"@@RUN-CNT@@",end='',flush=True)
-                _count = self.count()
-                #print(f"@@RUN-SEL@@",end='',flush=True)
-                _list = sql.select()
+                with DbThreads.AccessData:
+                    s_rc = self.insert()
+                    #print(f"@@RUN-CNT@@",end='',flush=True)
+                    _count = self.count()
+                    #print(f"@@RUN-SEL@@",end='',flush=True)
+                    _list = self.select()
+            # aquire lock and also release it after leaving the with statement
             with DbThreads.AccessData:
                 #print(f"@@RUN-DAT@@",end='',flush=True)
                 self.count_sql = _count
+                #
+                # every n-th available data record check for broken chains
+                #
+                if _count and _count % 10 == 0:
+                    sql_broken_chains="SELECT * FROM fhcounter2 AS a \
+                                                WHERE a.id != 1 AND NOT EXISTS \
+                                                      ( SELECT * FROM fhcounter2 AS b \
+                                                                 WHERE (b.ID = a.LASTID) AND (b.PID = a.PID ) \
+                                                      ); \
+                                      "
+                    _broken_chains = self.select(sql=sql_broken_chains)
+                    if _broken_chains and len(_broken_chains) > 0:
+                        print()
+                        print("#### BROKEN CHAINS FOUND:")
+                        for _bc_row in _broken_chains:
+                            (ts, pid, my_id, old_id) = _bc_row
+                            print(f"#### {ts} pid={pid} id={my_id} old_id={old_id}", flush=True)
+                        self.__emergency_stop__ = 1
+                    else:
+                        pass
+                        #print("**** No broken chains - all good ****")
                 if _list and len(_list) > 0:
                     self.list = _list[:]
                 self.err_status = self._err_flag
@@ -126,28 +268,45 @@ class DbThreads:
                 # self.msg_status = self._err_flag
                 self.msg_txt = self._msg_txt[:]
                 self.run_time = time.time()
+                if self.kick_me:
+                    #print('## PRE RETURN#',flush=True)
+                    # reset kick_me flag and terminate the thread
+                    self.kick_me = False
+                    return 0
             time.sleep(sleep_in_sec)
+            if self.__emergency_stop__ == 1:
+                return 2
         self.disconnect()
 
     def run_watchdog(self):
-        """ runner for watchdog """
+        """
+        run_watchdog(self)
+        runner for watchdog
+        """
         sleep_in_sec = 6
         while True:
             loop_time = time.time()
+            # aquire lock and also release it after leaving the with statement
             with DbThreads.AccessData:
                 time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
                 if (loop_time - self.run_time) > 3*sleep_in_sec:
-                    msg = "expired data - KICK!!"
+                    #msg = "expired data - KICK!!"
                     self.kick_me = True
                 else:
-                    msg = "current data"
+                    pass
+                    #msg = "current data"
                 #print(f"{time_str}: WDog {msg}", flush=True)
             time.sleep(sleep_in_sec)
+            if self.__emergency_stop__ == 1:
+                return 2
 
     # TODO: add args, kwargs handling later or remove from connect()
     # pylint: disable-next=unused-argument
     def connect(self, **kargs):
-        """ connect to the database """
+        """
+        connect(self, **kargs)
+        connect to the database
+        """
         # TODO: key=userkey, table=tablename
         try:
             connection = dbapi.connect(key=self.userkey)
@@ -163,23 +322,34 @@ class DbThreads:
         return connection
 
     def disconnect(self):
-        """ close connection to the database """
+        """
+        disconnect(self)
+        close connection to the database
+        """
         if self.connection:
             self.connection.close()
 
     def check_and_reconnect(self, i):
-        """ reconnect to database, if needed """
+        """
+        check_and_reconnect(self, i)
+        reconnect to database, if needed
+        """
         connection = None
         if not self.connection.isconnected() or i % 100 == 0:
-            sql.disconnect()
-            connection = sql.connect()
+            self.disconnect()
+            connection = self.connect()
         return connection
 
     def insert(self):
-        """ insert timestamp to test table """
-        count = 1
+        """
+        insert(self)
+        insert timestamp to test table
+        """
+        last_id = self.id
+        next_id = self.id + 1
         time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
-        insert_sql = f"insert into fhcounter (timestamp, counter) VALUES ( '{time_str}', {count} );"
+        insert_sql = f"INSERT INTO fhcounter2 (timestamp, pid, id, lastid)\
+                              VALUES ( '{time_str}', {self.pid}, {next_id}, {last_id} );"
 
         connection = self.connection
         if connection is None or not connection.isconnected():
@@ -192,18 +362,27 @@ class DbThreads:
         except Exception as exerr:
             self._err_flag = True
             self._err_txt = "I-ERR-02"
+            cursor.close()
+            return 2
         try:
             connection.commit()
+            self.id = next_id
         except Exception as exerr:
             self._err_flag = True
             self._err_txt = "I-ERR-03"
+            cursor.close()
+            return 3
         cursor.close()
         return 0
 
     # pylint: disable-next=unused-argument
     def count(self, **kargs):
-        """ count values in test_table """
-        count_sql = "select count(*) from fhcounter"
+        """
+        count(self, **kargs)
+        kars TBD
+        count values in test_table
+        """
+        count_sql = "select count(*) from fhcounter2"
         connection = self.connection
         result = None
         if connection is None or not connection.isconnected():
@@ -218,10 +397,11 @@ class DbThreads:
                 result = row[0]
             if not result is None and result > 1024:
                 try:
-                    delete_sql = "delete from fhcounter"
+                    delete_sql = "DELETE FROM fhcounter2"
                     cursor.execute(delete_sql)
                     self._msg_flag = True
                     self._msg_txt = "DATA RESET"
+                    self.id = 0
                 except Exception as d_err:
                     self._err_flag = True
                     self._err_txt = f"D-ERR-01 {d_err}"
@@ -234,9 +414,15 @@ class DbThreads:
         cursor.close()
         return result
 
-    def select(self):
-        """ slelect values from test table """
-        select_sql = "SELECT timestamp, counter FROM fhcounter ORDER BY timestamp, counter"
+    def select(self, **kargs):
+        """
+        select(self, **kargs)
+        select values from test table
+        kargs:
+        sql - complete sql (select) string -
+            default: SELECT timestamp, id FROM fhcounter2 ORDER BY timestamp, id
+        """
+        select_sql = kargs.get("sql","SELECT timestamp FROM fhcounter2 ORDER BY timestamp, id")
         connection = self.connection
         result = []
         if connection is None or not connection.isconnected():
@@ -248,7 +434,7 @@ class DbThreads:
         try:
             cursor.execute(select_sql)
             for row in cursor:
-                result.append(row[0])
+                result.append(row)
             result.reverse()
         except Exception as exerr:
             self._err_flag = True
@@ -260,7 +446,8 @@ class DbThreads:
         """ list last entries """
         now = time.time()
         out_list = []
-        for element in self.list[0:maxnr]:
+        for row_element in self.list[0:maxnr]:
+            element = row_element[0]
             etime = element.timestamp()
             dtime = now - etime
             if dtime < 70:
@@ -273,16 +460,25 @@ class DbThreads:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--userkey", help="specify sap user key")
+parser.add_argument("--drop_data", help="delete data in the test table at the beginning",
+                                   action="store_true")
+parser.add_argument("--create_table", help="create the test able at the beginning",
+                                   action="store_true")
 cmd_line_args = parser.parse_args()
 
-sql = DbThreads()
+db_tester = DbThreads()
 
 if cmd_line_args.userkey:
-    sql.userkey = cmd_line_args.userkey
+    db_tester.userkey = cmd_line_args.userkey
+if cmd_line_args.drop_data:
+    db_tester.init_drop_data = True
+if cmd_line_args.create_table:
+    db_tester.init_create_table = True
 
-sql.start_threads()
+db_tester.start_threads()
 
-# pylint is not smart enought to differ constants and variables but does complain about wrong constant names for variables
+# pylint is not smart enought to differ constants and variables but
+#        does complain about wrong constant names for variables
 # pylint: disable=invalid-name
 g_loop_counter = 0
 print(f"version: {VERSION}")
@@ -290,24 +486,51 @@ while True:
     g_loop_counter = g_loop_counter + 1
     g_status = ""
     g_sleep_in_sec = 2
+    # aquire lock and also release it after leaving the with statement
+    with DbThreads.AccessData:
+        g_kick_me = db_tester.kick_me
+        if g_kick_me is True:
+            #print('## PRE JOIN#',flush=True)
+            g_msg = "status=ACT (SQL TERM)"
+            _id_str = str(db_tester.id)
+            _cs_str = str(db_tester.count_sql)
+            g_time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
+            print(f"{g_time_str} {db_tester.userkey:<8}",end='', flush=True)
+            print(f"{g_msg:<22} count={_cs_str:6} id={_id_str:6}",end='',flush=True)
+            print()
+    # threading-join must be outside of the locked code sequence
+    if g_kick_me is True:
+        db_tester.thread_sql.join()
+    # aquire lock and also release it after leaving the with statement
     with DbThreads.AccessData:
         g_time_str = f"{time.strftime('%Y-%m-%d %H:%M:%S')}"
         g_loop_time = time.time()
-        if g_loop_time - sql.run_time > 10:
+        if g_loop_time - db_tester.run_time > 10:
             g_msg = "status=FAIL (EXPIRED)"
         else:
-            if sql.err_status is True:
-                g_msg = f"status=FAIL ({sql.err_txt})"
+            if db_tester.err_status is True:
+                g_msg = f"status=FAIL ({db_tester.err_txt})"
             else:
-                g_msg = f"status=OK {sql.msg_txt}"
-        print(f"{g_time_str} {sql.userkey:<8}",end='', flush=True)
-        print(f"{g_msg:<22} count={str(sql.count_sql):6} ",end='',flush=True)
-        sql.list_last(10)
+                g_msg = f"status=OK {db_tester.msg_txt}"
+        _id_str = str(db_tester.id)
+        _cs_str = str(db_tester.count_sql)
+        print(f"{g_time_str} {db_tester.userkey:<8}",end='', flush=True)
+        print(f"{g_msg:<22} count={_cs_str:6} id={_id_str:6}",end='',flush=True)
+        db_tester.list_last(10)
         print('',flush=True)
-        if sql.kick_me is True:
-            sql.del_thread_sql()
-            sql.start_thread_sql()
-            sql.kick_me = False
+        if g_kick_me is True:
+            db_tester.del_thread_sql()
+            _id = db_tester.id
+            g_msg = "status=ACT (SQL START)"
+            _id_str = str(db_tester.id)
+            _cs_str = str(db_tester.count_sql)
+            print(f"{g_time_str} {db_tester.userkey:<8}",end='', flush=True)
+            print(f"{g_msg:<22} count={_cs_str:6} id={_id_str:6}",end='',flush=True)
+            print()
+            db_tester.kick_me = False
+            db_tester.start_thread_sql()
+    if db_tester.__emergency_stop__ == 1:
+        sys.exit(2)
     time.sleep(g_sleep_in_sec)
     # pylint: enable=invalid-name
-sql.disconnect()
+db_tester.disconnect()

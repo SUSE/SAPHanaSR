@@ -1,6 +1,6 @@
 .\" Version: 1.2 
 .\"
-.TH SAPHanaSR-hookHelper 8 "17 Nov 2025" "" "SAPHanaSR"
+.TH SAPHanaSR-hookHelper 8 "07 Oct 2026" "" "SAPHanaSR"
 .\"
 .SH NAME
 .\"
@@ -16,18 +16,22 @@ SAPHanaSR-hookHelper - generic helper for SAP HANA HA/DR provider hook scripts
 .\"
 .SH DESCRIPTION
 .\"
-\fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HA/DR provider hook scripts.
-.br
-Currently three use cases are implemented:
+\fBSAPHanaSR-hookHelper\fR is a generic helper for SAP HANA HA/DR provider hook
+scripts. It also is used by Linux cluster alert agents.
+.PP
+Two use cases are implemented for HA/DR provider hook scripts:
 .br
 - Checking for maintenance mode of the multi-state resource, as described in manual
-page SAPHanaSR_maitenance_examples(7).
+page SAPHanaSR_maintenance_examples(7).
 .br
 - Fencing local node by cluster, see manual page susChkSrv.py(7).
+.PP
+Two use cases are implemented for Linux cluster alert agents:
 .br
 - Rebooting local node directly, see manual page SAPHanaSR-alert-fencing(8).
 .br
-For details, see SUPPORTED PARAMETERS below.
+- Collecting system status information on resource agent timeout, see manual page
+SAPHanaSR-alert-timeout(8).
 .PP
 .\"
 .SH OPTIONS
@@ -54,13 +58,16 @@ The script supports the following paramters:
 .br
 Required. No default.
 .TP 4
-\fBuse_case\fR  Use case to run. At the moment 'checkTakeover', 'fenceMe' and 'echoBe' are supported.
+\fBuse_case\fR  Use case to run. At the moment 'checkTakeover', 'fenceMe', 'echoBe'
+and 'alertLog' are supported.
 .br
 - checkTakeover : check whether a HANA takeover is running, allow or deny admin action.
 .br
 - fenceMe : fence local node by calling 'crm_attribute ... terminate'.
 .br
 - echoBe : reboot local node by calling 'echo b >/proc/sysrq-trigger'.
+.br
+- alertLog : collect system status information by calling ClusterTools2 scripts.
 .br
 Required. No default.
 .PP
@@ -101,17 +108,31 @@ unknown cluster command error, permit takeover.
 # grep sudo.*SAPHanaSR-hookHelper /var/log/messages
 .RE
 .PP
-* Example for generic sudo permissions in /etc/sudoers.d/SAPHanaSR .
+* Example for generic sudo permissions, needed by HANA HA/DR provider hooks.
 .PP
+Needed when called by HANA HA/DR provider hook scripts.
 Example SID is HA1. See also manual pages susTkOver.py(7), susChkSrv.py(7) and
 sudoers(5).
 .PP
 .RS 2
 # SAPHanaSR needs for HA/DR provider hook scripts
-.PP
+.br
 Cmnd_Alias HOOK_HELPER  = /usr/bin/SAPHanaSR-hookHelper --sid=HA1 --case=*
 .br
 ha1adm ALL=(ALL) NOPASSWD: HOOK_HELPER
+.RE
+.PP
+* Example for generic sudo permissions, needed by cluster alert agents.
+.PP
+Needed when called by Linux cluster alert agents.
+Example SID is HA1. See also manual pages SAPHanaSr-alert-timeout(8) and sudoers(5).
+.PP
+.RS 2
+# SAPHanaSR needs for cluster alert agents
+.br
+Cmnd_Alias HOOK_HELPER  = /usr/bin/SAPHanaSR-hookHelper --sid=HA1 --case=*
+.br
+hacluster ALL=(ALL) NOPASSWD: HOOK_HELPER
 .RE
 .PP
 * Example for checking the Linux cluster STONITH setup and logs.
@@ -167,7 +188,7 @@ open a request for the component BC-OP-LNX-SUSE.
 \fBocf_suse_SAPHanaTopology\fP(7) , \fBocf_suse_SAPHanaController\fP(7) ,
 \fBSAPHanaSR-showAttr\fP(8) , \fBSAPHanaSR-alert-fencing\fP(8) ,
 \fBcrm\fP(8) , \fBcrm_attribute\fP(8) , \fBstonith_admin\fP(8) ,
-\fBsudo\fP(8) , \fBsudoers\fP(5) , 
+\fBsudo\fP(8) , \fBsudoers\fP(5) , \fBClusterTools2\fP(7) ,
 .br
 https://documentation.suse.com/sbp/sap/
 .PP

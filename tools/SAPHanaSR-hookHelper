@@ -35,7 +35,7 @@ usage() {
     echo -e "\\t--sid=<SID>: SID (like HA1) of the SAP system"
     echo -e "\\t--ino=<InstanceNumber>: instance number (like 10) of the SAP instance"
     echo -e "\\t--case=<use case>: the use case for the hook helper"
-    echo -e "\\t                   at the moment only 'checkTakeover' and 'fenceMe' is supported"
+    echo -e "\\t                   at the moment 'checkTakeover', 'fenceMe', 'echoBe' and 'alertLog' are supported"
     echo -e "\\t--version: show script version"
     echo -e "\\t--help:    show help"
     exit 1
@@ -307,6 +307,21 @@ case "$USECASE" in
      fi
      rc=0
      ;;
+"alertLog" )
+    #
+    # needs to run as root
+    #
+    logger -t SAPHanaSR-hookHelper "alertLog: SID=$SID"
+    # TODO function: test -x $X && $X 
+    test -x /usr/sbin/psauxlog && /usr/sbin/psauxlog /var/log/psaux.log
+    test -x /usr/sbin/meminfolog && /usr/sbin/meminfolog /var/log/meminfo.log
+    test -x /usr/sbin/vmstatlog && /usr/sbin/vmstatlog /var/log/vmstat.log
+    test -x /usr/sbin/cpustatelog && /usr/sbin/cpustatelog /var/log/cpustate.log
+    test -x /usr/sbin/dstatelog && /usr/sbin/dstatelog /var/log/dstate.log
+    test -x /usr/sbin/netstatlog && /usr/sbin/netstatlog /var/log/netstat.log
+    # wildcards do not work for lsof
+    test -x /usr/sbin/lsoflog && /usr/sbin/lsoflog /var/log/lsof.log "+D/tmp/ +D/hana/shared/${SID}/" 21
+    ;;
 #"nextUsecase")
 #    chk_next_case; rc=$?
 #    ;;
@@ -321,4 +336,4 @@ esac
 rm -f "$cibtmp"
 
 # return exit status to the hook
-exit $rc
+exit "$rc"
