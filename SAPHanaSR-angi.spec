@@ -48,11 +48,13 @@ Requires:       /usr/bin/logger
 BuildRequires:  resource-agents >= 4.1.0
 BuildRequires:  crmsh
 BuildRequires:  crmsh-scripts
+BuildRequires:  systemd-rpm-macros
+%{?systemd_requires}
+
 
 %package testenv
 Group:          Productivity/Clustering/HA
 Summary:        Testenv for SAPHanaSR-angi - Not for production clusters
-
 
 %description
 SAPHanaSR-angi is "SAP HANA SR - Advanced Next Generation Interface" for SUSE high availabilty clusters to manage SAP HANA databases with system replication.
@@ -125,7 +127,7 @@ install -m 0555 tools/SAPHanaSR-replay-archive %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-hookHelper %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-manageProvider %{buildroot}/usr/bin
 install -m 0555 tools/SAPHanaSR-upgrade-to-angi-demo %{buildroot}/usr/share/%{name}/samples
-install -m 0444 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
+install -m 0755 tools/saphana_sr_tools.py %{buildroot}/usr/lib/%{name}
 
 # install services and/or timers (main package)
 install -d %{buildroot}/usr/lib/systemd/system
@@ -140,6 +142,28 @@ install -m 0544 services/saphanasr-rmhdbpid %{buildroot}/usr/share/%{name}/bin
 install -m 0644 services/saphanasr-prep-for-test.service %{buildroot}/usr/lib/systemd/system
 install -m 0644 services/saphanasr-rmhdbpid.service %{buildroot}/usr/lib/systemd/system
 install -m 0644 man-testenv/*8.gz %{buildroot}%{_mandir}/man8
+
+%if 0%{?suse_version} < 1600
+    mkdir -p %{buildroot}%{_sbindir}
+    ln -s %{_sbindir}/service %{buildroot}%{_sbindir}/rcsaphanasr-prep-for-test
+    ln -s %{_sbindir}/service %{buildroot}%{_sbindir}/rcsaphanasr-rmhdbpid
+%endif
+
+%post testenv
+%service_add_post saphanasr-prep-for-test.service
+%service_add_post saphanasr-rmhdbpid.service
+
+%pre testenv
+%service_add_pre saphanasr-prep-for-test.service
+%service_add_pre saphanasr-rmhdbpid.service
+
+%postun testenv
+%service_del_postun saphanasr-prep-for-test.service
+%service_del_postun saphanasr-rmhdbpid.service
+
+%preun testenv
+%service_del_preun saphanasr-prep-for-test.service
+%service_del_preun saphanasr-rmhdbpid.service
 
 %files
 %defattr(-,root,root)
@@ -175,5 +199,10 @@ install -m 0644 man-testenv/*8.gz %{buildroot}%{_mandir}/man8
 %dir /usr/lib/systemd/system
 /usr/lib/systemd/system/sap*
 %doc %{_mandir}/man?/saphanasr*
+
+%if 0%{?suse_version} < 1600
+    %{_sbindir}/rcsaphanasr-prep-for-test
+    %{_sbindir}/rcsaphanasr-rmhdbpid
+%endif
 
 %changelog
